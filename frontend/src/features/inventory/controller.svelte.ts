@@ -11,6 +11,9 @@ type Phase = 'idle' | 'loading' | 'done' | 'error';
 export class InventoryController {
   constructor(private store: StateStore, private transport: Pick<DesktopCapabilities, 'loadCachedMarket' | 'refreshMarket' | 'fetchInventory'>, private sources: { loadMarket(): Promise<Market>; loadCatalogs(): Promise<Catalogs>; normalizeInventory(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }> }) { }
   phase = $state<Phase>('idle');
+  /** False until startup has looked for a saved scan. Until then "no
+   *  inventory" is unknown, not empty: the shell must not offer first run. */
+  restored = $state(false);
   refreshFailed = $state(false);
   noTradeables = $state(false);
   source = $state<'scan' | 'saved' | 'import' | null>(null);
@@ -208,6 +211,10 @@ export class InventoryController {
   }
 
   async restore() {
+    try { await this.#restore(); } finally { this.restored = true; }
+  }
+
+  async #restore() {
     // Startup can reach this after a user acts while the health check awaits IPC.
     if (this.generation !== 0) return;
     const generation = ++this.generation;

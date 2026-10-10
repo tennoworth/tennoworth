@@ -71,10 +71,9 @@
 <section class="keeping" aria-label="What I’m keeping">
   <h3>What I’m keeping</h3>
   <p class="keep-rules">{keepRules}</p>
-  <p class="keep-status" class:verified={!conflicts && !unavailable && !unavailableCount && !!controller.state && !controller.loading && !controller.error}>{controller.loading ? 'Checking quantities…' : unavailable ? 'Waiting for valid quantities' : conflicts ? 'Some quantities need review' : unavailableCount ? 'Applied to items with known quantities' : controller.state ? '✓ Keep rules applied to this inventory' : 'Waiting for inventory'}</p>
-  <button class="btn xs change" onclick={edit} disabled={controller.saving}>Change what I keep</button>
+  <p class="keep-status" class:verified={!conflicts && !unavailable && !unavailableCount && !!controller.state && !controller.loading && !controller.error}>{controller.loading ? 'Checking quantities…' : unavailable ? 'Waiting for valid quantities' : conflicts ? 'Some quantities need review' : unavailableCount ? 'Applied to items with known quantities' : controller.state ? '✓ Applied' : 'Waiting for inventory'}</p>
   <details>
-    <summary>View quantity details</summary>
+    <summary>Quantity details</summary>
     <div class="ui-toolbar"><button class="btn" onclick={() => controller.refresh()} disabled={controller.loading || controller.saving}>{controller.loading ? 'Checking quantities…' : 'Recheck quantities'}</button>
     {#if controller.state?.issues.some(issue => issue.includes('Unlock WFM'))}<button class="btn" onclick={onconnect}>Connect WFM</button>{/if}</div>
     <p class="muted">Own minus kept copies and checked listings gives what you can sell. Without WFM, estimates do not subtract existing listings.</p>
@@ -90,6 +89,7 @@
       <div class="ui-toolbar"><span class="muted">Showing {Math.min(detailLimit, detailRows.length)} of {detailRows.length} items</span>{#if detailRows.length > detailLimit}<button class="btn" onclick={() => detailLimit += 25}>Show 25 more</button>{/if}</div>
     {/if}
   </details>
+  <button class="btn xs change" onclick={edit} disabled={controller.saving}>Change what I keep</button>
 </section>
 <dialog bind:this={dialog} class="keep-dialog" aria-labelledby="keep-title" onclose={() => editing = false} onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!controller.saving && !keepBusy) dialog.close(); } }} oncancel={(event) => { if (controller.saving || keepBusy) event.preventDefault(); }}>
   <header class="keep-head"><h2 id="keep-title">What I’m keeping</h2></header>
@@ -138,13 +138,14 @@
   .ui-input { max-width: 100%; }
   input[type="number"] { width: 8rem; }
   h3, p { margin: 0; }
-  .keeping { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); min-width: 0; padding: var(--s2) var(--inset); background: var(--panel); border: 1px solid var(--border); font-size: var(--text-control); }
+  /* A line, not a panel: dotted rules above and below, like the other one-line strips under a view title. */
+  .keeping { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); min-width: 0; padding: var(--s1) 0; border-block: 1px var(--rule) var(--hairline); font-size: var(--text-control); }
   .keeping h3 { font: 500 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
   .keep-rules { min-width: 0; overflow-wrap: anywhere; }
-  .keeping .change { margin-left: auto; }
-  /* Closed, the disclosure sits at the end of the line; open, it takes a row. */
-  .keeping > details { min-width: 0; }
-  .keeping > details[open] { flex: 1 0 100%; }
+  /* Closed, the disclosure and Change sit at the end of the line; open, the details take their own row under it. */
+  .keeping > details { min-width: 0; margin-left: auto; }
+  .keeping > details[open] { flex: 1 0 100%; order: 1; margin-left: 0; }
+  .keeping > details[open] ~ .change { margin-left: auto; }
   .keep-status { color: var(--muted); }
   .keep-status.verified { color: var(--good); }
   .keep-dialog { width: min(40rem, calc(100vw - var(--s6))); max-height: calc(100dvh - var(--s6)); overflow: auto; padding: var(--s5); background: var(--panel); color: var(--fg); border: 1px solid var(--border); }

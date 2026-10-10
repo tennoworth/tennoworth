@@ -162,9 +162,9 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
 </script>
 
 <section class="ui-stack watchlist" data-testid="watchlist">
-  <header class="view-header row">
-    <div><h2>Price watches</h2><p class="lede">Get a desktop notification when an item reaches your target price.</p></div>
-    <div class="row gap-sm">
+  <header class="view-header">
+    <h2>Price watches</h2><p class="lede">Get a desktop notification when an item reaches your target price.</p>
+    <div class="vh-end">
       <button class="btn ghost" onclick={checkNow} disabled={checking || watches.length === 0}
         title="Run a check right now (the app also checks every 10 minutes in the background and notifies you).">
         {checking ? 'Checking…' : 'Check now'}

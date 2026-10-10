@@ -8,7 +8,6 @@ export type SettingKey =
   | 'reserve-copies'
   | 'filters-open'
   | 'view'
-  | 'score-explainer-dismissed'
   | 'keep-copies-nudge-dismissed'
   | 'tray-toast-seen'
   | 'sell-onboarding-dismissed'

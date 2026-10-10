@@ -52,7 +52,6 @@ export function createPreview(scenario: string) {
   const settings = new Map<string, string>([
     ['last-owned-v2', serializeSnapshot({ invName: 'Sample inventory with a deliberately long name', owned, rivens, nativeSnapshotId: 1 }, Date.now())],
     ['sell-onboarding-dismissed', '1'], ['keep-copies-nudge-dismissed', '1'],
-    ['score-explainer-dismissed', '1'],
   ]);
   // An earlier install, so this launch counts as use rather than a first run.
   if (scenario === 'support-prompt') settings.set('prompts', JSON.stringify({ first_seen: Date.now() - 21 * 86_400_000, launches: 6, prompts: {} }));
@@ -201,6 +200,7 @@ export function createPreview(scenario: string) {
     if (command === 'submit_plan') return { plan_id: 'preview-plan', results: (args?.items as Array<{slug: string}>).map(i => ({
       slug: i.slug, status: 'ok', action: i.slug === 'primed_flow' ? 'updated' : 'created', order_id: `preview-${i.slug}`,
     })) };
+    if (command === 'bulk_visibility') return (args?.orderIds as string[]).map(order_id => ({ order_id, status: 'ok' }));
     throw new Error('Unsupported sample action: ' + command);
   };
 }

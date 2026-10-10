@@ -7,6 +7,9 @@ import PendingBatchBanner from '../features/selling/PendingBatchBanner.svelte';
 import BaroView from '../features/market-context/BaroView.svelte';
 import RelicPlannerView from '../features/relics/RelicPlannerView.svelte';
 import SetPicksView from '../features/selling/SetPicksView.svelte';
+import { ActivityLog } from '../ui/activity.svelte';
+import { ListingReceipts } from '../features/selling/receipts.svelte';
+import type { PlanResponse } from '../contracts/data';
 
   import { loadMarket } from '../adapters/market';
   import { loadCatalogs } from '../adapters/catalogs';
@@ -17,6 +20,7 @@ import SetPicksView from '../features/selling/SetPicksView.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
   import { type WfmSession } from '../features/settings/feedback';
   import { humanError } from '../contracts/errors';
+  import { humanWindow } from '../ui/format';
   
   import { onMount, untrack } from 'svelte';
   import Faq from './Faq.svelte';
@@ -90,6 +94,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
+  const activity = new ActivityLog();
+  const receipts = new ListingReceipts();
   const workspace = createSellWorkspace({ inventory, filters, protection, listing, transport, services: notesServices, getView: () => effectiveView, getNow: () => session.displayNow });
   let allocationMatches = $derived(workspace.allocationMatches);
   let unknownSlugs = $derived(workspace.unknownSlugs);
@@ -234,6 +240,52 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   let outstanding = $derived(pendingRemaining + uncertainRemaining);
   let ordersToFix = $derived((listing.ordersSummary?.issues ?? 0) + (listing.pendingPlan ? outstanding : 0));
 
+  // Scans report in the strip's activity cell: a user scan from the moment it
+  // starts, an automatic one when it lands. Both settle on what changed.
+  let scanActivity: number | null = null;
+  let lastApplied: number | null = null;
+  function scanSummary(): string {
+    if (!inventory.previousOwned) return 'Scan applied';
+    let added = 0, changed = 0;
+    for (const [key, d] of inventory.deltas) {
+      if (!inventory.previousOwned.has(key)) added += 1;
+      else if (d !== 0) changed += 1;
+    }
+    return added + changed === 0 ? 'Scan applied · no changes' : `Scan applied · ${changed} changed · ${added} new`;
+  }
+  $effect(() => {
+    const pulling = inventory.pullingInventory;
+    untrack(() => {
+      if (pulling && scanActivity == null) scanActivity = activity.begin('Scanning game…');
+      else if (!pulling && scanActivity != null) {
+        const id = scanActivity;
+        scanActivity = null;
+        if (inventory.pullError) activity.finish(id, inventory.noTradeables ? 'Scan found nothing tradeable' : 'Scan failed', 'bad');
+        else if (inventory.lastUpdated !== lastApplied) { lastApplied = inventory.lastUpdated; activity.finish(id, scanSummary()); }
+        else activity.finish(id, 'Scan stopped');
+      }
+    });
+  });
+  $effect(() => {
+    // A scan landing outside a user request: the automatic scanner adopting one.
+    const updated = inventory.lastUpdated;
+    const fromScan = inventory.source === 'scan';
+    untrack(() => {
+      if (!fromScan || updated == null || updated === lastApplied || inventory.pullingInventory) return;
+      lastApplied = updated;
+      activity.finish(activity.begin(''), scanSummary());
+    });
+  });
+  function sendSummary(response: PlanResponse): string {
+    const ok = response.results.filter((r) => r.status === 'ok');
+    const created = ok.filter((r) => r.action !== 'updated').length;
+    const updated = ok.length - created;
+    const open = response.results.filter((r) => r.status === 'pending' || r.status === 'uncertain_mutation').length;
+    if (open > 0) return `Batch interrupted · ${open} to resume`;
+    const parts = [created ? `Listed ${created} · hidden` : '', updated ? `Updated ${updated}` : ''].filter(Boolean);
+    return parts.join(' · ') || 'Nothing was listed';
+  }
+
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
   // The last sign-in or unlock failure, kept for a bug report after the dialog closes.
   let wfmAuthFailure = $state<unknown>(null);
@@ -276,14 +328,17 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // of trading, where they would compete with the task.
   let promptsActive = $derived(hasInventory && !listing.listingOpen && effectiveView !== 'session');
   $effect(() => { if (hasInventory) untrack(() => prompts.launch()); });
-  let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
+  // Until startup has looked for a saved scan, "no inventory" is unknown, not
+  // empty: show the workspace with placeholders, never the first-run page.
+  let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell' || !inventory.restored);
+  let restoring = $derived(!inventory.restored && !hasInventory);
 </script>
 
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
 <div data-shell class={showWorkspace ? 'shell' : 'desktop-landing'}>
-  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {ordersToFix} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
+  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
   <aside data-shell class="sidebar">
     <nav data-shell>
@@ -318,7 +373,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         {#if showBaroCard}
           <button data-shell type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} onclick={() => filters.setView('baro')}>
             <span data-shell>Baro</span>
-            {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>{/if}
+            {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>
+            {:else if baroState && baroState.phase !== 'unknown'}<span data-shell class="badge when" title="Baro arrives in {humanWindow(baroState.windowMs)}">{humanWindow(baroState.windowMs).split(' ')[0]}</span>{/if}
           </button>
         {/if}
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} onclick={() => filters.setView('routines')}>
@@ -335,7 +391,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         <div data-shell class="nav-label">Manage</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} onclick={() => filters.setView('orders')}>
           <span data-shell>My orders</span>
-          {#if listing.pendingPlan && outstanding > 0}<span data-shell class="badge warn">{outstanding}</span>{/if}
+          {#if ordersToFix > 0}<span data-shell class="badge warn" title="{ordersToFix} {ordersToFix === 1 ? 'order' : 'orders'} to fix">{ordersToFix}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'watches'} onclick={() => filters.setView('watches')}>
           <span data-shell>Price watches</span>
@@ -362,7 +418,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   </aside>
 
   {/if}
-  <main data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['sets', 'relics', 'routines', 'install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-mode' : undefined}>
+  <main data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-mode' : undefined}>
     {@render generalBanners()}
     {#if !showWorkspace}
   {#if !inventory.error && !inventory.pullError}
@@ -396,7 +452,19 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
     {/if}
 
-    {#if effectiveView === 'sell'}
+    {#if effectiveView === 'sell' && restoring}
+      <!-- Startup is still looking for the saved scan: hold the Sell layout
+           with placeholder rows so the real ones fill in where they will stay. -->
+      <section data-shell class="view-header">
+        <h2 data-shell>Sell</h2>
+        <p data-shell class="lede" role="status">Loading your saved scan…</p>
+      </section>
+      <div data-shell class="restoring" aria-hidden="true">
+        {#each { length: 3 } as _, i (i)}<div data-shell class="ph-row pick"><span data-shell></span><span data-shell></span><span data-shell></span></div>{/each}
+        <div data-shell class="ph-gap"></div>
+        {#each { length: 8 } as _, i (i)}<div data-shell class="ph-row"><span data-shell></span><span data-shell></span><span data-shell></span></div>{/each}
+      </div>
+    {:else if effectiveView === 'sell'}
       <SellPane keep={keepSection}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView={workspace.tableView}
@@ -406,7 +474,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
         columnsCustomized={filters.columnKey in filters.columnChoice} oncolumnschange={(columns) => filters.setColumns(columns)}
-        activePreset={filters.activePreset} reserveCopies={filters.reserveCopies} filtersOpen={filters.filtersOpen} scoreExplainerDismissed={filters.scoreExplainerDismissed}
+        activePreset={filters.activePreset} reserveCopies={filters.reserveCopies} filtersOpen={filters.filtersOpen}
         sellOnboardingDismissed={filters.sellOnboardingDismissed} keepCopiesNudgeDismissed={filters.keepCopiesNudgeDismissed}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
         dismissSellOnboarding={() => filters.dismissSellOnboarding()} dismissKeepCopiesNudge={() => filters.dismissKeepCopiesNudge()}
@@ -591,7 +659,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  sendThrough={(send) => listing.trackSend(send)}
+  sendThrough={(send) => activity.track('Sending listings…', () => listing.trackSend(send), (response) => sendSummary(response as PlanResponse), () => 'Listing failed')}
+  onsent={(sent, results) => receipts.record(sent, results)}
+  onvisible={(results) => { receipts.markVisible(results); const shown = results.filter((r) => r.status === 'ok').length; if (shown) activity.finish(activity.begin(''), `${shown} now visible`); }}
   onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void listing.refreshPendingPlan(); }}
 />
 

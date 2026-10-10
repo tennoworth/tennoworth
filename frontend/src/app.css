@@ -616,8 +616,25 @@ table.tw tr.busy td { color: var(--faint); }
 .ui-panel.warn-banner { border-left: 3px solid var(--warn); }
 .ui-panel > header { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
 .ui-panel > header h2 { margin: 0; font-size: var(--text-heading); line-height: var(--leading-control); }
+/* One header grammar for every view: TITLE · one-line lede · totals or the
+   view's primary action at the far edge. The lede wraps before the end slot
+   does, so a long description never pushes the totals off the row. */
 .view-header { display: flex; align-items: center; gap: var(--s2) var(--s4); min-height: var(--rail); flex-wrap: wrap; margin-bottom: var(--s2); }
-.view-header > .lede { flex: 0 0 100%; width: 100%; max-width: none; margin: 0; color: var(--muted); }
+.view-header > .lede { flex: 1 1 18rem; min-width: 0; max-width: none; margin: 0; color: var(--muted); }
+.view-header > .vh-end { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-width: 0; }
+/* Comparable totals beside a view title: one outlined strip, dotted dividers. */
+.ui-totals { display: flex; flex-wrap: wrap; align-items: stretch; min-height: var(--rail); min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-ctl); font-size: var(--text-caption); }
+.ui-totals > .cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: var(--rail); border-left: 1px var(--rule) var(--hairline); }
+.ui-totals > .cell:first-child { border-left: none; }
+.ui-totals .k { font: 600 var(--text-caption)/1 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ui-totals .v { font: 600 var(--text-control)/1rem var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.ui-totals .v .unit { font-size: var(--text-caption); color: var(--muted); margin-left: 1px; }
+.ui-totals .v.up { color: var(--good); }
+.ui-totals .d { font: var(--text-caption)/1rem var(--font-mono); font-variant-numeric: tabular-nums; }
+.ui-totals .d.up { color: var(--good); }
+.ui-totals .d.down { color: var(--bad); }
+.ui-totals > .cell.attn .k, .ui-totals > .cell.attn .v { color: var(--warn); }
+@media (max-width: 35rem) { .view-header > .vh-end, .view-header > .vh-end > .ui-totals { flex: 1 1 100%; margin-left: 0; } .ui-totals > .cell { flex: 1 1 auto; } }
 .view-header h2 { margin: 0; color: var(--fg); font-size: var(--text-heading); font-weight: 600; line-height: var(--leading-control); letter-spacing: -.01em; text-transform: none; }
 /* Reading surfaces share one edge; analytical tables retain the workspace. */
 .ui-reading { width: 100%; max-width: 64rem; }

@@ -117,9 +117,15 @@
   .statusbar .cell.inv[data-shell] { flex: 1 1 23rem; }
   .statusbar .cell.inv .file[data-shell] { flex: 1 1 6rem; }
   .statusbar .refresh-wrap[data-shell] { flex: none; margin-left: auto; }
-  /* The timestamp starts the second line, beside Refresh, so a long file name
-     keeps the first line to itself. */
   .statusbar .cell.inv time[data-shell] { flex: 1 1 55%; }
+  /* Wide windows keep the strip to one line: the scan cell takes the slack,
+     a long scan name wraps inside its own box, and the time and Refresh stay
+     beside it. Narrow windows still wrap the cell. */
+  @media (min-width: 901px) {
+    .statusbar.shell-strip .cell.inv[data-shell] { flex-wrap: nowrap; }
+    .statusbar.shell-strip .cell.inv .file[data-shell] { flex: 0 1 auto; min-width: 6rem; }
+    .statusbar.shell-strip .cell.inv time[data-shell] { flex: none; }
+  }
   .statusbar.shell-strip .brand + .cell[data-shell] { border-left: none; }
   .statusbar .cell.end[data-shell] { padding-right: var(--inset); }
   .statusbar .cell b[data-shell] {
@@ -128,7 +134,15 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
-  .statusbar .cell.attn b[data-shell] { color: var(--warn); }
+  /* The activity cell: one place for scans, sends and live checks. Busy is
+     the caution hue, a finished result good, a failure bad; the words carry
+     the meaning, the square only repeats it. */
+  .statusbar .cell.act[data-shell] { background: var(--panel-2); border-left: 1px solid var(--border); white-space: nowrap; }
+  .statusbar .cell.act .dot[data-shell] { background: var(--fg); }
+  .statusbar .cell.act.busy .dot[data-shell] { background: var(--warn); }
+  .statusbar .cell.act.done .dot[data-shell] { background: var(--good); }
+  .statusbar .cell.act.bad[data-shell] { color: var(--bad); }
+  .statusbar .cell.act.bad .dot[data-shell] { background: var(--bad); }
   /* A long inventory filename must not push the WFM cell off the right rail. */
   .statusbar .cell .file[data-shell] { max-width: 16rem; white-space: normal; overflow-wrap: anywhere; }
   .statusbar .cell .ducat[data-shell] { color: var(--ducat); }
@@ -236,6 +250,7 @@
     padding: 0 var(--s1);
   }
   .nav-item .badge.unread[data-shell] { color: var(--on-ink); background: var(--ink-bar); font-weight: 600; }
+  .nav-item .badge.when[data-shell] { color: var(--muted); border-color: transparent; background: transparent; font-weight: 400; }
   .nav-item .badge.warn[data-shell] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
   .nav-item .badge.here[data-shell] {
     color: var(--ducat);
@@ -378,16 +393,7 @@
   .refresh-pop .rp-item.danger:hover[data-shell] { color: var(--bad); }
   .refresh-pop .rp-note[data-shell] { margin: var(--s1) 0 0; font-size: var(--text-caption); line-height: 1.45; color: var(--muted); }
 
-  /* Workspace view header - h2 + a hover/focus info dot carrying the
-     one-sentence lede, folded onto a single row (was h2 + a full lede
-     paragraph on its own line) to reclaim vertical space above the fold. */
-  .view-header[data-shell] {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-height: 28px;
-    flex-wrap: wrap;
-  }
+  .view-header[data-shell] { min-height: var(--rail); }
   .view-header h2[data-shell] {
     font-size: var(--text-heading);
     font-weight: 600;
@@ -910,3 +916,11 @@
 .feedback-problems > span[data-shell] { color: var(--muted); }
 html[data-look="yorha"] dialog.feedback-dialog header[data-shell] { margin: 0; padding: var(--s3); }
 dialog.feedback-dialog .feedback-check[data-shell] { flex-direction: row; font-family: var(--font-body); font-size: var(--text-control); letter-spacing: normal; text-transform: none; }
+
+/* Startup placeholders: the Sell layout's rows, drawn as hairline bars at their
+   final height. Static on purpose - no shimmer; the strip says what is loading. */
+.restoring[data-shell] { display: flex; flex-direction: column; border: 1px solid var(--border); background: var(--panel); }
+.restoring .ph-row[data-shell] { display: grid; grid-template-columns: minmax(0, 3fr) 1fr 1fr; gap: var(--s4); align-items: center; min-height: var(--row); padding: 0 var(--inset); border-bottom: 1px var(--rule) var(--hairline); }
+.restoring .ph-row span[data-shell] { display: block; height: 0.45rem; background: var(--hairline); }
+.restoring .ph-row span + span[data-shell] { width: 50%; justify-self: end; }
+.restoring .ph-gap[data-shell] { height: var(--s5); background: var(--bg); border-block: 1px solid var(--border); }

@@ -34,11 +34,14 @@
     // table-local filter is active, so the parent's "List on WFM" CTA can stage
     // exactly what the user sees instead of the unfiltered preset results.
     onfiltered?: (rows: Row[], filterActive: boolean) => void;
-    // Controls block inside the table border (Flow v2). Row A SCOPE = the
-    // parent's presets / type chips / Filters popover; row B NARROW = the
-    // name filter (ours) · the parent's active-filter chips · badge chips ·
-    // count · the parent's CTA. All optional so the table stands alone.
+    // Controls inside the table border, three bars with one job each:
+    // 1 scope = the parent's presets, then the name filter (ours) and the
+    //   parent's Filters popover; 2 narrow = the parent's category toggles and
+    //   active-filter chips, then badge chips; 3 = count, column tools and the
+    //   parent's CTA. All optional so the table stands alone.
     scope?: Snippet;
+    filters?: Snippet;
+    categories?: Snippet;
     narrow?: Snippet;
     cta?: Snippet;
     // Top picks: rendered HERE (as a carved panel above the controls) so the
@@ -56,15 +59,12 @@
     // empty-state card), so the SCOPE/NARROW rows stay put and the presets stay
     // reachable while the cascade yields nothing.
     empty?: Snippet;
-    // Rendered between the picks panel and the results panel (the parent's
-    // score explainer), so it sits directly over the table it explains.
-    between?: Snippet;
   }
   let {
     results, allocation = null, quantityStatus = false, estimatedGuidance = false, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined, columnsCustomized = false, oncolumnschange = undefined,
-    scope = undefined, narrow = undefined, cta = undefined,
+    scope = undefined, filters = undefined, categories = undefined, narrow = undefined, cta = undefined,
     picks = null, picksHead = undefined, pickActions = undefined, pickReason = undefined, picksEmpty = undefined,
-    empty = undefined, between = undefined,
+    empty = undefined,
   }: Props = $props();
 
   // Picks panel collapse - session-only; the rail stays as a one-line reminder.
@@ -230,7 +230,7 @@
     ratio:          { text: 'Live buyers ÷ live sellers - a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
     potential_plat: { text: 'Sellable copies × the 48 h average trade price. Optimistic - selling many copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
     raw_value:      { text: 'Sellable copies × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings - no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Sellable × Avg until the next scrape adds ask-depth data' },
-    sell_score:     { text: 'Priority ranking, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. Items below 3 trades / 48 h get a "patience" tag.', unit: 'priority points', dir: 'higher = list sooner; actual plat totals stay unweighted' },
+    sell_score:     { text: 'Priority ranking, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. The clearing price is the lowest live ask, clamped up to the 90-day median when that ask is a lone troll undercut, so one 1p listing cannot sink a row. Items below 3 trades / 48 h keep their priority and get a "patience" tag, but stay out of Top Picks.', unit: 'priority points', dir: 'higher = list sooner; actual plat totals stay unweighted' },
     ducats:         { text: 'Ducat value at Baro Ki’Teer.', unit: 'ducats', dir: 'only prime parts have a non-zero value' },
     plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
     medians_7d:     { text: 'Sparkline of the last 7 days of daily median price. Hover the line for the raw values.' },
@@ -472,7 +472,10 @@
     {fmt(r.owned, col.key)}
     {#if quantityStatus}
       {@const quantity = allocation?.items[r.slug]}
-      <span class="quantity-note">sell {quantity?.estimated == null ? 'unavailable' : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? 'unavailable'} · keep {quantity?.protected ?? '—'}</span>
+      {@const sellText = quantity?.estimated == null ? null : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? null}
+      {@const keepText = quantity?.protected == null ? 'keep unknown' : `keep ${quantity.protected}`}
+      <!-- Short on the row, so a missing quantity does not wrap it to three lines; the full wording is the label. -->
+      <span class="quantity-note" aria-label="sell {sellText ?? 'unavailable'}, {keepText}" title="Sell {sellText ?? 'unavailable'} · {keepText}">/ sell {sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText}{#if quantity?.protected != null && quantity.protected > 0} · keep {quantity.protected}{/if}</span>
     {:else if r.sellable < r.owned}
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
       <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
@@ -539,6 +542,23 @@
   {/if}
 {/snippet}
 
+{#snippet nameFilter()}
+  <span class="shimmer-field" use:shimmer={{ mode: filterFocused ? 'live' : 'idle', pulse: filterPulse }}>
+    <input
+      id="inventory-name-filter"
+      type="text"
+      class="name-filter"
+      placeholder="Filter by name… ( / )"
+      aria-label="Filter by name"
+      bind:value={filter}
+      bind:this={filterInput}
+      oninput={() => (page = 0)}
+      onfocus={() => (filterFocused = true)}
+      onblur={() => (filterFocused = false)}
+    />
+  </span>
+{/snippet}
+
 {#if picks}
   <section class="wrap picks" aria-label="Top picks">
     <div class="rail picks-head">
@@ -555,7 +575,7 @@
       {#if picks.length > 0}
         <div class="scroll">
         <table class:comfortable={density === 'comfortable'} class="picks-table">
-          <colgroup><col /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
+          <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
           <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
@@ -565,7 +585,7 @@
                   {@render cell(p, columns[0], rowDelta(p))}
                 </td>
                 <td class="left pick-act">{@render pickActions?.(p)}</td>
-                <td class="right">{fmt(p.low_sell, 'low_sell')}</td>
+                <td class="right col-low_sell">{fmt(p.low_sell, 'low_sell')}</td>
                 <td class="right">{fmt(p.volume_48h, 'volume_48h')}</td>
                 <td class="left reason">{@render pickReason?.(p)}</td>
               </tr>
@@ -580,30 +600,18 @@
   </section>
 {/if}
 
-{@render between?.()}
-
 <div class="wrap results">
   {#if scope}
     <div class="bar raised scope-row">
-      <span class="lbl">Scope</span>
       {@render scope()}
+      <span class="grow"></span>
+      {@render nameFilter()}
+      {@render filters?.()}
     </div>
   {/if}
   <div class="bar narrow-row">
-    <label class="lbl" for="inventory-name-filter">Item</label>
-    <span class="shimmer-field" use:shimmer={{ mode: filterFocused ? 'live' : 'idle', pulse: filterPulse }}>
-      <input
-        id="inventory-name-filter"
-        type="text"
-        class="name-filter"
-        placeholder="Filter by name… ( / )"
-        bind:value={filter}
-        bind:this={filterInput}
-        oninput={() => (page = 0)}
-        onfocus={() => (filterFocused = true)}
-        onblur={() => (filterFocused = false)}
-      />
-    </span>
+    {#if !scope}{@render nameFilter()}{/if}
+    {@render categories?.()}
     {@render narrow?.()}
     <div class="pill-filters">
       {#each PILL_DEFS as p (p.key)}
@@ -628,6 +636,9 @@
       {sortDir === -1 ? '↓' : '↑'}
       {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}{/if}
     </div>
+    {#if columns.some((c) => c.key === 'sell_score')}
+      <span class="formula">Priority = price × sell-through × usage weight, not plat/day</span>
+    {/if}
     <span class="grow"></span>
     <ColumnGuide entries={guideEntries} />
     {#if oncolumnschange}
@@ -756,7 +767,7 @@
   .picks-table { min-width: 40rem; }
   .picks-table td.reason { white-space: normal; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .picks-table th, .picks-table td { padding-block: var(--s3); }
+  .picks-table th, .picks-table td { padding-block: var(--s1); }
   .wrap.picks { margin-bottom: var(--stack); overflow: hidden; }
   /* Horizontal scroll lives on the table's own scroller, not the panel, so
      the control rows' popovers (Filters, badge chips) can escape the panel.
@@ -816,24 +827,15 @@
     row-gap: var(--s1);
   }
   .bar.raised { background: var(--panel-2); border-bottom: 1px var(--rule) var(--hairline); }
-  .bar .lbl {
-    width: 3.25rem;
-    flex: 0 0 auto;
-    font-size: var(--text-caption);
-    line-height: 1rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    font-weight: 600;
-    color: var(--muted);
-  }
   .name-filter {
-    height: var(--ctl-lg);
-    width: 10rem;
+    height: var(--ctl);
+    width: 14rem;
     padding: 0 var(--s3);
     font-size: var(--text-control);
   }
-  /* One caption line under the count; missing quantities are unavailable, not errors. */
-  .quantity-note { display: block; font: var(--text-caption)/var(--leading-control) var(--font-body); color: var(--muted); white-space: normal; }
+  /* Beside the count on the same line, so rows keep one height; missing quantities are unavailable, not errors. */
+  .quantity-note { font: var(--text-caption)/var(--leading-control) var(--font-body); color: var(--muted); white-space: normal; }
+  .formula { color: var(--muted); font-size: var(--text-caption); white-space: normal; }
   .count { color: var(--muted); font-size: var(--text-caption); white-space: nowrap; }
   .count b { color: var(--fg); font-weight: 600; }
   /* Pill-filter chips reuse the badge palette (.tag.peak etc.) so the chip
@@ -920,7 +922,7 @@
     z-index: 2;
   }
   /* Keep the full item identity readable even at the column's width floor. */
-  td.col-name { position: relative; color: var(--fg); overflow: visible; }
+  td.col-name { position: relative; color: var(--fg); font-weight: 500; overflow: visible; }
   .name-clip { display: block; white-space: normal; overflow-wrap: anywhere; padding-block: var(--s1); }
   /* Pick rows: rank glyph, bold name, reason spanning the trailing columns
      with the parent's List/× at its right end. */
@@ -959,7 +961,10 @@
      rows) - the hairline + this hover tint carry row separation on their
      own now that the header/panel borders read at proper contrast. */
   tbody tr:hover td { background: var(--panel-2); }
-  td.col-sell_score { color: var(--fg); font-weight: 600; }
+  /* The price a row is about is ink 600 (design-system's td.price rule); the
+     sort key is ink 500; context numbers stay muted. */
+  td.col-low_sell { color: var(--fg); font-weight: 600; }
+  td.col-sell_score { color: var(--fg); font-weight: 500; }
   /* Rows with nothing left to sell (leveled gear ate the whole stack, or
      the "keep copies" reserve did) stay visible but recede - still useful
      as inventory context, not an action item. Was `opacity: 0.5`, which
@@ -967,7 +972,7 @@
      this keeps every row's text at a token with checked contrast and just
      forces the name cell down to --muted instead of --fg. */
   tbody tr.row-dim td { color: var(--muted); }
-  tbody tr.row-dim td.col-name, tbody tr.row-dim td.col-sell_score { color: var(--muted); font-weight: 400; }
+  tbody tr.row-dim td.col-name, tbody tr.row-dim td.col-sell_score, tbody tr.row-dim td.col-low_sell { color: var(--muted); font-weight: 400; }
   td a { color: var(--fg); text-decoration: none; }
   td a:hover { color: var(--accent); text-decoration: underline; }
   .arrow { color: var(--accent); }
@@ -1120,7 +1125,7 @@
   }
   /* Alone in its cell, so no leading gap; the reasons live in the title. */
   .tag.advice { margin-inline-start: 0; cursor: help; }
-  .scope-row, .narrow-row, .result-actions { padding-block: var(--s3); gap: var(--s3); }
+  .scope-row, .narrow-row, .result-actions { padding-block: var(--s2); gap: var(--s3); }
   .col-chooser { position: relative; }
   .col-panel {
     position: absolute; top: calc(100% + var(--s1)); right: 0; z-index: var(--layer-popover);

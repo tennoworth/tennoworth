@@ -25,7 +25,6 @@ export class FilterController {
       const saved = this.store.getSetting('view') as View | null;
       return saved && VALID_VIEWS.has(saved) ? saved : 'sell';
     })();
-    this.scoreExplainerDismissed = (() => this.store.getSetting('score-explainer-dismissed') === '1')();
     this.sellOnboardingDismissed = (() => this.store.getSetting('sell-onboarding-dismissed') === '1')();
     this.keepCopiesNudgeDismissed = (() => this.store.getSetting('keep-copies-nudge-dismissed') === '1')();
     this.columnChoice = parseColumnChoice(this.store.getSetting('sell-columns'));
@@ -42,7 +41,6 @@ export class FilterController {
   view = $state<View>(
     'sell'
   );
-  scoreExplainerDismissed = $state(false);
   sellOnboardingDismissed = $state(false);
   keepCopiesNudgeDismissed = $state(false);
   activePreset = $state<string | null>('default');
@@ -70,10 +68,6 @@ export class FilterController {
   setView(v: View): void {
     this.view = v;
     void this.store.setSetting('view', v);
-  }
-  dismissScoreExplainer(): void {
-    this.scoreExplainerDismissed = true;
-    void this.store.setSetting('score-explainer-dismissed', '1');
   }
   dismissSellOnboarding(): void {
     this.sellOnboardingDismissed = true;
