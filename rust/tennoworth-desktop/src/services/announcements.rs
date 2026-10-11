@@ -48,6 +48,17 @@ fn text(raw: &str, max: usize) -> bool {
         && !raw.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
 }
 
+fn permitted_source(raw: &str, limits: &Limits) -> bool {
+    let Ok(source) = reqwest::Url::parse(raw) else { return false; };
+    source.scheme() == "https" && source.username().is_empty() && source.password().is_none() && source.port().is_none()
+        && source.host_str().is_some_and(|host| limits.source_hosts.iter().any(|allowed| allowed == host))
+}
+
+pub fn source_allowed(raw: &str) -> bool {
+    let Ok(limits) = serde_json::from_str::<Limits>(include_str!("../../../../tests/fixtures/announcements/limits.json")) else { return false; };
+    permitted_source(raw, &limits)
+}
+
 pub fn parse(raw: &str) -> Option<AnnouncementFeed> {
     let limits: Limits = serde_json::from_str(include_str!("../../../../tests/fixtures/announcements/limits.json")).ok()?;
     if raw.len() > limits.max_bytes { return None; }
@@ -60,9 +71,7 @@ pub fn parse(raw: &str) -> Option<AnnouncementFeed> {
             || !ids.insert(&message.id) || !text(&message.title, limits.max_title) || !text(&message.body, limits.max_body) { return None; }
         let window = stamp(&message.ends_at)?.checked_sub(stamp(&message.starts_at)?)?;
         if !(1..=limits.max_window_seconds).contains(&window) { return None; }
-        let source = reqwest::Url::parse(&message.source_url).ok()?;
-        if source.scheme() != "https" || !source.username().is_empty() || source.password().is_some() || source.port().is_some()
-            || !source.host_str().is_some_and(|host| limits.source_hosts.iter().any(|allowed| allowed == host)) { return None; }
+        if !permitted_source(&message.source_url, &limits) { return None; }
     }
     Some(feed)
 }
