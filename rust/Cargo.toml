@@ -23,8 +23,10 @@
 #                         product is the desktop app or the informational site.
 #   tennoworth-usage    - the opt-in installation-count service on the host.
 #   tennoworth-reports  - the opt-in anonymous price-report service on the host.
+#   tennoworth-announcements - pure feed contract shared by readers and publishers.
+#   tennoworth-publisher - private host-only announcement publication service.
 [workspace]
-members = ["wfm-core", "market-math", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports"]
+members = ["wfm-core", "market-math", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "tennoworth-announcements", "tennoworth-publisher"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping
@@ -36,6 +38,9 @@ resolver = "2"
 # (a member declaring a smaller subset never actually got a smaller build -
 # see tennoworth-desktop's Cargo.toml).
 [workspace.dependencies]
+url = "2.5"
+# RS256 verification for private Cloudflare Access requests; AWS-LC avoids system OpenSSL and the RSA timing advisory.
+jsonwebtoken = { version = "11.1", default-features = false, features = ["aws_lc_rs"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
 
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }

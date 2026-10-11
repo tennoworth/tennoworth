@@ -306,6 +306,20 @@ Chromium. The grid repeats every 28px; the diagonal’s 9px period projects to a
 12.7279220614px square tile. Keep the bounded sizes and verify the actual
 rendering in both engines when changing the pattern.
 
+## Private announcement dashboard
+
+The separate admin entry uses the existing view header, status strip, panels,
+fields, notices and inline review patterns. Publication status leads; messages
+and the editor sit alongside at wide widths and stack below 760px without
+remounting the form. Appearance is in a footer disclosure. The preview reuses
+`AnnouncementBanner.svelte`, the same banner rendered to users; notification
+preview shows the prose with an explicit operating-system presentation limit.
+Refresh, resizing and publication failures preserve edits. Switching messages
+with unsaved edits offers Keep editing or Discard edits in place. Publish and
+withdraw each require a review naming their delivery consequences. The dedicated
+admin browser suite verifies this styled surface in both themes and engines.
+These extend the existing review/continuity patterns without a new palette.
+
 ## Notification history
 
 Curated market announcements use the existing warn-toned notice and general

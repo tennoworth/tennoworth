@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-const files = import.meta.glob<string>(['../shells/**/*.svelte', '../features/**/*.svelte', '../ui/**/*.svelte', './**/*.svelte'], { query: '?raw', import: 'default', eager: true });
+const files = import.meta.glob<string>(['../shells/**/*.svelte', '../features/**/*.svelte', '../ui/**/*.svelte', '../admin/**/*.svelte', './**/*.svelte'], { query: '?raw', import: 'default', eager: true });
 
 describe('component design contract', () => {
   for (const [file, source] of Object.entries(files)) {

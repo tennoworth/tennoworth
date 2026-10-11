@@ -1,15 +1,13 @@
 // Single source of truth for the Content-Security-Policy.
 //
-// The HOSTED CSP ships in TWO places that must agree - frontend/index.html
-// (meta tag) and deploy/Caddyfile (the production header) - and they were
-// hand-synced, with a standing doc warning instead of tooling. Edit the
-// DIRECTIVES below, run `bun run csp` (from frontend/) to rewrite both; CI runs
-// `--check` before every build and fails if either copy drifted.
+// The hosted site and private dashboard each carry a meta tag and a server
+// header. Hand-syncing previously allowed drift; edit DIRECTIVES below and
+// run `bun run csp` from frontend/. CI checks every committed copy.
 //
 // One deliberate asymmetry: `frame-ancestors` is invalid in a <meta> CSP
 // (browsers ignore it there), so the meta tag gets the policy WITHOUT it.
 //
-// The DESKTOP (Tauri) build is a build-variant, not a third committed copy:
+// The DESKTOP (Tauri) build is a build variant rather than a committed copy:
 // `--desktop <built-index.html>` rewrites a built dist's meta CSP in place with
 // the desktop connect-src (the Tauri IPC scheme added). It NEVER touches the
 // hosted copies, so the hosted CSP stays byte-identical.
@@ -84,6 +82,16 @@ if (desktopIdx !== -1) {
 
 const TARGETS = [
   {
+    path: 'deploy/Caddyfile-admin',
+    re: /^(\s*Content-Security-Policy ").*(")$/m,
+    replacement: `$1${full}$2`,
+  },
+  {
+    path: 'frontend/admin.html',
+    re: META_RE,
+    replacement: metaReplacement(metaDirectives),
+  },
+  {
     path: 'deploy/Caddyfile',
     re: /^(\s*Content-Security-Policy ").*(")$/m,
     replacement: `$1${full}$2`,
@@ -121,4 +129,4 @@ if (check && drifted > 0) {
   console.error('sync-csp: run `bun run csp` (in frontend/) and commit the result.');
   process.exit(1);
 }
-if (drifted === 0) console.log('sync-csp: both copies in sync');
+if (drifted === 0) console.log('sync-csp: All CSP copies are in sync');

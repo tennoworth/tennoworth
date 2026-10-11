@@ -1,0 +1,16 @@
+[package]
+name = "tennoworth-announcements"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Pure curated announcement feed contract and validation."
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ts-rs = { workspace = true }
+url = { workspace = true }
+
+[lints]
+workspace = true
