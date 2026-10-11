@@ -70,6 +70,11 @@ and give that temporary JSON configuration a unique per-run `identifier`.
 Preserve existing application data; do not clear a gaming profile to reset a
 probe.
 
+Run Rust tests before the final isolated build. A later plain Cargo command can
+rebuild the executable with the default configuration and replace its isolated
+identity. Build with the probe configuration last, confirm the intended source
+and unique identifier, and launch that executable without another Cargo command.
+
 Check the final report and a clean process exit, not just a checkpoint. The
 workflow requires both success evidence and a clean exit, with a 120-second
 guard. Record the exact launched PID and inspect evidence even after a timeout.
