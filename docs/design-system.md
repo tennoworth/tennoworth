@@ -308,6 +308,16 @@ rendering in both engines when changing the pattern.
 
 ## Notification history
 
+Curated market announcements use the existing warn-toned notice and general
+banner on the hosted and desktop shells. On desktop first run they follow the
+scan introduction, so scanning remains the first action. They contain plain text, an exact
+deadline in the message, a source link and Dismiss. Dismissal persists per ID
+and is independent of notification read state. A scheduled message waits for
+its start; an ended or withdrawn message leaves the banner region. Desktop
+history keeps the original prose, source link and an explicit Ends/Ended time.
+Market announcements have their own inbox/popup preferences. Select Market
+announcements in the living reference's Data state control.
+
 Desktop history uses `.notification-entry` rows with a raised unread surface,
 explicit Read/Unread text, evidence, and navigation to the next step. Rows lead
 with the title and category/read state; the exact local time has its own aligned

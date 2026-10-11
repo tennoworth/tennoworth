@@ -44,6 +44,7 @@ pub struct ArtifactSpec {
     /// decides what the app allocates, so a runaway or hostile response is
     /// refused rather than buffered whole. Set well above the published size.
     pub max_bytes: usize,
+    pub validate: Option<fn(&str) -> Option<String>>,
 }
 
 impl ArtifactSpec {
@@ -61,6 +62,7 @@ pub const MARKET: ArtifactSpec = ArtifactSpec {
     default_url: MARKET_URL,
     // ~3 MB published.
     max_bytes: 32 * 1024 * 1024,
+    validate: None,
 };
 
 /// The year-long daily price history (relics.run-derived, built on the box -
@@ -74,6 +76,17 @@ pub const HISTORY: ArtifactSpec = ArtifactSpec {
     default_url: HISTORY_URL,
     // ~10 MB published.
     max_bytes: 64 * 1024 * 1024,
+    validate: None,
+};
+
+pub const ANNOUNCEMENTS: ArtifactSpec = ArtifactSpec {
+    cache_file: "announcements.json",
+    etag_file: "announcements.etag",
+    stamp_key: "updated_at",
+    url_env: "TENNOWORTH_ANNOUNCEMENTS_URL",
+    default_url: "https://tennoworth.app/announcements.json",
+    max_bytes: 65536,
+    validate: Some(super::announcements::validated_stamp),
 };
 
 /// The result the SPA acts on. `updated` is true only when a validated 200
@@ -94,11 +107,12 @@ pub struct RefreshResult {
 /// files (`market.json`, `market.etag`) and the refresh routine.
 pub struct MarketCache {
     dir: PathBuf,
+    announcements: std::sync::Mutex<Option<String>>,
 }
 
 impl MarketCache {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir }
+        Self { dir, announcements: std::sync::Mutex::new(None) }
     }
 
     /// The cached snapshot body, or None on a first run / unreadable / empty
@@ -111,6 +125,17 @@ impl MarketCache {
     /// The cached history body, if any. No network.
     pub fn cached_history(&self) -> Option<String> {
         read_cache(&self.dir, &HISTORY)
+    }
+
+    pub fn cached_announcements(&self) -> Option<String> {
+        wfm_core::poison::guard(&self.announcements).clone().or_else(|| read_cache(&self.dir, &ANNOUNCEMENTS))
+    }
+
+    pub fn adopt_announcements(&self, body: &str) {
+        let Some(next) = super::announcements::validated_stamp(body) else { return; };
+        let mut current = wfm_core::poison::guard(&self.announcements);
+        let prior = current.as_deref().and_then(super::announcements::validated_stamp);
+        if prior.is_none_or(|prior| next >= prior) { *current = Some(body.to_owned()); }
     }
 
     /// Cloneable owned dir, so the async command can hand it to `spawn_blocking`
@@ -231,6 +256,12 @@ pub fn refresh_history(dir: &Path) -> RefreshResult {
     refresh_artifact(dir, &HISTORY, &HISTORY.url())
 }
 
+pub fn refresh_announcements(dir: &Path) -> RefreshResult {
+    static REFRESH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _lock = wfm_core::poison::guard(&REFRESH_LOCK);
+    refresh_artifact(dir, &ANNOUNCEMENTS, &ANNOUNCEMENTS.url())
+}
+
 fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult {
     let prior_etag = std::fs::read_to_string(etag_path(dir, spec))
         .ok()
@@ -253,6 +284,9 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
     };
 
     let mut req = client.get(url);
+    if spec.cache_file == ANNOUNCEMENTS.cache_file {
+        req = req.header(reqwest::header::CACHE_CONTROL, "no-cache");
+    }
     if let Some(tag) = &prior_etag {
         req = req.header(reqwest::header::IF_NONE_MATCH, tag);
     }
@@ -304,7 +338,7 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
 
     // Validate before caching: a truncated or non-JSON 200 must not overwrite a
     // good cache. parse_stamp is the gate AND gives us the timestamp.
-    let updated_at = match parse_stamp(&body, spec.stamp_key) {
+    let updated_at = match spec.validate.map_or_else(|| parse_stamp(&body, spec.stamp_key), |validate| validate(&body)) {
         Some(u) => u,
         None => {
             eprintln!(
@@ -381,6 +415,31 @@ mod tests {
 
     const ETAG: &str = "\"test-etag-1\"";
     const BODY: &str = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{}}"#;
+
+    #[test]
+    fn announcements_refuse_invalid_siblings_and_keep_the_last_valid_cache() {
+        let dir = temp_dir();
+        let body = include_str!("../../../../frontend/public/announcements.json");
+        let (url, handle) = spawn_mock_serving(1, body);
+        assert!(refresh_artifact(&dir, &ANNOUNCEMENTS, &url).updated);
+        handle.join().unwrap();
+        // The mock reuses one ETag, so force a body response to exercise validation.
+        std::fs::remove_file(etag_path(&dir, &ANNOUNCEMENTS)).unwrap();
+        let invalid = r#"{"version":1,"updated_at":"2026-10-14T00:00:00Z","messages":[{"id":"broken"}]}"#;
+        let (url, handle) = spawn_mock_serving(1, invalid);
+        assert!(!refresh_artifact(&dir, &ANNOUNCEMENTS, &url).updated);
+        handle.join().unwrap();
+        assert!(!refresh_artifact(&dir, &ANNOUNCEMENTS, "http://127.0.0.1:1/feed").updated);
+        assert_eq!(read_cache(&dir, &ANNOUNCEMENTS).unwrap(), body);
+        let empty = r#"{"version":1,"updated_at":"2026-10-14T00:00:00Z","messages":[]}"#;
+        let (url, handle) = spawn_mock_serving(1, empty);
+        assert!(refresh_artifact(&dir, &ANNOUNCEMENTS, &url).updated);
+        handle.join().unwrap();
+        assert!(super::super::announcements::parse(&read_cache(&dir, &ANNOUNCEMENTS).unwrap()).unwrap().messages.is_empty());
+        let limits: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/announcements/limits.json")).unwrap();
+        assert_eq!(ANNOUNCEMENTS.max_bytes as u64, limits["max_bytes"].as_u64().unwrap());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     /// Minimal HTTP/1.1 mock: serves 200 + ETag on a plain request, 304 when the
     /// request carries a matching `If-None-Match`. Records, per request, whether

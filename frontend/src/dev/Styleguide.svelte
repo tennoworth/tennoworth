@@ -1,4 +1,7 @@
 <script lang="ts">
+  import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
+  import announcementCases from '../../../tests/fixtures/announcements/cases.json';
+  import { parseAnnouncements } from '../domain/announcements';
   import NotificationRow from '../features/settings/NotificationRow.svelte';
   import baroNotice from '../../../tests/fixtures/notifications/baro.json';
   import type { NotificationEntry } from '../contracts/desktop';
@@ -146,7 +149,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="frame">View header</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="app-icon">App icon</option><option value="shimmer">Field shimmer</option><option value="presence">Trade presence</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="frame">View header</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="announcements">Market announcements</option><option value="app-icon">App icon</option><option value="shimmer">Field shimmer</option><option value="presence">Trade presence</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -174,6 +177,10 @@
     {/if}
     <div class="line">Sample data only · missing prices stay unknown · quantities are not recommendations</div>
   </section>
+
+  {#if dataState === 'announcements'}
+    <MarketAnnouncement now={Date.parse(announcementCases[0].now)} load={async () => parseAnnouncements(announcementCases[0].feed)} />
+  {/if}
 
   <section class="wrap tw" aria-labelledby="states-title">
     <div class="rail"><h3 id="states-title">04 / Meaning without color dependence</h3></div>

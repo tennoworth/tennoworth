@@ -33,6 +33,7 @@ export {
   ALLOWANCE_CHANGED_EVENT,
   NOTIFICATIONS_EVENT,
   MARKET_REFRESHED_EVENT,
+  ANNOUNCEMENTS_CHANGED_EVENT,
 } from './generated/desktop';
 
 /** The user's warframe.market status changed (a PresenceStatus). */

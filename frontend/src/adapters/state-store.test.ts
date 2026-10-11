@@ -42,6 +42,7 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     ['tray-toast-seen', 'wfminv:tray-toast-seen-v1', '1'],
     ['sell-onboarding-dismissed', 'wfminv:sell-onboarding-dismissed-v1', '1'],
     ['prompts', 'wfminv:prompts-v1', '{"launches":1,"prompts":{}}'],
+    ['dismissed-announcements', 'wfminv:dismissed-announcements-v1', '["sample-announcement"]'],
     ['sell-columns', 'wfminv:sell-columns-v1', '{"default":["name","owned"]}'],
     ['auto-close-sold', 'wfminv:auto-close-sold-v1', 'off'],
     ['routine-checklist', 'wfminv:routine-checklist-v2', '{"version":2}'],
@@ -127,7 +128,7 @@ describe('TauriStateStore - command mapping', () => {
     expect(s.getSetting('view')).toBeNull();
   });
 
-  it('setSetting invokes set_setting and updates the cache immediately', async () => {
+  it('setSetting invokes set_setting and caches the saved value', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined);
     installTauri(invoke);
     const s = new TauriStateStore();
@@ -135,6 +136,18 @@ describe('TauriStateStore - command mapping', () => {
     expect(invoke).toHaveBeenCalledWith('set_setting', { key: 'view', value: 'relics' });
     // Synchronous read reflects the write without another IPC round-trip.
     expect(s.getSetting('view')).toBe('relics');
+  });
+
+  it('a failed announcement dismissal preserves the last saved setting', async () => {
+    const invoke = vi.fn(async (command) => {
+      if (command === 'set_setting') throw new Error('database is locked');
+      return '[]';
+    });
+    installTauri(invoke);
+    const s = new TauriStateStore();
+    await s.hydrate();
+    await expect(s.setSetting('dismissed-announcements', '["sample-message"]')).rejects.toThrow('database is locked');
+    expect(s.getSetting('dismissed-announcements')).toBe('[]');
   });
 
   it('saveSnapshot serializes to the last-owned setting; loadSnapshot deserializes it back', async () => {

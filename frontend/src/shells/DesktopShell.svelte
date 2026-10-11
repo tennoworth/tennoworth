@@ -5,6 +5,7 @@ import StatusStrip from './StatusStrip.svelte';
 import FeedbackDialog from '../features/settings/FeedbackDialog.svelte';
 import PendingBatchBanner from '../features/selling/PendingBatchBanner.svelte';
 import BaroView from '../features/market-context/BaroView.svelte';
+import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
 import RelicPlannerView from '../features/relics/RelicPlannerView.svelte';
 import SetPicksView from '../features/selling/SetPicksView.svelte';
 import { ActivityLog } from '../ui/activity.svelte';
@@ -35,7 +36,7 @@ import type { PlanResponse } from '../contracts/data';
   import WatchlistPanel from '../features/watches/WatchlistPanel.svelte';
   import NotificationInbox from '../features/settings/NotificationInbox.svelte';
   
-import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
+import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contracts/events';
   import LedgerPanel from '../features/ledger/LedgerPanel.svelte';
   import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
   import DesktopUpdateBanner from '../ui/DesktopUpdateBanner.svelte';
@@ -484,6 +485,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       </div>
     </section>
   {/if}
+  {@render marketAnnouncement()}
   {#if inventory.market}
     <p data-shell class="lookup-label">Or look anything up</p>
     <MarketBrowser market={inventory.market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
@@ -498,6 +500,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     <div data-shell class="foot-theme"><ThemeSwitcher {theme} compact label="Colour mode" /></div>
   </footer>
     {:else}
+    {@render marketAnnouncement()}
     {#if advisorResult.error && !filterState.adviceOnly && ['sell', 'sets', 'session'].includes(effectiveView)}
       <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
     {/if}
@@ -732,6 +735,10 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   <SupportPrompt session={prompts} active={promptsActive} />
     <DesktopUpdateBanner {updates} />
   
+{/snippet}
+
+{#snippet marketAnnouncement()}
+  <MarketAnnouncement now={displayNow} {store} load={notesServices.desktopAnnouncements} subscribe={(refresh) => listenForTauriEvent(ANNOUNCEMENTS_CHANGED_EVENT, refresh)} />
 {/snippet}
 
 {#snippet pendingBanner()}

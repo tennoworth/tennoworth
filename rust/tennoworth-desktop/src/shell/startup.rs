@@ -118,6 +118,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::commands::settings::save_protection_plan,
             crate::commands::settings::list_snapshots,
             crate::commands::market::cached_market,
+            crate::commands::market::get_announcements,
             crate::commands::market::refresh_market,
             crate::commands::market::top_sellables,
             crate::commands::market::live_top_prices,

@@ -22,7 +22,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.locator('#settings-notifications')).toBeInViewport();
     await page.getByLabel('Desktop popups', { exact: true }).uncheck();
     await expect(page.getByText('Preferences saved.')).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: / in inbox$/ })).toHaveCount(5);
+    await expect(page.getByRole('checkbox', { name: / in inbox$/ })).toHaveCount(6);
     await expect(page.getByLabel('Inventory scan summary in inbox', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Price watches popup', { exact: true })).toBeDisabled();
     await page.getByLabel('Baro arrival and departure in inbox', { exact: true }).uncheck();

@@ -1,3 +1,5 @@
+import { NOTIFICATION_CATEGORIES } from '../contracts/desktop';
+import type { AnnouncementFeed } from '../contracts/generated/desktop';
 import baroNotice from '../../../tests/fixtures/notifications/baro.json';
 import digestNotice from '../../../tests/fixtures/notifications/digest.json';
 import type { NotificationEntry } from '../contracts/desktop';
@@ -7,7 +9,7 @@ import { sampleAllocation, sampleGuidance } from './protection-preview';
 import type { ProtectionInventory, ProtectionPlan } from '../contracts/protection';
 
 // This module is dynamically imported only by the development preview.
-export function createPreview(scenario: string) {
+export function createPreview(scenario: string, announcementFeed: AnnouncementFeed | null = null) {
   const now = Math.floor(Date.now() / 1000);
   const owned = new Map([
     ['pyrana_prime_set', { count: 30, name: 'Pyrana Prime Set', type: 'Weapon', slug: 'pyrana_prime_set', subtype: null, kept_lvl: null, leveled: 0 }],
@@ -62,6 +64,10 @@ export function createPreview(scenario: string) {
   const unownedSample = scenario === 'orders-unowned';
   if (sessionSample) settings.set('view', 'session');
   let notifications: NotificationEntry[] = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
+  if (scenario === 'announcements' && announcementFeed?.messages[0]) {
+    const message = announcementFeed.messages[0];
+    notifications = [{ id: 2, category: 'announcements', title: message.title, body: message.body, target: 'sell', created_at: now, read: false, delivery: 'sent', content: { kind: 'announcement', source_url: message.source_url, ends_at: message.ends_at } }, ...notifications];
+  }
   if (scenario === 'notifications') {
     const yesterday = new Date(now * 1000);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -72,7 +78,7 @@ export function createPreview(scenario: string) {
       { id: 2, category: 'calendar', title: 'Saved calendar reminder', body: 'Full saved context from before structured notification details. A deliberately long item identity remains readable in the history.', target: 'routines', created_at: yesterday.getTime() / 1000, read: true, delivery: 'pending' },
     ];
   }
-  let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
+  let notificationPreferences = { popups: true, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
     fetch_orders: empty || scenario.startsWith('buyers') ? [] : [
       { id: 'preview-order', platinum: 90, visible: true, quantity: 2, name: 'Pyrana Prime Set', slug: 'pyrana_prime_set', item_id: 'pyrana_prime_set', side: 'sell' as const, per_trade: null, subtype: null },

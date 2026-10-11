@@ -1,3 +1,5 @@
+import { NOTIFICATION_CATEGORIES } from '../contracts/desktop';
+import { HostedTransport } from '../adapters/hosted';
 import notesSample from '../../../tests/fixtures/update-notes/status.json';
 import defaults from '../../../tests/fixtures/pacing.json';
 import { loadDomainEvaluator } from './domain-wasm';
@@ -10,12 +12,13 @@ import { APP_ICON_COLOURS, type PresenceStatus, type PresenceSettings } from '..
 import { PRESENCE_CHANGED_EVENT } from '../contracts/events';
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
+  const loadAnnouncements = new HostedTransport().loadAnnouncements;
   // Loaded once; a missing build rejects each calculation with how to build
   // it, while the rest of the preview keeps working.
   const domain = loadDomainEvaluator();
   domain.catch(error => console.error(error));
   const preview = scenario !== null
-    ? (await import('./preview-data')).createPreview(scenario || 'populated')
+    ? (await import('./preview-data')).createPreview(scenario || 'populated', scenario === 'announcements' ? await loadAnnouncements().catch(() => null) : null)
     : null;
   let notes: import('../contracts/update').UpdateNotesStatus = structuredClone(notesSample) as import('../contracts/update').UpdateNotesStatus;
   // `support-prompt` is a launch that installed an update: notes first, then the prompt.
@@ -45,7 +48,7 @@ export async function installPreview() {
     refresh_history: { updated: false, body: null },
     refresh_market: { updated: false, status: 'offline' },
     list_watches: [], list_trades: [], list_notifications: [],
-    get_notification_preferences: { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) },
+    get_notification_preferences: { popups: true, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true }])) },
     try_silent_unlock: false,
     wfm_remember_available: true,
     get_usage_preferences: { enabled: false, available: false },
@@ -84,6 +87,7 @@ export async function installPreview() {
     return structuredClone(presence);
   };
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd === 'get_announcements') return loadAnnouncements();
     if (cmd === 'presence_status') return Promise.resolve(structuredClone(presence));
     if (cmd === 'set_presence') {
       if (presence.problem === 'not_verified') {

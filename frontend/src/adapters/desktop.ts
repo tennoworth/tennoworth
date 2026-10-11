@@ -4,6 +4,10 @@ import { isHistory, type History } from '../domain/history';
 import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome, PresenceChoice, PresenceSettings, PresenceStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
+export async function desktopAnnouncements(): Promise<import('../contracts/generated/desktop').AnnouncementFeed | null> {
+  return resolveInvoke()('get_announcements');
+}
+
 /**
  * The Rust struct both scan paths deliver: the `scan_inventory` response and
  * the `inventory-scanned` event payload. Field names match its serde output.

@@ -13,6 +13,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NotificationContent {
+    Announcement(AnnouncementNotification),
     Baro(BaroNotification),
     Digest(DigestNotification),
 }
@@ -52,7 +53,13 @@ pub struct DigestOpportunity {
     pub price: f64,
 }
 
-pub const CATEGORIES: &[&str] = &["trades", "watches", "baro", "calendar", "digest"];
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, TS)]
+pub struct AnnouncementNotification {
+    pub source_url: String,
+    pub ends_at: String,
+}
+
+pub const CATEGORIES: &[&str] = &["trades", "watches", "baro", "calendar", "digest", "announcements"];
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CategoryPreference {

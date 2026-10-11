@@ -28,6 +28,7 @@ export interface DesktopServices extends UpdateNotesServices {
   restartApp(): Promise<void>;
   onUpdateAvailable(cb: (s: UpdateStatus) => void): () => void;
   desktopNotifications(): Promise<NotificationEntry[]>;
+  desktopAnnouncements(): Promise<import('./generated/desktop').AnnouncementFeed | null>;
   desktopWfmStatus(): Promise<DesktopWfmStatus>;
   desktopWfmLogout(): Promise<void>;
   listenForTauriEvent<T>(event: string, cb: (payload: T) => void): () => void;

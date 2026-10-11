@@ -2,6 +2,12 @@
 
 export type AccessStatus = { revision: number, reason: string, cooldown_until_ms: number, queue_count: number, outstanding: number, restrictions: Restrictions, requests: number, throttles: number, cache_hits: number, cache_misses: number, queue_rejections: number, };
 
+export type Announcement = { id: string, starts_at: string, ends_at: string, title: string, body: string, source_url: string, };
+
+export type AnnouncementFeed = { version: number, updated_at: string, messages: Array<Announcement>, };
+
+export type AnnouncementNotification = { source_url: string, ends_at: string, };
+
 export type AppIconOutcome = {
 /**
  * False on a GTK Wayland session: Wayland compositors take the window and
@@ -51,7 +57,7 @@ export type DigestNotification = { opportunities: Array<DigestOpportunity>, inve
 
 export type DigestOpportunity = { name: string, quantity: number, price: number, };
 
-export type NotificationContent = { "kind": "baro" } & BaroNotification | { "kind": "digest" } & DigestNotification;
+export type NotificationContent = { "kind": "announcement" } & AnnouncementNotification | { "kind": "baro" } & BaroNotification | { "kind": "digest" } & DigestNotification;
 
 export type OrderSide = "sell" | "buy";
 
@@ -148,6 +154,8 @@ export const ALLOWANCE_CHANGED_EVENT = "trade-allowance-changed" as const;
 export const NOTIFICATIONS_EVENT = "notifications-changed" as const;
 
 export const MARKET_REFRESHED_EVENT = "market-refreshed" as const;
+
+export const ANNOUNCEMENTS_CHANGED_EVENT = "announcements-changed" as const;
 
 export const LIVE_TOP_PROGRESS_EVENT = "live-top-progress" as const;
 

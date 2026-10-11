@@ -1,4 +1,5 @@
 pub(crate) mod acquisition;
+pub(crate) mod announcements;
 pub(crate) mod allowance;
 pub(crate) mod auto_scan;
 pub(crate) mod browser;
