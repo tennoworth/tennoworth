@@ -19,7 +19,10 @@
     "check": "svelte-check",
     "knip": "knip && knip --production",
     "csp": "bun ../scripts/sync-csp.ts",
-    "icons": "bun ../scripts/build-icons.ts --raster"
+    "icons": "bun ../scripts/build-icons.ts --raster",
+    "dev:admin": "vite --config vite.admin.config.ts",
+    "build:admin": "bun ../scripts/sync-csp.ts --check && vite build --config vite.admin.config.ts",
+    "test:admin": "playwright test --config playwright.admin.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

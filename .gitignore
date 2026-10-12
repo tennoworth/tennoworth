@@ -92,3 +92,5 @@ wfm-cooldown.json
 /wfm-policy.json
 # Task worktrees created by the local agent harness.
 .dsh-worktrees/
+
+/frontend/dist-admin/

@@ -122,6 +122,9 @@ bun run knip
 bun audit --audit-level=moderate
 bun run build
 bun run build:desktop
+bun run build:admin
+bun ../scripts/check-admin-build.ts
+bun run test:admin
 bunx playwright install --with-deps chromium webkit
 bun run build:domain-wasm
 bun run test:responsive:all
@@ -144,6 +147,10 @@ refreshes, resizes, authentication, and error states. Do not hide diagnostics
 with `@ts-nocheck` or replace runtime verification with type checking.
 
 ## Publishing market announcements
+
+The bundled feed bootstraps readers and initial publisher state. Once a host
+uses the private publisher, manage messages in its dashboard: rebuilding the
+site does not replace the independently exported feed.
 
 Edit `frontend/public/announcements.json` and run
 `bun scripts/check-announcements.ts` from the root. Hosted and desktop builds
@@ -178,6 +185,37 @@ guaranteed while the app is closed or the operating system suppresses popups.
 Banner expiry follows the shell clock, which refreshes every minute and on
 focus. A publisher must maintain correct dates and advance the feed timestamp;
 the readers refuse a rollback to an older timestamp.
+
+## Private announcement dashboard development
+
+The dashboard is a separate entry, never part of the hosted or desktop build.
+From `frontend/`, `bun run dev:admin` serves `http://127.0.0.1:5194/admin.html`.
+In another terminal, start the local API from the repository root:
+
+```sh
+mkdir -p target/publisher-tmp
+TENNOWORTH_PUBLISHER_DEV_STATE="$PWD/target/admin-local-state" \
+CARGO_TARGET_DIR="$PWD/target/publisher-cargo" TMPDIR="$PWD/target/publisher-tmp" \
+cargo run --manifest-path rust/Cargo.toml -p tennoworth-publisher \
+  --features dev-server --bin tennoworth-publisher-dev
+```
+
+This debug-only binary binds loopback and uses fictional local identity. The
+production binary requires Cloudflare Access and publisher configuration; it
+has no unauthenticated mode. `bun run test:admin` starts both local services and
+exercises draft, publication and withdrawal against real SQLite state. Saved
+local state lives under ignored `target/`; never use production data for it.
+
+Run `cargo test -p tennoworth-announcements -p tennoworth-publisher` from `rust/`
+for shared feed, persistence, authentication and HTTP checks. Linux auth tests
+use OpenSSL to generate ephemeral test signing keys; no key fixture is committed.
+Regenerate private API declarations with
+`TENNOWORTH_UPDATE_BINDINGS=1 cargo test -p tennoworth-publisher publisher_bindings_match_rust`.
+Use `bun run build:admin` for the separate `dist-admin` artifact. Once all three
+frontend variants have been built, `bun scripts/check-admin-build.ts` checks
+that public and desktop output exclude the dashboard and that the private
+artifact carries only its intended assets. See [architecture.md](docs/architecture.md#private-announcement-publishing)
+for its runtime boundaries. Host activation is a separate reviewed operation.
 
 ## Native desktop development
 

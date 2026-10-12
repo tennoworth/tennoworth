@@ -1,0 +1,49 @@
+name: build-publisher
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    concurrency:
+      group: build-publisher
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: ./.github/actions/setup-rust
+      - name: Build private dashboard
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build:admin
+      - name: Build authenticated publisher
+        working-directory: rust
+        run: cargo build --locked --release -p tennoworth-publisher --bin tennoworth-publisher
+      - name: Package code without publication state
+        run: |
+          mkdir -p dist/publisher/frontend
+          cp rust/target/release/tennoworth-publisher dist/publisher/
+          cp -a frontend/dist-admin dist/publisher/frontend/
+          cp deploy/Caddyfile-admin deploy/tennoworth-publisher.service dist/publisher/
+          printf '%s\n' "$GITHUB_SHA" > dist/publisher/commit.txt
+          tar -czf dist/tennoworth-publisher.tar.gz -C dist/publisher .
+          cd dist
+          sha256sum tennoworth-publisher.tar.gz > tennoworth-publisher.tar.gz.sha256
+      - name: Publish rolling code bundle
+        uses: ./.github/actions/publish-rolling-release
+        with:
+          tag_name: publisher-latest
+          release_name: publisher-latest (private dashboard code)
+          files: |
+            dist/tennoworth-publisher.tar.gz
+            dist/tennoworth-publisher.tar.gz.sha256
+          body: Authenticated announcement publisher and dashboard code from main. Contains no drafts, history, credentials or live feed. Hosting activation is separate.

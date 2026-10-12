@@ -1,0 +1,46 @@
+[Unit]
+Description=Private curated announcement publisher
+After=network.target
+OnFailure=wfm-alert@%n.service
+
+[Service]
+User=tennoworth-publisher
+Group=tennoworth-publisher
+StateDirectory=tennoworth-publisher
+StateDirectoryMode=0700
+UMask=0077
+EnvironmentFile=/etc/tennoworth-publisher.env
+Environment=TENNOWORTH_PUBLISHER_STATE=/var/lib/tennoworth-publisher
+Environment=TENNOWORTH_PUBLISHER_FEED=/srv/wfm/announcements/announcements.json
+ExecStart=/srv/wfm/bin/tennoworth-publisher
+ReadWritePaths=/srv/wfm/announcements
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+MemoryMax=256M
+TasksMax=64
+LimitNOFILE=256
+
+[Install]
+WantedBy=multi-user.target

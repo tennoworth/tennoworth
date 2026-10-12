@@ -12,6 +12,8 @@ This gate is repeated in the root and rust instruction files on purpose: missing
 it is expensive, and each copy is read where UI work starts.
 
 Shared frontend for the desktop app, overlay, and static informational site.
+The private announcement dashboard has its own `admin.html` entry and
+`vite.admin.config.ts` build; never import it from a player-facing entry.
 The hosted surface has no accounts or inventory input; the desktop app owns
 interactive operations. Read ../docs/architecture.md for capability boundaries.
 
@@ -216,11 +218,11 @@ belt-and-suspenders fallback.
 
 Allowed `connect-src` (hosted): `self`. The hosted site makes no
 loopback or third-party calls - the loopback entries were for the removed
-companion CLI. The CSP ships in two places
-(`index.html` meta, `deploy/Caddyfile`) but is
+companion CLI. The policy also has private-dashboard copies in `admin.html` and
+`deploy/Caddyfile-admin`. All copies are
 **edited in ONE**: `scripts/sync-csp.ts`. Change the directives there,
-run `bun run csp` to rewrite both; `bun run build` fails via its
-prebuild `--check` if either copy drifted. (The meta copy deliberately
+run `bun run csp` to rewrite all copies; `bun run build` fails via its
+prebuild `--check` if any copy drifted. (The meta copies deliberately
 omits `frame-ancestors` - browsers ignore it in meta tags.)
 
 **Desktop (Tauri) is a build-variant, not a third committed copy.**

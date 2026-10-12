@@ -68,6 +68,12 @@ jobs:
             frontend_runtime:
               - 'frontend/src/**'
               - 'frontend/index.html'
+              - 'frontend/admin.html'
+              - 'frontend/vite.admin.config.ts'
+              - 'frontend/playwright.admin.config.ts'
+              - 'frontend/tests/admin/**'
+              - 'rust/tennoworth-publisher/**'
+              - 'rust/tennoworth-announcements/**'
               - 'frontend/knip.jsonc'
               - 'frontend/svelte.config.ts'
               - 'frontend/tsconfig.json'
@@ -91,6 +97,7 @@ jobs:
               - 'rust/Cargo.lock'
               - 'scripts/build-domain-wasm.ts'
               - 'scripts/sync-csp.ts'
+              - 'scripts/check-admin-build.ts'
               # The prebuild --check compares these with what build-icons.ts generates.
               - 'scripts/build-icons.ts'
               - 'frontend/public/favicon.svg'
@@ -254,12 +261,16 @@ jobs:
           bun run build:domain-wasm
       - name: responsive browser gate
         run: bun run test:responsive:all
-      - name: Upload responsive failure evidence
+      - name: private dashboard browser gate
+        run: bun run test:admin
+      - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: responsive-test-evidence
-          path: frontend/test-results/responsive
+          path: |
+            frontend/test-results/responsive
+            frontend/test-results/admin
           if-no-files-found: ignore
       - name: type-check
         run: bunx svelte-check --threshold error
@@ -269,6 +280,11 @@ jobs:
         run: bun run knip
       - name: build
         run: bun run build
+      - name: private dashboard build and artifact boundaries
+        run: |
+          bun run build:desktop
+          bun run build:admin
+          bun ../scripts/check-admin-build.ts
 
   bun-audit:
     needs: changes
@@ -490,6 +506,7 @@ jobs:
           sudo install -m 0755 deploy/*.sh /srv/wfm/
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-usage
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-reports
+          sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-publisher
           systemd-analyze verify deploy/*.service deploy/*.timer
       - name: CSP copies agree
         run: bun scripts/sync-csp.ts --check
@@ -498,7 +515,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends caddy
       - name: Caddyfile syntax
-        run: caddy validate --config deploy/Caddyfile --adapter caddyfile
+        run: |
+          caddy validate --config deploy/Caddyfile --adapter caddyfile
+          caddy validate --config deploy/Caddyfile-admin --adapter caddyfile
 
   # The instruction files and the public-surface rule are tracked policy with no
   # compiler behind them. This is the only job that runs both checks, so without

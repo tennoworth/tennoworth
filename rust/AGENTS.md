@@ -14,8 +14,8 @@ missing it is expensive, and each copy is read where UI work starts.
 
 ## Workspace map
 
-Cargo WORKSPACE with nine members (`target/` shared). The desktop app is the
-only adapter; there is no standalone player CLI.
+Cargo WORKSPACE with eleven members (`target/` shared). The desktop app is the
+only player adapter; there is no standalone player CLI.
 
 Read the file for the crate you are about to edit:
 
@@ -57,6 +57,10 @@ The crates:
   plain wasm32 memory boundary, for the browser `?preview-desktop` host. Built
   by `scripts/build-domain-wasm.ts`; never shipped.
 - `tennoworth-usage/` - opt-in installation-count service.
+- `tennoworth-announcements/` - pure curated feed contract and validation, shared
+  by desktop readers and the host publisher.
+- `tennoworth-publisher/` - private host-only announcement dashboard API and
+  publication state. No Tauri dependency or player account operations.
 - `tennoworth-reports/` - opt-in anonymous price-report service; contract and
   privacy rules in ../docs/price-reports.md.
 

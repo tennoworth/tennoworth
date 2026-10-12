@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import AnnouncementBanner from './AnnouncementBanner.svelte';
   import { activeAnnouncements, parseAnnouncements } from '../../domain/announcements';
   import type { AnnouncementFeed } from '../../contracts/generated/desktop';
   import type { SettingsStore } from '../../contracts/state-store';
@@ -50,21 +51,5 @@
 </script>
 
 {#each active as message (message.id)}
-  <section class="ui-notice general-banner market-announcement" data-tone="warn" aria-label={message.title}>
-    <div class="gb-body ui-stack">
-      <strong>{message.title}</strong>
-      <p>{message.body}</p>
-      {#if failed === message.id}<p class="bad" role="alert">Could not save dismissal. Try again.</p>{/if}
-    </div>
-    <div class="gb-actions">
-      <a class="btn xs" href={message.source_url} target="_blank" rel="noopener noreferrer">Source announcement ↗</a>
-      <button type="button" class="btn ghost xs" aria-label="Dismiss {message.title}" disabled={saving} onclick={() => dismiss(message.id)}>Dismiss</button>
-    </div>
-  </section>
+  <AnnouncementBanner {message} {saving} error={failed === message.id ? 'Could not save dismissal. Try again.' : ''} ondismiss={() => dismiss(message.id)} />
 {/each}
-
-<style>
-  .market-announcement { display: flex; margin-bottom: var(--s4); }
-  .gb-body { gap: var(--s1); }
-  .gb-body p { margin: 0; white-space: pre-line; }
-</style>

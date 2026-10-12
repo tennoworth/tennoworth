@@ -20,6 +20,8 @@ frontend/
     adapters/                Tauri IPC, same-origin loading, persistence
     ui/                      shared visual primitives and capability context
     dev/                     sample transport, styleguide, architecture gates
+  admin.html                 separate private dashboard entry (dist-admin)
+  src/admin/                 announcement editing and publication review
   public/                    published market/catalog data and static assets
   tests/browser/             styled runtime and visual regression checks
 rust/
@@ -47,6 +49,8 @@ rust/
   market-domain-wasm/        market-domain for the browser desktop preview (wasm32)
   market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
+  tennoworth-announcements/  pure curated announcement feed contract
+  tennoworth-publisher/      private publisher API, SQLite history and feed export
   tennoworth-usage/          opt-in installation-count service
   tennoworth-reports/        opt-in anonymous price-report service
 scripts/                     release, CSP, probe and deployment checks
@@ -98,7 +102,7 @@ hosted site is informational only - no accounts, no file access, no scan - and
 `.github/workflows/` holds the release and verification workflows:
 `release-desktop` (manual dispatch bound to an approved commit; creates the
 immutable `desktop-v*` tag during publication), `build-web`,
-`build-usage`, `build-reports`, `audit`, `ui-smoke`, the weekly
+`build-usage`, `build-reports`, the manual `build-publisher`, `audit`, `ui-smoke`, the weekly
 `republish-rolling` (which re-dispatches `build-web`, `build-usage` and
 `build-reports`), and the on-demand
 `ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
@@ -306,3 +310,30 @@ The real desktop smoke probe exercises all domain operations against shared
 fixtures before completing its existing persistence/authentication checks. A
 successful browser preview proves rendering and interaction behavior; it does
 not establish that native IPC registration or serialization works.
+
+## Private announcement publishing
+
+The private dashboard is independently built from `frontend/admin.html` into
+`dist-admin`; hosted and desktop bundles exclude it. It shares presentation
+patterns and feed validation, with a same-origin HTTP capability for publishing.
+Its host-only publisher does not depend on the desktop shell. Cloudflare Access
+protects the dashboard hostname; the API verifies RS256 identity tokens against
+the configured issuer, audience and publisher identities. Mutation requests also
+require the configured dashboard Origin. User clients only read the public feed.
+
+SQLite stores saved drafts, published content, revision history and idempotency
+keys. A seed feed creates that state on first start and is not read again.
+Saves never change the public feed. Publish and withdraw validate a complete
+new feed with a strictly advancing timestamp, then export atomically. Pending
+exports survive restart; failures leave the previous file available and are
+visible in dashboard state. The database and export directory are independent
+of web build output. Caddy's optional feed-root setting switches the existing
+`/announcements.json` route to that directory once the publisher has written
+its first export there; a missing
+configured export returns an error instead of falling back to bundled content.
+
+A separately named debug-only publisher supports local browser verification.
+The production binary always requires Access configuration, and release builds
+reject the development feature. Deployment templates are source examples;
+activating the authenticated hostname, service and public-feed route requires
+reviewed host configuration.
