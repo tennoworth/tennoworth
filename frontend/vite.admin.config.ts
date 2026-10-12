@@ -13,7 +13,7 @@ export default defineConfig({
   }],
   server: {
     host: '127.0.0.1', port: 5194, strictPort: true,
-    proxy: { '/api/announcements': 'http://127.0.0.1:8084' },
+    proxy: { '/api/announcements': 'http://127.0.0.1:8084', '/api/status': 'http://127.0.0.1:8084', '/api/jobs': 'http://127.0.0.1:8084' },
   },
   build: { outDir: 'dist-admin', emptyOutDir: true, copyPublicDir: false, rollupOptions: { input: 'admin.html' } },
 });

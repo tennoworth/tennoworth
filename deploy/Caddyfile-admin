@@ -15,7 +15,7 @@
 	root * /srv/wfm/admin/frontend/dist-admin
 	encode gzip zstd
 	import announcement_admin_headers
-	@api path /api/announcements /api/announcements/*
+	@api path /api/announcements /api/announcements/* /api/status /api/jobs/*
 	skip_log @api
 	handle @api {
 		reverse_proxy 127.0.0.1:8084 {

@@ -79,12 +79,124 @@ pub struct DashboardState {
     pub message_id: Option<String>,
 }
 
+/// What the box last reported about one systemd unit. Times are UTC RFC 3339.
+#[derive(Clone, Debug, Serialize, TS)]
+pub struct UnitStatus {
+    pub unit: String,
+    /// False when systemd does not know the unit, i.e. it is not installed.
+    pub installed: bool,
+    pub active_state: String,
+    pub sub_state: String,
+    pub result: String,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum Health {
+    Ok,
+    Failing,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct ServiceStatus {
+    pub label: String,
+    pub service: UnitStatus,
+    /// Started by a timer and expected to be idle between runs, rather than always running.
+    pub scheduled: bool,
+    /// When its timer fires next; absent for long-running services.
+    pub next_run: Option<String>,
+    /// The loopback health probe, for services that answer one.
+    pub health: Option<Health>,
+}
+
+/// The parts of the daily readiness report the dashboard shows. A field the
+/// report did not carry stays absent rather than reading as zero.
+#[derive(Debug, Serialize, TS)]
+pub struct Readiness {
+    pub ready: bool,
+    pub checked_at: String,
+    pub errors: Vec<String>,
+    pub warnings: Vec<String>,
+    pub csv_rows: Option<i64>,
+    pub newest_sweep_age_seconds: Option<i64>,
+    pub sweep_wall_seconds: Option<i64>,
+    pub deploy_revision: Option<String>,
+    pub checkout_head: Option<String>,
+    pub deploy_lag: Option<String>,
+    pub pending_scraper_commits: Option<i64>,
+    pub disk_free_bytes: Option<i64>,
+    pub disk_floor_bytes: Option<i64>,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct AlertEntry {
+    pub at: String,
+    pub unit: String,
+    pub result: String,
+    pub context: Vec<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct BackupStatus {
+    pub latest_at: Option<String>,
+    pub count: i64,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct JobRequest {
+    pub at: String,
+    pub actor: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct JobStatus {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub unit: UnitStatus,
+    /// Why the job cannot be requested right now; absent when it can.
+    pub blocked: Option<String>,
+    pub last_request: Option<JobRequest>,
+    pub cooldown_until: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct BoxStatus {
+    pub collected_at: String,
+    /// Sources the publisher could not read; the rest of the page still loads.
+    pub problems: Vec<String>,
+    pub readiness: Option<Readiness>,
+    pub services: Vec<ServiceStatus>,
+    pub failed_units: Vec<String>,
+    pub alerts: Vec<AlertEntry>,
+    pub backup: BackupStatus,
+    pub web_bundle: Option<String>,
+    pub jobs: Vec<JobStatus>,
+}
+
+#[derive(Serialize, TS)]
+pub struct StatusState {
+    pub actor: String,
+    pub status: BoxStatus,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct RunJob {
+    pub job: String,
+}
+
 #[cfg(test)]
 #[test]
 fn publisher_bindings_match_rust() {
     let mut types = market_domain::bindings::TypeScript::default();
     types.add::<DashboardState>();
     types.add::<Change>();
+    types.add::<StatusState>();
+    types.add::<RunJob>();
     let expected = types.finish().expect("contracts");
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../frontend/src/contracts/generated/publisher.ts");

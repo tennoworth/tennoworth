@@ -21,7 +21,7 @@ frontend/
     ui/                      shared visual primitives and capability context
     dev/                     sample transport, styleguide, architecture gates
   admin.html                 separate private dashboard entry (dist-admin)
-  src/admin/                 announcement editing and publication review
+  src/admin/                 box status, scheduled-job requests, announcements
   public/                    published market/catalog data and static assets
   tests/browser/             styled runtime and visual regression checks
 rust/
@@ -333,6 +333,18 @@ mid-write. Caddy's optional feed-root setting switches the existing
 `/announcements.json` route to that directory once the publisher has written
 its first export there; a missing
 configured export returns an error instead of falling back to bundled content.
+
+The dashboard opens on a read-only box status page. The publisher assembles it
+on request from `systemctl show`, the loopback health probes, the readiness
+report, the alert log and the snapshot directory; a source it cannot read is
+listed as a problem instead of failing the page. The same page can start a
+fixed list of scheduled jobs early (`ops::JOBS`). The publisher never runs
+them: it writes a request file into that job's own directory under
+`/srv/wfm/jobs`, and a root-owned `tennoworth-job-<id>.path` unit watching only
+that directory starts the job's existing service, which systemd does not start
+twice. Requests carry only the job name, need the dashboard Origin, are refused
+while the job runs or within its pacing window, and are recorded with the
+signed-in identity. Deploys, releases and restores are not jobs.
 
 A separately named debug-only publisher supports local browser verification.
 The production binary always requires Access configuration, and release builds

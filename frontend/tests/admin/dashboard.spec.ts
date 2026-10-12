@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('drafts stay private, publish is reviewed, edits keep identity, and withdrawal clears the feed', async ({ page, request }) => {
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#announcements');
   await expect(page.getByText('Signed in: local-preview@example.invalid')).toBeVisible();
   await page.getByRole('button', { name: 'New announcement', exact: true }).click();
   const title = `Verified change ${Date.now()}`;
@@ -47,7 +47,7 @@ test('drafts stay private, publish is reviewed, edits keep identity, and withdra
 });
 
 async function draft(page: import('@playwright/test').Page, title: string) {
-  await page.goto('/admin.html');
+  await page.goto('/admin.html#announcements');
   await expect(page.getByText('Signed in: local-preview@example.invalid')).toBeVisible();
   await page.getByRole('button', { name: 'New announcement', exact: true }).click();
   await page.getByLabel('Title', { exact: true }).fill(title);
@@ -105,7 +105,7 @@ for (const mode of ['light', 'dark'] as const) for (const width of [320, 768, 14
   test(`editor remains usable in ${mode} at ${width}px and short height`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: mode });
     await page.setViewportSize({ width, height: 480 });
-    await page.goto('/admin.html');
+    await page.goto('/admin.html#announcements');
     await expect(page.getByText('Signed in: local-preview@example.invalid')).toBeVisible();
     await page.getByLabel('Title', { exact: true }).fill('A long title that should remain readable when the private dashboard is narrow');
     await page.getByLabel('Message', { exact: true }).fill('Unsaved guidance stays in place through refreshes, themes, resizes and failed saves.');

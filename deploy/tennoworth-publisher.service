@@ -14,6 +14,8 @@ Environment=TENNOWORTH_PUBLISHER_STATE=/var/lib/tennoworth-publisher
 Environment=TENNOWORTH_PUBLISHER_FEED=/srv/wfm/announcements/announcements.json
 ExecStart=/srv/wfm/bin/tennoworth-publisher
 ReadWritePaths=/srv/wfm/announcements
+# Job requests for the dashboard; optional so the service starts before they are installed.
+ReadWritePaths=-/srv/wfm/jobs
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
