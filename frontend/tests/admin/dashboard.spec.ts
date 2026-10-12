@@ -55,11 +55,15 @@ async function draft(page: import('@playwright/test').Page, title: string) {
   await page.getByLabel('Source URL').fill('https://forums.warframe.com/topic/123-test/');
 }
 
-test('an expired sign-in keeps unsaved edits through the reload and retries the same request', async ({ page, request }) => {
+test('an expired sign-in keeps unsaved edits through the reload and retries the same request', async ({ page, request, browserName }) => {
   const title = `Expired session ${Date.now()}`;
   await draft(page, title);
-  // Cloudflare Access answers an expired session at the edge, before the publisher sees it.
-  await page.route('**/api/announcements/change', route => route.fulfill({ status: 302, headers: { location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login' } }));
+  // Cloudflare Access answers an expired session at the edge with a login redirect,
+  // before the publisher sees it. Playwright's WebKit cannot fulfill a redirect, so it
+  // checks the same handling through the publisher's own 401.
+  await page.route('**/api/announcements/change', route => route.fulfill(browserName === 'webkit'
+    ? { status: 401, json: { message: 'Sign in through the private dashboard to continue.' } }
+    : { status: 302, headers: { location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login' } }));
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Your sign-in has expired');
   await page.unroute('**/api/announcements/change');
