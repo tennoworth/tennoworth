@@ -327,7 +327,9 @@ Saves never change the public feed. Publish and withdraw validate a complete
 new feed with a strictly advancing timestamp, then export atomically. Pending
 exports survive restart; failures leave the previous file available and are
 visible in dashboard state. The database and export directory are independent
-of web build output. Caddy's optional feed-root setting switches the existing
+of web build output. A daily timer writes a consistent `VACUUM INTO` snapshot
+beside the state and keeps the newest 30, so host backups never copy a database
+mid-write. Caddy's optional feed-root setting switches the existing
 `/announcements.json` route to that directory once the publisher has written
 its first export there; a missing
 configured export returns an error instead of falling back to bundled content.

@@ -229,7 +229,7 @@ done
 
 # Units need root plus a daemon-reload, so report rather than act - a puller
 # that silently restarts systemd units is a different and larger promise.
-for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor tennoworth-publisher; do
+for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor tennoworth-publisher tennoworth-publisher-backup; do
   for ext in service timer; do
     src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
     [ -f "$src" ] && [ -f "$dst" ] || continue

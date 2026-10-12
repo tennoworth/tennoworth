@@ -27,6 +27,28 @@ async fn main() -> anyhow::Result<()> {
                 &destination,
             );
         }
+        Some("snapshot") => {
+            let dir = PathBuf::from(
+                args.next()
+                    .ok_or_else(|| anyhow::anyhow!("snapshot requires a backup directory"))?,
+            );
+            let keep = match (args.next().as_deref(), args.next()) {
+                (None, _) => 30,
+                (Some("--keep"), Some(keep)) => keep.parse()?,
+                _ => anyhow::bail!("usage: snapshot DIR [--keep N]"),
+            };
+            if args.next().is_some() {
+                anyhow::bail!("unexpected snapshot arguments");
+            }
+            let written = tennoworth_publisher::store::snapshot(
+                &state.join("announcements.sqlite"),
+                &dir,
+                tennoworth_publisher::store::now(),
+                keep,
+            )?;
+            println!("{}", written.display());
+            return Ok(());
+        }
         Some("recover") => {
             if args.next().as_deref() != Some("--republish-restored-state") || args.next().is_some()
             {
@@ -37,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
                 &PathBuf::from(required("TENNOWORTH_PUBLISHER_FEED")?),
             );
         }
-        Some(_) => anyhow::bail!("expected backup, recover or no command"),
+        Some(_) => anyhow::bail!("expected backup, snapshot, recover or no command"),
         None => {}
     }
     let export = PathBuf::from(required("TENNOWORTH_PUBLISHER_FEED")?);
