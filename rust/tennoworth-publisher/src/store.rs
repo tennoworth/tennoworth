@@ -469,6 +469,9 @@ pub fn backup_file(path: &Path, destination: &Path) -> anyhow::Result<()> {
     if destination.exists() {
         anyhow::bail!("backup destination already exists");
     }
+    // An interrupted VACUUM leaves only this name behind, never a complete-looking backup.
+    let partial = partial_path(destination);
+    let _ = fs::remove_file(&partial);
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -476,13 +479,40 @@ pub fn backup_file(path: &Path, destination: &Path) -> anyhow::Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
         options.mode(0o600);
     }
-    drop(options.open(destination)?);
-    let result = db.execute("VACUUM INTO ?1", [destination.to_string_lossy().as_ref()]);
-    if result.is_err() {
-        let _ = fs::remove_file(destination);
+    drop(options.open(&partial)?);
+    let result = db
+        .execute("VACUUM INTO ?1", [partial.to_string_lossy().as_ref()])
+        .map_err(anyhow::Error::from)
+        .and_then(|_| {
+            fs::File::open(&partial)?.sync_all()?;
+            verify_backup(&partial)
+        });
+    if let Err(error) = result {
+        let _ = fs::remove_file(&partial);
+        return Err(error);
     }
-    result?;
-    fs::File::open(destination)?.sync_all()?;
+    fs::rename(&partial, destination)?;
+    #[cfg(unix)]
+    if let Some(parent) = destination.parent() {
+        fs::File::open(parent)?.sync_all()?;
+    }
+    Ok(())
+}
+
+fn partial_path(destination: &Path) -> PathBuf {
+    let mut name = destination.as_os_str().to_owned();
+    name.push(".partial");
+    PathBuf::from(name)
+}
+
+fn verify_backup(path: &Path) -> anyhow::Result<()> {
+    let db = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let check: String = db.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+    if check != "ok" {
+        anyhow::bail!("backup failed its integrity check: {check}");
+    }
+    let stored: String = db.query_row("SELECT feed FROM state", [], |r| r.get(0))?;
+    parse(&stored).ok_or_else(|| anyhow::anyhow!("backup holds no valid publication state"))?;
     Ok(())
 }
 
@@ -497,6 +527,17 @@ pub fn snapshot(path: &Path, dir: &Path, now: i64, keep: usize) -> anyhow::Resul
         .format("%Y%m%dT%H%M%SZ");
     let destination = dir.join(format!("announcements-{stamp}.sqlite"));
     backup_file(path, &destination)?;
+    // Partials from interrupted runs are never snapshots; clear them once one succeeds.
+    for entry in fs::read_dir(dir)?.filter_map(Result::ok) {
+        let name = entry.file_name();
+        if name
+            .to_str()
+            .and_then(|name| name.strip_suffix(".partial"))
+            .is_some_and(snapshot_name)
+        {
+            fs::remove_file(entry.path())?;
+        }
+    }
     let mut snapshots: Vec<PathBuf> = fs::read_dir(dir)?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| {
