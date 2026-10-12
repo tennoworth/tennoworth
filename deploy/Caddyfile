@@ -143,3 +143,8 @@
 		file_server
 	}
 }
+
+# The private announcement dashboard's own loopback listener. It is reachable
+# only through the Access-protected admin hostname; importing it keeps the
+# installed copy comparable with this file.
+import Caddyfile-admin

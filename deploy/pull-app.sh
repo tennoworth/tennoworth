@@ -221,14 +221,15 @@ done
 # was served from the BAKED dist/ copy instead of the live public/ one, and
 # editing the file on the box changed nothing. That silently voids the whole
 # point of a remote-fix file. Report it for the same reason as the units.
-if [ -f deploy/Caddyfile ] && [ -f /etc/caddy/Caddyfile ]; then
-  cmp -s deploy/Caddyfile /etc/caddy/Caddyfile \
-    || echo "  CADDY DRIFT: /etc/caddy/Caddyfile differs from deploy/Caddyfile - install it, 'caddy validate', then reload"
-fi
+for f in Caddyfile Caddyfile-admin; do
+  [ -f "deploy/$f" ] && [ -f /etc/caddy/Caddyfile ] || continue
+  cmp -s "deploy/$f" "/etc/caddy/$f" \
+    || echo "  CADDY DRIFT: /etc/caddy/$f differs from deploy/$f - install it, 'caddy validate', then reload"
+done
 
 # Units need root plus a daemon-reload, so report rather than act - a puller
 # that silently restarts systemd units is a different and larger promise.
-for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor; do
+for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor tennoworth-publisher; do
   for ext in service timer; do
     src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
     [ -f "$src" ] && [ -f "$dst" ] || continue
