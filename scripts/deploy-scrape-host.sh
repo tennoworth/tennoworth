@@ -265,7 +265,9 @@ install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.service" /etc/system
 install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.timer" /etc/systemd/system/wfm-observations-check.timer
 # ProtectSystem=strict in both new units grants write access to exactly this
 # path, and systemd refuses to start a unit whose ReadWritePaths does not exist.
-install -d -m 0750 -o root -g root "$HOST_ROOT/data/observations-check"
+# The private dashboard's publisher reads the report through its group; a box
+# without the dashboard keeps it root's. Escaped so the lookup runs on the box.
+install -d -m 0750 -o root -g "\$(getent group tennoworth-publisher >/dev/null && echo tennoworth-publisher || echo root)" "$HOST_ROOT/data/observations-check"
 systemctl daemon-reload
 # A fresh box otherwise has the units and nothing scheduled: setup-container no
 # longer enables the scrape timer, because this script owns the pipeline now.
