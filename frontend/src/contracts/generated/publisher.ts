@@ -40,6 +40,10 @@ export type Message = { id: string, draft: Content, published: Content | null, e
 
 export type Operation = "save" | "publish" | "withdraw";
 
+export type PublicFeedCheck = { url: string, checked_at: string, expected_updated_at: string, served_updated_at: string | null, state: PublicFeedState, error: string | null, };
+
+export type PublicFeedState = "live" | "behind" | "different" | "unreachable";
+
 export type Readiness = { ready: boolean, checked_at: string, errors: Array<string>, warnings: Array<string>, csv_rows: number | null, newest_sweep_age_seconds: number | null, sweep_wall_seconds: number | null, deploy_revision: string | null, checkout_head: string | null, deploy_lag: string | null, pending_scraper_commits: number | null, disk_free_bytes: number | null, disk_floor_bytes: number | null, };
 
 export type RunJob = { job: string, };

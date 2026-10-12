@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod contracts;
 pub mod ops;
+pub mod public;
 pub mod store;
 
 use auth::Auth;
@@ -12,8 +13,9 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use contracts::{Change, DashboardState, RunJob, StatusState};
+use contracts::{Change, DashboardState, PublicFeedCheck, RunJob, StatusState};
 use ops::Ops;
+use public::PublicFeed;
 use std::sync::{Arc, Mutex};
 use store::{Error, Store};
 
@@ -24,6 +26,8 @@ pub struct App {
     pub origin: String,
     /// Box status and jobs; absent when the publisher runs without a box.
     pub ops: Option<Arc<Ops>>,
+    /// Where visitors fetch the feed; absent when nothing serves it.
+    pub public_feed: Option<Arc<PublicFeed>>,
 }
 
 impl App {
@@ -45,11 +49,17 @@ impl App {
             auth: Arc::new(auth),
             origin,
             ops: None,
+            public_feed: None,
         })
     }
 
     pub fn with_ops(mut self, ops: Ops) -> Self {
         self.ops = Some(Arc::new(ops));
+        self
+    }
+
+    pub fn with_public_feed(mut self, feed: PublicFeed) -> Self {
+        self.public_feed = Some(Arc::new(feed));
         self
     }
 
@@ -155,6 +165,30 @@ async fn change(
         snapshot,
         message_id,
     }))
+}
+
+async fn public_feed(
+    State(app): State<App>,
+    headers: HeaderMap,
+) -> Result<Json<PublicFeedCheck>, ApiError> {
+    principal(&app, &headers).await?;
+    let feed = app.public_feed.clone().ok_or_else(|| {
+        ApiError::Job(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "No public feed is configured for this publisher.".into(),
+        )
+    })?;
+    let store = app.store.clone();
+    let expected = tokio::task::spawn_blocking(move || {
+        store
+            .lock()
+            .map_err(|_| Error::Unavailable)?
+            .snapshot()
+            .map(|snapshot| snapshot.feed.updated_at)
+    })
+    .await
+    .map_err(|_| Error::Unavailable)??;
+    Ok(Json(feed.check(&expected, store::now()).await))
 }
 
 fn ops(app: &App) -> Result<Arc<Ops>, ApiError> {
@@ -264,6 +298,7 @@ pub fn router(app: App) -> Router {
     Router::new()
         .route("/api/announcements", get(read))
         .route("/api/announcements/change", post(change))
+        .route("/api/announcements/public", get(public_feed))
         .route("/api/status", get(status))
         .route("/api/jobs/run", post(run_job))
         .layer(DefaultBodyLimit::max(65536))
@@ -483,6 +518,55 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn public_feed_check_compares_the_served_feed_with_the_latest_publication() {
+        let dir = tempfile::tempdir().unwrap();
+        let export = dir.path().join("announcements.json");
+        let open = || {
+            Store::open(
+                &dir.path().join("state.sqlite"),
+                export.clone(),
+                r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","messages":[]}"#,
+            )
+            .unwrap()
+        };
+        let check = |app: App| async move {
+            let response = router(app)
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/announcements/public")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let status = response.status();
+            let body: serde_json::Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 1 << 20).await.unwrap())
+                    .unwrap();
+            (status, body)
+        };
+        let unconfigured = App::new(open(), Auth::Local, "http://127.0.0.1:5194".into()).unwrap();
+        assert_eq!(check(unconfigured).await.0, StatusCode::SERVICE_UNAVAILABLE);
+
+        let app = App::new(open(), Auth::Local, "http://127.0.0.1:5194".into())
+            .unwrap()
+            .with_public_feed(PublicFeed::File(export.clone()));
+        let (status, body) = check(app.clone()).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["state"], "live");
+        // The site still serves an older copy, as it would until caches expire.
+        std::fs::write(
+            &export,
+            r#"{"version":1,"updated_at":"2025-12-31T00:00:00Z","messages":[]}"#,
+        )
+        .unwrap();
+        let (_, body) = check(app).await;
+        assert_eq!(body["state"], "behind");
+        assert_eq!(body["served_updated_at"], "2025-12-31T00:00:00Z");
+        assert_eq!(body["expected_updated_at"], "2026-01-01T00:00:00Z");
     }
 
     #[tokio::test]

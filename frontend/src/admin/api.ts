@@ -1,9 +1,13 @@
-import type { Change, DashboardState, RunJob, StatusState } from '../contracts/generated/publisher';
+import type { Market } from '../contracts/data';
+import type { Change, DashboardState, PublicFeedCheck, RunJob, StatusState } from '../contracts/generated/publisher';
 import { parseAnnouncements } from '../domain/announcements';
 
 export interface Publisher {
   load(): Promise<DashboardState>;
   change(change: Change): Promise<DashboardState>;
+  publicFeed(): Promise<PublicFeedCheck>;
+  /** The live market snapshot, for its calendar dates. */
+  market(): Promise<Market>;
 }
 
 export interface BoxApi {
@@ -54,5 +58,21 @@ async function status(job?: string): Promise<StatusState> {
   return value;
 }
 
-export const publisher: Publisher = { load: () => request(), change: request };
+async function publicFeed(): Promise<PublicFeedCheck> {
+  const value = await call('/api/announcements/public') as PublicFeedCheck | null;
+  if (!value || typeof value.checked_at !== 'string' || typeof value.state !== 'string') throw new Error('The publisher returned an unreadable feed check.');
+  return value;
+}
+
+async function market(): Promise<Market> {
+  let response: Response;
+  try { response = await fetch('/market.json', { cache: 'no-store', credentials: 'same-origin', redirect: 'manual', signal: AbortSignal.timeout(20_000) }); }
+  catch { throw new Error('The market snapshot could not be reached.'); }
+  if (response.type === 'opaqueredirect') throw new Error('Your sign-in has expired. Reload the page to sign in again.');
+  const value = response.ok ? await response.json().catch(() => null) : null;
+  if (!value || typeof value !== 'object') throw new Error(`The market snapshot is unavailable${response.ok ? '' : ` (HTTP ${response.status})`}.`);
+  return value as Market;
+}
+
+export const publisher: Publisher = { load: () => request(), change: request, publicFeed, market };
 export const boxApi: BoxApi = { load: () => status(), run: status };

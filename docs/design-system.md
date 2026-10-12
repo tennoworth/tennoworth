@@ -321,6 +321,11 @@ place. Publish and withdraw each require a review naming their delivery
 consequences; reviewing an edit to a published ID says who will not see it and
 offers Copy into a new announcement for corrections that must reach them. The dedicated
 admin browser suite verifies this styled surface in both themes and engines.
+The status strip's last cell says whether the public site serves the newest
+publication, in words with a good, warn or bad hue. Suggested drafts from the
+game calendar sit in their own panel above the editor, one dotted-rule row each
+with Open as draft and Dismiss; the panel is absent when nothing is suggested.
+An opened suggestion is unsaved edits, so leaving it asks first.
 These extend the existing review/continuity patterns without a new palette.
 
 ## Notification history
