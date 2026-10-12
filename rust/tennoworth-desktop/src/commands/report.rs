@@ -12,7 +12,7 @@ fn allowed_external_url(raw: &str) -> bool {
     matches!(
         url.host_str(),
         Some("warframe.market" | "github.com" | "ko-fi.com")
-    )
+    ) || crate::services::announcements::source_allowed(raw)
 }
 
 /// Open links from the desktop webview in the user's real browser. Tauri does
@@ -50,5 +50,15 @@ mod tests {
             "https://warframe.market.evil.example/items/foo"
         ));
         assert!(!allowed_external_url("javascript:alert(1)"));
+    }
+
+    #[test]
+    fn every_valid_announcement_source_can_open_in_the_system_browser() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/announcements/cases.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            if let Some(feed) = crate::services::announcements::parse(&case["feed"].to_string()) {
+                for message in feed.messages { assert!(allowed_external_url(&message.source_url), "{}", message.source_url); }
+            }
+        }
     }
 }

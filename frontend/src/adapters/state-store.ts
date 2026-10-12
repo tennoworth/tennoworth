@@ -42,6 +42,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'tray-toast-seen': 'wfminv:tray-toast-seen-v1',
   'sell-onboarding-dismissed': 'wfminv:sell-onboarding-dismissed-v1',
   prompts: 'wfminv:prompts-v1',
+  'dismissed-announcements': 'wfminv:dismissed-announcements-v1',
   'sell-columns': 'wfminv:sell-columns-v1',
   'auto-close-sold': 'wfminv:auto-close-sold-v1',
   'routine-checklist': 'wfminv:routine-checklist-v2',
@@ -116,10 +117,9 @@ export class TauriStateStore implements StateStore {
   }
 
   async setSetting(key: SettingKey, value: string): Promise<void> {
-    // Update the cache first so an immediately-following synchronous read is
-    // consistent even if the IPC write is still in flight.
-    this.#cache.set(key, value);
     await resolveInvoke()<void>('set_setting', { key, value });
+    // A failed save must not become a dismissal after the component remounts.
+    this.#cache.set(key, value);
   }
 
   async loadSnapshot(): Promise<Snapshot | null> {

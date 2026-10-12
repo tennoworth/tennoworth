@@ -14,6 +14,7 @@ fn desktop_bindings_match_rust() {
     types.add::<crate::services::presence::PresenceStatus>();
     types.add::<super::listing::OwnOrder>();
     types.add::<crate::notification_contract::NotificationContent>();
+    types.add::<crate::services::announcements::AnnouncementFeed>();
     types.add::<crate::shell::app_icon::AppIconOutcome>();
     let mut expected = types.finish().expect("unique wire types");
     expected.push_str(&format!(
@@ -33,6 +34,7 @@ fn desktop_bindings_match_rust() {
         ("ALLOWANCE_CHANGED_EVENT", crate::services::allowance::EVENT_ALLOWANCE_CHANGED),
         ("NOTIFICATIONS_EVENT", crate::services::notifications::EVENT),
         ("MARKET_REFRESHED_EVENT", crate::services::reminders::MARKET_EVENT),
+        ("ANNOUNCEMENTS_CHANGED_EVENT", crate::services::announcements::EVENT),
         ("LIVE_TOP_PROGRESS_EVENT", super::market::EVENT_LIVE_TOP_PROGRESS),
         ("TRAY_HINT_EVENT", crate::shell::tray::EVENT_TRAY_HINT),
         ("UPDATE_AVAILABLE_EVENT", crate::shell::update::EVENT_UPDATE_AVAILABLE),

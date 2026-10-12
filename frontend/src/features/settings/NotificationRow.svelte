@@ -1,11 +1,12 @@
 <script lang="ts">
   import type { NotificationEntry } from '../../contracts/desktop';
   import { notificationDate, plat, baroLocation } from '../../ui/format';
+  import { announcementSource } from '../../domain/announcements';
   let { entry, now, busy = false, onopen, onread }: {
     entry: NotificationEntry; now: number; busy?: boolean;
     onopen: () => void; onread: () => void;
   } = $props();
-  const categories = { trades: 'Completed trade', watches: 'Price watch', baro: 'Baro', calendar: 'Calendar', digest: 'Daily digest' };
+  const categories = { trades: 'Completed trade', watches: 'Price watch', baro: 'Baro', calendar: 'Calendar', digest: 'Daily digest', announcements: 'Market announcement' };
   const targets = { sell: 'Open Sell', orders: 'Review My Orders', ledger: 'Open Ledger', watches: 'Open price watches', baro: 'Open Baro and ducat planner', routines: 'Open calendar' };
   let date = $derived(notificationDate(entry.created_at, now));
   let content = $derived(entry.content);
@@ -20,7 +21,13 @@
     <div class="entry-title"><h3>{entry.title}</h3><div class="entry-meta"><span>{entry.read ? 'Read' : 'Unread'} · {categories[entry.category]}</span></div></div>
     <div class="entry-time"><time class="clock" datetime={date.iso}>{date.time}</time><span>{date.label}{date.shortDate ? ` · ${date.shortDate}` : ''}</span></div>
   </header>
-  {#if content?.kind === 'baro'}
+  {#if content?.kind === 'announcement'}
+    <p class="body">{entry.body}</p>
+    <div class="ui-toolbar">
+      <span class="evidence">{now >= Date.parse(content.ends_at) ? 'Ended' : 'Ends'} · {stamp(content.ends_at)}</span>
+      {#if announcementSource(content.source_url)}<a href={announcementSource(content.source_url)} target="_blank" rel="noopener noreferrer">Source announcement ↗</a>{/if}
+    </div>
+  {:else if content?.kind === 'baro'}
     <div class="entry-content">
       <p class="context"><span>{baroLocation(content.location)}</span>{#if content.stock_count !== null}<span>{content.stock_count} stock {content.stock_count === 1 ? 'item' : 'items'}</span>{/if}<span>{now < Date.parse(content.activation) ? 'Arrives' : 'Departure'} · {stamp(now < Date.parse(content.activation) ? content.activation : content.expiry, { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</span></p>
       {#if content.stock_count === null}

@@ -1,0 +1,9 @@
+{
+  "max_bytes": 65536,
+  "max_messages": 10,
+  "max_id": 80,
+  "max_title": 120,
+  "max_body": 1600,
+  "max_window_seconds": 2678400,
+  "source_hosts": ["warframe.com", "www.warframe.com", "forums.warframe.com", "wiki.warframe.com", "warframe.market", "tennoworth.app"]
+}

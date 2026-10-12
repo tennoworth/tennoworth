@@ -19,7 +19,7 @@ import { createDesktopServices } from '../../adapters/services';
 
 vi.mock('../../adapters/desktop', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../adapters/desktop')>(),
-  desktopNotificationPreferences: vi.fn(async () => ({ popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) })),
+  desktopNotificationPreferences: vi.fn(async () => ({ popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest', 'announcements'].map(k => [k, { enabled: true, native: true }])) })),
 }));
 
 afterEach(() => {

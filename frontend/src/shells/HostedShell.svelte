@@ -2,6 +2,7 @@
 import { ago, marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { onMount } from 'svelte';
 import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
+import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
 import DesktopShowcase from '../features/market-context/DesktopShowcase.svelte';
 import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 import Faq from './Faq.svelte';
@@ -13,7 +14,8 @@ import { baroPhase } from '../domain/baro-board';
 import { bugReportUrl, improvementUrl } from '../features/settings/feedback';
 import type { ThemeController } from '../ui/theme';
 import type { Market } from '../contracts/data';
-let { theme }: { theme: ThemeController } = $props();
+import type { SettingsStore } from '../contracts/state-store';
+let { theme, store }: { theme: ThemeController; store?: SettingsStore } = $props();
 const APP_COMMIT = __APP_COMMIT__;
 const transport = new HostedTransport();
 const reportUrl = bugReportUrl({ surface: 'Website', version: `build ${APP_COMMIT}` });
@@ -72,7 +74,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
     <p data-shell class="lede">Live warframe.market prices · no install, no login on this site</p>
   </header>
 
-  
+  <MarketAnnouncement now={displayNow} {store} load={() => transport.loadAnnouncements()} />
 
   
     

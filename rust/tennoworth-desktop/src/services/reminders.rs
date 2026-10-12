@@ -461,6 +461,11 @@ pub fn start(app: AppHandle, on_market_refresh: impl Fn(&AppHandle) + Send + 'st
             let mut refreshed: Option<Instant> = None;
             loop {
                 if refreshed.is_none_or(|t| t.elapsed() >= Duration::from_secs(15 * 60)) {
+                    let announcements = market::refresh_announcements(&app.state::<MarketCache>().dir());
+                    if announcements.updated {
+                        if let Some(body) = announcements.body.as_deref() { app.state::<MarketCache>().adopt_announcements(body); }
+                        let _ = app.emit(super::announcements::EVENT, ());
+                    }
                     let result = market::refresh(&app.state::<MarketCache>().dir());
                     if result.updated {
                         on_market_refresh(&app);
@@ -468,6 +473,7 @@ pub fn start(app: AppHandle, on_market_refresh: impl Fn(&AppHandle) + Send + 'st
                     }
                     refreshed = Some(Instant::now());
                 }
+                super::announcements::deliver(&app);
                 evaluate(&app);
                 std::thread::sleep(Duration::from_secs(60));
             }

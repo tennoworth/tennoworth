@@ -10,8 +10,8 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   let error = $state('');
   let message = $state('');
   let busy = $state(false);
-  const labels = { trades: 'Completed trades and listing follow-up', watches: 'Price watches', baro: 'Baro arrival and departure', calendar: 'Events affecting your holdings', digest: 'Daily sell opportunities' };
-  const timing: Partial<Record<NotificationCategory, string>> = { baro: 'One hour before arrival, on arrival, and one hour before departure.', calendar: 'When active and one hour before ending.', digest: 'Once daily after 18:00 local time, with inventory and prices no older than 24 hours.' };
+  const labels = { trades: 'Completed trades and listing follow-up', watches: 'Price watches', baro: 'Baro arrival and departure', calendar: 'Events affecting your holdings', digest: 'Daily sell opportunities', announcements: 'Market announcements' };
+  const timing: Partial<Record<NotificationCategory, string>> = { baro: 'One hour before arrival, on arrival, and one hour before departure.', calendar: 'When active and one hour before ending.', digest: 'Once daily after 18:00 local time, with inventory and prices no older than 24 hours.', announcements: 'Once per announcement while active. Checks every 15 minutes while the app is running; offline delivery may be delayed.' };
   async function load() {
     error = '';
     try {

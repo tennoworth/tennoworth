@@ -27,6 +27,7 @@ try {
 }
 
 const problems = [];
+if (report.announcementsIpc !== true || report.announcementDismissal !== true) problems.push("announcement feed or dismissal did not work through native IPC");
 if (report.updateNotesUiVerified !== true) problems.push("installed update notes did not open and close through Settings");
 if (report.updateNotesVerified !== true) problems.push("installed update notes were not verified over native IPC");
 if (report.wfm?.cancelIdle?.ok !== true) problems.push('WFM cancellation command was unavailable');

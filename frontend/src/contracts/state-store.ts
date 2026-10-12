@@ -14,6 +14,7 @@ export type SettingKey =
   /** Optional prompt banners' schedule (JSON, ui/prompts.ts): first use,
    *  launches, and each prompt's asks. Prompt ids are never reused. */
   | 'prompts'
+  | 'dismissed-announcements'
   /** Sell table columns the user picked, per preset (JSON: preset name, or
    *  'custom' when none is active, to an ordered column-key list). */
   | 'sell-columns'

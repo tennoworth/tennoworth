@@ -101,6 +101,8 @@ describe('native probe startup readiness', () => {
 });
 
 const passingReport = {
+  announcementsIpc: true,
+  announcementDismissal: true,
   updateNotesUiVerified: true,
   updateNotesVerified: true,
   wfm: {

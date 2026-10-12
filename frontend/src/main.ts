@@ -49,6 +49,6 @@ const app = styleguideSurface && !overlaySurface
     // decides the shell, and only the desktop store carries a snapshot.
     return store.mode === 'tauri'
       ? Promise.all([import('./shells/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
-      : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => mount(HostedShell, { target, props: { theme } }));
+      : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => mount(HostedShell, { target, props: { theme, store } }));
   });
 export default app;

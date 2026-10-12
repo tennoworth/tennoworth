@@ -37,6 +37,11 @@ pub fn cached_market(cache: State<'_, MarketCache>) -> Option<String> {
     cache.cached()
 }
 
+#[tauri::command]
+pub fn get_announcements(cache: State<'_, MarketCache>) -> Option<crate::services::announcements::AnnouncementFeed> {
+    crate::services::announcements::load(&cache)
+}
+
 /// Conditionally refresh the market snapshot from tennoworth.app (ETag /
 /// If-None-Match), updating the app-data cache. Async + spawn_blocking so the
 /// (network) call never blocks the webview event loop, mirroring scan_inventory

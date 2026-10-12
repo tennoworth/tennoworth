@@ -233,6 +233,14 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return probeFetch('/wfstat-catalog.json').then(function(x){ R.fetchCatalog = x; }); })
     .then(checkDomain)
     .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
+    .then(function(){ return invk('get_announcements').then(function(feed){
+      if (!feed || feed.version !== 1 || !Array.isArray(feed.messages)) throw new Error('announcement feed unavailable over native IPC');
+      R.announcementsIpc = true;
+      return invk('set_setting', { key: 'dismissed-announcements', value: '["probe-message"]' });
+    }).then(function(){ return invk('get_setting', { key: 'dismissed-announcements' }); }).then(function(value){
+      if (value !== '["probe-message"]') throw new Error('announcement dismissal did not persist');
+      R.announcementDismissal = true;
+    }); })
     .then(function(){ return invk('trade_session_state').then(function(v){
       if (!v || !v.allowance || !v.quantities || !Array.isArray(v.bulk_slugs)
           || ['scanned', 'tracked', 'estimated', 'unknown'].indexOf(v.allowance.confidence) < 0
@@ -340,7 +348,7 @@ const PROBE_JS: &str = r#"(function(){
       if (rows.some(function(n){ return n.category === 'scans'; })) throw new Error('a scan notification was produced');
     }); })
     .then(function(){ return invk('get_notification_preferences').then(function(p){
-      if (!p.categories.baro.enabled || !p.popups) throw new Error('notification defaults missing');
+      if (!p.categories.baro.enabled || !p.categories.announcements.enabled || !p.categories.announcements.native || !p.popups) throw new Error('notification defaults missing');
       if (p.categories.scans) throw new Error('removed notification category is still served');
       p.popups = false;
       return invk('set_notification_preferences', { preferences: p }).then(function(){ return invk('get_notification_preferences'); }).then(function(saved){

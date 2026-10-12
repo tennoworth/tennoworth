@@ -1,0 +1,690 @@
+[
+  {
+    "name": "active",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": true,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": [
+      "sample-message"
+    ]
+  },
+  {
+    "name": "before-start",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": true,
+    "now": "2026-10-10T23:59:59Z",
+    "active_ids": []
+  },
+  {
+    "name": "at-start",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": true,
+    "now": "2026-10-11T00:00:00Z",
+    "active_ids": [
+      "sample-message"
+    ]
+  },
+  {
+    "name": "before-end",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": true,
+    "now": "2026-10-15T14:59:59Z",
+    "active_ids": [
+      "sample-message"
+    ]
+  },
+  {
+    "name": "at-end",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": true,
+    "now": "2026-10-15T15:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "withdrawn-empty-feed",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": []
+    },
+    "valid": true,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "bad-date",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "not-a-date",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "empty-window",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-11T00:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "long-window",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-12-01T00:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "non-canonical-date",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T01:00:00+01:00",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "bad-id",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "../sample",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "empty-id",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "long-body",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "control-character",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "bidi-override",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare \u202ebarrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "bidi-isolate",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange \u2067spare\u2069 barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "long-title",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "lookalike-host",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com.evil.example/news"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "unknown-host",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://example.com/news"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "community-host",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://www.reddit.com/r/Warframe/comments/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "unencrypted-source",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "http://forums.warframe.com/news"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "source-credentials",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://user@forums.warframe.com/news"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "source-port",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com:444/news"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "executable-link",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "javascript:alert(1)"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "unsupported-version",
+    "feed": {
+      "version": 2,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "bad-feed-stamp",
+    "feed": {
+      "version": 1,
+      "updated_at": "tomorrow",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "duplicate-id",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "malformed-sibling-refuses-whole-feed",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "title": "malformed sibling"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "too-many-messages",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-0",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-1",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-2",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-3",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-4",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-5",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-6",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-7",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-8",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-9",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        },
+        {
+          "id": "sample-10",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "extended-year",
+    "feed": {
+      "version": 1,
+      "updated_at": "+010000-01-01T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  }
+]

@@ -143,6 +143,42 @@ Check the actual app for native behavior. Preserve unfinished form edits through
 refreshes, resizes, authentication, and error states. Do not hide diagnostics
 with `@ts-nocheck` or replace runtime verification with type checking.
 
+## Publishing market announcements
+
+Edit `frontend/public/announcements.json` and run
+`bun scripts/check-announcements.ts` from the root. Hosted and desktop builds
+run this check too. Preview the banner on the site and desktop preview, and
+review both themes and narrow windows. Publish through the normal checked site
+delivery path; production promotion still requires the authorization described
+in [releasing.md](docs/releasing.md). Once installed clients support the feed,
+later announcements need only a site update, not a desktop release.
+
+Use a new, stable lowercase ID for a distinct announcement. Never reuse an ID:
+editing its text or deadline updates the banner but does not repeat a desktop
+notification. Set `updated_at` to the publication time in UTC and advance it
+for every revision or withdrawal. `starts_at` and `ends_at` are canonical UTC
+timestamps such as `2026-10-15T15:00:00Z`; the active window cannot exceed 31
+days. Use an empty `messages` array to withdraw everything. A newer valid feed
+replaces the whole older feed; a malformed sibling refuses the whole update.
+
+Write plain text with the specific change, exact deadline, consequence and
+useful next action. Link a verified source on one of the hosts in
+`tests/fixtures/announcements/limits.json`. Do not promise Platinum outcomes
+or instruct users to discard crafting copies. The feed carries no markup,
+executable actions, pricing overrides or inventory targeting. Keep messages
+rare and relevant to selling decisions.
+
+Clients check every 15 minutes while running. Offline clients retain the last
+valid feed and still expire its messages; a withdrawal cannot reach them until
+they reconnect. Popups come only from a feed fetched from the site, never from
+the copy bundled with a release. Desktop delivery honors notification preferences, keeps durable
+deduplication after history is cleared, and emits at most one new announcement
+per minute. Popups already sent cannot be recalled, and delivery is not
+guaranteed while the app is closed or the operating system suppresses popups.
+Banner expiry follows the shell clock, which refreshes every minute and on
+focus. A publisher must maintain correct dates and advance the feed timestamp;
+the readers refuse a rollback to an older timestamp.
+
 ## Native desktop development
 
 Install the Rust toolchain with Cargo. Native dependencies differ by platform;
