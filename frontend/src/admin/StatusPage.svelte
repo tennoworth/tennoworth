@@ -14,6 +14,13 @@
   const box = $derived(current?.status ?? null);
   const readiness = $derived(box?.readiness ?? null);
   const sweep = $derived(box?.services.find(service => service.service.unit === 'wfm-scrape.service') ?? null);
+  const sweeping = $derived(!!sweep && running(sweep.service));
+  // systemd clears the exit time when a new sweep starts, so while one runs the
+  // last finished sweep comes from the readiness report instead.
+  const lastSweepAt = $derived(sweep?.service.finished_at && !sweeping ? sweep.service.finished_at
+    : readiness?.newest_sweep_age_seconds != null
+      ? new Date(Date.parse(readiness.checked_at) - readiness.newest_sweep_age_seconds * 1000).toISOString()
+      : null);
   const confirming = $derived(box?.jobs.find(job => job.id === confirm) ?? null);
   // Poll quickly only while something the page started could still change.
   const settling = $derived(!!box?.jobs.some(job => running(job.unit)
@@ -79,6 +86,7 @@
     return `${Math.round(hours / 24)} days`;
   }
   function local(value: string | null | undefined) { return value ? new Date(value).toLocaleString() : ''; }
+  function count(n: number, noun: string) { return `${n} ${noun}${n === 1 ? '' : 's'}`; }
   function gib(bytes: number | null) { return bytes === null ? 'unknown' : `${(bytes / 2 ** 30).toFixed(1)} GiB`; }
   function lag(): [string, Tone] {
     switch (readiness?.deploy_lag) {
@@ -114,13 +122,13 @@
         <span class="k">Scrape readiness</span>
         {#if readiness}
           <strong class="word" data-tone={readiness.ready ? (readiness.warnings.length ? 'warn' : 'good') : 'bad'}>{readiness.ready ? 'Ready' : 'Not ready'}</strong>
-          <small>{readiness.errors.length} errors · {readiness.warnings.length} warnings · checked {ago(readiness.checked_at)}</small>
+          <small>{count(readiness.errors.length, 'error')} · {count(readiness.warnings.length, 'warning')} · checked {ago(readiness.checked_at)}</small>
         {:else}<strong class="word">Unknown</strong><small>No readable report</small>{/if}
       </div>
       <div>
         <span class="k">Last sweep</span>
-        <strong class="word">{ago(sweep?.service.finished_at)}</strong>
-        <small>{readiness?.csv_rows != null ? `${readiness.csv_rows.toLocaleString()} rows` : 'Row count unknown'}{readiness?.sweep_wall_seconds != null ? ` · took ${span(readiness.sweep_wall_seconds)}` : ''}</small>
+        <strong class="word" title={local(lastSweepAt)}>{lastSweepAt ? ago(lastSweepAt) : 'Unknown'}</strong>
+        <small>{#if sweeping}Another sweep is running, started {ago(sweep?.service.started_at)}{:else}{readiness?.csv_rows != null ? `${readiness.csv_rows.toLocaleString()} rows` : 'Row count unknown'}{readiness?.sweep_wall_seconds != null ? ` · took ${span(readiness.sweep_wall_seconds)}` : ''}{/if}</small>
       </div>
       <div>
         <span class="k">Deploy lag</span>
