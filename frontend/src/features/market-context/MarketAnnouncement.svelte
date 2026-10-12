@@ -11,7 +11,7 @@
   } = $props();
   let feed = $state<AnnouncementFeed | null>(null);
   let saving = $state(false);
-  let saveError = $state('');
+  let failed = $state<string | null>(null);
   let dismissed = $state<string[]>(untrack(() => {
     try {
       const value: unknown = JSON.parse(store?.getSetting('dismissed-announcements') ?? '[]');
@@ -38,13 +38,13 @@
     return () => { mounted = false; window.clearInterval(timer); window.removeEventListener('focus', focused); document.removeEventListener('visibilitychange', focused); stop?.(); };
   });
   async function dismiss(id: string) {
-    saving = true; saveError = '';
+    saving = true; failed = null;
     const next = [...dismissed.filter(value => value !== id), id].slice(-100);
     try {
       await store?.setSetting('dismissed-announcements', JSON.stringify(next));
       if (store && store.getSetting('dismissed-announcements') !== JSON.stringify(next)) throw new Error('Dismissal was not saved');
       dismissed = next;
-    } catch { saveError = 'Could not save dismissal. Try again.'; }
+    } catch { failed = id; }
     finally { saving = false; }
   }
 </script>
@@ -54,7 +54,7 @@
     <div class="gb-body ui-stack">
       <strong>{message.title}</strong>
       <p>{message.body}</p>
-      {#if saveError}<p class="bad" role="alert">{saveError}</p>{/if}
+      {#if failed === message.id}<p class="bad" role="alert">Could not save dismissal. Try again.</p>{/if}
     </div>
     <div class="gb-actions">
       <a class="btn xs" href={message.source_url} target="_blank" rel="noopener noreferrer">Source announcement ↗</a>

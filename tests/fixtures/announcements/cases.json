@@ -277,6 +277,46 @@
     "active_ids": []
   },
   {
+    "name": "bidi-override",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare \u202ebarrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "bidi-isolate",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange \u2067spare\u2069 barrels before the deadline.",
+          "source_url": "https://forums.warframe.com/topic/example/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
     "name": "long-title",
     "feed": {
       "version": 1,
@@ -329,6 +369,26 @@
           "title": "Check spare barrels",
           "body": "Exchange spare barrels before the deadline.",
           "source_url": "https://example.com/news"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "community-host",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [
+        {
+          "id": "sample-message",
+          "starts_at": "2026-10-11T00:00:00Z",
+          "ends_at": "2026-10-15T15:00:00Z",
+          "title": "Check spare barrels",
+          "body": "Exchange spare barrels before the deadline.",
+          "source_url": "https://www.reddit.com/r/Warframe/comments/example/"
         }
       ]
     },

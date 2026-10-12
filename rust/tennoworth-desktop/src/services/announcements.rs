@@ -43,9 +43,11 @@ fn stamp(raw: &str) -> Option<i64> {
     (value.to_utc().to_rfc3339_opts(SecondsFormat::Secs, true) == raw).then(|| value.timestamp())
 }
 
+// Bidirectional controls can make a title or deadline read differently from its stored text.
 fn text(raw: &str, max: usize) -> bool {
     !raw.trim().is_empty() && raw.chars().count() <= max
-        && !raw.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+        && !raw.chars().any(|c| (c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+            || matches!(c, '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'))
 }
 
 fn permitted_source(raw: &str, limits: &Limits) -> bool {
@@ -103,8 +105,15 @@ pub fn candidates(feed: &AnnouncementFeed, now: i64) -> Vec<Candidate> {
     }).collect()
 }
 
+/// Popups use only a feed fetched from the site. The bundled copy can still carry
+/// a message withdrawn since the release, which an offline first launch must not
+/// announce; the banner falls back to it only until those messages expire.
+fn fetched(cache: &MarketCache) -> Option<AnnouncementFeed> {
+    cache.cached_announcements().and_then(|raw| parse(&raw))
+}
+
 pub fn deliver(app: &AppHandle) {
-    if let Some(feed) = load(&app.state::<MarketCache>()) {
+    if let Some(feed) = fetched(&app.state::<MarketCache>()) {
         for candidate in candidates(&feed, notifications::now()) {
             match notifications::publish(app, candidate) {
                 Ok(true) => break,
@@ -162,6 +171,16 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         assert!(db.insert_notification(&candidate, now, false, true).unwrap().is_some());
         assert_eq!(db.list_notifications().unwrap()[0].delivery, "inbox_only");
+    }
+
+    #[test]
+    fn only_a_fetched_feed_can_raise_popups() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = MarketCache::new(dir.path().to_owned());
+        assert!(load(&cache).is_some_and(|feed| !feed.messages.is_empty()));
+        assert!(fetched(&cache).is_none());
+        cache.adopt_announcements(BUNDLED);
+        assert!(fetched(&cache).is_some());
     }
 
     #[test]

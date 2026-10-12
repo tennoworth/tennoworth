@@ -170,7 +170,8 @@ rare and relevant to selling decisions.
 
 Clients check every 15 minutes while running. Offline clients retain the last
 valid feed and still expire its messages; a withdrawal cannot reach them until
-they reconnect. Desktop delivery honors notification preferences, keeps durable
+they reconnect. Popups come only from a feed fetched from the site, never from
+the copy bundled with a release. Desktop delivery honors notification preferences, keeps durable
 deduplication after history is cleared, and emits at most one new announcement
 per minute. Popups already sent cannot be recalled, and delivery is not
 guaranteed while the app is closed or the operating system suppresses popups.

@@ -11,8 +11,9 @@ function stamp(value: unknown): value is string {
   return Number.isFinite(parsed) && new Date(parsed).toISOString().replace('.000Z', 'Z') === value;
 }
 
+// Bidirectional controls can make a title or deadline read differently from its stored text.
 function text(value: unknown, max: number): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && Array.from(value).length <= max && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(value);
+  return typeof value === 'string' && value.trim().length > 0 && Array.from(value).length <= max && !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/.test(value);
 }
 
 export function announcementSource(value: string): string | null {
