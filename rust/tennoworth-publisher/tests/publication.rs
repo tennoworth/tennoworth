@@ -280,3 +280,43 @@ fn exclusive_ownership_backup_restore_and_missing_exports_are_checked() {
     assert!(tennoworth_publisher::store::recover_publication(&db, &export).is_err());
     assert!(Store::open(&dir.path().join("lost.sqlite"), export, SEED).is_err());
 }
+
+#[test]
+fn existing_state_resumes_without_a_seed_and_retries_name_their_message() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state.sqlite");
+    let export = dir.path().join("public/announcements.json");
+    assert!(Store::resume(&db, export.clone()).is_err());
+    assert!(
+        !db.exists(),
+        "a refused start must not leave an empty database behind"
+    );
+    let mut store = Store::open(&db, export.clone(), SEED).unwrap();
+    let save = change(0, Operation::Save, None, Some(content()));
+    store
+        .apply(&save, "publisher@example.invalid", NOW)
+        .unwrap();
+    let id = store
+        .request_message(&save.request_id, "publisher@example.invalid")
+        .unwrap()
+        .unwrap();
+    assert!(id.starts_with("announcement-"));
+    drop(store);
+    let mut store = Store::resume(&db, export).unwrap();
+    store
+        .apply(&save, "publisher@example.invalid", NOW)
+        .unwrap();
+    assert_eq!(store.snapshot().unwrap().revision, 1);
+    assert_eq!(
+        store
+            .request_message(&save.request_id, "publisher@example.invalid")
+            .unwrap(),
+        Some(id)
+    );
+    assert_eq!(
+        store
+            .request_message(&save.request_id, "someone-else@example.invalid")
+            .unwrap(),
+        None
+    );
+}

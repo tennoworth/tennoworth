@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
         None => {}
     }
     let export = PathBuf::from(required("TENNOWORTH_PUBLISHER_FEED")?);
-    let seed = std::fs::read_to_string(required("TENNOWORTH_PUBLISHER_SEED")?)?;
+    let database = state.join("announcements.sqlite");
     let auth = Access::new(
         required("TENNOWORTH_ACCESS_ISSUER")?,
         required("TENNOWORTH_ACCESS_AUDIENCE")?,
@@ -50,7 +50,13 @@ async fn main() -> anyhow::Result<()> {
             .map(|s| s.trim().to_owned())
             .collect::<BTreeSet<_>>(),
     )?;
-    let store = Store::open(&state.join("announcements.sqlite"), export, &seed)?;
+    // The seed only creates first state, so a later loss of that file cannot stop the service.
+    let store = if database.exists() {
+        Store::resume(&database, export)?
+    } else {
+        let seed = std::fs::read_to_string(required("TENNOWORTH_PUBLISHER_SEED")?)?;
+        Store::open(&database, export, &seed)?
+    };
     let app = App::new(
         store,
         Auth::Access(auth),

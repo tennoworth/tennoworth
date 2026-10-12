@@ -8,7 +8,11 @@ export type Change = { request_id: string, expected_revision: number, operation:
 
 export type Content = { title: string, body: string, source_url: string, starts_at: string, ends_at: string, };
 
-export type DashboardState = { actor: string, snapshot: Snapshot, };
+export type DashboardState = { actor: string, snapshot: Snapshot,
+/**
+ * The announcement the answered change created or edited; absent on a plain read.
+ */
+message_id: string | null, };
 
 export type History = { revision: number, actor: string, at: string, operation: string, id: string | null, content: Content | null, };
 

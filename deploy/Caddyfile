@@ -44,8 +44,9 @@
 		file_server
 	}
 
-	# Configure the independent publisher directory only after seeding it.
-	# A configured but missing export returns 404 rather than reviving bundled content.
+	# Point this at the publisher's export directory only after the publisher has
+	# written its first export there; never copy a feed into it by hand. A configured
+	# but missing export returns 404 rather than reviving bundled content.
 	handle /announcements.json {
 		root * {$TENNOWORTH_ANNOUNCEMENT_FEED_ROOT:/srv/wfm/app/frontend/dist}
 		header Cache-Control "public, max-age=60, must-revalidate"

@@ -45,7 +45,17 @@ fn utc(now: i64) -> Result<String, Error> {
 }
 
 impl Store {
+    /// Creates publication state from `seed` on first use; an existing database ignores it.
     pub fn open(path: &Path, export: PathBuf, seed: &str) -> anyhow::Result<Self> {
+        Self::open_with(path, export, Some(seed))
+    }
+
+    /// Opens existing publication state, so the seed file is only needed once.
+    pub fn resume(path: &Path, export: PathBuf) -> anyhow::Result<Self> {
+        Self::open_with(path, export, None)
+    }
+
+    fn open_with(path: &Path, export: PathBuf, seed: Option<&str>) -> anyhow::Result<Self> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -62,9 +72,8 @@ impl Store {
         if !path.exists() && export.exists() {
             anyhow::bail!("existing feed requires database restoration before startup");
         }
-        let seed = parse(seed).ok_or_else(|| anyhow::anyhow!("invalid seed feed"))?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+        if !path.exists() && seed.is_none() {
+            anyhow::bail!("publication database is missing; start with a seed feed");
         }
         if !path.exists() {
             let mut options = fs::OpenOptions::new();
@@ -82,7 +91,7 @@ impl Store {
             CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, feed_revision INTEGER NOT NULL, exported_revision INTEGER NOT NULL, feed TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, draft TEXT NOT NULL, published TEXT, ever_published INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS history (revision INTEGER PRIMARY KEY, actor TEXT NOT NULL, at TEXT NOT NULL, operation TEXT NOT NULL, message_id TEXT, content TEXT);
-            CREATE TABLE IF NOT EXISTS requests (request_id TEXT NOT NULL, actor TEXT NOT NULL, digest TEXT NOT NULL, PRIMARY KEY(request_id, actor));")?;
+            CREATE TABLE IF NOT EXISTS requests (request_id TEXT NOT NULL, actor TEXT NOT NULL, digest TEXT NOT NULL, message_id TEXT NOT NULL, PRIMARY KEY(request_id, actor));")?;
         let mut store = Self {
             db,
             export,
@@ -92,6 +101,10 @@ impl Store {
             .db
             .query_row("SELECT EXISTS(SELECT 1 FROM state)", [], |r| r.get(0))?;
         if !existing {
+            let seed = seed.ok_or_else(|| {
+                anyhow::anyhow!("publication database has no state; start with a seed feed")
+            })?;
+            let seed = parse(seed).ok_or_else(|| anyhow::anyhow!("invalid seed feed"))?;
             let tx = store.db.transaction()?;
             tx.execute(
                 "INSERT INTO state VALUES (1,0,0,-1,?1)",
@@ -347,12 +360,24 @@ impl Store {
             ],
         )?;
         tx.execute(
-            "INSERT INTO requests VALUES (?1,?2,?3)",
-            params![change.request_id, actor, digest],
+            "INSERT INTO requests VALUES (?1,?2,?3,?4)",
+            params![change.request_id, actor, digest, id],
         )?;
         tx.commit()?;
         let _ = self.retry_export();
         self.snapshot()
+    }
+
+    /// The announcement a completed request created or changed, including on a retried request.
+    pub fn request_message(&self, request_id: &str, actor: &str) -> Result<Option<String>, Error> {
+        Ok(self
+            .db
+            .query_row(
+                "SELECT message_id FROM requests WHERE request_id=?1 AND actor=?2",
+                params![request_id, actor],
+                |r| r.get(0),
+            )
+            .optional()?)
     }
 
     pub fn retry_export(&mut self) -> Result<(), Error> {

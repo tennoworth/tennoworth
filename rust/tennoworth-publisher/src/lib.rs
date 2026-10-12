@@ -109,7 +109,11 @@ async fn read(
     })
     .await
     .map_err(|_| Error::Unavailable)??;
-    Ok(Json(DashboardState { actor, snapshot }))
+    Ok(Json(DashboardState {
+        actor,
+        snapshot,
+        message_id: None,
+    }))
 }
 
 async fn change(
@@ -122,15 +126,21 @@ async fn change(
         return Err(ApiError::Forbidden);
     }
     let author = actor.clone();
-    let snapshot = tokio::task::spawn_blocking(move || {
-        app.store
-            .lock()
-            .map_err(|_| Error::Unavailable)?
-            .apply(&change, &author, store::now())
+    let (snapshot, message_id) = tokio::task::spawn_blocking(move || {
+        let mut store = app.store.lock().map_err(|_| Error::Unavailable)?;
+        let snapshot = store.apply(&change, &author, store::now())?;
+        Ok::<_, Error>((
+            snapshot,
+            store.request_message(&change.request_id, &author)?,
+        ))
     })
     .await
     .map_err(|_| Error::Unavailable)??;
-    Ok(Json(DashboardState { actor, snapshot }))
+    Ok(Json(DashboardState {
+        actor,
+        snapshot,
+        message_id,
+    }))
 }
 
 async fn private_headers(request: axum::extract::Request, next: middleware::Next) -> Response {
@@ -165,11 +175,24 @@ pub async fn serve(app: App, port: u16) -> anyhow::Result<()> {
         }
     });
     axum::serve(listener, router(app))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
+        .with_graceful_shutdown(shutdown())
         .await?;
     Ok(())
+}
+
+// systemd stops the service with SIGTERM; Ctrl+C covers an interactive run.
+async fn shutdown() {
+    #[cfg(unix)]
+    if let Ok(mut terminate) =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+    {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate.recv() => {}
+        }
+        return;
+    }
+    let _ = tokio::signal::ctrl_c().await;
 }
 
 #[cfg(test)]

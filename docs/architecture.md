@@ -322,12 +322,14 @@ the configured issuer, audience and publisher identities. Mutation requests also
 require the configured dashboard Origin. User clients only read the public feed.
 
 SQLite stores saved drafts, published content, revision history and idempotency
-keys. Saves never change the public feed. Publish and withdraw validate a complete
+keys. A seed feed creates that state on first start and is not read again.
+Saves never change the public feed. Publish and withdraw validate a complete
 new feed with a strictly advancing timestamp, then export atomically. Pending
 exports survive restart; failures leave the previous file available and are
 visible in dashboard state. The database and export directory are independent
 of web build output. Caddy's optional feed-root setting switches the existing
-`/announcements.json` route to that directory after it is seeded; a missing
+`/announcements.json` route to that directory once the publisher has written
+its first export there; a missing
 configured export returns an error instead of falling back to bundled content.
 
 A separately named debug-only publisher supports local browser verification.

@@ -53,6 +53,8 @@ impl Access {
             .redirect(reqwest::redirect::Policy::none())
             .user_agent("TennoWorth publisher")
             .build()?;
+        // Email addresses are compared without case, as the identity provider may vary it.
+        let principals = principals.iter().map(|p| p.to_lowercase()).collect();
         Ok(Self {
             issuer,
             audience,
@@ -121,11 +123,15 @@ impl Access {
         validation.set_audience(&[&self.audience]);
         validation.set_required_spec_claims(&["iss", "aud", "exp", "sub"]);
         validation.validate_nbf = true;
-        validation.leeway = 0;
-        let claims = decode::<Claims>(token, &key, &validation).ok()?.claims;
-        self.principals
-            .contains(&claims.email)
-            .then_some(claims.email)
+        // Access issues tokens valid from the moment of sign-in; without a little
+        // tolerance a host clock a second behind Cloudflare refuses a fresh login.
+        validation.leeway = 60;
+        let email = decode::<Claims>(token, &key, &validation)
+            .ok()?
+            .claims
+            .email
+            .to_lowercase();
+        self.principals.contains(&email).then_some(email)
     }
 }
 
@@ -239,7 +245,7 @@ mod tests {
                 serde_json::json!("https://attacker.cloudflareaccess.com"),
             ),
             ("aud", serde_json::json!(["another-app"])),
-            ("exp", serde_json::json!(now - 1)),
+            ("exp", serde_json::json!(now - 61)),
             ("nbf", serde_json::json!(now + 300)),
             ("email", serde_json::json!("other@example.invalid")),
         ] {
@@ -262,6 +268,14 @@ mod tests {
                 "missing {field}"
             );
         }
+        let mut skewed = claims.clone();
+        skewed["nbf"] = serde_json::json!(now + 30);
+        skewed["email"] = serde_json::json!("Publisher@Example.Invalid");
+        assert_eq!(
+            access.verify(&encode(&header, &skewed, &signer).unwrap(), &keys),
+            Some("publisher@example.invalid".into()),
+            "a slightly fast Access clock and differently cased email"
+        );
         let mut altered = signed.clone().into_bytes();
         let last = altered.len() - 10;
         altered[last] = if altered[last] == b'A' { b'B' } else { b'A' };

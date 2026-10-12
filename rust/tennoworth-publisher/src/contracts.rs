@@ -75,6 +75,8 @@ pub struct Snapshot {
 pub struct DashboardState {
     pub actor: String,
     pub snapshot: Snapshot,
+    /// The announcement the answered change created or edited; absent on a plain read.
+    pub message_id: Option<String>,
 }
 
 #[cfg(test)]
