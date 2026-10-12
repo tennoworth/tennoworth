@@ -968,7 +968,8 @@ describe('observation corpus check wiring', () => {
     expect(deploy).toMatch(/install -m 0644 "\$RELEASES\/\$REVISION\/wfm-observations-check\.timer" \/etc\/systemd\/system\/wfm-observations-check\.timer/);
     // ProtectSystem=strict grants write access to exactly this path, and systemd
     // refuses to start a unit whose ReadWritePaths is missing.
-    expect(deploy).toMatch(/install -d -m 0750 -o root -g root "\$HOST_ROOT\/data\/observations-check"/);
+    // Recreating it as root:root on every deploy hid the report from the dashboard's publisher.
+    expect(deploy).toMatch(/install -d -m 0750 -o root -g "\\\$\(getent group tennoworth-publisher >\/dev\/null && echo tennoworth-publisher \|\| echo root\)" "\$HOST_ROOT\/data\/observations-check"/);
     expect(deploy).toMatch(/systemctl enable --now wfm-observations-check\.timer/);
     for (const file of owned) {
       expect(setup, `${file} must not be installed by provisioning`).not.toContain(file);

@@ -338,8 +338,9 @@ The dashboard opens on a read-only box status page. The publisher assembles it
 on request from `systemctl show`, the loopback health probes, the readiness
 report, the alert log and the snapshot directory; a source it cannot read is
 listed as a problem instead of failing the page. The readiness report directory
-belongs to group `tennoworth-publisher` (set once at install; tmpfiles cannot
-manage it below the `wfm`-owned `/srv/wfm/data`). The same page can start a
+belongs to group `tennoworth-publisher`; the scraper deploy, which recreates
+that directory, sets it (tmpfiles cannot manage it below the `wfm`-owned
+`/srv/wfm/data`). The same page can start a
 fixed list of scheduled jobs early (`ops::JOBS`). The publisher never runs
 them: it writes a request file into that job's own directory under
 `/srv/wfm/jobs`, and a root-owned `tennoworth-job-<id>.path` unit watching only
