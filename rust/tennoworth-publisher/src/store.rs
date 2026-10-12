@@ -38,7 +38,7 @@ fn encode<T: serde::Serialize>(value: &T) -> Result<String, Error> {
 fn decode<T: serde::de::DeserializeOwned>(value: String) -> Result<T, Error> {
     Ok(serde_json::from_str(&value)?)
 }
-fn utc(now: i64) -> Result<String, Error> {
+pub(crate) fn utc(now: i64) -> Result<String, Error> {
     chrono::DateTime::from_timestamp(now, 0)
         .map(|v| v.to_rfc3339_opts(SecondsFormat::Secs, true))
         .ok_or_else(|| Error::Invalid("Date is outside the supported range.".into()))

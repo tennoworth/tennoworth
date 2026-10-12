@@ -101,6 +101,66 @@ test('a correction can go out as a new announcement so dismissed readers see it'
   expect(copies.filter((entry: { ever_published: boolean }) => !entry.ever_published)).toHaveLength(1);
 });
 
+test('publication status says whether the public feed serves the newest revision', async ({ page }) => {
+  const strip = page.getByRole('region', { name: 'Publication status' });
+  await page.route('**/api/announcements/public', async route => {
+    const check = await (await route.fetch()).json();
+    await route.fulfill({ json: { ...check, url: 'https://tennoworth.app/announcements.json', state: 'behind', served_updated_at: '2026-01-01T00:00:00Z' } });
+  });
+  await page.goto('/admin.html#announcements');
+  await expect(strip).toContainText('tennoworth.app still serves the feed from');
+  await page.unroute('**/api/announcements/public');
+  // The local publisher has no public site; it checks its own export.
+  const title = `Confirmed ${Date.now()}`;
+  await draft(page, title);
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Review publication', exact: true }).click();
+  await page.getByRole('button', { name: 'Publish announcement', exact: true }).click();
+  await expect(strip).toContainText('The local export serves this feed');
+  await page.route('**/api/announcements/public', route => route.fulfill({ status: 503, json: { message: 'No public feed is configured for this publisher.' } }));
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await expect(strip).toContainText('Public feed not checked: No public feed is configured for this publisher.');
+});
+
+test('calendar suggestions open as unsaved drafts and stay gone once saved or dismissed', async ({ page, request }) => {
+  const hour = 3_600_000;
+  const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const arrives = Math.ceil(Date.now() / hour) * hour + 72 * hour;
+  // Rotation keys carry its dates, so each run proposes fresh suggestions.
+  const ends = arrives + Math.floor(Math.random() * 48) * hour;
+  await page.route('**/market.json', route => route.fulfill({ json: {
+    updated_at: iso(Date.now()), platform: 'pc', item_count: 0, catalog_count: 0, catalog: {}, items: {},
+    baro: { activation: iso(arrives), expiry: iso(arrives + 48 * hour), location: `Relay ${ends}` },
+    calendar: { resurgence_current: { from: iso(arrives - 30 * 24 * hour), to: iso(ends), frames: ['protea_prime_set'] } },
+  } }));
+  await page.goto('/admin.html#announcements');
+  const panel = page.getByRole('region', { name: 'Suggested drafts' });
+  await expect(panel.getByText(/Baro Ki'Teer arrives/)).toBeVisible();
+  await expect(panel.getByText(/Protea Prime relics leave Prime Resurgence/)).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Open as draft', exact: true }).first().click();
+  await expect(page.getByText('Suggested draft opened.', { exact: false })).toBeVisible();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(/^Baro Ki'Teer arrives/);
+  await expect(page.getByLabel('Source URL')).toHaveValue('https://wiki.warframe.com/w/Baro_Ki%27Teer');
+  await expect(page.getByText('Unsaved edits', { exact: true })).toBeVisible();
+  // Nothing reached the publisher yet.
+  let state = await (await request.get('http://127.0.0.1:8084/api/announcements')).json();
+  const title = await page.getByLabel('Title', { exact: true }).inputValue();
+  const before = state.snapshot.messages.filter((entry: { draft: { title: string } }) => entry.draft.title === title).length;
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Draft saved. The public feed has not changed.')).toBeVisible();
+  state = await (await request.get('http://127.0.0.1:8084/api/announcements')).json();
+  expect(state.snapshot.messages.filter((entry: { draft: { title: string } }) => entry.draft.title === title)).toHaveLength(before + 1);
+  expect(state.snapshot.feed.messages.some((entry: { title: string }) => entry.title === title)).toBe(false);
+  await expect(panel.getByText(/Baro Ki'Teer arrives/)).toHaveCount(0);
+
+  await panel.getByRole('button', { name: 'Dismiss', exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByText('Signed in: local-preview@example.invalid')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Suggested drafts' })).toHaveCount(0);
+});
+
 for (const mode of ['light', 'dark'] as const) for (const width of [320, 768, 1440]) {
   test(`editor remains usable in ${mode} at ${width}px and short height`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: mode });

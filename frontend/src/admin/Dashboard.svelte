@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import type { Publisher } from './api';
-  import type { Change, Content, DashboardState, Message } from '../contracts/generated/publisher';
+  import type { Change, Content, DashboardState, Message, PublicFeedCheck } from '../contracts/generated/publisher';
   import type { ThemeController } from '../ui/theme';
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
   import AnnouncementBanner from '../features/market-context/AnnouncementBanner.svelte';
   import { parseAnnouncements } from '../domain/announcements';
+  import { calendarSuggestions, type Suggestion } from './suggestions';
   import limits from '../../../tests/fixtures/announcements/limits.json';
 
   let { publisher, theme }: { publisher: Publisher; theme: ThemeController } = $props();
@@ -16,7 +17,7 @@
   }
   // Signing in again after Access expires reloads the page; this tab keeps unsaved work across it.
   const DRAFT_KEY = 'tennoworth-admin-draft-v1';
-  type SavedDraft = { selected: string | null; form: Content; baseline: string; pending: Change | null };
+  type SavedDraft = { selected: string | null; form: Content; baseline: string; pending: Change | null; suggested?: string | null };
   function restore(): SavedDraft | null {
     try {
       const value = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null');
@@ -35,7 +36,22 @@
   let receipt = $state(restored ? 'Restored your unsaved edits from before the page reloaded.' : '');
   let review = $state<'publish' | 'withdraw' | null>(null);
   let pending = $state<Change | null>(restored?.pending ?? null);
-  let discard = $state<string | 'new' | null>(null);
+  let discard = $state<string | Suggestion | null>(null);
+  let suggestions = $state<Suggestion[]>([]);
+  let suggestionError = $state('');
+  let suggested = $state<string | null>(restored?.suggested ?? null);
+  // Per browser: a dismissal only hides a proposal, so losing it costs nothing.
+  const DISMISSED_KEY = 'tennoworth-admin-dismissed-suggestions-v1';
+  function readDismissed(): string[] {
+    try { const value = JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? '[]'); return Array.isArray(value) ? value.filter(key => typeof key === 'string') : []; }
+    catch { return []; }
+  }
+  let dismissed = $state<string[]>(readDismissed());
+  let feedCheck = $state<PublicFeedCheck | null>(null);
+  let feedCheckError = $state('');
+  let confirming = $state(false);
+  let feedTimer: number | undefined;
+  let checkSerial = 0;
   let now = $state(Date.now());
   const dirty = $derived(JSON.stringify(form) !== baseline);
   const record = $derived(dashboardState?.snapshot.messages.find(message => message.id === selected));
@@ -44,8 +60,21 @@
   const unpublished = $derived(!record?.published || JSON.stringify(record.draft) !== JSON.stringify(record.published));
   const exportPending = $derived(!!dashboardState && dashboardState.snapshot.feed_revision !== dashboardState.snapshot.exported_revision);
   const draftChanged = $derived(!!record && JSON.stringify(record.draft) !== baseline);
+  const visibleSuggestions = $derived(suggestions.filter(suggestion => !dismissed.includes(suggestion.key)));
+  const feedHost = $derived.by(() => {
+    try { return feedCheck ? new URL(feedCheck.url).hostname : ''; } catch { return 'The local export'; }
+  });
+  const feedStatus = $derived.by((): { tone: string; text: string } => {
+    if (feedCheckError) return { tone: 'warn', text: `Public feed not checked: ${feedCheckError}` };
+    if (!feedCheck) return { tone: '', text: dashboardState ? 'Checking the public feed…' : 'Public feed unchecked' };
+    const served = feedCheck.served_updated_at ? local(feedCheck.served_updated_at) : 'unknown';
+    if (feedCheck.state === 'live') return { tone: 'good', text: `${feedHost} serves this feed · checked ${clock(feedCheck.checked_at)}` };
+    if (feedCheck.state === 'behind') return { tone: 'warn', text: `${feedHost} still serves the feed from ${served}${confirming ? ' · rechecking' : ` · checked ${clock(feedCheck.checked_at)}`}` };
+    if (feedCheck.state === 'different') return { tone: 'bad', text: `${feedHost} serves a newer feed (${served}) than this publisher published` };
+    return { tone: 'warn', text: `Could not confirm ${feedHost}: ${feedCheck.error ?? 'no answer'}` };
+  });
   $effect(() => {
-    const draft = dirty || pending ? JSON.stringify({ selected, form, baseline, pending } satisfies SavedDraft) : null;
+    const draft = dirty || pending ? JSON.stringify({ selected, form, baseline, pending, suggested } satisfies SavedDraft) : null;
     try { if (draft) sessionStorage.setItem(DRAFT_KEY, draft); else sessionStorage.removeItem(DRAFT_KEY); }
     catch { /* The form still holds the edits; only a reload would lose them. */ }
   });
@@ -54,24 +83,63 @@
     busy = true; error = '';
     if (review) receipt = 'Publication review closed. Review the latest saved draft before publishing.';
     review = null;
-    try { dashboardState = await publisher.load(); }
+    try { dashboardState = await publisher.load(); void checkPublic(); }
     catch (cause) { error = cause instanceof Error ? cause.message : 'Could not load publication state.'; }
     finally { busy = false; }
   }
+  async function checkPublic(): Promise<PublicFeedCheck | null> {
+    const serial = ++checkSerial;
+    try {
+      const next = await publisher.publicFeed();
+      if (serial === checkSerial) { feedCheck = next; feedCheckError = ''; }
+      return next;
+    } catch (cause) {
+      if (serial === checkSerial) feedCheckError = cause instanceof Error ? cause.message : 'Could not check the public feed.';
+      return null;
+    }
+  }
+  // The export lands at once, but the site's cache may serve the old feed for a minute or so.
+  function confirmPublication() {
+    window.clearTimeout(feedTimer);
+    feedCheck = null; confirming = true;
+    let attempts = 0;
+    const poll = async () => {
+      const result = await checkPublic();
+      attempts += 1;
+      if (result?.state === 'live' || attempts >= 18) { confirming = false; return; }
+      feedTimer = window.setTimeout(poll, 10_000);
+    };
+    void poll();
+  }
+  async function loadSuggestions() {
+    try { suggestions = calendarSuggestions(await publisher.market(), Date.now()); suggestionError = ''; }
+    catch (cause) { suggestionError = `Calendar suggestions are unavailable: ${cause instanceof Error ? cause.message : 'the market snapshot could not be read.'}`; }
+  }
+  function dismissSuggestion(key: string) {
+    // Keys of events that have passed are dropped, so the list stays small.
+    dismissed = [...dismissed.filter(entry => suggestions.some(suggestion => suggestion.key === entry)), key];
+    try { localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissed)); } catch { /* Hidden until the page reloads. */ }
+  }
   onMount(() => {
     void refresh();
+    void loadSuggestions();
     const timer = window.setInterval(() => { now = Date.now(); }, 30_000);
     const leave = (event: BeforeUnloadEvent) => { if (dirty || pending) event.preventDefault(); };
     window.addEventListener('beforeunload', leave);
-    return () => { window.clearInterval(timer); window.removeEventListener('beforeunload', leave); };
+    return () => { window.clearInterval(timer); window.clearTimeout(feedTimer); window.removeEventListener('beforeunload', leave); };
   });
 
-  function edit(id: string | 'new', confirmed = false) {
-    if ((dirty || pending) && !confirmed) { discard = id; return; }
-    const found = dashboardState?.snapshot.messages.find(message => message.id === id);
+  function edit(target: string | Suggestion, confirmed = false) {
+    if ((dirty || pending) && !confirmed) { discard = target; return; }
+    const found = typeof target === 'string' ? dashboardState?.snapshot.messages.find(message => message.id === target) : undefined;
+    const suggestion = typeof target === 'string' ? null : target;
     selected = found?.id ?? null;
-    form = found ? { ...found.draft } : initial();
-    baseline = JSON.stringify(form); review = null; pending = null; error = ''; receipt = ''; discard = null;
+    form = found ? { ...found.draft } : suggestion ? { ...suggestion.content } : initial();
+    // A suggestion opens as unsaved edits, so leaving it asks first and Save is offered.
+    baseline = suggestion ? JSON.stringify(initial()) : JSON.stringify(form);
+    suggested = suggestion?.key ?? null;
+    review = null; pending = null; error = ''; discard = null;
+    receipt = suggestion ? 'Suggested draft opened. Check the wording and dates against the source, then save it.' : '';
   }
   async function submit(operation: Change['operation']) {
     if (!dashboardState || busy) return;
@@ -83,7 +151,8 @@
       if (change.operation === 'save') {
         selected = change.id ?? next.message_id ?? null;
         baseline = JSON.stringify(change.content);
-      }
+        if (suggested) { dismissSuggestion(suggested); suggested = null; }
+      } else confirmPublication();
       receipt = change.operation === 'save' ? 'Draft saved. The public feed has not changed.'
         : next.snapshot.feed_revision === next.snapshot.exported_revision ? (change.operation === 'publish' ? 'Feed published. Running clients will pick it up on their next check.' : 'Withdrawal published. Existing popups cannot be recalled.')
         : 'Publication is pending: your revision was saved, but the public feed could not be replaced. The service will retry; refresh to check its status.';
@@ -103,6 +172,7 @@
     if (Date.parse(message.published.ends_at) <= now) return 'Expired';
     return Date.parse(message.published.starts_at) > now ? 'Scheduled' : 'Live';
   }
+  function clock(value: string) { const date = new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleTimeString() : 'unknown'; }
   function local(value: string) { const date = new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Enter a valid UTC date'; }
   function dateValue(value: string) { return value.replace(/Z$/, '').slice(0, 19); }
   function setDate(field: 'starts_at' | 'ends_at', value: string) { form[field] = value ? value.length === 16 ? `${value}:00Z` : `${value}Z` : ''; review = null; }
@@ -118,6 +188,7 @@
     <span>{dashboardState ? `Signed in: ${dashboardState.actor}` : 'Loading private publisher…'}</span>
     <span>{dashboardState ? `Revision ${dashboardState.snapshot.revision}` : 'Revision unavailable'}</span>
     <span>{exportPending ? 'Export pending — last public feed remains in use' : dashboardState ? `Feed updated ${local(dashboardState.snapshot.feed.updated_at)}` : 'Feed unavailable'}</span>
+    <span class="feed-check" data-tone={feedStatus.tone || undefined} role="status">{feedStatus.text}</span>
   </section>
   {#if error}<div class="ui-notice" data-tone="bad" role="alert">{error}</div>{/if}
   {#if receipt}<div class="ui-notice" data-tone={exportPending ? 'warn' : 'good'} role="status">{receipt}</div>{/if}
@@ -133,6 +204,21 @@
       <p>Keep working on these edits, or discard them to open another announcement?</p>
       <div class="ui-toolbar"><button class="btn" onclick={() => { discard = null; }}>Keep editing</button><button class="btn bad" onclick={() => edit(discard!, true)}>Discard edits</button></div>
     </div>
+  {/if}
+  {#if visibleSuggestions.length || suggestionError}
+    <section class="ui-panel" aria-label="Suggested drafts">
+      <header><h2>Suggested drafts</h2><span>From the game calendar · nothing publishes on its own</span></header>
+      {#if suggestionError}<p class="hint">{suggestionError}</p>{/if}
+      {#each visibleSuggestions as suggestion (suggestion.key)}
+        <div class="suggestion">
+          <div><strong id="suggestion-{suggestion.key}">{suggestion.headline}</strong><small>{suggestion.detail}</small></div>
+          <div class="ui-toolbar">
+            <button class="btn" disabled={busy} aria-describedby="suggestion-{suggestion.key}" onclick={() => edit(suggestion)}>Open as draft</button>
+            <button class="btn ghost" aria-describedby="suggestion-{suggestion.key}" onclick={() => dismissSuggestion(suggestion.key)}>Dismiss</button>
+          </div>
+        </div>
+      {/each}
+    </section>
   {/if}
   <div class="admin-workspace">
     <section class="ui-panel announcements-list">
@@ -205,9 +291,15 @@
   .message-choice[aria-pressed="true"] { background: var(--ink-bar); color: var(--on-ink); }
   .message-choice span, .hint { font-size: var(--text-caption); }
   .hint, footer { color: var(--muted); }
+  .feed-check[data-tone="good"] { color: var(--good); }
+  .feed-check[data-tone="warn"] { color: var(--warn); }
+  .feed-check[data-tone="bad"] { color: var(--bad); }
+  .suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s3); align-items: center; padding-top: var(--s2); border-top: 1px var(--rule) var(--border); overflow-wrap: anywhere; }
+  .suggestion:first-of-type { border-top: 0; padding-top: 0; }
+  .suggestion small { display: block; color: var(--muted); font-size: var(--text-caption); }
   .notification-preview { padding: var(--s3); border: 1px solid var(--border); margin-top: var(--s2); }
   .prose, .notification-preview p { white-space: pre-line; overflow-wrap: anywhere; }
   .history-entry { border-bottom: 1px var(--rule) var(--border); padding-bottom: var(--s2); overflow-wrap: anywhere; }
   footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s3); }
-  @media (max-width: 760px) { .admin-workspace, .dates { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) { .admin-workspace, .dates, .suggestion { grid-template-columns: minmax(0, 1fr); } }
 </style>

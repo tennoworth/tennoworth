@@ -84,7 +84,11 @@ async fn main() -> anyhow::Result<()> {
         Auth::Access(auth),
         required("TENNOWORTH_PUBLISHER_ORIGIN")?,
     )?
-    .with_ops(tennoworth_publisher::ops::Ops::box_defaults());
+    .with_ops(tennoworth_publisher::ops::Ops::box_defaults())
+    .with_public_feed(tennoworth_publisher::public::PublicFeed::url(
+        std::env::var("TENNOWORTH_PUBLIC_FEED_URL")
+            .unwrap_or_else(|_| "https://tennoworth.app/announcements.json".into()),
+    )?);
     let port = std::env::var("TENNOWORTH_PUBLISHER_PORT")
         .unwrap_or_else(|_| "8084".into())
         .parse()?;

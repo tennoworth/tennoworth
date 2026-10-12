@@ -333,6 +333,16 @@ mid-write. Caddy's optional feed-root setting switches the existing
 `/announcements.json` route to that directory once the publisher has written
 its first export there; a missing
 configured export returns an error instead of falling back to bundled content.
+Because a written export does not prove visitors receive it, the dashboard asks
+the publisher to fetch the public feed (`TENNOWORTH_PUBLIC_FEED_URL`, default
+`https://tennoworth.app/announcements.json`) and compare its `updated_at` with
+the newest publication; after a publish it rechecks until the two match. The
+fetch runs server-side because the dashboard's CSP allows only its own origin.
+
+The dashboard proposes drafts from the Baro visit and Prime Resurgence dates in
+the live `market.json`, which its own Caddy listener serves from the same
+directory as the public site. A suggestion only fills the editor; saving,
+review and publication are unchanged.
 
 The dashboard opens on a read-only box status page. The publisher assembles it
 on request from `systemctl show`, the loopback health probes, the readiness

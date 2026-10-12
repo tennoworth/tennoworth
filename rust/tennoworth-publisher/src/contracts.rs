@@ -79,6 +79,29 @@ pub struct DashboardState {
     pub message_id: Option<String>,
 }
 
+#[derive(Debug, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicFeedState {
+    /// Visitors receive the newest published revision.
+    Live,
+    /// Visitors still receive an older feed, usually until caches expire.
+    Behind,
+    /// The served feed is newer than anything this publisher published.
+    Different,
+    /// The public feed could not be fetched or did not validate.
+    Unreachable,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct PublicFeedCheck {
+    pub url: String,
+    pub checked_at: String,
+    pub expected_updated_at: String,
+    pub served_updated_at: Option<String>,
+    pub state: PublicFeedState,
+    pub error: Option<String>,
+}
+
 /// What the box last reported about one systemd unit. Times are UTC RFC 3339.
 #[derive(Clone, Debug, Serialize, TS)]
 pub struct UnitStatus {
@@ -197,6 +220,7 @@ fn publisher_bindings_match_rust() {
     types.add::<Change>();
     types.add::<StatusState>();
     types.add::<RunJob>();
+    types.add::<PublicFeedCheck>();
     let expected = types.finish().expect("contracts");
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../frontend/src/contracts/generated/publisher.ts");

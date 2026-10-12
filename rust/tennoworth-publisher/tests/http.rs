@@ -5,6 +5,7 @@ use axum::{
 use std::collections::BTreeSet;
 use tennoworth_publisher::{
     auth::{Access, Auth},
+    public::PublicFeed,
     router,
     store::Store,
     App,
@@ -31,24 +32,26 @@ async fn private_routes_refuse_missing_authentication() {
         Auth::Access(auth),
         "https://admin.example.invalid".into(),
     )
-    .unwrap();
-    let response = router(app)
-        .oneshot(
-            Request::builder()
-                .uri("/api/announcements")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    assert_eq!(response.headers()["cache-control"], "no-store");
-    assert!(!String::from_utf8(
-        to_bytes(response.into_body(), 65536)
-            .await
-            .unwrap()
-            .to_vec()
-    )
     .unwrap()
-    .contains("draft"));
+    .with_public_feed(PublicFeed::File(dir.path().join("announcements.json")));
+    for uri in [
+        "/api/announcements",
+        "/api/announcements/public",
+        "/api/status",
+    ] {
+        let response = router(app.clone())
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{uri}");
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        assert!(!String::from_utf8(
+            to_bytes(response.into_body(), 65536)
+                .await
+                .unwrap()
+                .to_vec()
+        )
+        .unwrap()
+        .contains("draft"));
+    }
 }
