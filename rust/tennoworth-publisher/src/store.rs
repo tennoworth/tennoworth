@@ -91,7 +91,8 @@ impl Store {
             CREATE TABLE IF NOT EXISTS state (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, feed_revision INTEGER NOT NULL, exported_revision INTEGER NOT NULL, feed TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, draft TEXT NOT NULL, published TEXT, ever_published INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS history (revision INTEGER PRIMARY KEY, actor TEXT NOT NULL, at TEXT NOT NULL, operation TEXT NOT NULL, message_id TEXT, content TEXT);
-            CREATE TABLE IF NOT EXISTS requests (request_id TEXT NOT NULL, actor TEXT NOT NULL, digest TEXT NOT NULL, message_id TEXT NOT NULL, PRIMARY KEY(request_id, actor));")?;
+            CREATE TABLE IF NOT EXISTS requests (request_id TEXT NOT NULL, actor TEXT NOT NULL, digest TEXT NOT NULL, message_id TEXT NOT NULL, PRIMARY KEY(request_id, actor));
+            CREATE TABLE IF NOT EXISTS job_requests (id INTEGER PRIMARY KEY, job TEXT NOT NULL, actor TEXT NOT NULL, at INTEGER NOT NULL);")?;
         let mut store = Self {
             db,
             export,
@@ -207,6 +208,24 @@ impl Store {
             messages,
             history,
         })
+    }
+
+    /// Records who asked the box to run a job, so the dashboard can show it and pace repeats.
+    pub fn record_job_request(&self, job: &str, actor: &str, now: i64) -> Result<(), Error> {
+        self.db.execute(
+            "INSERT INTO job_requests (job, actor, at) VALUES (?1, ?2, ?3)",
+            params![job, actor, now],
+        )?;
+        Ok(())
+    }
+
+    /// The newest request for each job, as (job, actor, unix seconds).
+    pub fn latest_job_requests(&self) -> Result<Vec<(String, String, i64)>, Error> {
+        let mut stmt = self.db.prepare(
+            "SELECT job, actor, at FROM job_requests WHERE id IN (SELECT MAX(id) FROM job_requests GROUP BY job)",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
     }
 
     pub fn apply(&mut self, change: &Change, actor: &str, now: i64) -> Result<Snapshot, Error> {
@@ -493,6 +512,26 @@ pub fn snapshot(path: &Path, dir: &Path, now: i64, keep: usize) -> anyhow::Resul
         fs::remove_file(old)?;
     }
     Ok(destination)
+}
+
+/// The time of the newest snapshot in `dir`, read from its name.
+pub fn latest_snapshot(dir: &Path) -> std::io::Result<(Option<i64>, usize)> {
+    let mut stamps: Vec<i64> = fs::read_dir(dir)?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| snapshot_name(name))
+        .filter_map(|name| {
+            let stamp = name
+                .strip_prefix("announcements-")?
+                .strip_suffix(".sqlite")?
+                .to_owned();
+            chrono::NaiveDateTime::parse_from_str(&stamp, "%Y%m%dT%H%M%SZ")
+                .ok()
+                .map(|time| time.and_utc().timestamp())
+        })
+        .collect();
+    stamps.sort_unstable();
+    Ok((stamps.last().copied(), stamps.len()))
 }
 
 fn snapshot_name(name: &str) -> bool {

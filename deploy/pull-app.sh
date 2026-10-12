@@ -236,5 +236,11 @@ for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-u
     cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
   done
 done
+for src in deploy/tennoworth-job-*.path; do
+  [ -f "$src" ] || continue
+  dst="/etc/systemd/system/${src#deploy/}"
+  [ -f "$dst" ] || continue
+  cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
+done
 
 # restore() runs here via the trap, before anyone reads the result.

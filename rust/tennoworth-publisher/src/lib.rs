@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod contracts;
+pub mod ops;
 pub mod store;
 
 use auth::Auth;
@@ -11,7 +12,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use contracts::{Change, DashboardState};
+use contracts::{Change, DashboardState, RunJob, StatusState};
+use ops::Ops;
 use std::sync::{Arc, Mutex};
 use store::{Error, Store};
 
@@ -20,6 +22,8 @@ pub struct App {
     pub store: Arc<Mutex<Store>>,
     pub auth: Arc<Auth>,
     pub origin: String,
+    /// Box status and jobs; absent when the publisher runs without a box.
+    pub ops: Option<Arc<Ops>>,
 }
 
 impl App {
@@ -40,7 +44,13 @@ impl App {
             store: Arc::new(Mutex::new(store)),
             auth: Arc::new(auth),
             origin,
+            ops: None,
         })
+    }
+
+    pub fn with_ops(mut self, ops: Ops) -> Self {
+        self.ops = Some(Arc::new(ops));
+        self
     }
 
     pub async fn maintenance(&self) {
@@ -69,6 +79,7 @@ enum ApiError {
     Unauthorized,
     Forbidden,
     Storage(Error),
+    Job(StatusCode, String),
 }
 impl From<Error> for ApiError {
     fn from(error: Error) -> Self {
@@ -87,6 +98,9 @@ impl IntoResponse for ApiError {
                 "Publish from the configured dashboard origin.",
             ),
             Self::Storage(error) => return error.into_response(),
+            Self::Job(status, message) => {
+                return (status, Json(serde_json::json!({ "message": message }))).into_response()
+            }
         };
         (status, Json(serde_json::json!({"message":message}))).into_response()
     }
@@ -143,6 +157,96 @@ async fn change(
     }))
 }
 
+fn ops(app: &App) -> Result<Arc<Ops>, ApiError> {
+    app.ops.clone().ok_or_else(|| {
+        ApiError::Job(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Box status is not configured for this publisher.".into(),
+        )
+    })
+}
+
+async fn latest_requests(app: &App) -> Result<Vec<(String, String, i64)>, ApiError> {
+    let store = app.store.clone();
+    Ok(tokio::task::spawn_blocking(move || {
+        store
+            .lock()
+            .map_err(|_| Error::Unavailable)?
+            .latest_job_requests()
+    })
+    .await
+    .map_err(|_| Error::Unavailable)??)
+}
+
+async fn status(State(app): State<App>, headers: HeaderMap) -> Result<Json<StatusState>, ApiError> {
+    let actor = principal(&app, &headers).await?;
+    let ops = ops(&app)?;
+    let requests = latest_requests(&app).await?;
+    Ok(Json(StatusState {
+        actor,
+        status: ops.collect(store::now(), &requests).await,
+    }))
+}
+
+async fn run_job(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(request): Json<RunJob>,
+) -> Result<Json<StatusState>, ApiError> {
+    let actor = principal(&app, &headers).await?;
+    if headers.get("origin").and_then(|v| v.to_str().ok()) != Some(app.origin.as_str()) {
+        return Err(ApiError::Forbidden);
+    }
+    let ops = ops(&app)?;
+    let job = ops::job(&request.job).ok_or_else(|| {
+        ApiError::Job(
+            StatusCode::BAD_REQUEST,
+            "The dashboard does not offer that job.".into(),
+        )
+    })?;
+    let now = store::now();
+    let units = ops
+        .units(&[job.unit], now)
+        .await
+        .map_err(|message| ApiError::Job(StatusCode::SERVICE_UNAVAILABLE, message))?;
+    let unit = units.get(job.unit).ok_or_else(|| {
+        ApiError::Job(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "systemd did not report on this job.".into(),
+        )
+    })?;
+    let cooldown_until = latest_requests(&app)
+        .await?
+        .into_iter()
+        .find(|(id, _, _)| id == job.id)
+        .map(|(_, _, at)| at + job.cooldown)
+        .filter(|until| *until > now);
+    if let Some(reason) = ops.blocked(job, unit, cooldown_until, now) {
+        return Err(ApiError::Job(
+            StatusCode::CONFLICT,
+            format!("{} was not started. {reason}", job.label),
+        ));
+    }
+    ops.trigger(job, now)
+        .map_err(|message| ApiError::Job(StatusCode::SERVICE_UNAVAILABLE, message))?;
+    // The request is already on its way to systemd; a failed audit row must
+    // not make the page report a job as not started.
+    let store = app.store.clone();
+    let (id, author) = (job.id, actor.clone());
+    let _ = tokio::task::spawn_blocking(move || {
+        store
+            .lock()
+            .map_err(|_| Error::Unavailable)?
+            .record_job_request(id, &author, now)
+    })
+    .await;
+    let requests = latest_requests(&app).await?;
+    Ok(Json(StatusState {
+        actor,
+        status: ops.collect(now, &requests).await,
+    }))
+}
+
 async fn private_headers(request: axum::extract::Request, next: middleware::Next) -> Response {
     let mut response = next.run(request).await;
     response.headers_mut().insert(
@@ -160,6 +264,8 @@ pub fn router(app: App) -> Router {
     Router::new()
         .route("/api/announcements", get(read))
         .route("/api/announcements/change", post(change))
+        .route("/api/status", get(status))
+        .route("/api/jobs/run", post(run_job))
         .layer(DefaultBodyLimit::max(65536))
         .layer(middleware::from_fn(private_headers))
         .with_state(app)
@@ -266,5 +372,158 @@ mod tests {
             assert_eq!(response.headers()["cache-control"], "no-store");
         }
         assert_eq!(app.store.lock().unwrap().snapshot().unwrap().revision, 1);
+    }
+
+    fn job_request(job: &str, origin: Option<&str>) -> Request<Body> {
+        let mut request = Request::builder()
+            .uri("/api/jobs/run")
+            .method("POST")
+            .header("content-type", "application/json");
+        if let Some(origin) = origin {
+            request = request.header("origin", origin);
+        }
+        request
+            .body(Body::from(serde_json::json!({ "job": job }).to_string()))
+            .unwrap()
+    }
+
+    async fn message(response: Response) -> String {
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 1 << 20).await.unwrap())
+                .unwrap();
+        body["message"].as_str().unwrap_or_default().to_owned()
+    }
+
+    #[tokio::test]
+    async fn jobs_start_only_from_the_dashboard_once_per_run_and_are_audited() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(
+            &dir.path().join("state.sqlite"),
+            dir.path().join("announcements.json"),
+            r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","messages":[]}"#,
+        )
+        .unwrap();
+        let box_root = dir.path().join("box");
+        std::fs::create_dir_all(box_root.join("jobs/backup")).unwrap();
+        let app = App::new(store, Auth::Local, "http://127.0.0.1:5194".into())
+            .unwrap()
+            .with_ops(Ops::simulated(&box_root));
+        let request_file = box_root.join("jobs/backup/request");
+        let origin = Some("http://127.0.0.1:5194");
+
+        for bad in [None, Some("https://attacker.invalid")] {
+            let response = router(app.clone())
+                .oneshot(job_request("backup", bad))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        }
+        let response = router(app.clone())
+            .oneshot(job_request("../../etc", origin))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        // Offered by the publisher but not installed on the box: refused, nothing created.
+        let response = router(app.clone())
+            .oneshot(job_request("scrape", origin))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert!(message(response).await.contains("Not installed"));
+        assert!(!box_root.join("jobs/scrape").exists());
+        assert!(!request_file.exists());
+
+        let response = router(app.clone())
+            .oneshot(job_request("backup", origin))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 1 << 20).await.unwrap())
+                .unwrap();
+        let backup = body["status"]["jobs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|j| j["id"] == "backup")
+            .unwrap()
+            .clone();
+        assert_eq!(
+            backup["last_request"]["actor"],
+            "local-preview@example.invalid"
+        );
+        assert!(request_file.exists());
+
+        // A second click while it runs is refused, and so is one inside the pacing window after it.
+        let response = router(app.clone())
+            .oneshot(job_request("backup", origin))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert!(message(response).await.contains("Running now"));
+        let finished = std::time::SystemTime::now() - std::time::Duration::from_secs(30);
+        std::fs::File::options()
+            .write(true)
+            .open(&request_file)
+            .unwrap()
+            .set_modified(finished)
+            .unwrap();
+        let response = router(app.clone())
+            .oneshot(job_request("backup", origin))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        assert!(message(response).await.contains("Requested recently"));
+        assert_eq!(
+            app.store
+                .lock()
+                .unwrap()
+                .latest_job_requests()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn status_reports_missing_sources_instead_of_failing() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(
+            &dir.path().join("state.sqlite"),
+            dir.path().join("announcements.json"),
+            r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","messages":[]}"#,
+        )
+        .unwrap();
+        let app = App::new(store, Auth::Local, "http://127.0.0.1:5194".into())
+            .unwrap()
+            .with_ops(Ops::simulated(&dir.path().join("empty-box")));
+        let response = router(app)
+            .oneshot(
+                Request::builder()
+                    .uri("/api/status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 1 << 20).await.unwrap())
+                .unwrap();
+        assert!(body["status"]["readiness"].is_null());
+        assert!(body["status"]["problems"][0]
+            .as_str()
+            .unwrap()
+            .contains("readiness"));
+        assert!(body["status"]["backup"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("never run"));
+        assert!(body["status"]["jobs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|j| j["blocked"].as_str().unwrap().contains("Not installed")));
     }
 }

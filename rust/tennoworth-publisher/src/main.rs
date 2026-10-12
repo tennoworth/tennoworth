@@ -83,7 +83,8 @@ async fn main() -> anyhow::Result<()> {
         store,
         Auth::Access(auth),
         required("TENNOWORTH_PUBLISHER_ORIGIN")?,
-    )?;
+    )?
+    .with_ops(tennoworth_publisher::ops::Ops::box_defaults());
     let port = std::env::var("TENNOWORTH_PUBLISHER_PORT")
         .unwrap_or_else(|_| "8084".into())
         .parse()?;
