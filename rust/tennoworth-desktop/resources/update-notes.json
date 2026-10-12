@@ -1,5 +1,5 @@
 {
-  "version": "0.8.102",
+  "version": "0.8.103",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1131,6 +1131,34 @@
           "kind": "improved",
           "title": "Keep the next row under your cursor",
           "body": "A new scan keeps the current row order and offers an explicit re-sort instead of moving the next action while you work.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.103",
+      "date": "2026-10-12",
+      "changes": [
+        {
+          "id": "market-announcements",
+          "kind": "improved",
+          "title": "See time-limited market changes before they happen",
+          "body": "A notice above your workspace states the change, its exact deadline and a link to the official source. Dismiss it and it stays dismissed; it disappears by itself when the deadline passes or the notice is withdrawn.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "market-announcement-notifications",
+          "kind": "improved",
+          "title": "Get one notification for each announcement",
+          "body": "New announcements are kept in notification history and, if popups are on, appear once as a desktop notification. Choose how they reach you under Settings → Notifications → Market announcements.",
           "platforms": [
             "windows",
             "linux"

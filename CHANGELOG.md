@@ -54,6 +54,25 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.103 - 2026-10-12
+
+# 📣 TennoWorth Desktop 0.8.103
+
+TennoWorth Desktop 0.8.103 is ready.
+
+Some market changes come with a deadline, and missing one costs Ducats or Platinum. TennoWorth can now show short, sourced notices about them, starting with DE's reduction of the Bronco Prime Barrel from 45 to 25 Ducats on 15 October 2026 at 15:00 UTC.
+
+## Changelog (2)
+
+### Market
+
+- **See time-limited market changes before they happen** A notice above your workspace states the change, its exact deadline and a link to the official source. Dismiss it and it stays dismissed; it disappears by itself when the deadline passes or the notice is withdrawn. <!-- app-note {"id":"market-announcements","kind":"improved"} -->
+- **Get one notification for each announcement** New announcements are kept in notification history and, if popups are on, appear once as a desktop notification. Choose how they reach you under Settings → Notifications → Market announcements. <!-- app-note {"id":"market-announcement-notifications","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.102 - 2026-10-10
 
 # 🎨 TennoWorth Desktop 0.8.102
