@@ -815,14 +815,39 @@ mod tests {
         }
         let expected: BTreeSet<String> = JOBS.iter().map(|job| job.id.to_owned()).collect();
         assert_eq!(found, expected);
-        let tmpfiles = fs::read_to_string(deploy.join("tennoworth-jobs.conf")).unwrap();
+        let tmpfiles = fs::read_to_string(deploy.join("tennoworth-dashboard.conf")).unwrap();
+        let rule = |path: &str| {
+            tmpfiles
+                .lines()
+                .map(|line| line.split_whitespace().collect::<Vec<_>>())
+                .find(|fields| fields.get(1) == Some(&path))
+        };
         for job in JOBS {
-            assert!(
-                tmpfiles.lines().any(|line| line.split_whitespace().nth(1)
-                    == Some(&format!("/srv/wfm/jobs/{}", job.id))),
-                "tennoworth-jobs.conf does not create the {} directory",
+            let fields = rule(&format!("/srv/wfm/jobs/{}", job.id)).unwrap_or_else(|| {
+                panic!(
+                    "tennoworth-dashboard.conf does not create the {} directory",
+                    job.id
+                )
+            });
+            assert_eq!(
+                fields[3], "tennoworth-publisher",
+                "{} must be the publisher's to write",
                 job.id
             );
         }
+        // On the box this directory was root-only, which hid the report from the status page.
+        let report_dir = Ops::box_defaults()
+            .readiness_report
+            .parent()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        let fields = rule(&report_dir)
+            .expect("tennoworth-dashboard.conf must open the readiness report directory");
+        assert_eq!(
+            fields[4], "tennoworth-publisher",
+            "the publisher needs group access to {report_dir}"
+        );
     }
 }
