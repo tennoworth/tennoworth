@@ -330,6 +330,12 @@ fn rotating_snapshots_restore_and_prune_only_their_own_files() {
     fs::create_dir_all(&backups).unwrap();
     fs::write(backups.join("notes.txt"), "kept").unwrap();
     fs::write(backups.join("announcements-manual.sqlite"), "kept").unwrap();
+    // What a killed earlier run leaves behind: never counted, and cleared afterwards.
+    fs::write(
+        backups.join("announcements-20261011T000000Z.sqlite.partial"),
+        "torn",
+    )
+    .unwrap();
     let mut store = Store::open(&db, export, SEED).unwrap();
     let save = change(0, Operation::Save, None, Some(content()));
     store
