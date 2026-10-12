@@ -320,3 +320,53 @@ fn existing_state_resumes_without_a_seed_and_retries_name_their_message() {
         None
     );
 }
+
+#[test]
+fn rotating_snapshots_restore_and_prune_only_their_own_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("state/announcements.sqlite");
+    let export = dir.path().join("public/announcements.json");
+    let backups = dir.path().join("backups");
+    fs::create_dir_all(&backups).unwrap();
+    fs::write(backups.join("notes.txt"), "kept").unwrap();
+    fs::write(backups.join("announcements-manual.sqlite"), "kept").unwrap();
+    let mut store = Store::open(&db, export, SEED).unwrap();
+    let save = change(0, Operation::Save, None, Some(content()));
+    store
+        .apply(&save, "publisher@example.invalid", NOW)
+        .unwrap();
+    // The service keeps the database open while the timer takes snapshots.
+    let written: Vec<_> = (0..3)
+        .map(|day| {
+            tennoworth_publisher::store::snapshot(&db, &backups, NOW + day * 86400, 2).unwrap()
+        })
+        .collect();
+    let mut names: Vec<_> = fs::read_dir(&backups)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "announcements-20261013T000000Z.sqlite",
+            "announcements-20261014T000000Z.sqlite",
+            "announcements-manual.sqlite",
+            "notes.txt"
+        ]
+    );
+    assert!(!written[0].exists());
+    assert!(tennoworth_publisher::store::snapshot(&db, &backups, NOW + 3 * 86400, 0).is_err());
+    drop(store);
+    let restored = dir.path().join("restored/announcements.sqlite");
+    fs::create_dir_all(restored.parent().unwrap()).unwrap();
+    fs::copy(&written[2], &restored).unwrap();
+    let store = Store::resume(
+        &restored,
+        dir.path().join("restored-public/announcements.json"),
+    );
+    // A restored database without its export is a fresh host: it must start and keep the draft.
+    let snapshot = store.unwrap().snapshot().unwrap();
+    assert_eq!(snapshot.revision, 1);
+    assert_eq!(snapshot.messages.len(), 1);
+}

@@ -1,0 +1,39 @@
+[Unit]
+Description=Snapshot the private announcement publisher database
+After=tennoworth-publisher.service
+OnFailure=wfm-alert@%n.service
+
+[Service]
+Type=oneshot
+User=tennoworth-publisher
+Group=tennoworth-publisher
+# Snapshots sit beside the live state so the nightly container backup carries a
+# consistent copy instead of a database caught mid-write.
+StateDirectory=tennoworth-publisher tennoworth-publisher-backups
+StateDirectoryMode=0700
+UMask=0077
+Environment=TENNOWORTH_PUBLISHER_STATE=/var/lib/tennoworth-publisher
+ExecStart=/srv/wfm/bin/tennoworth-publisher snapshot /var/lib/tennoworth-publisher-backups --keep 30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources

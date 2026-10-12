@@ -467,6 +467,47 @@ pub fn backup_file(path: &Path, destination: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Writes a timestamped snapshot into `dir`, then keeps only the newest `keep`
+/// snapshots of this naming scheme there; anything else in the directory is left alone.
+pub fn snapshot(path: &Path, dir: &Path, now: i64, keep: usize) -> anyhow::Result<PathBuf> {
+    if keep == 0 {
+        anyhow::bail!("keep at least one snapshot");
+    }
+    let stamp = chrono::DateTime::from_timestamp(now, 0)
+        .ok_or_else(|| anyhow::anyhow!("snapshot time is out of range"))?
+        .format("%Y%m%dT%H%M%SZ");
+    let destination = dir.join(format!("announcements-{stamp}.sqlite"));
+    backup_file(path, &destination)?;
+    let mut snapshots: Vec<PathBuf> = fs::read_dir(dir)?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(snapshot_name)
+        })
+        .collect();
+    // The fixed-width UTC stamp makes name order chronological order.
+    snapshots.sort();
+    let excess = snapshots.len().saturating_sub(keep);
+    for old in snapshots.iter().take(excess) {
+        fs::remove_file(old)?;
+    }
+    Ok(destination)
+}
+
+fn snapshot_name(name: &str) -> bool {
+    name.strip_prefix("announcements-")
+        .and_then(|rest| rest.strip_suffix(".sqlite"))
+        .is_some_and(|stamp| {
+            stamp.len() == 16
+                && stamp.bytes().enumerate().all(|(i, b)| match i {
+                    8 => b == b'T',
+                    15 => b == b'Z',
+                    _ => b.is_ascii_digit(),
+                })
+        })
+}
+
 pub fn recover_publication(path: &Path, export: &Path) -> anyhow::Result<()> {
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(false);
