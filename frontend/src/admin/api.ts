@@ -7,11 +7,20 @@ export interface Publisher {
 }
 
 async function request(change?: Change): Promise<DashboardState> {
-  const response = await fetch(change ? '/api/announcements/change' : '/api/announcements', {
-    method: change ? 'POST' : 'GET', cache: 'no-store', credentials: 'same-origin',
-    headers: { Accept: 'application/json', ...(change ? { 'Content-Type': 'application/json' } : {}) },
-    body: change ? JSON.stringify(change) : undefined, signal: AbortSignal.timeout(10_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(change ? '/api/announcements/change' : '/api/announcements', {
+      method: change ? 'POST' : 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'manual',
+      headers: { Accept: 'application/json', ...(change ? { 'Content-Type': 'application/json' } : {}) },
+      body: change ? JSON.stringify(change) : undefined, signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw new Error('The publisher could not be reached. Refresh to check whether your request was saved.');
+  }
+  // An expired Access session never reaches the publisher: the edge redirects to its login page.
+  if (response.type === 'opaqueredirect' || response.status === 401) {
+    throw new Error('Your sign-in has expired. Unsaved edits stay in this tab: reload the page to sign in again, then retry.');
+  }
   const value = await response.json().catch(() => null);
   if (!response.ok) throw new Error(value?.message || 'The publisher could not be reached. Refresh to check whether your request was saved.');
   if (!value || typeof value.actor !== 'string' || !value.snapshot

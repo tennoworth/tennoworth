@@ -8,7 +8,9 @@ for (const output of ['dist', 'dist-desktop']) {
   if (!existsSync(join(root, 'index.html'))) throw new Error(`Build ${output} before checking artifact boundaries`);
   if (existsSync(join(root, 'admin.html'))) throw new Error(`Private dashboard entry leaked into ${output}`);
   for (const file of readdirSync(join(root, 'assets')).filter(file => file.endsWith('.js'))) {
-    if (readFileSync(join(root, 'assets', file), 'utf8').includes('Publish announcement')) throw new Error(`Publisher UI leaked into ${output}`);
+    // The API route is fixed by the server, so a wording change cannot hide a leak.
+    const source = readFileSync(join(root, 'assets', file), 'utf8');
+    if (['/api/announcements/change', 'Publish announcement'].some(marker => source.includes(marker))) throw new Error(`Publisher UI leaked into ${output}`);
   }
 }
 const admin = join(frontend, 'dist-admin');

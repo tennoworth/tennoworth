@@ -46,6 +46,57 @@ test('drafts stay private, publish is reviewed, edits keep identity, and withdra
   expect(state.snapshot.feed.messages.some((entry: { id: string }) => entry.id === message.id)).toBe(false);
 });
 
+async function draft(page: import('@playwright/test').Page, title: string) {
+  await page.goto('/admin.html');
+  await expect(page.getByText('Signed in: local-preview@example.invalid')).toBeVisible();
+  await page.getByRole('button', { name: 'New announcement', exact: true }).click();
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByLabel('Message', { exact: true }).fill('Exchange spare copies before the deadline. Keep crafting copies.');
+  await page.getByLabel('Source URL').fill('https://forums.warframe.com/topic/123-test/');
+}
+
+test('an expired sign-in keeps unsaved edits through the reload and retries the same request', async ({ page, request }) => {
+  const title = `Expired session ${Date.now()}`;
+  await draft(page, title);
+  // Cloudflare Access answers an expired session at the edge, before the publisher sees it.
+  await page.route('**/api/announcements/change', route => route.fulfill({ status: 302, headers: { location: 'https://team.cloudflareaccess.com/cdn-cgi/access/login' } }));
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Your sign-in has expired');
+  await page.unroute('**/api/announcements/change');
+  await page.reload();
+  await expect(page.getByText('Restored your unsaved edits from before the page reloaded.')).toBeVisible();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title);
+  await page.getByRole('button', { name: 'Retry request', exact: true }).click();
+  await expect(page.getByText('Draft saved. The public feed has not changed.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Edit announcement' })).toBeVisible();
+  const state = await (await request.get('http://127.0.0.1:8084/api/announcements')).json();
+  expect(state.snapshot.messages.filter((entry: { draft: { title: string } }) => entry.draft.title === title)).toHaveLength(1);
+  await page.reload();
+  await expect(page.getByText('Restored your unsaved edits')).toHaveCount(0);
+});
+
+test('a correction can go out as a new announcement so dismissed readers see it', async ({ page, request }) => {
+  const title = `Correction source ${Date.now()}`;
+  await draft(page, title);
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Review publication', exact: true }).click();
+  await page.getByRole('button', { name: 'Publish announcement', exact: true }).click();
+  await expect(page.getByText('Feed published. Running clients will pick it up on their next check.')).toBeVisible();
+  await page.getByLabel('Message', { exact: true }).fill('Corrected deadline. Keep crafting copies.');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Review publication', exact: true }).click();
+  await expect(page.getByText(/will not see this edit/)).toBeVisible();
+  await page.getByRole('button', { name: 'Copy into a new announcement', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'New announcement' })).toBeVisible();
+  await expect(page.getByLabel('Message', { exact: true })).toHaveValue('Corrected deadline. Keep crafting copies.');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByText('Draft saved. The public feed has not changed.')).toBeVisible();
+  const state = await (await request.get('http://127.0.0.1:8084/api/announcements')).json();
+  const copies = state.snapshot.messages.filter((entry: { draft: { title: string } }) => entry.draft.title === title);
+  expect(copies).toHaveLength(2);
+  expect(copies.filter((entry: { ever_published: boolean }) => !entry.ever_published)).toHaveLength(1);
+});
+
 for (const mode of ['light', 'dark'] as const) for (const width of [320, 768, 1440]) {
   test(`editor remains usable in ${mode} at ${width}px and short height`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: mode });

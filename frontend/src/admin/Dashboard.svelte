@@ -14,16 +14,27 @@
     const end = new Date(start.getTime() + 7 * 86400_000);
     return { title: '', body: '', source_url: '', starts_at: start.toISOString().replace('.000Z', 'Z'), ends_at: end.toISOString().replace('.000Z', 'Z') };
   }
+  // Signing in again after Access expires reloads the page; this tab keeps unsaved work across it.
+  const DRAFT_KEY = 'tennoworth-admin-draft-v1';
+  type SavedDraft = { selected: string | null; form: Content; baseline: string; pending: Change | null };
+  function restore(): SavedDraft | null {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? 'null');
+      const fields = ['title', 'body', 'source_url', 'starts_at', 'ends_at'] as const;
+      return value && typeof value.baseline === 'string' && fields.every(field => typeof value.form?.[field] === 'string') ? value : null;
+    } catch { return null; }
+  }
+  const restored = restore();
   let dashboardState = $state<DashboardState | null>(null);
-  let selected = $state<string | null>(null);
+  let selected = $state<string | null>(restored?.selected ?? null);
   const initialForm = initial();
-  let form = $state<Content>(initialForm);
-  let baseline = $state(JSON.stringify(initialForm));
+  let form = $state<Content>(restored?.form ?? initialForm);
+  let baseline = $state(restored?.baseline ?? JSON.stringify(initialForm));
   let busy = $state(false);
   let error = $state('');
-  let receipt = $state('');
+  let receipt = $state(restored ? 'Restored your unsaved edits from before the page reloaded.' : '');
   let review = $state<'publish' | 'withdraw' | null>(null);
-  let pending = $state<Change | null>(null);
+  let pending = $state<Change | null>(restored?.pending ?? null);
   let discard = $state<string | 'new' | null>(null);
   let now = $state(Date.now());
   const dirty = $derived(JSON.stringify(form) !== baseline);
@@ -33,6 +44,11 @@
   const unpublished = $derived(!record?.published || JSON.stringify(record.draft) !== JSON.stringify(record.published));
   const exportPending = $derived(!!dashboardState && dashboardState.snapshot.feed_revision !== dashboardState.snapshot.exported_revision);
   const draftChanged = $derived(!!record && JSON.stringify(record.draft) !== baseline);
+  $effect(() => {
+    const draft = dirty || pending ? JSON.stringify({ selected, form, baseline, pending } satisfies SavedDraft) : null;
+    try { if (draft) sessionStorage.setItem(DRAFT_KEY, draft); else sessionStorage.removeItem(DRAFT_KEY); }
+    catch { /* The form still holds the edits; only a reload would lose them. */ }
+  });
 
   async function refresh() {
     busy = true; error = '';
@@ -65,8 +81,7 @@
       const next = await publisher.change(change);
       dashboardState = next;
       if (change.operation === 'save') {
-        const saved = next.snapshot.history.find(entry => entry.operation === 'save' && entry.revision === change.expected_revision + 1 && entry.actor === next.actor);
-        selected = change.id ?? saved?.id ?? null;
+        selected = change.id ?? next.message_id ?? null;
         baseline = JSON.stringify(change.content);
       }
       receipt = change.operation === 'save' ? 'Draft saved. The public feed has not changed.'
@@ -75,6 +90,13 @@
       pending = null; review = null;
     } catch (cause) { error = cause instanceof Error ? cause.message : 'Could not save. Refresh before retrying.'; }
     finally { busy = false; }
+  }
+  function copyAsNew() {
+    selected = null;
+    form = { ...form };
+    baseline = JSON.stringify(initial());
+    review = null;
+    receipt = 'Copied into a new draft. Save it, review its publication, then withdraw the original if it is wrong.';
   }
   function status(message: Message) {
     if (!message.published) return message.ever_published ? 'Withdrawn' : 'Draft';
@@ -146,9 +168,10 @@
           <strong>{review === 'publish' ? 'Ready to publish this saved draft?' : 'Withdraw this announcement?'}</strong>
           {#if review === 'publish'}
             <p>{record?.ever_published ? 'This ID has already been published. This edit will not repeat its desktop notification.' : 'This is a new announcement. Eligible desktop clients may receive one notification.'}</p>
+            {#if record?.ever_published}<p>People who dismissed it or already received its popup will not see this edit. For a correction they must see, publish it as a new announcement.</p>{/if}
             <p>Starts {local(form.starts_at)} · Ends {local(form.ends_at)}. Running clients check every 15 minutes.</p>
           {:else}<p>The banner leaves after clients refresh. Offline clients may keep it until expiry; popups already sent cannot be recalled.</p>{/if}
-          <div class="ui-toolbar"><button class="btn primary" disabled={busy} onclick={() => submit(review!)}>{review === 'publish' ? 'Publish announcement' : 'Withdraw announcement'}</button><button class="btn" disabled={busy} onclick={() => { review = null; }}>Cancel review</button></div>
+          <div class="ui-toolbar"><button class="btn primary" disabled={busy} onclick={() => submit(review!)}>{review === 'publish' ? 'Publish announcement' : 'Withdraw announcement'}</button><button class="btn" disabled={busy} onclick={() => { review = null; }}>Cancel review</button>{#if review === 'publish' && record?.ever_published}<button class="btn" disabled={busy} onclick={copyAsNew}>Copy into a new announcement</button>{/if}</div>
         </section>
       {/if}
     </section>
