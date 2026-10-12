@@ -835,19 +835,16 @@ mod tests {
                 job.id
             );
         }
-        // On the box this directory was root-only, which hid the report from the status page.
-        let report_dir = Ops::box_defaults()
-            .readiness_report
-            .parent()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_owned();
-        let fields = rule(&report_dir)
-            .expect("tennoworth-dashboard.conf must open the readiness report directory");
-        assert_eq!(
-            fields[4], "tennoworth-publisher",
-            "the publisher needs group access to {report_dir}"
-        );
+        // /srv/wfm/data is wfm's, so tmpfiles refuses any root-owned path below it
+        // ("unsafe path transition") and fails the whole file at boot.
+        for line in tmpfiles
+            .lines()
+            .filter(|l| !l.trim_start().starts_with('#'))
+        {
+            assert!(
+                !line.contains("/srv/wfm/data"),
+                "tmpfiles cannot manage paths under /srv/wfm/data: {line}"
+            );
+        }
     }
 }
