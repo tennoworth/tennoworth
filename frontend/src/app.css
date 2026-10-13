@@ -847,3 +847,11 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
    an edge: a delivery-failure notice inside the entry already owns the edge. */
 .notification-entry { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--inset); border-bottom: 1px var(--rule) var(--border); overflow-wrap: anywhere; }
 .notification-entry.unread { background: var(--panel-2); }
+
+/* Calendar event kinds: the 3px edge carries the kind, dashed when the date is an estimate. */
+[data-kind="event"] { --k: var(--border); }
+[data-kind="baro"] { --k: var(--ducat); }
+[data-kind="resurgence"] { --k: var(--fg); }
+[data-kind="vault"] { --k: var(--vault); }
+[data-kind="notice"] { --k: var(--good); }
+[data-kind="deal"] { --k: var(--muted); }

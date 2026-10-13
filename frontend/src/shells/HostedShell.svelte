@@ -7,6 +7,7 @@ import DesktopShowcase from '../features/market-context/DesktopShowcase.svelte';
 import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 import Faq from './Faq.svelte';
 import UsageChart from '../features/community/UsageChart.svelte';
+import CalendarView from '../features/calendar/CalendarView.svelte';
 import { loadMarket } from '../adapters/market';
 import { HostedTransport } from '../adapters/hosted';
 import { baroLocation, humanWindow } from '../ui/format';
@@ -110,6 +111,11 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
 
   
 
+  {#if market}
+    <div data-shell id="calendar" class="hosted-calendar">
+      <CalendarView {market} now={displayNow} loadAnnouncements={() => transport.loadAnnouncements()} {store} surface="hosted" />
+    </div>
+  {/if}
   <UsageChart />
   <Faq />
 
@@ -164,6 +170,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
     <span data-shell class="grow"></span>
     
       <nav data-shell class="cell end site-links" aria-label="Site">
+        <a data-shell href="#calendar">Calendar</a>
         <a data-shell href="#faq">FAQ</a>
         <a data-shell href="#desktop">Desktop app ↓</a>
         {@render projectLinkAnchors()}

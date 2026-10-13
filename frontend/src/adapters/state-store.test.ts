@@ -48,6 +48,7 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     ['routine-checklist', 'wfminv:routine-checklist-v2', '{"version":2}'],
     ['theme.mode', 'wfminv:theme-mode-v1', 'dark'],
     ['app-icon', 'wfminv:app-icon-v1', 'match'],
+    ['calendar', 'wfminv:calendar-v1', '{"view":"board","hidden":["deal"]}'],
   ];
 
   // Drift-proof gate: the fixture and LOCAL_SETTING_KEYS must agree, or the

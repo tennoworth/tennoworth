@@ -9,7 +9,7 @@ import type { SettingsStore, StateStore, SettingKey } from '../contracts/state-s
 //     keep-copies-nudge-dismissed,
 //     tray-toast-seen, sell-onboarding-dismissed, prompts, auto-close-sold,
 //     routine-checklist, sell-columns,
-//     theme.mode, app-icon), each a short string;
+//     theme.mode, app-icon, calendar), each a short string;
 //   - on desktop, the last-owned inventory snapshot (the reload-restore copy).
 //     The hosted build holds no inventory, so its store persists settings only.
 //
@@ -48,6 +48,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'routine-checklist': 'wfminv:routine-checklist-v2',
   'theme.mode': 'wfminv:theme-mode-v1',
   'app-icon': 'wfminv:app-icon-v1',
+  calendar: 'wfminv:calendar-v1',
 };
 
 // The SQLite `setting.key` the desktop store parks the reload-restore snapshot
