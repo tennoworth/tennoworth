@@ -1,5 +1,5 @@
 {
-  "version": "0.8.104",
+  "version": "0.8.105",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1209,6 +1209,56 @@
           "kind": "fixed",
           "title": "Stay current with network security fixes",
           "body": "A networking library the app depends on is updated with fixes for three published issues.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.105",
+      "date": "2026-10-13",
+      "changes": [
+        {
+          "id": "live-prices-per-account",
+          "kind": "fixed",
+          "title": "Switch accounts without seeing the old account's live prices",
+          "body": "Live prices depend on your login: its platform, and which orders are your own. My orders, Trade Session and listing review now drop live prices when you sign in, sign out or switch accounts, including a check that was still running.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "live-check-progress",
+          "kind": "fixed",
+          "title": "See the right progress for each live check",
+          "body": "Two live checks running at once, for example in My orders and Trade Session, each count their own items instead of showing each other's progress.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "live-prices-time",
+          "kind": "improved",
+          "title": "Know how old your live prices are",
+          "body": "My orders says when the live prices it shows were taken, so prices checked before you left the view are not mistaken for fresh ones.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "market-snapshot-checks",
+          "kind": "fixed",
+          "title": "Keep getting new prices after a bad download",
+          "body": "An incomplete market snapshot is set aside in favour of the app's built-in one, and a snapshot stamped with a date far in the future no longer blocks newer data. The next refresh replaces either.",
           "platforms": [
             "windows",
             "linux"
