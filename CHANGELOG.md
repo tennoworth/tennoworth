@@ -54,6 +54,30 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.105 - 2026-10-13
+
+# 🩹 TennoWorth Desktop 0.8.105
+
+TennoWorth Desktop 0.8.105 is ready.
+
+This release makes live prices and market data more trustworthy. Live prices now belong to the warframe.market account that checked them, so switching accounts can no longer show you another account's figures, and a damaged market snapshot can no longer stop the app from picking up new prices.
+
+## Changelog (4)
+
+### Live prices
+
+- **Switch accounts without seeing the old account's live prices** Live prices depend on your login: its platform, and which orders are your own. My orders, Trade Session and listing review now drop live prices when you sign in, sign out or switch accounts, including a check that was still running. <!-- app-note {"id":"live-prices-per-account","kind":"fixed"} -->
+- **See the right progress for each live check** Two live checks running at once, for example in My orders and Trade Session, each count their own items instead of showing each other's progress. <!-- app-note {"id":"live-check-progress","kind":"fixed"} -->
+- **Know how old your live prices are** My orders says when the live prices it shows were taken, so prices checked before you left the view are not mistaken for fresh ones. <!-- app-note {"id":"live-prices-time","kind":"improved"} -->
+
+### Market data
+
+- **Keep getting new prices after a bad download** An incomplete market snapshot is set aside in favour of the app's built-in one, and a snapshot stamped with a date far in the future no longer blocks newer data. The next refresh replaces either. <!-- app-note {"id":"market-snapshot-checks","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.104 - 2026-10-13
 
 # 📅 TennoWorth Desktop 0.8.104
