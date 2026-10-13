@@ -1,5 +1,5 @@
 {
-  "version": "0.8.103",
+  "version": "0.8.104",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1159,6 +1159,56 @@
           "kind": "improved",
           "title": "Get one notification for each announcement",
           "body": "New announcements are kept in notification history and, if popups are on, appear once as a desktop notification. Choose how they reach you under Settings → Notifications → Market announcements.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.104",
+      "date": "2026-10-13",
+      "changes": [
+        {
+          "id": "calendar-view",
+          "kind": "improved",
+          "title": "See what is coming in one Calendar",
+          "body": "A new Calendar view, next to Routines, lists Baro's visits, Prime Resurgence rotations, in-game events, estimated vaulting and TennoWorth notices. Board counts down to the next confirmed moment, Month shows a wall calendar and Lanes lines up overlapping rotations. Estimated dates are marked as estimates and never counted down.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "calendar-held-items",
+          "kind": "improved",
+          "title": "Know which events touch what you hold",
+          "body": "Events say how many of your scanned items they affect, so a Resurgence rotation or an estimated vaulting shows its reach in your inventory.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "calendar-official-dates",
+          "kind": "improved",
+          "title": "Find the dates DE announces",
+          "body": "Devstreams, updates and Prime Access dates appear in the Calendar as DE announces them, each with a link to the post that announced it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "quinn-proto-0-11-18",
+          "kind": "fixed",
+          "title": "Stay current with network security fixes",
+          "body": "A networking library the app depends on is updated with fixes for three published issues.",
           "platforms": [
             "windows",
             "linux"

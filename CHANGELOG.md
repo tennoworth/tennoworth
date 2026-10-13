@@ -54,6 +54,30 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.104 - 2026-10-13
+
+# 📅 TennoWorth Desktop 0.8.104
+
+TennoWorth Desktop 0.8.104 is ready.
+
+Warframe prices move around dates: Baro's visits, Prime Resurgence rotations, vaulting and the updates DE announces. A new Calendar view puts them in one place, so you can see what is coming and which of your items it touches before it happens.
+
+## Changelog (4)
+
+### Calendar
+
+- **See what is coming in one Calendar** A new Calendar view, next to Routines, lists Baro's visits, Prime Resurgence rotations, in-game events, estimated vaulting and TennoWorth notices. Board counts down to the next confirmed moment, Month shows a wall calendar and Lanes lines up overlapping rotations. Estimated dates are marked as estimates and never counted down. <!-- app-note {"id":"calendar-view","kind":"improved"} -->
+- **Know which events touch what you hold** Events say how many of your scanned items they affect, so a Resurgence rotation or an estimated vaulting shows its reach in your inventory. <!-- app-note {"id":"calendar-held-items","kind":"improved"} -->
+- **Find the dates DE announces** Devstreams, updates and Prime Access dates appear in the Calendar as DE announces them, each with a link to the post that announced it. <!-- app-note {"id":"calendar-official-dates","kind":"improved"} -->
+
+### Security
+
+- **Stay current with network security fixes** A networking library the app depends on is updated with fixes for three published issues. <!-- app-note {"id":"quinn-proto-0-11-18","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.103 - 2026-10-12
 
 # 📣 TennoWorth Desktop 0.8.103
