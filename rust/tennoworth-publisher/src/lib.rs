@@ -28,6 +28,9 @@ pub struct App {
     pub ops: Option<Arc<Ops>>,
     /// Where visitors fetch the feed; absent when nothing serves it.
     pub public_feed: Option<Arc<PublicFeed>>,
+    /// Held from a job's running and cooldown checks until its request is
+    /// written and recorded, so two simultaneous clicks cannot both pass.
+    admission: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl App {
@@ -50,6 +53,7 @@ impl App {
             origin,
             ops: None,
             public_feed: None,
+            admission: Arc::default(),
         })
     }
 
@@ -265,6 +269,7 @@ async fn run_job(
             "The dashboard does not offer that job.".into(),
         )
     })?;
+    let admission = app.admission.lock().await;
     let now = store::now();
     let units = ops
         .units(&[job.unit], now)
@@ -276,9 +281,9 @@ async fn run_job(
             "systemd did not report on this job.".into(),
         )
     })?;
-    let cooldown_until = latest_requests(&app)
-        .await?
-        .into_iter()
+    let mut requests = latest_requests(&app).await?;
+    let cooldown_until = requests
+        .iter()
         .find(|(id, _, _)| id == job.id)
         .map(|(_, _, at)| at + job.cooldown)
         .filter(|until| *until > now);
@@ -290,18 +295,28 @@ async fn run_job(
     }
     ops.trigger(job, now)
         .map_err(|message| ApiError::Job(StatusCode::SERVICE_UNAVAILABLE, message))?;
-    // The request is already on its way to systemd; a failed audit row must
-    // not make the page report a job as not started.
+    // The request is already on its way to systemd. From here nothing may
+    // report the job as not started: a failed audit row is logged, and the
+    // status is built from what was read above plus this request, rather than
+    // from a second read that could fail after dispatch.
     let store = app.store.clone();
     let (id, author) = (job.id, actor.clone());
-    let _ = tokio::task::spawn_blocking(move || {
+    let recorded = tokio::task::spawn_blocking(move || {
         store
             .lock()
             .map_err(|_| Error::Unavailable)?
             .record_job_request(id, &author, now)
     })
     .await;
-    let requests = latest_requests(&app).await?;
+    if !matches!(recorded, Ok(Ok(()))) {
+        eprintln!(
+            "tennoworth-publisher: {} was started but its request was not recorded",
+            job.id
+        );
+    }
+    drop(admission);
+    requests.retain(|(id, _, _)| id != job.id);
+    requests.push((job.id.to_owned(), actor.clone(), now));
     Ok(Json(StatusState {
         actor,
         status: ops.collect(now, &requests).await,
@@ -545,6 +560,71 @@ mod tests {
                 .unwrap()
                 .len(),
             1
+        );
+    }
+
+    fn job_app(dir: &std::path::Path) -> App {
+        let store = Store::open(
+            &dir.join("state.sqlite"),
+            dir.join("announcements.json"),
+            r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","messages":[]}"#,
+        )
+        .unwrap();
+        let box_root = dir.join("box");
+        std::fs::create_dir_all(box_root.join("jobs/backup")).unwrap();
+        App::new(store, Auth::Local, "http://127.0.0.1:5194".into())
+            .unwrap()
+            .with_ops(Ops::simulated(&box_root))
+    }
+
+    /// Two clicks that arrive together, from two tabs or a double submit, used to
+    /// pass the running and cooldown checks before either had written anything.
+    #[tokio::test]
+    async fn simultaneous_requests_start_a_job_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = job_app(dir.path());
+        let origin = Some("http://127.0.0.1:5194");
+        let (a, b) = tokio::join!(
+            router(app.clone()).oneshot(job_request("backup", origin)),
+            router(app.clone()).oneshot(job_request("backup", origin)),
+        );
+        let mut statuses = [a.unwrap().status(), b.unwrap().status()];
+        statuses.sort();
+        assert_eq!(statuses, [StatusCode::OK, StatusCode::CONFLICT]);
+    }
+
+    /// Once the request file is written the job is on its way. Nothing that
+    /// fails afterwards may report it as not started, which invites a second click.
+    #[tokio::test]
+    async fn a_dispatched_job_is_reported_started_even_if_its_audit_row_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = job_app(dir.path());
+        rusqlite::Connection::open(dir.path().join("state.sqlite"))
+            .unwrap()
+            .execute_batch(
+                "CREATE TRIGGER refuse_job_requests BEFORE INSERT ON job_requests
+                 BEGIN SELECT RAISE(ABORT, 'audit unavailable'); END;",
+            )
+            .unwrap();
+        let response = router(app.clone())
+            .oneshot(job_request("backup", Some("http://127.0.0.1:5194")))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(dir.path().join("box/jobs/backup/request").exists());
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 1 << 20).await.unwrap())
+                .unwrap();
+        let backup = body["status"]["jobs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|j| j["id"] == "backup")
+            .unwrap()
+            .clone();
+        assert_eq!(
+            backup["last_request"]["actor"],
+            "local-preview@example.invalid"
         );
     }
 
