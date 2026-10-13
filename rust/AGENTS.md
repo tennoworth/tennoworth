@@ -92,7 +92,11 @@ These bind every crate here, including callers:
   empty/neutral while keeping `items` strict. Otherwise one optional surface can
   discard current market rows and silently fall back to the bundled snapshot.
   Keep a load-level test with a current-only item; a serde field test alone
-  cannot prove fallback did not happen.
+  cannot prove fallback did not happen. What any runtime reader accepts - the
+  cache write, the cache read and the webview - is the shared market contract
+  in `tests/fixtures/market-contract`: an RFC 3339 `updated_at` and a
+  non-empty `items`, nothing more. The local clock never rejects a snapshot; it
+  only stops a held stamp far in the future from blocking a newer one.
 
   This lives here, not in the pipeline file that writes the snapshot, because
   the rule constrains the desktop reader.

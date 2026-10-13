@@ -44,3 +44,33 @@ export function staleSurfaceTimestamp(
   if (now - stampMs < SURFACE_STALE_MS) return null;
   return stamp;
 }
+
+// Native refresh uses the same bound; tests/fixtures/market-contract pins both.
+const MAX_FUTURE_SKEW_MS = 60 * 60 * 1000;
+const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The runtime market contract the desktop cache also enforces: an object with
+ *  an RFC 3339 `updated_at` and a non-empty `items` object. A parseable body
+ *  without prices must not replace real ones. Auxiliary maps stay optional and
+ *  nullable. The local clock plays no part: a slow clock must not reject real
+ *  snapshots. Release completeness is a separate, stricter check. */
+export function isMarket(value: unknown): value is Market {
+  if (!isRecord(value) || typeof value.updated_at !== 'string' || !RFC3339.test(value.updated_at)) return false;
+  if (!Number.isFinite(Date.parse(value.updated_at))) return false;
+  return isRecord(value.items) && Object.keys(value.items).length > 0;
+}
+
+/** Whether a snapshot stamped `next` should replace one stamped `current` at
+ *  `nowMs`: when nothing usable is held, or `next` is strictly newer. A held
+ *  stamp more than an hour ahead of the clock is no evidence of being newer;
+ *  a 2099 stamp once blocked every later snapshot. */
+export function replacesMarket(current: string | null | undefined, next: string, nowMs: number): boolean {
+  const held = Date.parse(current ?? '');
+  if (!Number.isFinite(held) || held - nowMs > MAX_FUTURE_SKEW_MS) return true;
+  const incoming = Date.parse(next);
+  return Number.isFinite(incoming) && incoming > held;
+}

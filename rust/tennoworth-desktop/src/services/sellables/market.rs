@@ -47,9 +47,9 @@ impl MarketData {
 
     /// Whether `candidate` is strictly older than the compiled-in bundle.
     ///
-    /// Unknown stamps answer false on both sides: a snapshot we cannot place in
-    /// time is not evidence that the other one is newer, and treating it as older
-    /// would silently swap the user back to the bundle for good.
+    /// The cache has already passed the market contract, so its stamp is
+    /// readable; an unreadable bundle stamp answers false, because a snapshot
+    /// we cannot place in time is not evidence that the cache is older.
     fn is_older_than_bundle(candidate: &MarketData) -> bool {
         let bundle = match serde_json::from_str::<MarketData>(BUNDLED_MARKET) {
             Ok(bundle) => bundle,

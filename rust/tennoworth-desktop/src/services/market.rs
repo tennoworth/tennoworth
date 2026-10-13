@@ -62,7 +62,7 @@ pub const MARKET: ArtifactSpec = ArtifactSpec {
     default_url: MARKET_URL,
     // ~3 MB published.
     max_bytes: 32 * 1024 * 1024,
-    validate: None,
+    validate: Some(validated_market_stamp),
 };
 
 /// The year-long daily price history (relics.run-derived, built on the box -
@@ -119,7 +119,7 @@ impl MarketCache {
     /// cache. No network - a fast local read the SPA does at boot to prefer the
     /// cache over the bundled floor.
     pub fn cached(&self) -> Option<String> {
-        read_cache(&self.dir, &MARKET)
+        read_valid_cache(&self.dir, &MARKET)
     }
 
     /// The cached history body, if any. No network.
@@ -158,6 +158,18 @@ fn read_cache(dir: &Path, spec: &ArtifactSpec) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// The body's stamp when it passes the artifact's validity gate, else None.
+fn valid_stamp(spec: &ArtifactSpec, body: &str) -> Option<String> {
+    spec.validate.map_or_else(|| parse_stamp(body, spec.stamp_key), |validate| validate(body))
+}
+
+/// The cached body, only if it still passes the artifact's gate. A cache that
+/// predates the gate, or that a fault left unusable, reads as absent: the
+/// readers fall back to the bundle and the next refresh may replace it.
+fn read_valid_cache(dir: &Path, spec: &ArtifactSpec) -> Option<String> {
+    read_cache(dir, spec).filter(|body| valid_stamp(spec, body).is_some())
+}
+
 /// Pull the artifact's top-level stamp string (`updated_at` / `generated_at`)
 /// out of a body. Doubles as the validity gate for a fetched 200: a truncated
 /// or non-JSON body (or one missing the stamp) returns None and is refused, so
@@ -165,6 +177,41 @@ fn read_cache(dir: &Path, spec: &ArtifactSpec) -> Option<String> {
 fn parse_stamp(body: &str, key: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
     v.get(key)?.as_str().map(str::to_string)
+}
+
+/// How far ahead of this clock a held snapshot's stamp may be and still count
+/// as evidence for ordering. Enough for ordinary clock skew; a stamp further
+/// out would otherwise win every comparison and block every later snapshot.
+const MAX_FUTURE_SKEW_SECS: i64 = 60 * 60;
+
+/// The runtime market contract, shared with the webview through
+/// `tests/fixtures/market-contract/cases.json`: a JSON object with an RFC 3339
+/// `updated_at` and a non-empty `items` object. Everything else stays
+/// optional; nullable auxiliary maps are not a broken snapshot. The local clock
+/// plays no part, because a slow clock must not reject real snapshots. Release
+/// completeness is checked separately, when a snapshot is prepared.
+fn validated_market_stamp(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let root = value.as_object()?;
+    let stamp = root.get("updated_at")?.as_str()?;
+    stamp_instant(stamp)?;
+    if root.get("items")?.as_object()?.is_empty() {
+        return None;
+    }
+    Some(stamp.to_string())
+}
+
+/// Whether a snapshot stamped `fetched` may replace one stamped `held`, at
+/// `now`. Shared with the webview through
+/// `tests/fixtures/market-contract/ordering.json`.
+fn stamp_replaces(held: Option<&str>, fetched: &str, now: chrono::DateTime<chrono::Utc>) -> bool {
+    let Some(held) = held.and_then(stamp_instant) else {
+        return true;
+    };
+    if held.timestamp().saturating_sub(now.timestamp()) > MAX_FUTURE_SKEW_SECS {
+        return true;
+    }
+    stamp_instant(fetched).is_none_or(|fetched| fetched >= held)
 }
 
 /// A stamp as an instant, for ordering two snapshots. A stamp we cannot read is
@@ -186,17 +233,13 @@ fn stamp_instant(stamp: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
 /// The rules mirror the webview's, including its handling of unusable stamps:
 /// nothing cached (or a cached stamp we cannot read) accepts, and so does a
 /// fetched stamp we cannot read, because an unreadable stamp must not be able to
-/// freeze the cache permanently. Only a readable, strictly older snapshot is
-/// refused - the same stamp is not a regression.
+/// freeze the cache permanently. A held stamp more than an hour ahead of this
+/// clock is no evidence either: a 2099 stamp once blocked every refresh. Only a
+/// readable, strictly older snapshot is refused - the same stamp is not a
+/// regression.
 fn replaces_cache(dir: &Path, spec: &ArtifactSpec, fetched: &str) -> bool {
-    let Some(cached) = read_cache(dir, spec).as_deref().and_then(|b| parse_stamp(b, spec.stamp_key))
-    else {
-        return true;
-    };
-    let (Some(cached), Some(fetched)) = (stamp_instant(&cached), stamp_instant(fetched)) else {
-        return true;
-    };
-    fetched >= cached
+    let held = read_cache(dir, spec).and_then(|body| valid_stamp(spec, &body));
+    stamp_replaces(held.as_deref(), fetched, chrono::Utc::now())
 }
 
 /// Atomic write (tmp + rename), matching the repo-wide atomic-write rule - a
@@ -227,9 +270,7 @@ fn read_bounded(resp: reqwest::blocking::Response, max: usize) -> Result<String,
 /// "Nothing changed" outcome: report the cache's `updated_at` (parsed lazily) and
 /// its ETag, no body. Covers 304, non-200, and every network/IO failure.
 fn keep_cache(dir: &Path, spec: &ArtifactSpec, etag: Option<String>) -> RefreshResult {
-    let updated_at = read_cache(dir, spec)
-        .as_deref()
-        .and_then(|b| parse_stamp(b, spec.stamp_key));
+    let updated_at = read_cache(dir, spec).and_then(|body| valid_stamp(spec, &body));
     RefreshResult {
         updated: false,
         updated_at,
@@ -338,7 +379,7 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
 
     // Validate before caching: a truncated or non-JSON 200 must not overwrite a
     // good cache. parse_stamp is the gate AND gives us the timestamp.
-    let updated_at = match spec.validate.map_or_else(|| parse_stamp(&body, spec.stamp_key), |validate| validate(&body)) {
+    let updated_at = match valid_stamp(spec, &body) {
         Some(u) => u,
         None => {
             eprintln!(
@@ -414,7 +455,7 @@ mod tests {
     }
 
     const ETAG: &str = "\"test-etag-1\"";
-    const BODY: &str = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{}}"#;
+    const BODY: &str = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{"a":{}}}"#;
 
     #[test]
     fn announcements_refuse_invalid_siblings_and_keep_the_last_valid_cache() {
@@ -507,7 +548,7 @@ mod tests {
         assert!(read_cache(&dir, &HISTORY).is_none());
         write_atomic(
             &cache_path(&dir, &HISTORY),
-            br#"{"generated_at":"2026-08-17T06:00:00Z","items":{}}"#,
+            br#"{"generated_at":"2026-08-17T06:00:00Z","items":{"a":{}}}"#,
         )
         .unwrap();
         assert_eq!(
@@ -551,7 +592,7 @@ mod tests {
     #[test]
     fn a_body_over_the_ceiling_is_refused_and_the_cache_kept() {
         let dir = temp_dir();
-        let cached = r#"{"updated_at":"2026-07-01T00:00:00Z","items":{}}"#;
+        let cached = r#"{"updated_at":"2026-07-01T00:00:00Z","items":{"a":{}}}"#;
         write_atomic(&cache_path(&dir, &MARKET), cached.as_bytes()).unwrap();
         let (url, handle) = spawn_mock(2);
         let tight = ArtifactSpec { max_bytes: BODY.len() - 1, ..MARKET };
@@ -651,7 +692,7 @@ mod tests {
     fn an_older_snapshot_is_refused_and_leaves_the_cache_alone() {
         let dir = temp_dir();
         let newer = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{"a":{}}}"#;
-        let older = r#"{"updated_at":"2026-07-19T10:00:00Z","platform":"pc","items":{}}"#;
+        let older = r#"{"updated_at":"2026-07-19T10:00:00Z","platform":"pc","items":{"a":{}}}"#;
         write_atomic(&cache_path(&dir, &MARKET), newer.as_bytes()).unwrap();
         write_atomic(&etag_path(&dir, &MARKET), b"\"stale\"").unwrap();
 
@@ -677,8 +718,8 @@ mod tests {
     #[test]
     fn a_newer_snapshot_still_replaces_the_cache() {
         let dir = temp_dir();
-        let older = r#"{"updated_at":"2026-07-19T10:00:00Z","platform":"pc","items":{}}"#;
-        let newer = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{}}"#;
+        let older = r#"{"updated_at":"2026-07-19T10:00:00Z","platform":"pc","items":{"a":{}}}"#;
+        let newer = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{"a":{}}}"#;
         write_atomic(&cache_path(&dir, &MARKET), older.as_bytes()).unwrap();
 
         let (url, handle) = spawn_mock_serving(1, newer);
@@ -699,7 +740,7 @@ mod tests {
         let dir = temp_dir();
         write_atomic(
             &cache_path(&dir, &MARKET),
-            br#"{"updated_at":"not a date","platform":"pc","items":{}}"#,
+            br#"{"updated_at":"not a date","platform":"pc","items":{"a":{}}}"#,
         )
         .unwrap();
 
@@ -724,6 +765,94 @@ mod tests {
         let r = refresh_artifact(&dir, &MARKET, &url);
 
         assert!(r.updated, "the same snapshot is not a regression");
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
+        let _ = handle.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn market_contract_matches_the_shared_cases() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/market-contract/cases.json"
+        ))
+        .unwrap();
+        for case in cases.as_array().unwrap() {
+            let body = serde_json::to_string(&case["body"]).unwrap();
+            assert_eq!(
+                validated_market_stamp(&body).is_some(),
+                case["valid"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn snapshot_ordering_matches_the_shared_cases() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/market-contract/ordering.json"
+        ))
+        .unwrap();
+        for case in cases.as_array().unwrap() {
+            let now = chrono::DateTime::parse_from_rfc3339(case["now"].as_str().unwrap())
+                .unwrap()
+                .with_timezone(&chrono::Utc);
+            assert_eq!(
+                stamp_replaces(case["current"].as_str(), case["next"].as_str().unwrap(), now),
+                case["replaces"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn the_bundled_snapshot_satisfies_the_runtime_contract() {
+        assert!(validated_market_stamp(crate::services::sellables::BUNDLED_MARKET).is_some());
+    }
+
+    /// A cache stamped in the future used to win every ordering check, so no
+    /// later snapshot could replace it and every native reader stayed on it.
+    #[test]
+    fn a_future_stamped_cache_does_not_block_a_valid_refresh() {
+        let dir = temp_dir();
+        let cache = MarketCache::new(dir.clone());
+        let future = r#"{"updated_at":"2099-01-01T00:00:00Z","platform":"pc","items":{"a":{}}}"#;
+        write_atomic(&cache_path(&dir, &MARKET), future.as_bytes()).unwrap();
+
+        let (url, handle) = spawn_mock(1);
+        let r = refresh_artifact(&dir, &MARKET, &url);
+
+        assert!(r.updated, "a valid snapshot must replace the future-stamped cache");
+        assert_eq!(cache.cached().as_deref(), Some(BODY));
+        let _ = handle.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_cache_that_breaks_the_contract_reads_as_absent() {
+        let dir = temp_dir();
+        let cache = MarketCache::new(dir.clone());
+        write_atomic(
+            &cache_path(&dir, &MARKET),
+            br#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{}}"#,
+        )
+        .unwrap();
+        assert_eq!(cache.cached(), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_parseable_but_unusable_200_keeps_the_cache() {
+        let dir = temp_dir();
+        write_atomic(&cache_path(&dir, &MARKET), BODY.as_bytes()).unwrap();
+
+        let (url, handle) =
+            spawn_mock_serving(1, r#"{"updated_at":"2026-07-21T10:00:00Z","items":{}}"#);
+        let r = refresh_artifact(&dir, &MARKET, &url);
+
+        assert!(!r.updated, "a market with no items must not replace prices");
+        assert_eq!(r.body, None);
         assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
         let _ = handle.join();
         let _ = std::fs::remove_dir_all(&dir);

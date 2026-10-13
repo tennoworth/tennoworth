@@ -1,0 +1,367 @@
+[
+  {
+    "name": "minimal: stamp and one item",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z",
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "published shape",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      },
+      "path_to_info": {},
+      "set_to_parts": {},
+      "relic_rewards": {},
+      "vault_status": {},
+      "baro": null,
+      "surface_fetched_at": {},
+      "source": "wfm"
+    },
+    "valid": true
+  },
+  {
+    "name": "auxiliary maps explicitly null",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": null,
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      },
+      "path_to_info": null,
+      "set_to_parts": null,
+      "relic_rewards": null,
+      "vault_status": null,
+      "baro": null,
+      "rivens": null,
+      "riven_stats": null,
+      "calendar": null,
+      "de": null,
+      "surface_fetched_at": null
+    },
+    "valid": true
+  },
+  {
+    "name": "older snapshot without newer surfaces",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "stamp with an offset",
+    "body": {
+      "updated_at": "2026-10-13T13:00:00+02:00",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "stamp with fractional seconds",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00.250Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "a future stamp is still a snapshot (ordering handles it)",
+    "body": {
+      "updated_at": "2099-01-01T00:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "null body",
+    "body": null,
+    "valid": false
+  },
+  {
+    "name": "array body",
+    "body": [],
+    "valid": false
+  },
+  {
+    "name": "string body",
+    "body": "market",
+    "valid": false
+  },
+  {
+    "name": "empty object",
+    "body": {},
+    "valid": false
+  },
+  {
+    "name": "stamp only",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z"
+    },
+    "valid": false
+  },
+  {
+    "name": "items null",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": null
+    },
+    "valid": false
+  },
+  {
+    "name": "items array",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": []
+    },
+    "valid": false
+  },
+  {
+    "name": "items empty",
+    "body": {
+      "updated_at": "2026-10-13T10:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {}
+    },
+    "valid": false
+  },
+  {
+    "name": "missing stamp",
+    "body": {
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "numeric stamp",
+    "body": {
+      "updated_at": 1792000000,
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "date-only stamp",
+    "body": {
+      "updated_at": "2026-10-13",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "unparseable stamp",
+    "body": {
+      "updated_at": "yesterday",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "impossible date",
+    "body": {
+      "updated_at": "2026-13-40T10:00:00Z",
+      "platform": "pc",
+      "item_count": 1,
+      "catalog_count": 1,
+      "catalog": {
+        "primed flow": "primed_flow"
+      },
+      "items": {
+        "primed_flow": {
+          "avg": 10,
+          "low_sell": 10,
+          "top_buy": 8,
+          "vol": 30,
+          "buys": 1,
+          "sells": 1,
+          "ratio": 1
+        }
+      }
+    },
+    "valid": false
+  }
+]

@@ -517,7 +517,10 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("market.json"),
-            r#"{"items":{"current_only":{"vol":10,"low_sell":12}},"catalog":null,"path_to_info":null,"usage":null,"set_to_parts":null}"#,
+            format!(
+                r#"{{"updated_at":"{}","items":{{"current_only":{{"vol":10,"low_sell":12}}}},"catalog":null,"path_to_info":null,"usage":null,"set_to_parts":null}}"#,
+                chrono::Utc::now().to_rfc3339()
+            ),
         )
         .unwrap();
 
@@ -580,16 +583,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    /// A cache with no usable stamp cannot be placed in time, so it is not
-    /// evidence that the bundle is newer - loading it keeps today's behaviour
-    /// instead of silently discarding a perfectly good snapshot.
+    /// A cache that breaks the runtime market contract (no orderable stamp, no
+    /// items) is not a snapshot the webview would adopt either. Native readers
+    /// use the bundle, and the next refresh may replace the cache.
     #[test]
-    fn load_keeps_a_cache_whose_stamp_is_missing_or_unreadable() {
+    fn load_falls_back_to_the_bundle_for_a_cache_that_breaks_the_contract() {
         for (tag, body) in [
-            ("no-stamp", r#"{"items":{"unstamped_only":{"vol":1,"low_sell":1}}}"#),
+            ("no-stamp", r#"{"items":{"broken_only":{"vol":1,"low_sell":1}}}"#),
             (
                 "bad-stamp",
-                r#"{"updated_at":"whenever","items":{"unstamped_only":{"vol":1,"low_sell":1}}}"#,
+                r#"{"updated_at":"whenever","items":{"broken_only":{"vol":1,"low_sell":1}}}"#,
+            ),
+            (
+                "no-items",
+                r#"{"updated_at":"2026-07-20T10:00:00Z","items":{}}"#,
             ),
         ] {
             let dir = temp_dir(tag);
@@ -597,9 +604,10 @@ mod tests {
 
             let market = MarketData::load(&MarketCache::new(dir.clone()));
 
+            assert!(!market.items.contains_key("broken_only"), "{tag}: the cache was adopted");
             assert!(
-                market.items.contains_key("unstamped_only"),
-                "{tag}: an unorderable cache is still the best snapshot we hold"
+                market.items.contains_key("acceltra_prime_barrel"),
+                "{tag}: the bundle should be what we loaded"
             );
             let _ = std::fs::remove_dir_all(dir);
         }

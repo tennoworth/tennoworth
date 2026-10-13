@@ -1,6 +1,7 @@
 import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
+import { isMarket } from '../domain/market';
 import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome, PresenceChoice, PresenceSettings, PresenceStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
@@ -118,13 +119,15 @@ export class TauriTransport implements DesktopCapabilities {
   }
 
   // The `cached_market` command returns the raw cached body (or null). Parse it
-  // here; a corrupt cache (parse throws) reads as "no cache" so the caller falls
-  // back to the bundled floor rather than crashing the boot.
+  // here; a corrupt or contract-breaking cache reads as "no cache" so the caller
+  // falls back to the bundled floor rather than crashing the boot or adopting a
+  // future stamp that no later refresh could replace.
   async loadCachedMarket(): Promise<Market | null> {
     const raw = await resolveInvoke()<string | null>('cached_market');
     if (!raw) return null;
     try {
-      return JSON.parse(raw) as Market;
+      const market: unknown = JSON.parse(raw);
+      return isMarket(market) ? market : null;
     } catch {
       return null;
     }
@@ -140,8 +143,9 @@ export class TauriTransport implements DesktopCapabilities {
       etag: string | null;
       body: string | null;
     }>('refresh_market');
-    const market = r.updated && r.body ? (JSON.parse(r.body) as Market) : undefined;
-    return { updated: !!r.updated, updatedAt: r.updated_at ?? null, etag: r.etag ?? null, market };
+    const parsed: unknown = r.updated && r.body ? JSON.parse(r.body) : undefined;
+    const market = isMarket(parsed) ? parsed : undefined;
+    return { updated: !!r.updated && market !== undefined, updatedAt: r.updated_at ?? null, etag: r.etag ?? null, market };
   }
 
   async loadHistory(): Promise<History | null> {

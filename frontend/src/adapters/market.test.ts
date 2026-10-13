@@ -30,13 +30,24 @@ describe('loadMarket', () => {
   it('caches the result so a second call does not refetch', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,
-      json: async () => ({ items: {}, catalog: {} }),
+      json: async () => ({ updated_at: '2026-05-26T18:39:22Z', items: { axi_k2_relic: {} }, catalog: {} }),
     });
     const { loadMarket } = await freshMarket();
     await loadMarket();
     await loadMarket();
     expect(globalThis.fetch).toHaveBeenCalledOnce();
   });
+
+  it.each([null, {}, { updated_at: '2026-05-26T18:39:22Z' }, { updated_at: '2026-05-26T18:39:22Z', items: null }])(
+    'rejects a successful response that is not a usable snapshot (%j) and retries next time',
+    async body => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => body });
+      const { loadMarket } = await freshMarket();
+      await expect(loadMarket()).rejects.toThrow(/incomplete or malformed/);
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ updated_at: '2026-05-26T18:39:22Z', items: { a: {} } }) });
+      await expect(loadMarket()).resolves.toMatchObject({ items: { a: {} } });
+    },
+  );
 
   it('throws a helpful error on HTTP failure', async () => {
     globalThis.fetch.mockResolvedValue({ ok: false, status: 404 });

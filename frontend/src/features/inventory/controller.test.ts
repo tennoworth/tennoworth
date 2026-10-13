@@ -6,7 +6,7 @@ import { FilterController } from '../selling/filters.svelte';
 import { DesktopCmdError } from '../../contracts/errors';
 import type { StateStore } from '../../contracts/state-store';
 import type { Snapshot } from '../../adapters/state-store';
-import type { PendingPlan } from '../../contracts/data';
+import type { Market, PendingPlan } from '../../contracts/data';
 
 
 function store(snapshot: Snapshot | null = null, settings: Record<string, string> = {}): StateStore {
@@ -367,4 +367,32 @@ it('distinguishes a scan with no tradeables from a failed refresh and clears tha
   empty = false;
   await c.handleInventory({ name: 'New scan', data: {} });
   expect(c.noTradeables).toBe(false);
+});
+
+describe('background market refresh', () => {
+  const market = (updated_at: string) => ({ updated_at, items: { a: { avg: 1 } } }) as unknown as Market;
+  function controller(fetched: string) {
+    return new InventoryController(store(), {
+      fetchInventory: vi.fn(), loadCachedMarket: vi.fn(),
+      refreshMarket: async () => ({ updated: true, updatedAt: fetched, etag: null, market: market(fetched) }),
+    }, sources);
+  }
+
+  it('keeps a newer snapshot over an older fetch, and takes a newer one', async () => {
+    const c = controller('2026-07-19T10:00:00Z');
+    c.market = market('2026-07-20T10:00:00Z');
+    await c.refreshMarketInBackground();
+    expect(c.market?.updated_at).toBe('2026-07-20T10:00:00Z');
+    const d = controller('2026-07-21T10:00:00Z');
+    d.market = market('2026-07-20T10:00:00Z');
+    await d.refreshMarketInBackground();
+    expect(d.market?.updated_at).toBe('2026-07-21T10:00:00Z');
+  });
+
+  it('replaces a snapshot stamped implausibly far in the future', async () => {
+    const c = controller('2026-07-20T10:00:00Z');
+    c.market = market('2099-01-01T00:00:00Z');
+    await c.refreshMarketInBackground();
+    expect(c.market?.updated_at).toBe('2026-07-20T10:00:00Z');
+  });
 });
