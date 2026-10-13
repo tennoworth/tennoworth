@@ -261,6 +261,9 @@ else
     kept="$(grep -c '"outcome":"kept"' "$path" || true)"
     rejected="$(grep -c '"outcome":"below_volume"\|"outcome":"no_statistics"' "$path" || true)"
     books="$(grep -c '"book":{' "$path" || true)"
+    # Rows whose statistics came from the scraper's cache: the sweep made no
+    # statistics request for them, so they do not count toward its baseline.
+    cached="$(grep -c '"statistics_cached_at"' "$path" || true)"
     unique_slugs="$(grep -o '"slug":"[^"]*"' "$path" | sort -u | wc -l || true)"
     runs="$(grep -c '^{"kind":"run"' "$path" || true)"
     summaries="$(grep -c '^{"kind":"summary"' "$path" || true)"
@@ -326,7 +329,7 @@ else
     valid=$((valid + 1))
     printf '%s\n' "$started" >> "$starts_file"
     printf '%s\n' "${started%%T*}" >> "$day_counts"
-    printf '%s|%s|%s|%s\n' "$start_epoch" "$base" "${run_items:-}" "${sum_kept:-}" >> "$log_rows"
+    printf '%s|%s|%s|%s|%s\n' "$start_epoch" "$base" "${run_items:-}" "${sum_kept:-}" "$(( ${items:-0} - ${cached:-0} ))" >> "$log_rows"
 
     if [ -z "$oldest_start" ] || [ "$start_epoch" -lt "$(iso_to_epoch "$oldest_start")" ]; then
       oldest_start="$started"
@@ -653,7 +656,8 @@ else
     fi
 
     # The baseline is the sweep the invocation actually ran: one catalog fetch,
-    # one statistics call per catalog item, one orders call per kept item. A
+    # one statistics call per item it did not take from the statistics cache,
+    # one orders call per kept item. A
     # count more than 10% off that means requests were dropped or repeated, and
     # the observation rows that follow cannot be read as a cross-section. A zero
     # or absent count is not agreement - it is a missing measurement, and the
@@ -661,19 +665,25 @@ else
     if [ -n "$sweep_log" ]; then
       baseline_items="$(printf '%s' "$matched" | cut -d'|' -f3)"
       baseline_kept="$(printf '%s' "$matched" | cut -d'|' -f4)"
+      baseline_statistics="$(printf '%s' "$matched" | cut -d'|' -f5)"
       drift_checked=true
       if [ -n "${catalog_attempts:-}" ] && [ "$catalog_attempts" != 1 ]; then
         warn "the most recent sweep made $catalog_attempts catalog requests (baseline 1)"
       fi
-      if [ -z "${baseline_items:-}" ]; then
+      if [ -z "${baseline_items:-}" ] || [ -z "${baseline_statistics:-}" ]; then
         error "cannot check request drift: $sweep_log has no catalog size"
+      elif [ "$baseline_statistics" -eq 0 ]; then
+        # Every item reused cached statistics; any request at all is drift.
+        if [ -n "${statistics_attempts:-}" ] && [ "$statistics_attempts" -ne 0 ]; then
+          error "the most recent sweep made $statistics_attempts statistics requests although every item reused cached statistics"
+        fi
       elif [ -z "${statistics_attempts:-}" ] || [ "$statistics_attempts" -eq 0 ]; then
-        error "the most recent sweep recorded no statistics requests against a $baseline_items-item catalog"
+        error "the most recent sweep recorded no statistics requests against $baseline_statistics items due for statistics"
       else
-        delta=$((statistics_attempts - baseline_items))
+        delta=$((statistics_attempts - baseline_statistics))
         [ "$delta" -lt 0 ] && delta=$((-delta))
-        if [ $((delta * 10)) -gt "$baseline_items" ]; then
-          error "the most recent sweep made $statistics_attempts statistics requests against a $baseline_items-item catalog"
+        if [ $((delta * 10)) -gt "$baseline_statistics" ]; then
+          error "the most recent sweep made $statistics_attempts statistics requests against $baseline_statistics items due for statistics ($baseline_items in the catalog)"
         fi
       fi
       if [ -z "${baseline_kept:-}" ]; then

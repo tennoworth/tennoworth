@@ -83,6 +83,11 @@ pub struct Item {
     pub avg_price_48h: f64,
     pub donch_top_90d: f64,
     pub donch_bot_90d: f64,
+    /// When these statistics were fetched, if an earlier sweep fetched them and
+    /// this one reused them from the cache. Absent means fetched this sweep.
+    /// A replay must not treat a cached row as what the market said now.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub statistics_cached_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub book: Option<Book>,
 }
@@ -289,6 +294,7 @@ mod tests {
             avg_price_48h: 20.5,
             donch_top_90d: 30.0,
             donch_bot_90d: 10.0,
+            statistics_cached_at: None,
             book: None,
         }
     }

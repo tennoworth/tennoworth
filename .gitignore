@@ -75,6 +75,8 @@ AGENTS.local.md
 # Mid-run checkpoints and failed-run diagnostics deliberately survive at this
 # path; they are box-owned state, never a source artifact.
 /wfm_results.csv.partial
+/stats-cache.json
+/stats-cache.tmp
 # Long price history (relics.run-derived). Box-only state, ~7 MB, rewritten
 # daily; served live by Caddy, never committed. See wfm-scrape/src/history.rs.
 /frontend/public/history.json

@@ -14,6 +14,10 @@
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
 #   OBSERVATIONS  per-item observation log directory (default
 #               /srv/wfm/observations); empty disables the log
+#   STATS_INTERVAL  how long an item's statistics are reused (default 6h);
+#               empty fetches every item's statistics every sweep
+#   STATS_CACHE   where reused statistics are kept (default stats-cache.json,
+#               beside the CSV)
 #   HISTORY     1 (default) also refresh history.json from relics.run after the
 #               build; 0 skips it for a one-off local scrape
 set -euo pipefail
@@ -42,6 +46,14 @@ SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
 # written, so a missing directory costs nothing but the log.
 OBSERVATIONS="${OBSERVATIONS-/srv/wfm/observations}"
 [ -n "$OBSERVATIONS" ] && SCRAPE_ARGS+=(--observations-dir "$OBSERVATIONS")
+# Daily medians move once a day and the 48-hour figures drift slowly, while
+# the order book moves every sweep. The replay over the observation corpus
+# (317 sweeps, 2026-09-16 to 2026-10-13) put six hours at 42% fewer requests
+# with under 1% of top-100 candidates hidden past one extra sweep. A missing
+# or unreadable cache only costs a full refresh.
+STATS_INTERVAL="${STATS_INTERVAL-6h}"
+STATS_CACHE="${STATS_CACHE:-stats-cache.json}"
+[ -n "$STATS_INTERVAL" ] && SCRAPE_ARGS+=(--stats-cache "$STATS_CACHE" --stats-interval "$STATS_INTERVAL")
 
 # Identity of the generation on disk right now. The binary refuses a run that
 # keeps nothing, but this is the independent check: a replaced or older binary

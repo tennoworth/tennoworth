@@ -100,7 +100,7 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
     use wfm_scrape::http::{
         FixtureScrapeHttp, LiveScrapeHttp, NoopSleeper, RealSleeper, ScrapeHttp, Sleeper,
     };
-    use wfm_scrape::scrape::{run_scrape, ScrapeConfig};
+    use wfm_scrape::scrape::{run_scrape, ScrapeConfig, StatsCacheConfig};
 
     let parse_usize = |s: String, what: &str| -> Result<usize, String> {
         s.parse::<usize>()
@@ -133,6 +133,14 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
             .unwrap_or(100),
         max_coercions: wfm_scrape::coerce::DEFAULT_MAX_COERCIONS,
         observations: extract_flag(args, "--observations-dir").map(PathBuf::from),
+        stats_cache: match (extract_flag(args, "--stats-cache"), extract_flag(args, "--stats-interval")) {
+            (Some(path), Some(interval)) => Some(StatsCacheConfig {
+                path: PathBuf::from(path),
+                interval: wfm_scrape::stats_cache::parse_interval(&interval)?,
+            }),
+            (None, None) => None,
+            _ => return Err("--stats-cache and --stats-interval go together".into()),
+        },
         now: extract_flag(args, "--now")
             .map(|s| wfm_scrape::clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
             .transpose()?
@@ -165,11 +173,13 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
 
     let summary = run_scrape(http.as_ref(), sleeper.as_ref(), &cfg)?;
     eprintln!(
-        "scrape complete: scanned {}, kept {}, coercions {}, workers {} → {}",
+        "scrape complete: scanned {}, kept {}, coercions {}, workers {}, statistics fetched {} reused {} → {}",
         summary.scanned,
         summary.kept,
         summary.coercions,
         summary.workers,
+        summary.statistics_fetched,
+        summary.statistics_reused,
         cfg.out.display()
     );
     Ok(())
