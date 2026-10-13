@@ -107,11 +107,14 @@ pub async fn refresh_history(cache: State<'_, MarketCache>) -> Result<RefreshRes
         .map_err(|e| format!("history refresh task failed to run: {e}"))
 }
 
-/// Progress event for [`live_top_prices`]: `{ done, total }` after each item.
+/// Progress event for [`live_top_prices`]: `{ request_id, done, total }` after
+/// each item. Every live-price surface listens on this one channel, so the id
+/// is what lets each keep only its own request's progress.
 pub const EVENT_LIVE_TOP_PROGRESS: &str = "live-top-progress";
 
 #[derive(serde::Serialize, Clone)]
 struct LiveTopProgress {
+    request_id: u32,
     done: usize,
     total: usize,
 }
@@ -123,13 +126,16 @@ struct LiveTopProgress {
 /// own orders are reported separately (`own_ask` / `own_bid`) instead of
 /// being counted as competition. Paced at WFM's
 /// 3 req/s ceiling, so 50 items ≈ 17 s: the SPA listens for
-/// [`EVENT_LIVE_TOP_PROGRESS`] and shows a counter. Capped at 100 queries per
-/// call - a whole-inventory sweep is the scraper's job, not the UI's.
+/// [`EVENT_LIVE_TOP_PROGRESS`] and shows a counter. A caller that passes no
+/// `request_id` (`requestId` from the webview) shows no counter, so nothing is
+/// emitted for it. Capped at 100 queries per call - a whole-inventory sweep is
+/// the scraper's job, not the UI's.
 #[tauri::command]
 pub async fn live_top_prices(
     app: AppHandle,
     session: State<'_, Arc<WfmSession>>,
     queries: Vec<LiveTopQuery>,
+    request_id: Option<u32>,
 ) -> Result<Vec<LiveTop>, CmdError> {
     const MAX_QUERIES: usize = 100;
     if queries.len() > MAX_QUERIES {
@@ -149,7 +155,9 @@ pub async fn live_top_prices(
         .unwrap_or_else(|_| ("pc".to_string(), None));
     tauri::async_runtime::spawn_blocking(move || {
         fetch_live_tops(&platform, me.as_deref(), &queries, |done, total| {
-            let _ = app.emit(EVENT_LIVE_TOP_PROGRESS, LiveTopProgress { done, total });
+            if let Some(request_id) = request_id {
+                let _ = app.emit(EVENT_LIVE_TOP_PROGRESS, LiveTopProgress { request_id, done, total });
+            }
         })
         .map_err(CmdError::wfm)
     })

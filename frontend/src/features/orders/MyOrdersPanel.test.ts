@@ -8,6 +8,7 @@ import MyOrdersPanel from './MyOrdersPanel.svelte';
 import type { DesktopCapabilities } from '../../contracts/desktop';
 import type { Market } from '../../contracts/data';
 import { installTauri, removeTauri } from '../../dev/test-utils';
+import { ActivityLog } from '../../ui/activity.svelte';
 
 afterEach(() => { cleanup(); removeTauri(); });
 
@@ -106,6 +107,31 @@ describe('MyOrdersPanel listing health', () => {
     await waitFor(() => expect(transport.updateOrder).toHaveBeenCalledWith('o2', { quantity: 2 }));
   });
 
+  it('desktop: a live check abandoned by a session change is not reported as a clean result', async () => {
+    installTauri(vi.fn(() => new Promise(() => {})), undefined);
+    const activity = new ActivityLog();
+    const view = render(MyOrdersPanel, { props: { transport: makeTransport(), activity, sessionEpoch: 0 } });
+    await screen.findByText('Primed Flow');
+    await fireEvent.click(screen.getByRole('button', { name: 'Check live' }));
+    await waitFor(() => expect(activity.current?.tone).toBe('busy'));
+    await view.rerender({ sessionEpoch: 1 });
+    await waitFor(() => expect(activity.current?.tone).not.toBe('busy'));
+    expect(activity.current?.label).toBe('Live check stopped: the WFM session changed');
+  });
+
+  it('desktop: a live check that returns no quotes does not date the snapshot health as live', async () => {
+    const invoke = vi.fn(async () => []);
+    installTauri(invoke, undefined);
+    const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 2]]);
+    render(MyOrdersPanel, { props: { transport: makeTransport(), ownedQty } });
+    await screen.findByText('1 over-quantity');
+    await fireEvent.click(screen.getByRole('button', { name: 'Check live' }));
+    await screen.findByRole('button', { name: 'Re-check live' });
+    const rail = document.querySelector('.orders .rail .exp')?.textContent;
+    expect(rail).toMatch(/attention · fixes apply immediately/);
+    expect(rail).not.toMatch(/live prices from/);
+  });
+
   it('desktop: Check live asks for each sell listing\'s tier and Reprice matches the lowest other ask', async () => {
     const invoke = vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => {
       expect(cmd).toBe('live_top_prices');
@@ -126,7 +152,9 @@ describe('MyOrdersPanel listing health', () => {
       { slug: 'primed_flow', rank: 0, subtype: null },
       { slug: 'ash_prime_blueprint', rank: 0, subtype: null },
     ]);
+    expect(invoke.mock.calls[0][1]).toMatchObject({ requestId: expect.any(Number) });
     await screen.findByText('1 above the market');
+    expect(document.querySelector('.orders .rail .exp')?.textContent).toMatch(/attention · fixes apply immediately · live prices from \d/);
     await fireEvent.click(screen.getByRole('button', { name: 'Reprice' }));
     await waitFor(() => expect(transport.updateOrder).toHaveBeenCalledWith('o1', { platinum: 15 }));
   });

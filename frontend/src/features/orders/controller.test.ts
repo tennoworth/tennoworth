@@ -125,3 +125,33 @@ it('does not ask for sign-in from the hidden orders view after a logout elsewher
   await settle();
   expect(auth).toHaveBeenCalledWith('needs_login');
 });
+
+it.each([false, true])('never shows the previous account a live quote after a session change (in flight: %s)', async inFlight => {
+  const epoch = reactiveBox(0);
+  const active = reactiveBox(true);
+  let account = 'account-a';
+  const oldQuote = deferred<unknown[]>();
+  const quote = { slug: 'primed_flow', rank: 0, low_sell: 99, top_buy: 15, sells: [99], buys: [15], own_ask: 20 };
+  const desktopLiveTopPrices = vi.fn(() => inFlight ? oldQuote.promise : Promise.resolve([quote]));
+  let controller!: ReturnType<typeof createOrdersController>;
+  const stop = controllerTestRoot(() => {
+    controller = createOrdersController({
+      transport: { fetchOrders: async () => [{ ...order, id: account }] } as unknown as DesktopCapabilities,
+      get active() { return active.value; },
+      get sessionEpoch() { return epoch.value; },
+    }, { desktopLiveTopPrices, listenForTauriEvent: vi.fn(() => () => {}) } as never);
+  });
+  cleanups.push(() => { controller.dispose(); stop(); });
+  await settle();
+  const check = controller.checkLive();
+  if (!inFlight) await check;
+  active.value = false; flushSync(); await settle();
+  epoch.value += 1; flushSync(); await settle();
+  account = 'account-b';
+  epoch.value += 1; active.value = true; flushSync(); await settle();
+  if (inFlight) { oldQuote.resolve([quote]); await check; await settle(); }
+  expect(controller.orders.map(row => row.id)).toEqual(['account-b']);
+  expect(controller.liveForOrder(controller.orders[0])).toBeNull();
+  expect(controller.liveTop.quotes.size).toBe(0);
+  expect(desktopLiveTopPrices).toHaveBeenCalledTimes(1);
+});
