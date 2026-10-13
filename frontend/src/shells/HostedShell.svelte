@@ -8,7 +8,7 @@ import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 import Faq from './Faq.svelte';
 import UsageChart from '../features/community/UsageChart.svelte';
 import CalendarView from '../features/calendar/CalendarView.svelte';
-import { loadMarket } from '../adapters/market';
+import { loadMarket, revalidateMarket, startHostedMarketRevalidation } from '../adapters/market';
 import { HostedTransport } from '../adapters/hosted';
 import { baroLocation, humanWindow } from '../ui/format';
 import { baroPhase } from '../domain/baro-board';
@@ -45,6 +45,14 @@ let voidTrader = $derived.by(() => {
 // The clock the countdown and the snapshot's age read. `Date.now()` inside a
 // `$derived` is not tracked, so both froze at their first value.
 let displayNow = $state(Date.now());
+// A tab left open used to rank the first snapshot's prices forever while the
+// age label kept counting. Only a newer valid snapshot replaces the shown one,
+// so search and other page state carry over, and a failed check changes nothing.
+onMount(() => startHostedMarketRevalidation(async () => {
+  if (!market) return;
+  const next = await revalidateMarket(market);
+  if (next) market = next;
+}));
 onMount(() => {
     const refreshClock = () => { displayNow = Date.now(); };
     const timer = window.setInterval(() => { if (!document.hidden) refreshClock(); }, 60_000);

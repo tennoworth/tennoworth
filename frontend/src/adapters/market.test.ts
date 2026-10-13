@@ -230,3 +230,95 @@ describe('startMarketRefreshLoop', () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('revalidateMarket', () => {
+  const snapshot = (updated_at, extra = {}) => ({ updated_at, items: { a: { avg: 1 } }, ...extra });
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  it('adopts only a valid, strictly newer snapshot and asks the server to revalidate', async () => {
+    const { loadMarket, revalidateMarket } = await freshMarket();
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
+    const first = await loadMarket();
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
+    expect(await revalidateMarket(first)).toBeNull();
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T09:00:00Z') });
+    expect(await revalidateMarket(first)).toBeNull();
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T12:00:00Z', { marker: 'newer' }) });
+    const newer = await revalidateMarket(first);
+    expect(newer).toMatchObject({ marker: 'newer' });
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/market.json', { cache: 'no-cache' });
+    expect(await loadMarket()).toBe(newer);
+  });
+
+  it('replaces a shown snapshot stamped implausibly far in the future', async () => {
+    const { revalidateMarket } = await freshMarket();
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
+    expect(await revalidateMarket(snapshot('2099-01-01T00:00:00Z'))).toMatchObject({ updated_at: '2026-10-13T10:00:00Z' });
+  });
+
+  it.each([
+    ['an HTTP failure', { ok: false, status: 503 }],
+    ['a body that breaks the contract', { ok: true, json: async () => ({ updated_at: '2026-10-13T12:00:00Z', items: {} }) }],
+  ])('keeps the current snapshot on %s', async (_case, response) => {
+    const { loadMarket, revalidateMarket } = await freshMarket();
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
+    const first = await loadMarket();
+    globalThis.fetch.mockResolvedValue(response);
+    await expect(revalidateMarket(first)).rejects.toThrow();
+    expect(await loadMarket()).toBe(first);
+  });
+});
+
+describe('startHostedMarketRevalidation', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+  });
+  const setHidden = (hidden) => Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
+
+  it('checks on return to the tab at most every ten minutes, and every 30 minutes while visible', async () => {
+    const { HOSTED_RETURN_MIN_INTERVAL_MS, MARKET_REFRESH_INTERVAL_MS, startHostedMarketRevalidation } = await freshMarket();
+    expect(HOSTED_RETURN_MIN_INTERVAL_MS).toBe(600_000);
+    const revalidate = vi.fn().mockResolvedValue(undefined);
+    const stop = startHostedMarketRevalidation(revalidate);
+    window.dispatchEvent(new Event('focus'));
+    expect(revalidate).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(HOSTED_RETURN_MIN_INTERVAL_MS);
+    window.dispatchEvent(new Event('focus'));
+    await vi.waitFor(() => expect(revalidate).toHaveBeenCalledTimes(1));
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(revalidate).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(MARKET_REFRESH_INTERVAL_MS);
+    expect(revalidate).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it('skips while the tab is hidden and checks when it becomes visible again', async () => {
+    const { MARKET_REFRESH_INTERVAL_MS, startHostedMarketRevalidation } = await freshMarket();
+    const revalidate = vi.fn().mockResolvedValue(undefined);
+    const stop = startHostedMarketRevalidation(revalidate);
+    setHidden(true);
+    await vi.advanceTimersByTimeAsync(MARKET_REFRESH_INTERVAL_MS * 2);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(revalidate).not.toHaveBeenCalled();
+    setHidden(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(revalidate).toHaveBeenCalledTimes(1));
+    stop();
+  });
+
+  it('stops listening and checking once stopped', async () => {
+    const { HOSTED_RETURN_MIN_INTERVAL_MS, MARKET_REFRESH_INTERVAL_MS, startHostedMarketRevalidation } = await freshMarket();
+    const revalidate = vi.fn().mockResolvedValue(undefined);
+    const stop = startHostedMarketRevalidation(revalidate);
+    stop();
+    await vi.advanceTimersByTimeAsync(Math.max(HOSTED_RETURN_MIN_INTERVAL_MS, MARKET_REFRESH_INTERVAL_MS));
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('online'));
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+});
