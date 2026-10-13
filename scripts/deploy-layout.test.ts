@@ -1114,8 +1114,11 @@ describe('observation corpus check wiring', () => {
 });
 
 /** One sweep's JSONL in the shape `src/observations.rs` writes. */
-function sweepLog(startSeconds: number, items: number, kept: number, format = 1): string {
+function sweepLog(startSeconds: number, items: number, kept: number, format = 1, cached = 0): string {
   const stamp = new Date(startSeconds * 1000).toISOString().replace('.000Z', 'Z');
+  // The first `cached` items took their statistics from the scraper's cache.
+  let reused = 0;
+  const cache = () => (reused++ < cached ? { statistics_cached_at: '2026-09-16T10:00:00Z' } : {});
   const lines = [JSON.stringify({
     kind: 'run', format, version: '0.1.0', platform: 'pc', filter: '', exclude: '',
     min_volume: 1, items, workers: 2, started_at: stamp,
@@ -1124,14 +1127,14 @@ function sweepLog(startSeconds: number, items: number, kept: number, format = 1)
     lines.push(JSON.stringify({
       kind: 'item', slug: `thin_${startSeconds}_${i}`, name: 'Thin', tags: [], ducats: null,
       outcome: 'below_volume', subtype: null, volume_48h: 1, median_now: 1, median_90d: 1,
-      medians_7d: [1], avg_price_48h: 1, donch_top_90d: 1, donch_bot_90d: 1,
+      medians_7d: [1], avg_price_48h: 1, donch_top_90d: 1, donch_bot_90d: 1, ...cache(),
     }));
   }
   for (let i = 0; i < kept; i++) {
     lines.push(JSON.stringify({
       kind: 'item', slug: `kept_${startSeconds}_${i}`, name: 'Kept', tags: [], ducats: null,
       outcome: 'kept', subtype: null, volume_48h: 9, median_now: 9, median_90d: 9,
-      medians_7d: [9], avg_price_48h: 9, donch_top_90d: 9, donch_bot_90d: 9,
+      medians_7d: [9], avg_price_48h: 9, donch_top_90d: 9, donch_bot_90d: 9, ...cache(),
       book: { live_buys: 1, live_sells: 1, buy_sell_ratio: 1, top_buy_price: 1, low_sell_price: 1, low5_avg_unclamped: 1, score: 1 },
     }));
   }
@@ -1627,7 +1630,34 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     ]);
     const result = f.run();
     expect(result.status).not.toBe(0);
-    expect(f.report().errors.join('\n')).toContain('no statistics requests against a 4-item catalog');
+    expect(f.report().errors.join('\n')).toContain('no statistics requests against 4 items due for statistics');
+  });
+
+  test('statistics reused from the cache are not counted as missing requests', () => {
+    const f = corpusFixture();
+    const newest = f.observationPath(f.names[2]);
+    const sweep = (statistics: number, cached: number) => {
+      writeFileSync(newest, sweepLog(f.newestStart, 4, 2, 1, cached));
+      utimesSync(newest, f.newestStart + 4200, f.newestStart + 4200);
+      f.writeJournal([
+        { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
+        { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
+        { at: f.newestStart + 4200, message: sweepMetrics(statistics, 2), invocation: FIXTURE_INVOCATION },
+      ]);
+      const result = f.run();
+      return { result, errors: f.report().errors.join('\n') };
+    };
+    let outcome = sweep(1, 3);
+    expect(outcome.result.status, outcome.errors).toBe(0);
+    outcome = sweep(0, 4);
+    expect(outcome.result.status, outcome.errors).toBe(0);
+    // Every item reused its statistics, yet requests were made: drift.
+    outcome = sweep(4, 4);
+    expect(outcome.result.status).not.toBe(0);
+    expect(outcome.errors).toContain('4 statistics requests although every item reused cached statistics');
+    // Fetched items still need their requests.
+    outcome = sweep(0, 1);
+    expect(outcome.errors).toContain('no statistics requests against 3 items due for statistics');
   });
 
   test('a metrics line with no statistics count at all is not ready', () => {

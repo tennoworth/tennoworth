@@ -32,3 +32,4 @@ pub mod render;
 pub mod replay;
 pub mod scrape;
 pub mod stats;
+pub mod stats_cache;

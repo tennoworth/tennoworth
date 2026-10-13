@@ -360,7 +360,17 @@ pub fn read_directory(
             });
             continue;
         }
-        let Some(started_at) = crate::clock::parse_stamp(&run.started_at) else {
+        // A sweep that reused cached statistics did not see the market as it was
+        // then, so simulating a schedule against it would score a guess.
+        let cached = items.values().filter(|item| item.statistics_cached_at.is_some()).count();
+        if cached > 0 {
+            loaded.skipped_malformed.push(SkippedLog {
+                file,
+                reason: format!("{cached} items reused cached statistics; a replay needs a sweep that fetched every item's statistics"),
+            });
+            continue;
+        }
+                let Some(started_at) = crate::clock::parse_stamp(&run.started_at) else {
             return Err(format!(
                 "{file}: unparseable start stamp {:?}",
                 run.started_at
@@ -1291,6 +1301,7 @@ mod tests {
             avg_price_48h: volume * 1.5,
             donch_top_90d: 40.0,
             donch_bot_90d: 20.0,
+            statistics_cached_at: None,
             book,
         }
     }

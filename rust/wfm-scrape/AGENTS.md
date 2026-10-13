@@ -109,6 +109,19 @@ freshly built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen
 fixtures in `tests/fixtures/{scrape,convert}` - cargo rebuilds the binary first,
 so a stale one cannot green them.
 
+`--stats-cache <FILE> --stats-interval <6h>` (`src/stats_cache.rs`) reuses an
+item's statistics between sweeps while its book is still read every sweep. It
+refreshes exactly when `replay`'s policy does: first sight, an unusable cached
+entry, a reappearance after an absence, an empty book last time, or age at the
+interval. It caches the derived figures (`StatsStage`), not the daily rows,
+writes the file only after a completed sweep, and treats a missing or foreign
+file as a full refresh, never a failure. Reused rows carry
+`statistics_cached_at` in the observation log; `replay` refuses such a sweep,
+because simulating a schedule against cached statistics would score a guess,
+and the readiness check expects statistics requests only for the rows without
+it. Production runs with a six-hour interval (`deploy/run-scrape.sh`); an empty
+`STATS_INTERVAL` restores fetching everything every sweep.
+
 The corpus's operational owners are host-only, next to the pipeline:
 `deploy/observations-check.sh` (with `wfm-observations-check.service`/`.timer`,
 installed by `scripts/deploy-scrape-host.sh`) reports whether the corpus is sound
