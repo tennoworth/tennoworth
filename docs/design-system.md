@@ -326,13 +326,18 @@ publication, in words with a good, warn or bad hue. Suggested drafts from the
 game calendar sit in their own panel above the editor, one dotted-rule row each
 with Open as draft and Dismiss; the panel is absent when nothing is suggested.
 An opened suggestion is unsaved edits, so leaving it asks first.
+Official dates for the player calendar have their own panel below the editor:
+published dates as rows with Edit and Remove, then a form whose fields are
+labelled as event fields. Publish and Remove each pass through an inline
+review that shows exactly what goes live; there is no draft.
 These extend the existing review/continuity patterns without a new palette.
 
 ## Calendar
 
 The Calendar is a desktop view and a section of the hosted landing (`#calendar`,
-linked from the status strip). It shows dated things that move prices: DE's
-in-game events, Baro visits, Prime Resurgence rotations, estimated vaulting,
+linked from the status strip). It shows dated things that move prices: official
+DE announcements entered in the dashboard (devstreams, updates, Prime Access),
+DE's in-game events, Baro visits, Prime Resurgence rotations, estimated vaulting,
 our curated notices and, when switched on, Darvo deals. A `.ui-segmented`
 choice offers three views of the same events, remembered per device:
 

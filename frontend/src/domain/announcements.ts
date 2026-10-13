@@ -40,5 +40,27 @@ export function parseAnnouncements(value: unknown): AnnouncementFeed | null {
     if (!announcementSource(message.source_url)) return null;
     ids.add(message.id);
   }
+  if (feed.events !== undefined && feed.events !== null && !validEvents(feed.events)) return null;
   return value as AnnouncementFeed;
+}
+
+function validEvents(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > limits.max_events) return false;
+  const ids = new Set<string>();
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') return false;
+    const event = raw as Record<string, unknown>;
+    if (!text(event.id, limits.max_id) || !/^[a-z0-9_-]+$/.test(event.id) || ids.has(event.id)
+      || typeof event.kind !== 'string' || !limits.event_kinds.includes(event.kind)
+      || !text(event.title, limits.max_title) || !stamp(event.starts_at)
+      || typeof event.source_url !== 'string' || !announcementSource(event.source_url)) return false;
+    if (event.ends_at !== undefined && event.ends_at !== null) {
+      if (!stamp(event.ends_at)) return false;
+      const window = Date.parse(event.ends_at) - Date.parse(event.starts_at);
+      if (window <= 0 || window > limits.max_event_window_seconds * 1000) return false;
+    }
+    if (event.note !== undefined && event.note !== null && !text(event.note, limits.max_event_note)) return false;
+    ids.add(event.id);
+  }
+  return true;
 }

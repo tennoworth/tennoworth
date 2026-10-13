@@ -4,7 +4,12 @@ export type AccessStatus = { revision: number, reason: string, cooldown_until_ms
 
 export type Announcement = { id: string, starts_at: string, ends_at: string, title: string, body: string, source_url: string, };
 
-export type AnnouncementFeed = { version: number, updated_at: string, messages: Array<Announcement>, };
+export type AnnouncementFeed = { version: number, updated_at: string, messages: Array<Announcement>,
+/**
+ * Official dates for the calendar. Optional so readers that predate it
+ * (desktop 0.8.103) keep accepting the feed: they ignore the field.
+ */
+events?: Array<OfficialEvent>, };
 
 export type AnnouncementNotification = { source_url: string, ends_at: string, };
 
@@ -58,6 +63,12 @@ export type DigestNotification = { opportunities: Array<DigestOpportunity>, inve
 export type DigestOpportunity = { name: string, quantity: number, price: number, };
 
 export type NotificationContent = { "kind": "announcement" } & AnnouncementNotification | { "kind": "baro" } & BaroNotification | { "kind": "digest" } & DigestNotification;
+
+export type OfficialEvent = { id: string, kind: string, title: string, starts_at: string,
+/**
+ * Absent for a single moment such as a stream start.
+ */
+ends_at?: string, source_url: string, note?: string, };
 
 export type OrderSide = "sell" | "buy";
 

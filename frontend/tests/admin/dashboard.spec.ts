@@ -161,6 +161,44 @@ test('calendar suggestions open as unsaved drafts and stay gone once saved or di
   await expect(page.getByRole('region', { name: 'Suggested drafts' })).toHaveCount(0);
 });
 
+test('official dates are reviewed, published into the feed, corrected in place and removed', async ({ page, request }) => {
+  await page.goto('/admin.html#announcements');
+  await expect(page.getByText('Signed in: local-preview@example.invalid')).toBeVisible();
+  const panel = page.getByRole('region', { name: 'Official dates' });
+  const title = `Devstream ${Date.now()}`;
+  const start = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 16);
+  await panel.getByLabel('Event kind').selectOption('devstream');
+  await panel.getByLabel('Event title').fill(title);
+  await panel.getByLabel('Event starts at (UTC)').fill(start);
+  // Without an approved source the date cannot be reviewed.
+  await expect(panel.getByRole('button', { name: 'Review event' })).toBeDisabled();
+  await panel.getByLabel("Link to DE's announcement").fill('https://forums.warframe.com/topic/devstream/');
+  await panel.getByRole('button', { name: 'Review event' }).click();
+  await expect(panel.getByText('Publish this date to the player calendar?')).toBeVisible();
+  await panel.getByRole('button', { name: 'Publish event', exact: true }).click();
+  await expect(panel.getByText('Event published. Calendars pick it up on their next feed check.')).toBeVisible();
+  let state = await (await request.get('http://127.0.0.1:8084/api/announcements')).json();
+  const published = state.snapshot.feed.events.find((event: { title: string }) => event.title === title);
+  expect(published).toMatchObject({ kind: 'devstream', starts_at: `${start}:00Z`, source_url: 'https://forums.warframe.com/topic/devstream/' });
+
+  const row = panel.locator('.row', { hasText: title });
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await panel.getByLabel('Event title').fill(`${title} (moved)`);
+  await panel.getByRole('button', { name: 'Review correction' }).click();
+  await panel.getByRole('button', { name: 'Publish correction' }).click();
+  await expect(panel.getByText('Event corrected.', { exact: false })).toBeVisible();
+  state = await (await request.get('http://127.0.0.1:8084/api/announcements')).json();
+  const corrected = state.snapshot.feed.events.filter((event: { id: string }) => event.id === published.id);
+  expect(corrected.map((event: { title: string }) => event.title)).toEqual([`${title} (moved)`]);
+
+  await panel.locator('.row', { hasText: `${title} (moved)` }).getByRole('button', { name: 'Remove' }).click();
+  await panel.getByRole('button', { name: 'Remove event' }).click();
+  await expect(panel.getByText('Event removed from the calendar.')).toBeVisible();
+  state = await (await request.get('http://127.0.0.1:8084/api/announcements')).json();
+  expect((state.snapshot.feed.events ?? []).some((event: { id: string }) => event.id === published.id)).toBe(false);
+  expect(state.snapshot.history.slice(0, 3).map((entry: { operation: string }) => entry.operation)).toEqual(['event-remove', 'event-publish', 'event-publish']);
+});
+
 for (const mode of ['light', 'dark'] as const) for (const width of [320, 768, 1440]) {
   test(`editor remains usable in ${mode} at ${width}px and short height`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: mode });

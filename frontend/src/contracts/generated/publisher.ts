@@ -4,7 +4,12 @@ export type AlertEntry = { at: string, unit: string, result: string, context: Ar
 
 export type Announcement = { id: string, starts_at: string, ends_at: string, title: string, body: string, source_url: string, };
 
-export type AnnouncementFeed = { version: number, updated_at: string, messages: Array<Announcement>, };
+export type AnnouncementFeed = { version: number, updated_at: string, messages: Array<Announcement>,
+/**
+ * Official dates for the calendar. Optional so readers that predate it
+ * (desktop 0.8.103) keep accepting the feed: they ignore the field.
+ */
+events?: Array<OfficialEvent>, };
 
 export type BackupStatus = { latest_at: string | null, count: number, error: string | null, };
 
@@ -24,9 +29,19 @@ export type DashboardState = { actor: string, snapshot: Snapshot,
  */
 message_id: string | null, };
 
+export type EventChange = { request_id: string, expected_revision: number, operation: EventOperation, id: string | null, event: EventContent | null, };
+
+export type EventContent = { kind: string, title: string, starts_at: string, ends_at: string | null, source_url: string, note: string | null, };
+
+export type EventOperation = "publish" | "remove";
+
 export type Health = "ok" | "failing";
 
-export type History = { revision: number, actor: string, at: string, operation: string, id: string | null, content: Content | null, };
+export type History = { revision: number, actor: string, at: string, operation: string, id: string | null, content: Content | null,
+/**
+ * Set instead of `content` for the official-event operations.
+ */
+event: EventContent | null, };
 
 export type JobRequest = { at: string, actor: string, };
 
@@ -37,6 +52,12 @@ export type JobStatus = { id: string, label: string, description: string, unit: 
 blocked: string | null, last_request: JobRequest | null, cooldown_until: string | null, };
 
 export type Message = { id: string, draft: Content, published: Content | null, ever_published: boolean, };
+
+export type OfficialEvent = { id: string, kind: string, title: string, starts_at: string,
+/**
+ * Absent for a single moment such as a stream start.
+ */
+ends_at?: string, source_url: string, note?: string, };
 
 export type Operation = "save" | "publish" | "withdraw";
 

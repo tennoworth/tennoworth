@@ -8,7 +8,7 @@
 
   let { events, now, surface }: { events: CalendarEvent[]; now: number; surface: 'desktop' | 'hosted' } = $props();
   const LANES = 4;
-  const PRIORITY: EventKind[] = ['notice', 'baro', 'resurgence', 'vault', 'event', 'deal'];
+  const PRIORITY: EventKind[] = ['notice', 'official', 'baro', 'resurgence', 'vault', 'event', 'deal'];
   // Opens on the current month; navigating away is the reader's choice from then on.
   let month = $state(untrack(() => Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), 1)));
   let day = $state(untrack(() => dayStart(now)));

@@ -8,7 +8,7 @@
 import type { Market, OwnedRecord, ResurgenceRotation } from '../contracts/data';
 import type { AnnouncementFeed } from '../contracts/generated/desktop';
 
-export type EventKind = 'event' | 'baro' | 'resurgence' | 'vault' | 'notice' | 'deal';
+export type EventKind = 'official' | 'event' | 'baro' | 'resurgence' | 'vault' | 'notice' | 'deal';
 
 export interface CalendarEvent {
   /** Stable across refreshes of the same snapshot, so a selection survives. */
@@ -25,7 +25,7 @@ export interface CalendarEvent {
   detail: string;
   estimate: boolean;
   /** Who published the date. */
-  source: 'worldstate' | 'estimate' | 'notice';
+  source: 'worldstate' | 'estimate' | 'notice' | 'official';
   sourceUrl?: string;
   /** Owned slugs this event touches; absent when that cannot be known. */
   affects?: string[];
@@ -159,6 +159,31 @@ function gameEvents(market: Market, now: number): CalendarEvent[] {
   });
 }
 
+const OFFICIAL_DETAIL: Record<string, string> = {
+  update: 'An update releases. Balance changes in its notes can move mod and weapon prices within hours.',
+  devstream: 'DE presents what is coming next. Reworks and changes announced here can move prices the same evening.',
+  'prime-access': 'A new Prime Access begins. New prime parts start high and usually fall as supply grows.',
+  drops: 'Watch partnered streams to earn the listed drops.',
+  nightwave: 'A Nightwave season or its offerings change.',
+  ducats: 'A Ducat value changes. Exchange or keep affected items before the date.',
+  event: 'An announced in-game event.',
+  other: 'An announcement from DE.',
+};
+
+function official(feed: AnnouncementFeed | null | undefined, now: number): CalendarEvent[] {
+  return (feed?.events ?? []).flatMap(event => {
+    const from = at(event.starts_at);
+    const to = event.ends_at ? at(event.ends_at) : null;
+    if (!Number.isFinite(from) || (to !== null && !Number.isFinite(to)) || (to ?? from) < now - PAST) return [];
+    return [{
+      id: `official-${event.id}`, kind: 'official' as const, from, to, estimate: false, source: 'official' as const,
+      title: event.title, short: event.title,
+      detail: event.note?.trim() || OFFICIAL_DETAIL[event.kind] || OFFICIAL_DETAIL.other,
+      sourceUrl: event.source_url,
+    }];
+  });
+}
+
 function notices(feed: AnnouncementFeed | null | undefined, now: number): CalendarEvent[] {
   return (feed?.messages ?? []).flatMap(message => {
     const from = at(message.starts_at);
@@ -180,6 +205,7 @@ export function calendarEvents(
   const events = [
     ...(market ? [...gameEvents(market, now), ...baro(market, now), ...resurgence(market, now, owned), ...vaulting(market, now, owned), ...deals(market, now)] : []),
     ...notices(feed, now),
+    ...official(feed, now),
   ];
   return events.sort((a, b) => a.from - b.from || a.id.localeCompare(b.id));
 }

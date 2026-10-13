@@ -1,4 +1,7 @@
-use crate::contracts::{Change, Content, History, Message, Operation, Snapshot};
+use crate::contracts::{
+    Change, Content, EventChange, EventContent, EventOperation, History, Message, Operation,
+    Snapshot,
+};
 use chrono::{SecondsFormat, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
@@ -191,13 +194,19 @@ impl Store {
         let mut history = Vec::new();
         for row in rows {
             let (revision, actor, at, operation, id, content) = row?;
+            let is_event = operation.starts_with("event-");
             history.push(History {
                 revision,
                 actor,
                 at,
                 operation,
                 id,
-                content: content.map(decode).transpose()?,
+                content: content
+                    .clone()
+                    .filter(|_| !is_event)
+                    .map(decode)
+                    .transpose()?,
+                event: content.filter(|_| is_event).map(decode).transpose()?,
             });
         }
         Ok(Snapshot {
@@ -229,15 +238,7 @@ impl Store {
     }
 
     pub fn apply(&mut self, change: &Change, actor: &str, now: i64) -> Result<Snapshot, Error> {
-        if change.request_id.len() < 16
-            || change.request_id.len() > 80
-            || !change
-                .request_id
-                .bytes()
-                .all(|c| c.is_ascii_alphanumeric() || c == b'-')
-        {
-            return Err(Error::Invalid("Invalid request ID.".into()));
-        }
+        check_request_id(&change.request_id)?;
         let digest = format!("{:x}", Sha256::digest(encode(change)?.as_bytes()));
         let tx = self.db.transaction()?;
         let old: Option<String> = tx
@@ -294,6 +295,7 @@ impl Store {
                     version: 1,
                     updated_at: at.clone(),
                     messages: vec![content.message(&id)],
+                    events: None,
                 };
                 if parse(&encode(&draft_feed)?).is_none() {
                     return Err(Error::Invalid("Check the text, source and dates. The window must be between 1 second and 31 days.".into()));
@@ -355,6 +357,7 @@ impl Store {
                     feed.messages.push(content.message(&id));
                 }
             }
+            prune_events(&mut feed, now);
             let raw = encode(&feed)?;
             if parse(&raw).is_none() {
                 return Err(Error::Invalid(
@@ -377,6 +380,124 @@ impl Store {
                 id,
                 saved_content.as_ref().map(encode).transpose()?
             ],
+        )?;
+        tx.execute(
+            "INSERT INTO requests VALUES (?1,?2,?3,?4)",
+            params![change.request_id, actor, digest, id],
+        )?;
+        tx.commit()?;
+        let _ = self.retry_export();
+        self.snapshot()
+    }
+
+    /// Publishes or removes an official event. Events have no drafts: the
+    /// dashboard reviews the exact entry before sending it, and each change is
+    /// a new feed revision with history, like a message publication.
+    pub fn apply_event(
+        &mut self,
+        change: &EventChange,
+        actor: &str,
+        now: i64,
+    ) -> Result<Snapshot, Error> {
+        check_request_id(&change.request_id)?;
+        let digest = format!("{:x}", Sha256::digest(encode(change)?.as_bytes()));
+        let tx = self.db.transaction()?;
+        let old: Option<String> = tx
+            .query_row(
+                "SELECT digest FROM requests WHERE request_id=?1 AND actor=?2",
+                params![change.request_id, actor],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if let Some(old) = old {
+            if old != digest {
+                return Err(Error::Conflict);
+            }
+            drop(tx);
+            let _ = self.retry_export();
+            return self.snapshot();
+        }
+        let (revision, raw): (i64, String) =
+            tx.query_row("SELECT revision,feed FROM state", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })?;
+        if change.expected_revision != revision {
+            return Err(Error::Conflict);
+        }
+        let revision = revision.checked_add(1).ok_or(Error::Unavailable)?;
+        let mut feed: AnnouncementFeed = decode(raw)?;
+        let mut events = feed.events.take().unwrap_or_default();
+        let (id, operation, content) = match change.operation {
+            EventOperation::Publish => {
+                let content = change
+                    .event
+                    .as_ref()
+                    .ok_or_else(|| Error::Invalid("Event details are missing.".into()))?;
+                let last = content.ends_at.as_deref().unwrap_or(&content.starts_at);
+                if stamp(last).is_none_or(|last| last <= now) {
+                    return Err(Error::Invalid(
+                        "This date has already passed. Enter an upcoming event.".into(),
+                    ));
+                }
+                let id = match &change.id {
+                    Some(id) if events.iter().any(|event| &event.id == id) => id.clone(),
+                    Some(_) => return Err(Error::Invalid("Event no longer exists.".into())),
+                    None => {
+                        tx.query_row("SELECT 'event-' || lower(hex(randomblob(12)))", [], |r| {
+                            r.get(0)
+                        })?
+                    }
+                };
+                let event = content.event(&id);
+                match events.iter_mut().find(|existing| existing.id == id) {
+                    Some(existing) => *existing = event,
+                    None => events.push(event),
+                }
+                (id, "event-publish", content.clone())
+            }
+            EventOperation::Remove => {
+                if change.event.is_some() {
+                    return Err(Error::Invalid("Removal cannot change details.".into()));
+                }
+                let id = change
+                    .id
+                    .clone()
+                    .ok_or_else(|| Error::Invalid("Choose an event to remove.".into()))?;
+                let position = events
+                    .iter()
+                    .position(|event| event.id == id)
+                    .ok_or_else(|| Error::Invalid("Event no longer exists.".into()))?;
+                let removed = events.remove(position);
+                let content = EventContent {
+                    kind: removed.kind,
+                    title: removed.title,
+                    starts_at: removed.starts_at,
+                    ends_at: removed.ends_at,
+                    source_url: removed.source_url,
+                    note: removed.note,
+                };
+                (id, "event-remove", content)
+            }
+        };
+        events.sort_by(|a, b| a.starts_at.cmp(&b.starts_at).then_with(|| a.id.cmp(&b.id)));
+        feed.events = Some(events);
+        prune_events(&mut feed, now);
+        let previous = stamp(&feed.updated_at).ok_or(Error::Unavailable)?;
+        feed.updated_at = utc(now.max(previous.checked_add(1).ok_or(Error::Unavailable)?))?;
+        let raw = encode(&feed)?;
+        if parse(&raw).is_none() {
+            return Err(Error::Invalid(
+                "Check the kind, title, source and dates. Events last at most 120 days, notes at most 280 characters, and the feed holds 30 events.".into(),
+            ));
+        }
+        let at = utc(now)?;
+        tx.execute(
+            "UPDATE state SET feed=?1,feed_revision=?2,revision=?2 WHERE id=1",
+            params![raw, revision],
+        )?;
+        tx.execute(
+            "INSERT INTO history VALUES (?1,?2,?3,?4,?5,?6)",
+            params![revision, actor, at, operation, id, encode(&content)?],
         )?;
         tx.execute(
             "INSERT INTO requests VALUES (?1,?2,?3,?4)",
@@ -457,6 +578,27 @@ impl Store {
             [revision],
         )?;
         Ok(())
+    }
+}
+
+fn check_request_id(id: &str) -> Result<(), Error> {
+    if id.len() < 16 || id.len() > 80 || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-')
+    {
+        return Err(Error::Invalid("Invalid request ID.".into()));
+    }
+    Ok(())
+}
+
+/// Finished events stay a week, so a just-ended stream is still on the
+/// calendar, then drop out to keep the feed within its size limit.
+const EVENT_RETENTION: i64 = 7 * 86_400;
+
+fn prune_events(feed: &mut AnnouncementFeed, now: i64) {
+    if let Some(events) = &mut feed.events {
+        events.retain(|event| {
+            stamp(event.ends_at.as_deref().unwrap_or(&event.starts_at))
+                .is_some_and(|last| last >= now - EVENT_RETENTION)
+        });
     }
 }
 
