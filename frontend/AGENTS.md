@@ -138,10 +138,11 @@ whether Vite leaked its extracted CSS into another entry path.
 | Multi-MB structured cache (item catalogs) | IndexedDB |
 | HTTP request/response cache | Cache API (not used yet) |
 
-The key mapping lives in `src/adapters/state-store.ts`; its `SettingKey`
-contract lives in `src/contracts/state-store.ts`. Snapshot keys live in
-`src/adapters/browser-snapshot.ts`. Keep key inventories in code and its tests
-rather than maintaining another list here.
+The key mapping, snapshot keys included, lives in
+[`src/adapters/state-store.ts`](src/adapters/state-store.ts); its `SettingKey`
+contract lives in [`src/contracts/state-store.ts`](src/contracts/state-store.ts).
+Keep key inventories in code and its tests rather than maintaining another list
+here.
 
 **Don't read/write these via raw `localStorage` calls.** Go through
 `src/adapters/state-store.ts`'s `store.getSetting`/`setSetting` (`SettingKey`
