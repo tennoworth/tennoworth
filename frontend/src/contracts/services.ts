@@ -50,7 +50,8 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopRememberAvailable(): Promise<boolean>;
   desktopReadNotifications(id?: number | null): Promise<void>;
   desktopClearNotifications(): Promise<void>;
-  desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<LiveTop[]>;
+  /** `requestId` tags this call's progress events; omit it when no counter is shown. */
+  desktopLiveTopPrices(queries: LiveTopQuery[], requestId?: number): Promise<LiveTop[]>;
   isDesktopRuntime(): boolean;
   desktopRivenComps(weapon: string, stats?: RivenStatFilter | null): Promise<RivenAuction[]>;
   desktopTradeSessionState(): Promise<import('./data').TradeSessionState>;

@@ -29,7 +29,7 @@ function setup(candidates: ListingCandidate[], port: Partial<DesktopCapabilities
   const stop = controllerTestRoot(() => {
     controller = createListingReview({
       transport, get open() { return listing.listingOpen; }, set open(value) { listing.listingOpen = value; },
-      get rows() { return listing.reviewRowsOverride ?? []; }, sendThrough: send => send(),
+      get rows() { return listing.reviewRowsOverride ?? []; }, get sessionEpoch() { return listing.sessionEpoch; }, sendThrough: send => send(),
     }, { desktopAccessStatus: vi.fn(), desktopLiveTopPrices: vi.fn(), listenForTauriEvent: vi.fn(() => () => {}), desktopTradeSessionState: vi.fn().mockResolvedValue(state), ...services });
   });
   cleanups.push(() => { controller.dispose(); stop(); });
@@ -101,4 +101,44 @@ it('holds sending busy and prevents a second submission while IPC is pending', a
   await Promise.all([first, duplicate]);
   expect(c.phase).toBe('results');
   expect(c.validatingSend).toBe(false);
+});
+
+const liveQuote = { slug: 'primed_flow', rank: 0, low_sell: 30, top_buy: 25, sells: [30], buys: [25], own_ask: 20 };
+
+it('starts each review without the previous review\'s live prices', async () => {
+  const desktopLiveTopPrices = vi.fn().mockResolvedValue([liveQuote]);
+  const { c, listing } = setup(rows, {}, { desktopLiveTopPrices });
+  await c.checkLivePrices();
+  expect(c.liveFor(c.plan[0])).toEqual(liveQuote);
+  listing.listingOpen = false;
+  flushSync();
+  listing.listingOpen = true;
+  flushSync();
+  expect(c.liveFor(c.plan[0])).toBeUndefined();
+  expect(c.liveTop.phase).toBe('idle');
+});
+
+it('drops a live check that finishes after its review closed', async () => {
+  const old = deferred<unknown[]>();
+  const desktopLiveTopPrices = vi.fn().mockReturnValueOnce(old.promise);
+  const { c, listing } = setup(rows, {}, { desktopLiveTopPrices });
+  const check = c.checkLivePrices();
+  listing.listingOpen = false;
+  flushSync();
+  listing.listingOpen = true;
+  flushSync();
+  old.resolve([liveQuote]);
+  await check;
+  expect(c.liveFor(c.plan[0])).toBeUndefined();
+  expect(c.liveTop.phase).toBe('idle');
+});
+
+it('drops live prices when the WFM session changes during a review', async () => {
+  const desktopLiveTopPrices = vi.fn().mockResolvedValue([liveQuote]);
+  const { c, listing } = setup(rows, {}, { desktopLiveTopPrices });
+  await c.checkLivePrices();
+  listing.handleWfmUnlocked(null);
+  flushSync();
+  expect(c.liveFor(c.plan[0])).toBeUndefined();
+  expect(c.plan[0].platinum).toBe(20);
 });

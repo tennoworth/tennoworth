@@ -66,6 +66,8 @@ import type { DesktopServices } from '../../contracts/services';
     onrecheck?: () => void;
     listingActionLabel?: string;
     currentSnapshotId?: number | null;
+    /** Bumped when the WFM session changes; live prices belong to one account. */
+    sessionEpoch?: number;
   }
 
 export function createListingReview(input: ListingReviewInput, services: Pick<DesktopServices, 'desktopAccessStatus' | 'desktopLiveTopPrices' | 'desktopTradeSessionState' | 'listenForTauriEvent'>) {
@@ -153,8 +155,23 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
       ordersReady = false;
       sessionRemaining = null;
       sessionProblem = null;
-      untrack(() => { if (plan.some(r => r.session)) void refreshReviewOrders(false); });
+      untrack(() => {
+        // The modal stays mounted between reviews; quotes from an earlier batch
+        // (or a check still running for it) describe a moment that has passed.
+        liveTop.reset();
+        if (plan.some(r => r.session)) void refreshReviewOrders(false);
+      });
     }
+  });
+
+  let quotesEpoch = untrack(() => input.sessionEpoch);
+  $effect(() => {
+    const epoch = input.sessionEpoch;
+    untrack(() => {
+      if (epoch === quotesEpoch) return;
+      quotesEpoch = epoch;
+      liveTop.reset();
+    });
   });
 
   let selectedCount = $derived(plan.filter((r) => r.include).length);

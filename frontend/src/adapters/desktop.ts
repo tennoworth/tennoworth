@@ -323,11 +323,12 @@ export async function desktopRememberAvailable(): Promise<boolean> {
 
 /**
  * Exact-tier live asks/bids for up to 100 items, paced at WFM's 3 req/s
- * (≈17 s per 50) - listen on `LIVE_TOP_PROGRESS_EVENT` for `{done,total}`.
+ * (≈17 s per 50) - listen on `LIVE_TOP_PROGRESS_EVENT` for
+ * `{request_id,done,total}`, emitted only when a `requestId` is given.
  */
-export async function desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<LiveTop[]> {
+export async function desktopLiveTopPrices(queries: LiveTopQuery[], requestId?: number): Promise<LiveTop[]> {
   try {
-    return await resolveInvoke()<LiveTop[]>('live_top_prices', { queries });
+    return await resolveInvoke()<LiveTop[]>('live_top_prices', { queries, requestId: requestId ?? null });
   } catch (e) {
     rethrowInvoke(e);
   }

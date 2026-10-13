@@ -118,6 +118,9 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     // view is hidden (a logout from Settings) drops the old rows instead of
     // fetching, and the next return loads for the new session.
     untrack(() => {
+      // Live quotes are per account (platform, own-order exclusion): a new
+      // session must not inherit the old one's, finished or still in flight.
+      liveTop.reset();
       if (input.active ?? true) { loadOrders(); return; }
       ++loadGen;
       orders = [];

@@ -18,8 +18,10 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import type { ScoredInventoryFact } from '../../contracts/generated/domain';
   import type { Verdict } from '../../contracts/generated/domain';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', keep, active = true }: {
+  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', keep, active = true, sessionEpoch = 0 }: {
     keep?: Snippet;
+    /** Bumped when the WFM session changes; live prices belong to one account. */
+    sessionEpoch?: number;
     /** Whether the view is on screen; it stays mounted while hidden. */
     active?: boolean;
     owned: Map<string, OwnedRecord>; market: Market | null; reserveCopies: number;
@@ -150,6 +152,21 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     priceSources = sources;
     priceNote = failed ? `${failed} price checks failed; those items retain their previous prices.` : 'Online competitors checked; your own orders are excluded.';
   }
+
+  // Live prices were fetched for the previous account (its platform, its own
+  // orders excluded), so a new session starts from the cached snapshot again.
+  let pricesEpoch = untrack(() => sessionEpoch);
+  $effect(() => {
+    const epoch = sessionEpoch;
+    untrack(() => {
+      if (epoch === pricesEpoch) return;
+      pricesEpoch = epoch;
+      liveTop.reset();
+      livePrices = {};
+      priceSources = {};
+      priceNote = null;
+    });
+  });
 
   // Back on screen after being hidden: refresh at once rather than at the next poll.
   let wasActive = untrack(() => active);

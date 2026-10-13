@@ -12,6 +12,10 @@
   // Rows on screen but not freshly confirmed (refreshing, or the refresh
   // failed): they stay readable, and changes wait for a confirmed list.
   let unconfirmed = $derived(controller.phase !== 'done');
+  // Retained quotes outlive the moment they describe once the view is left and
+  // revisited, so the rail says when they were taken.
+  let liveAt = $derived(controller.liveTop.checkedAt == null || controller.liveTop.quotes.size === 0 ? null
+    : new Date(controller.liveTop.checkedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
   // Live checks report in the status strip's activity cell too, so a check
   // started here is still visible from another view.
   let liveActivity: number | null = null;
@@ -27,6 +31,8 @@
         const id = liveActivity;
         liveActivity = null;
         if (phase === 'error') activity.finish(id, 'Live check failed', 'bad');
+        // Only a session change resets a running check; its result was discarded.
+        else if (phase === 'idle') activity.finish(id, 'Live check stopped: the WFM session changed');
         else activity.finish(id, controller.health.length ? `Live check · ${controller.health.length} to fix` : 'Live check · no issues');
       }
     });
@@ -72,8 +78,8 @@
       {#if controller.phase === 'loading' || controller.phase === 'idle'}{controller.orders.length > 0 ? 'refreshing…' : 'Fetching orders…'}
       {:else if controller.phase === 'locked'}unlock required
       {:else if controller.phase === 'error'}couldn't load orders
-      {:else if controller.queue.length > 0}{controller.counts.issues} of {controller.orders.length} {controller.orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately
-      {:else if controller.liveTop.quotes.size > 0}no issues in {controller.orders.length} {controller.orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
+      {:else if controller.queue.length > 0}{controller.counts.issues} of {controller.orders.length} {controller.orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately{liveAt ? ` · live prices from ${liveAt}` : ''}
+      {:else if controller.liveTop.quotes.size > 0}no issues in {controller.orders.length} {controller.orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book{liveAt ? ` at ${liveAt}` : ''}
       {:else if ownedQty}no issues in {controller.orders.length} {controller.orders.length === 1 ? 'listing' : 'listings'} · quantities checked against your last scan
       {:else}nothing flagged yet - check live to compare your asks with the online top-of-book
       {/if}

@@ -14,14 +14,21 @@ function deferred<T>() {
   return { promise: new Promise<T>((yes, no) => { resolve = yes; reject = no; }), resolve, reject };
 }
 
+type Progress = { request_id: number; done: number; total: number };
+
 function setup() {
-  let progress: (value: { done: number; total: number }) => void = () => {};
+  const listeners = new Set<(value: Progress) => void>();
   const stop = vi.fn();
   const services = {
     desktopLiveTopPrices: vi.fn().mockResolvedValue([]),
-    listenForTauriEvent: vi.fn((_event, callback) => { progress = callback; return stop; }),
+    listenForTauriEvent: vi.fn((_event, callback) => { listeners.add(callback); return () => { listeners.delete(callback); stop(); }; }),
   };
-  return { state: new LiveTopController(services), services, stop, emit: (done: number, total: number) => progress({ done, total }) };
+  const lastRequestId = (): number => services.desktopLiveTopPrices.mock.calls.at(-1)?.[1];
+  const broadcast = (value: Progress) => { for (const listener of [...listeners]) listener(value); };
+  return {
+    state: new LiveTopController(services), services, stop, lastRequestId, broadcast,
+    emit: (done: number, total: number) => broadcast({ request_id: lastRequestId(), done, total }),
+  };
 }
 
 describe('shared live top-of-book lifecycle', () => {
@@ -122,5 +129,89 @@ describe('shared live top-of-book lifecycle', () => {
     expect(state.progress).toEqual({ done: 0, total: 1 });
     await state.check([{ slug: 'odd' }]);
     expect(services.desktopLiveTopPrices).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores progress that belongs to another request on the shared channel', async () => {
+    const { state, services, broadcast, lastRequestId } = setup();
+    services.desktopLiveTopPrices.mockReturnValue(deferred<LiveTop[]>().promise);
+    void state.check([{ slug: 'flow' }]);
+    const own = lastRequestId();
+    expect(own).toEqual(expect.any(Number));
+    broadcast({ request_id: own + 1, done: 2, total: 3 });
+    expect(state.progress).toEqual({ done: 0, total: 1 });
+    broadcast({ request_id: own, done: 1, total: 1 });
+    expect(state.progress).toEqual({ done: 1, total: 1 });
+  });
+
+  it('gives concurrent controllers distinct requests and separate progress', async () => {
+    const shared = setup();
+    const other = new LiveTopController(shared.services);
+    shared.services.desktopLiveTopPrices.mockReturnValue(deferred<LiveTop[]>().promise);
+    void shared.state.check([{ slug: 'a' }]);
+    const first = shared.lastRequestId();
+    void other.check([{ slug: 'b' }, { slug: 'c' }, { slug: 'd' }]);
+    const second = shared.lastRequestId();
+    expect(second).not.toBe(first);
+    shared.broadcast({ request_id: second, done: 2, total: 3 });
+    expect(shared.state.progress).toEqual({ done: 0, total: 1 });
+    expect(other.progress).toEqual({ done: 2, total: 3 });
+    other.dispose();
+  });
+
+  it('records when the retained quotes were observed', async () => {
+    const { state, services } = setup();
+    expect(state.checkedAt).toBeNull();
+    const before = Date.now();
+    services.desktopLiveTopPrices.mockResolvedValue([quote()]);
+    await state.check([{ slug: 'flow' }]);
+    expect(state.checkedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('forgets completed quotes when its context resets', async () => {
+    const { state, services } = setup();
+    services.desktopLiveTopPrices.mockResolvedValue([quote({ own_ask: 20 })]);
+    await state.check([{ slug: 'flow' }]);
+    services.desktopLiveTopPrices.mockRejectedValue(new Error('Offline'));
+    await state.check([{ slug: 'flow' }]);
+    state.reset();
+    expect(state.quotes.size).toBe(0);
+    expect(state.get({ slug: 'flow' })).toBeUndefined();
+    expect(state.phase).toBe('idle');
+    expect(state.error).toBeNull();
+    expect(state.checkedAt).toBeNull();
+    expect(state.progress).toEqual({ done: 0, total: 0 });
+  });
+
+  it.each(['success', 'failure'])('drops a %s that lands after its context reset', async outcome => {
+    const { state, services, emit } = setup();
+    const old = deferred<LiveTop[]>();
+    services.desktopLiveTopPrices.mockReturnValue(old.promise);
+    const request = state.check([{ slug: 'flow' }]);
+    state.reset();
+    expect(state.phase).toBe('idle');
+    emit(1, 1);
+    expect(state.progress).toEqual({ done: 0, total: 0 });
+    if (outcome === 'success') old.resolve([quote({ own_ask: 20 })]);
+    else old.reject(new Error('Old account failed'));
+    expect(await request).toBeNull();
+    expect(state.quotes.size).toBe(0);
+    expect(state.phase).toBe('idle');
+    expect(state.error).toBeNull();
+    expect(state.checkedAt).toBeNull();
+  });
+
+  it('accepts a new check while a reset request is still unresolved', async () => {
+    const { state, services } = setup();
+    const old = deferred<LiveTop[]>();
+    services.desktopLiveTopPrices.mockReturnValue(old.promise);
+    const stale = state.check([{ slug: 'flow' }]);
+    state.reset();
+    const current = quote({ low_sell: 25 });
+    services.desktopLiveTopPrices.mockResolvedValue([current]);
+    expect(await state.check([{ slug: 'flow' }])).toEqual([current]);
+    old.resolve([quote({ own_ask: 20 })]);
+    expect(await stale).toBeNull();
+    expect(state.get({ slug: 'flow' })).toEqual(current);
+    expect(state.phase).toBe('done');
   });
 });
