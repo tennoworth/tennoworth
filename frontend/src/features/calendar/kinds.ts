@@ -1,7 +1,8 @@
 import type { EventKind } from '../../domain/calendar-events';
 
 export const KIND_LABEL: Record<EventKind, string> = {
-  event: 'DE events',
+  official: 'DE announcements',
+  event: 'In-game events',
   baro: "Baro Ki'Teer",
   resurgence: 'Prime Resurgence',
   vault: 'Vaulting',

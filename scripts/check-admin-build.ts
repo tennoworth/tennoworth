@@ -10,7 +10,7 @@ for (const output of ['dist', 'dist-desktop']) {
   for (const file of readdirSync(join(root, 'assets')).filter(file => file.endsWith('.js'))) {
     // The API route is fixed by the server, so a wording change cannot hide a leak.
     const source = readFileSync(join(root, 'assets', file), 'utf8');
-    if (['/api/announcements/change', '/api/jobs/run', 'Publish announcement'].some(marker => source.includes(marker))) throw new Error(`Publisher UI leaked into ${output}`);
+    if (['/api/announcements/change', '/api/announcements/events', '/api/jobs/run', 'Publish announcement'].some(marker => source.includes(marker))) throw new Error(`Publisher UI leaked into ${output}`);
   }
 }
 const admin = join(frontend, 'dist-admin');

@@ -175,6 +175,16 @@ or instruct users to discard crafting copies. The feed carries no markup,
 executable actions, pricing overrides or inventory targeting. Keep messages
 rare and relevant to selling decisions.
 
+The same feed can carry an optional `events` list: official DE dates that
+worldState does not publish, such as devstreams, updates and Prime Access.
+They appear in the player Calendar and never raise a notification. Each has a
+stable ID, a `kind` from `event_kinds` in the limits fixture, a title, a UTC
+`starts_at`, an optional `ends_at` (absent for a single moment, at most 120
+days later), a source on an approved host and an optional short `note`. Enter
+them in the dashboard's Official dates panel rather than by hand; the
+publisher drops events that ended more than a week ago. Readers that predate
+the field ignore it, so it needs no desktop release to stay compatible.
+
 Clients check every 15 minutes while running. Offline clients retain the last
 valid feed and still expire its messages; a withdrawal cannot reach them until
 they reconnect. Popups come only from a feed fetched from the site, never from

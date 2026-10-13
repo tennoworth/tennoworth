@@ -5,5 +5,9 @@
   "max_title": 120,
   "max_body": 1600,
   "max_window_seconds": 2678400,
+  "max_events": 30,
+  "max_event_note": 280,
+  "max_event_window_seconds": 10368000,
+  "event_kinds": ["update", "devstream", "prime-access", "drops", "nightwave", "ducats", "event", "other"],
   "source_hosts": ["warframe.com", "www.warframe.com", "forums.warframe.com", "wiki.warframe.com", "warframe.market", "tennoworth.app"]
 }

@@ -286,7 +286,7 @@
           "id": "sample-message",
           "starts_at": "2026-10-11T00:00:00Z",
           "ends_at": "2026-10-15T15:00:00Z",
-          "title": "Check spare \u202ebarrels",
+          "title": "Check spare ‮barrels",
           "body": "Exchange spare barrels before the deadline.",
           "source_url": "https://forums.warframe.com/topic/example/"
         }
@@ -307,7 +307,7 @@
           "starts_at": "2026-10-11T00:00:00Z",
           "ends_at": "2026-10-15T15:00:00Z",
           "title": "Check spare barrels",
-          "body": "Exchange \u2067spare\u2069 barrels before the deadline.",
+          "body": "Exchange ⁧spare⁩ barrels before the deadline.",
           "source_url": "https://forums.warframe.com/topic/example/"
         }
       ]
@@ -684,6 +684,182 @@
       ]
     },
     "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "events-valid",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": [
+        {
+          "id": "devstream-200",
+          "kind": "devstream",
+          "title": "Devstream 200",
+          "starts_at": "2026-10-23T19:00:00Z",
+          "source_url": "https://forums.warframe.com/topic/devstream-200/"
+        },
+        {
+          "id": "update-41",
+          "kind": "update",
+          "title": "Update 41 releases",
+          "starts_at": "2026-11-18T15:00:00Z",
+          "ends_at": "2026-11-18T18:00:00Z",
+          "source_url": "https://www.warframe.com/news/update-41",
+          "note": "Patch notes follow at release."
+        }
+      ]
+    },
+    "valid": true,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "event-unknown-kind",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": [
+        {
+          "id": "devstream-200",
+          "kind": "rumour",
+          "title": "Devstream 200",
+          "starts_at": "2026-10-23T19:00:00Z",
+          "source_url": "https://forums.warframe.com/topic/devstream-200/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "event-unapproved-source",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": [
+        {
+          "id": "devstream-200",
+          "kind": "devstream",
+          "title": "Devstream 200",
+          "starts_at": "2026-10-23T19:00:00Z",
+          "source_url": "https://www.reddit.com/r/Warframe/"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "event-window-too-long",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": [
+        {
+          "id": "update-41",
+          "kind": "update",
+          "title": "Update 41 releases",
+          "starts_at": "2026-11-18T15:00:00Z",
+          "ends_at": "2027-03-20T15:00:00Z",
+          "source_url": "https://www.warframe.com/news/update-41",
+          "note": "Patch notes follow at release."
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "event-ends-before-start",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": [
+        {
+          "id": "update-41",
+          "kind": "update",
+          "title": "Update 41 releases",
+          "starts_at": "2026-11-18T15:00:00Z",
+          "ends_at": "2026-11-18T14:00:00Z",
+          "source_url": "https://www.warframe.com/news/update-41",
+          "note": "Patch notes follow at release."
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "event-duplicate-id",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": [
+        {
+          "id": "devstream-200",
+          "kind": "devstream",
+          "title": "Devstream 200",
+          "starts_at": "2026-10-23T19:00:00Z",
+          "source_url": "https://forums.warframe.com/topic/devstream-200/"
+        },
+        {
+          "id": "devstream-200",
+          "kind": "update",
+          "title": "Update 41 releases",
+          "starts_at": "2026-11-18T15:00:00Z",
+          "ends_at": "2026-11-18T18:00:00Z",
+          "source_url": "https://www.warframe.com/news/update-41",
+          "note": "Patch notes follow at release."
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "event-note-too-long",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": [
+        {
+          "id": "update-41",
+          "kind": "update",
+          "title": "Update 41 releases",
+          "starts_at": "2026-11-18T15:00:00Z",
+          "ends_at": "2026-11-18T18:00:00Z",
+          "source_url": "https://www.warframe.com/news/update-41",
+          "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      ]
+    },
+    "valid": false,
+    "now": "2026-10-12T00:00:00Z",
+    "active_ids": []
+  },
+  {
+    "name": "events-null",
+    "feed": {
+      "version": 1,
+      "updated_at": "2026-10-11T00:00:00Z",
+      "messages": [],
+      "events": null
+    },
+    "valid": true,
     "now": "2026-10-12T00:00:00Z",
     "active_ids": []
   }

@@ -71,6 +71,21 @@ describe('calendarEvents', () => {
     expect(events.map(e => [e.kind, e.title, e.detail])).toEqual([['event', 'Heat Fissure', 'In-game event. Rewards include Kuva, Ayatan Sculpture and Riven Mod and more.']]);
   });
 
+  it('shows curated official dates with their source, as moments when they have no end', () => {
+    const feed = { version: 1, updated_at: '2026-10-12T00:00:00Z', messages: [], events: [
+      { id: 'devstream-200', kind: 'devstream', title: 'Devstream 200', starts_at: '2026-10-23T19:00:00Z', source_url: 'https://forums.warframe.com/topic/devstream-200/' },
+      { id: 'update-41', kind: 'update', title: 'Update 41', starts_at: '2026-11-18T15:00:00Z', ends_at: '2026-11-18T18:00:00Z', source_url: 'https://www.warframe.com/news/update-41', note: 'Patch notes follow at release.' },
+      { id: 'old', kind: 'other', title: 'Old', starts_at: '2026-07-01T00:00:00Z', source_url: 'https://www.warframe.com/news' },
+    ] };
+    const events = calendarEvents(null, feed, NOW);
+    expect(events.map(e => [e.id, e.kind, e.to === null, e.source, e.sourceUrl])).toEqual([
+      ['official-devstream-200', 'official', true, 'official', 'https://forums.warframe.com/topic/devstream-200/'],
+      ['official-update-41', 'official', false, 'official', 'https://www.warframe.com/news/update-41'],
+    ]);
+    expect(events[0].detail).toMatch(/^DE presents what is coming next/);
+    expect(events[1].detail).toBe('Patch notes follow at release.');
+  });
+
   it('turns a live Darvo deal into a one-day event', () => {
     const [deal] = calendarEvents(market({ de: { deals: [{ item: 'Tenno Sword Shield', expiry: '2026-10-13T15:00:00Z', discount: 90, sale_price: 15 }] } }), null, NOW);
     expect(deal.title).toBe('Darvo: Tenno Sword Shield (90% off, 15p)');

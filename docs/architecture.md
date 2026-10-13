@@ -339,6 +339,12 @@ the publisher to fetch the public feed (`TENNOWORTH_PUBLIC_FEED_URL`, default
 the newest publication; after a publish it rechecks until the two match. The
 fetch runs server-side because the dashboard's CSP allows only its own origin.
 
+Official DE dates that worldState lacks (devstreams, updates, Prime Access)
+travel in the same feed as an optional `events` list, validated by the shared
+crate and the TypeScript reader from one fixture. The dashboard publishes or
+removes each one after a review, as a feed revision with history; there is no
+draft stage. Readers that predate the field ignore it.
+
 The dashboard proposes drafts from the Baro visit and Prime Resurgence dates in
 the live `market.json`, which its own Caddy listener serves from the same
 directory as the public site. A suggestion only fills the editor; saving,

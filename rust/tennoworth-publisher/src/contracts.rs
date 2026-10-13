@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tennoworth_announcements::{Announcement, AnnouncementFeed};
+use tennoworth_announcements::{Announcement, AnnouncementFeed, OfficialEvent};
 use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
@@ -59,6 +59,52 @@ pub struct History {
     pub operation: String,
     pub id: Option<String>,
     pub content: Option<Content>,
+    /// Set instead of `content` for the official-event operations.
+    pub event: Option<EventContent>,
+}
+
+/// An official DE date as the maintainer enters it; the publisher assigns the ID.
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct EventContent {
+    pub kind: String,
+    pub title: String,
+    pub starts_at: String,
+    pub ends_at: Option<String>,
+    pub source_url: String,
+    pub note: Option<String>,
+}
+
+impl EventContent {
+    pub fn event(&self, id: &str) -> OfficialEvent {
+        OfficialEvent {
+            id: id.into(),
+            kind: self.kind.clone(),
+            title: self.title.clone(),
+            starts_at: self.starts_at.clone(),
+            ends_at: self.ends_at.clone(),
+            source_url: self.source_url.clone(),
+            note: self.note.clone().filter(|note| !note.trim().is_empty()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum EventOperation {
+    Publish,
+    Remove,
+}
+
+/// Publishes a new or corrected official event straight into the feed, or removes one.
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct EventChange {
+    pub request_id: String,
+    pub expected_revision: i64,
+    pub operation: EventOperation,
+    pub id: Option<String>,
+    pub event: Option<EventContent>,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -218,6 +264,7 @@ fn publisher_bindings_match_rust() {
     let mut types = market_domain::bindings::TypeScript::default();
     types.add::<DashboardState>();
     types.add::<Change>();
+    types.add::<EventChange>();
     types.add::<StatusState>();
     types.add::<RunJob>();
     types.add::<PublicFeedCheck>();

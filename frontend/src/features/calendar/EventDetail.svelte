@@ -3,7 +3,7 @@
   import { utcDay, utcTime, localTime } from './time';
 
   let { event, surface }: { event: CalendarEvent; surface: 'desktop' | 'hosted' } = $props();
-  const SOURCE = { worldstate: 'DE worldState', estimate: 'Estimate', notice: 'TennoWorth notice' } as const;
+  const SOURCE = { worldstate: 'DE worldState', estimate: 'Estimate', notice: 'TennoWorth notice', official: 'DE announcement' } as const;
 </script>
 
 <div class="detail" data-kind={event.kind} class:estimate={event.estimate}>

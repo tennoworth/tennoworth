@@ -849,6 +849,7 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 .notification-entry.unread { background: var(--panel-2); }
 
 /* Calendar event kinds: the 3px edge carries the kind, dashed when the date is an estimate. */
+[data-kind="official"] { --k: var(--warn); }
 [data-kind="event"] { --k: var(--border); }
 [data-kind="baro"] { --k: var(--ducat); }
 [data-kind="resurgence"] { --k: var(--fg); }

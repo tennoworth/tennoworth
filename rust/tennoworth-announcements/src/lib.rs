@@ -8,6 +8,29 @@ pub struct AnnouncementFeed {
     pub version: u32,
     pub updated_at: String,
     pub messages: Vec<Announcement>,
+    /// Official dates for the calendar. Optional so readers that predate it
+    /// (desktop 0.8.103) keep accepting the feed: they ignore the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub events: Option<Vec<OfficialEvent>>,
+}
+
+/// A dated announcement from DE that worldState does not carry, such as a
+/// devstream or an update, entered by the maintainer with its source.
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+pub struct OfficialEvent {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub starts_at: String,
+    /// Absent for a single moment such as a stream start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ends_at: Option<String>,
+    pub source_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub note: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
@@ -29,6 +52,38 @@ struct Limits {
     max_body: usize,
     max_window_seconds: i64,
     source_hosts: Vec<String>,
+    max_events: usize,
+    max_event_note: usize,
+    max_event_window_seconds: i64,
+    event_kinds: Vec<String>,
+}
+
+fn valid_id(raw: &str, limits: &Limits) -> bool {
+    text(raw, limits.max_id)
+        && raw
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'_' | b'-'))
+}
+
+fn valid_event(event: &OfficialEvent, limits: &Limits) -> bool {
+    let Some(start) = stamp(&event.starts_at) else {
+        return false;
+    };
+    let window_ok = match &event.ends_at {
+        None => true,
+        Some(end) => stamp(end)
+            .and_then(|end| end.checked_sub(start))
+            .is_some_and(|window| (1..=limits.max_event_window_seconds).contains(&window)),
+    };
+    valid_id(&event.id, limits)
+        && limits.event_kinds.iter().any(|kind| kind == &event.kind)
+        && text(&event.title, limits.max_title)
+        && window_ok
+        && event
+            .note
+            .as_deref()
+            .is_none_or(|note| text(note, limits.max_event_note))
+        && permitted_source(&event.source_url, limits)
 }
 
 pub fn stamp(raw: &str) -> Option<i64> {
@@ -91,11 +146,7 @@ pub fn parse(raw: &str) -> Option<AnnouncementFeed> {
     }
     let mut ids = std::collections::BTreeSet::new();
     for message in &feed.messages {
-        if !text(&message.id, limits.max_id)
-            || !message
-                .id
-                .bytes()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'_' | b'-'))
+        if !valid_id(&message.id, &limits)
             || !ids.insert(&message.id)
             || !text(&message.title, limits.max_title)
             || !text(&message.body, limits.max_body)
@@ -107,6 +158,16 @@ pub fn parse(raw: &str) -> Option<AnnouncementFeed> {
             return None;
         }
         if !permitted_source(&message.source_url, &limits) {
+            return None;
+        }
+    }
+    if let Some(events) = &feed.events {
+        let mut ids = std::collections::BTreeSet::new();
+        if events.len() > limits.max_events
+            || !events
+                .iter()
+                .all(|event| ids.insert(&event.id) && valid_event(event, &limits))
+        {
             return None;
         }
     }
