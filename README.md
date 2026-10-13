@@ -211,19 +211,10 @@ details, and explicit non-promises live in [`SECURITY.md`](SECURITY.md).
 | [`deploy/`](deploy/) | Self-host deployment kit for the site and scheduled market refresh. |
 | [`.github/workflows/`](.github/workflows/) | Web, scraper, desktop release, smoke, and audit automation. |
 
-The Rust workspace contains these crates:
-
-| Crate | Role |
-|---|---|
-| `tennoworth-desktop` | Tauri v2 shell, local SQLite state, tray, notifications, overlay, update flow, and IPC commands. |
-| `wfm-core` | Inventory scan/fetch, encrypted WFM session, listings, orders, and recoverable batch plans. |
-| `market-math` | Dependency-free market arithmetic. |
-| `market-domain` | Native inventory normalization, sell facts, trade/advisor decisions and planners, with generated IPC contracts. |
-| `market-domain-wasm` | `market-domain` compiled to WebAssembly so the browser desktop preview runs the native planners. |
-| `wfm-client` | Shared warframe.market transport primitives and request policy. |
-| `wfm-scrape` | Host pipeline that scrapes market data and builds `market.json` plus `wfstat-catalog.json`. |
-| `tennoworth-usage` | Opt-in installation-count service that runs on the host. |
-| `tennoworth-reports` | Opt-in anonymous price-report service that runs on the host. |
+The Rust workspace holds the desktop app, its inventory and warframe.market
+core, the shared market calculations, the market pipeline and the host
+services. The [architecture guide's repository map](docs/architecture.md#repository-map)
+lists every crate and what it owns.
 
 ## Contributing
 

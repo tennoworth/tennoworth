@@ -790,29 +790,36 @@ describe.skipIf(process.platform === 'win32')('external-backup deployment readin
 // every tick from the day it was installed; running it with jq absent from PATH
 // is what keeps that from coming back.
 describe.skipIf(process.platform === 'win32').each(collectors)('$name monitor', ({ monitor, route }) => {
-  function monitorFixture(updatedAt: string) {
+  // `busy` is how many requests to each endpoint answer like a held store
+  // lock (curl --fail exits 22) before the collector answers.
+  function monitorFixture(updatedAt: string, busy: { health?: number; data?: number } = {}) {
     const root = mkdtempSync(join(tmpdir(), 'collector-monitor-')); directories.push(root);
     const bin = join(root, 'bin'); mkdirSync(bin);
+    const calls = join(root, 'calls');
     write(join(bin, 'curl'), [
       '#!/bin/sh',
       'for a in "$@"; do last="$a"; done',
       'case "$last" in',
-      '  */health) printf "ok\\n";;',
-      `  *${route}) printf '{"updated_at":"${updatedAt}","days":[{"day":"2026-09-25","installs":3}]}\\n';;`,
+      `  */health) echo health >> '${calls}'; [ "$(grep -c health '${calls}')" -le ${busy.health ?? 0} ] && exit 22; printf "ok\\n";;`,
+      `  *${route}) echo data >> '${calls}'; [ "$(grep -c data '${calls}')" -le ${busy.data ?? 0} ] && exit 22; printf '{"updated_at":"${updatedAt}","days":[{"day":"2026-09-25","installs":3}]}\\n';;`,
       'esac',
       '',
     ].join('\n'));
     chmodSync(join(bin, 'curl'), 0o755);
+    write(join(bin, 'sleep'), '#!/bin/sh\n');
+    chmodSync(join(bin, 'sleep'), 0o755);
     // Only the stub and the base tools the script needs: a jq anywhere else on
     // the developer's PATH must not make this pass.
-    for (const tool of ['sed', 'date']) {
+    for (const tool of ['sed', 'date', 'grep']) {
       const real = execFileSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).trim();
       write(join(bin, tool), `#!/bin/sh\nexec ${real} "$@"\n`);
       chmodSync(join(bin, tool), 0o755);
     }
-    return () => spawnSync('/bin/sh', [fileURLToPath(new URL(`../deploy/${monitor}`, import.meta.url))], {
+    const run = () => spawnSync('/bin/sh', [fileURLToPath(new URL(`../deploy/${monitor}`, import.meta.url))], {
       encoding: 'utf8', env: { PATH: bin },
     });
+    const count = (endpoint: string) => (existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(line => line === endpoint).length : 0);
+    return Object.assign(run, { count });
   }
 
   test('passes on a fresh collector without jq installed', () => {
@@ -828,6 +835,28 @@ describe.skipIf(process.platform === 'win32').each(collectors)('$name monitor', 
   test('fails on a response with no updated_at', () => {
     const result = monitorFixture('')();
     expect(result.status).not.toBe(0);
+  });
+
+  // Both endpoints answer 503 while a check-in or the maintenance tick holds
+  // the store lock. One busy answer is contention, not an outage to alert on.
+  test('passes when the store is briefly busy on either request', () => {
+    const fixture = monitorFixture(new Date(Date.now() - 60_000).toISOString(), { health: 2, data: 2 });
+    const result = fixture();
+    expect(result.status, result.stderr).toBe(0);
+    expect(fixture.count('health')).toBe(3);
+    expect(fixture.count('data')).toBe(3);
+  });
+
+  test('fails when the collector stays unavailable, after a bounded number of tries', () => {
+    const fixture = monitorFixture(new Date(Date.now() - 60_000).toISOString(), { health: 99 });
+    expect(fixture().status).not.toBe(0);
+    expect(fixture.count('health')).toBe(3);
+    expect(fixture.count('data')).toBe(0);
+  });
+
+  test('a busy store does not hide stale data', () => {
+    const fixture = monitorFixture(new Date(Date.now() - 3 * 3600_000).toISOString(), { data: 1 });
+    expect(fixture().status).not.toBe(0);
   });
 });
 

@@ -8,17 +8,12 @@ removed on 2026-08-02 - the desktop app replaced it.
 
 ## Crates
 
-| Crate | What it is |
-|---|---|
-| `tennoworth-desktop` | Tauri v2 shell - the app users install. Same-origin webview, `wfm-core` over IPC. No HTTP server, no session token. |
-| `wfm-core` | The reusable core: process detection + memory scan, DE inventory fetch, WFM auth + encrypted-JWT storage, listing/order service, pending-plan persistence. **No interactive terminal I/O** - the desktop shell drives it over IPC. |
-| `market-domain` | Portable inventory and planning decisions, Rust-derived wire types and shared behavior fixtures. |
-| `market-domain-wasm` | `market-domain` compiled to WebAssembly for the browser desktop preview. |
-| `market-math` | Pure market-data heuristics (ported from the retired Python scraper). No I/O, no deps. |
-| `wfm-scrape` | Host-only pipeline binary: `scrape` runs the WFM scrape to CSV, `build` renders `market.json` + `wfstat-catalog.json`. The only pipeline - Python was retired 2026-08. |
-| `wfm-client` | Shared WFM transport primitives: UA, request headers, request budgets and signed policy, envelope unwrap, retry backoff. |
-| `tennoworth-usage` | Opt-in installation-count service that runs on the host. |
-| `tennoworth-reports` | Opt-in anonymous price-report service that runs on the host. See [price reports](../docs/price-reports.md). |
+Besides the desktop app, its core and the pipeline, the workspace holds the
+shared market calculations and transport, the browser preview's WebAssembly
+build, and the host services: usage and price reports, and the private
+announcement publisher. The [architecture guide's repository map](../docs/architecture.md#repository-map)
+lists every crate and what it owns; [price reports](../docs/price-reports.md)
+documents that service's privacy contract.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md#native-desktop-development) for
 Windows and Linux prerequisites and build commands. Build the desktop frontend
