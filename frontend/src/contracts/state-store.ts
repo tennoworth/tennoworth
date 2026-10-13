@@ -31,7 +31,9 @@ export type SettingKey =
   | 'theme.mode'
   /** Desktop: the App icon choice, 'blue' | 'match' | 'ink' | 'rag'. Native
    *  keeps the resolved colour it applied in its own `app-icon.applied` row. */
-  | 'app-icon';
+  | 'app-icon'
+  /** Calendar view and hidden event kinds (JSON, features/calendar). */
+  | 'calendar';
 
 
 /** The scalar settings every build persists. */

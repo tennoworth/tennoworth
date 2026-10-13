@@ -1,7 +1,7 @@
 import type { SettingsStore } from '../../contracts/state-store';
 import { presetFilterValues } from '../../domain/presets';
-const VALID_VIEWS: ReadonlySet<View> = new Set(['sell', 'session', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'notifications', 'install', 'settings']);
-export type View = 'sell' | 'session' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'notifications' | 'install' | 'settings';
+const VALID_VIEWS: ReadonlySet<View> = new Set(['sell', 'session', 'sets', 'relics', 'rivens', 'baro', 'routines', 'calendar', 'meta', 'orders', 'watches', 'ledger', 'notifications', 'install', 'settings']);
+export type View = 'sell' | 'session' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'calendar' | 'meta' | 'orders' | 'watches' | 'ledger' | 'notifications' | 'install' | 'settings';
 /** A malformed or hand-edited value falls back to the presets' own columns. */
 export function parseColumnChoice(raw: string | null): Record<string, string[]> {
   if (!raw) return {};

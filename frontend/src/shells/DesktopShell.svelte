@@ -6,6 +6,7 @@ import FeedbackDialog from '../features/settings/FeedbackDialog.svelte';
 import PendingBatchBanner from '../features/selling/PendingBatchBanner.svelte';
 import BaroView from '../features/market-context/BaroView.svelte';
 import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
+import CalendarView from '../features/calendar/CalendarView.svelte';
 import RelicPlannerView from '../features/relics/RelicPlannerView.svelte';
 import SetPicksView from '../features/selling/SetPicksView.svelte';
 import { ActivityLog } from '../ui/activity.svelte';
@@ -431,6 +432,9 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} onclick={() => filters.setView('routines')}>
           <span data-shell>Routines</span>
         </button>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'calendar'} onclick={() => filters.setView('calendar')}>
+          <span data-shell>Calendar</span>
+        </button>
         {#if buildMetaDrift(inventory.market) || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'meta'} onclick={() => filters.setView('meta')}>
             <span data-shell>Meta Drift</span>
@@ -580,6 +584,11 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
     {#if visited.has('routines')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'routines')}>
       <RoutinesPanel routine={routines} market={inventory.market} owned={inventory.resolved.owned} now={displayNow} />
+    </div>
+    {/if}
+    {#if visited.has('calendar')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'calendar')}>
+      <CalendarView market={inventory.market} owned={inventory.resolved.owned} now={displayNow} loadAnnouncements={notesServices.desktopAnnouncements} {store} surface="desktop" />
     </div>
     {/if}
     {#if visited.has('meta')}

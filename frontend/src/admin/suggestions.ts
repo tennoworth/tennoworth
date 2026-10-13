@@ -5,6 +5,7 @@
 
 import type { Market, ResurgenceRotation } from '../contracts/data';
 import type { Content } from '../contracts/generated/publisher';
+import { joinNames, primeName } from '../domain/calendar-events';
 
 export interface Suggestion {
   /** Stable for one event, so a dismissal outlives a reload but not the next visit. */
@@ -34,13 +35,8 @@ function when(ms: number): string {
   return `${day(ms)} at ${time(ms)} UTC`;
 }
 
-function primeName(market: Market, slug: string): string {
-  return market.calendar?.primes?.[slug]?.name
-    ?? slug.replace(/_set$/, '').split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-}
 function names(market: Market, rotation: ResurgenceRotation): string {
-  const list = rotation.frames.map(slug => primeName(market, slug));
-  return list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0] ?? '';
+  return joinNames(rotation.frames.map(slug => primeName(market, slug)));
 }
 
 function baro(market: Market, now: number): Suggestion[] {

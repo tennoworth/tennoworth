@@ -328,6 +328,34 @@ with Open as draft and Dismiss; the panel is absent when nothing is suggested.
 An opened suggestion is unsaved edits, so leaving it asks first.
 These extend the existing review/continuity patterns without a new palette.
 
+## Calendar
+
+The Calendar is a desktop view and a section of the hosted landing (`#calendar`,
+linked from the status strip). It shows dated things that move prices: DE's
+in-game events, Baro visits, Prime Resurgence rotations, estimated vaulting,
+our curated notices and, when switched on, Darvo deals. A `.ui-segmented`
+choice offers three views of the same events, remembered per device:
+
+- **Board** (default) leads with Next up: the soonest confirmed moment and a
+  countdown. An event already under way counts down to its end, so a deadline
+  reads as one. Tear-off tiles follow in This week, Next week and Later.
+- **Month** is a wall-calendar grid. Multi-day events are thin rules across the
+  days and single moments are timed lines; the chosen day's events sit in a
+  panel beside it. When a week is crowded, notices and Baro get lanes before
+  month-long events. On a phone the grid keeps only coloured lines and the day
+  panel carries the words.
+- **Lanes** puts one row per kind across eight weeks with an ink line for now,
+  so overlaps read at a glance. It scrolls sideways inside its own panel.
+
+Each kind has a 3px edge colour set once in `app.css` by `data-kind`. An
+estimated date is dashed and tagged "est.", never gets a countdown, and says
+there is no advice until DE confirms it. Every event names its source (DE
+worldState, Estimate or TennoWorth notice, with a link for notices). Times are
+UTC, with the reader's own time beside single moments. On desktop an event
+says how many held items it touches. Filters are labelled checkboxes; Darvo
+starts hidden because it changes daily and never touches tradeable items.
+Select Calendar in the living styleguide's Data state control.
+
 ## Notification history
 
 Curated market announcements use the existing warn-toned notice and general

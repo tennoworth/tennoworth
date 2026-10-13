@@ -19,6 +19,7 @@
   import AppIconSetting from '../features/settings/AppIconSetting.svelte';
   import { shimmer } from '../ui/shimmer';
   import { AppIconController } from '../features/settings/app-icon.svelte';
+  import CalendarView from '../features/calendar/CalendarView.svelte';
   import PresenceSettings from '../features/presence/PresenceSettings.svelte';
   import PresenceMark from '../features/presence/PresenceMark.svelte';
   import { PresenceController } from '../features/presence/presence.svelte';
@@ -53,6 +54,16 @@
     theme: { get mode() { return mode; }, subscribe: () => () => {} },
     native: { setAppIcon: async () => ({ windowIcon: true }) },
   });
+  // Fictional calendar dates, placed relative to now so every view has something ahead.
+  const calendarNow = Date.now();
+  const calendarAt = (days: number) => new Date(Math.floor(calendarNow / 3_600_000) * 3_600_000 + days * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const calendarSample = {
+    updated_at: calendarAt(0), platform: 'pc', item_count: 0, catalog_count: 0, catalog: {}, items: {},
+    baro: { activation: calendarAt(3), expiry: calendarAt(5), location: 'Sample Relay' },
+    calendar: { resurgence_current: { from: calendarAt(-12), to: calendarAt(16), frames: ['sample_prime_set', 'example_prime_set'] } },
+    event_rewards: { goals: { sample: { id: 'sample', source: 'goal' as const, title: 'Sample Operation', starts_at: calendarAt(-6), ends_at: calendarAt(8), completeness: 'complete' as const, groups: [] } } },
+  };
+  const calendarFeed = { version: 1, updated_at: calendarAt(-2), messages: [{ id: 'sample-deadline', title: 'Sample deadline notice', body: 'A fictional change that takes effect at the end of this notice.', source_url: 'https://forums.warframe.com/', starts_at: calendarAt(-2), ends_at: calendarAt(2) }] };
   // The production Trade presence group over a native side that keeps the pick
   // in memory; picking a status pauses following, as it does in the app.
   let samplePresenceStatus: PresenceStatus = {
@@ -149,7 +160,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="frame">View header</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="announcements">Market announcements</option><option value="app-icon">App icon</option><option value="shimmer">Field shimmer</option><option value="presence">Trade presence</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="frame">View header</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="announcements">Market announcements</option><option value="app-icon">App icon</option><option value="shimmer">Field shimmer</option><option value="presence">Trade presence</option><option value="calendar">Calendar</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -210,6 +221,7 @@
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
   {#if dataState === 'shimmer'}<section class="wrap tw ui-reading" aria-labelledby="shimmer-title"><div class="rail"><h3 id="shimmer-title">Field shimmer</h3></div><div class="bar"><span class="lbl">Idle</span><span class="shimmer-field grow" use:shimmer={{ mode: 'idle' }}><input class="input" type="text" aria-label="Idle shimmer sample" placeholder="At rest" /></span></div><div class="bar"><span class="lbl">Live</span><span class="shimmer-field grow" use:shimmer={{ mode: 'live', sparks: true }}><input class="input" type="text" aria-label="Live shimmer sample" placeholder="Waiting for a query" /></span></div><div class="bar"><span class="lbl">Pass</span><span class="shimmer-field grow" use:shimmer={{ mode: 'settled', pulse: shimmerPulse }}><input class="input" type="text" aria-label="Settled shimmer sample" placeholder="Focused from a shortcut" /></span><button class="btn xs" onclick={() => shimmerPulse++}>Run one pass</button></div><div class="body"><p>Idle is the quiet sweep a field shows at rest. Live is the full effect while a focused field waits for input, with sparks in the dark theme only. Pass runs once when a shortcut moves focus. Reduced motion shows the lit edges alone.</p></div></section>{/if}
   {#if dataState === 'app-icon'}<section class="wrap tw ui-reading" aria-labelledby="app-icon-title"><div class="rail"><h3 id="app-icon-title">App icon setting</h3></div><AppIconSetting appIcon={sampleAppIcon} /></section>{/if}
+  {#if dataState === 'calendar'}<CalendarView market={calendarSample} now={calendarNow} surface="desktop" loadAnnouncements={async () => calendarFeed} />{/if}
   {#if dataState === 'presence'}<section class="wrap tw ui-reading" aria-labelledby="presence-title"><div class="rail"><h3 id="presence-title">Trade presence</h3></div><p class="presence-marks"><span><PresenceMark kind="ingame" />Online in game</span><span><PresenceMark kind="online" />Online</span><span><PresenceMark kind="invisible" />Invisible</span><span><PresenceMark kind="warn" />Needs action</span></p><PresenceSettings presence={samplePresence} /></section>{/if}
   {#if dataState === 'frame'}<section class="ui-stack"><h2>View header</h2><p>Every task view: the title, a one-line lede beside it, and its totals or primary action at the far edge.</p>
     <section class="view-header"><h2>Sell</h2><p class="lede">Items worth listing right now, ranked by priority.</p><div class="vh-end"><div class="ui-totals" role="group" aria-label="Sample totals"><div class="cell"><span class="k">Owned</span><span class="v">5</span></div><div class="cell"><span class="k">Sellable</span><span class="v">3</span><span class="d up">+1</span></div><div class="cell"><span class="k">Stack value</span><span class="v">292<span class="unit">p</span></span></div><div class="cell attn"><span class="k">Needs fixing</span><span class="v">1</span></div></div></div></section>
