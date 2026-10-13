@@ -96,12 +96,12 @@ describe('TauriTransport op → invoke mapping', () => {
   });
 
   it('loadCachedMarket() invokes `cached_market` and JSON-parses the body', async () => {
-    const invoke = vi.fn().mockResolvedValue('{"updated_at":"2026-07-20T10:00:00Z","items":{}}');
+    const invoke = vi.fn().mockResolvedValue('{"updated_at":"2026-07-20T10:00:00Z","items":{"a":{}}}');
     installTauri(invoke);
     const t = new TauriTransport();
     await expect(t.loadCachedMarket()).resolves.toEqual({
       updated_at: '2026-07-20T10:00:00Z',
-      items: {},
+      items: { a: {} },
     });
     expect(invoke).toHaveBeenCalledWith('cached_market');
   });
@@ -116,6 +116,25 @@ describe('TauriTransport op → invoke mapping', () => {
     const invoke = vi.fn().mockResolvedValue('{not json');
     installTauri(invoke);
     await expect(new TauriTransport().loadCachedMarket()).resolves.toBeNull();
+  });
+
+  it.each([
+    ['an unreadable stamp', '{"updated_at":"whenever","items":{"a":{}}}'],
+    ['no items', '{"updated_at":"2026-07-20T10:00:00Z","items":{}}'],
+    ['a stamp only', '{"updated_at":"2026-07-20T10:00:00Z"}'],
+    ['a null body', 'null'],
+  ])('loadCachedMarket() treats a cache with %s as absent', async (_case, body) => {
+    installTauri(vi.fn().mockResolvedValue(body));
+    await expect(new TauriTransport().loadCachedMarket()).resolves.toBeNull();
+  });
+
+  it('refreshMarket() adopts a valid body and refuses one that breaks the contract', async () => {
+    const valid = '{"updated_at":"2026-07-20T10:00:00Z","items":{"a":{}}}';
+    const invoke = vi.fn().mockResolvedValue({ updated: true, updated_at: '2026-07-20T10:00:00Z', etag: 'x', body: valid });
+    installTauri(invoke);
+    await expect(new TauriTransport().refreshMarket()).resolves.toMatchObject({ updated: true, market: { items: { a: {} } } });
+    invoke.mockResolvedValue({ updated: true, updated_at: '2026-07-21T10:00:00Z', etag: 'x', body: '{"updated_at":"2026-07-21T10:00:00Z","items":{}}' });
+    await expect(new TauriTransport().refreshMarket()).resolves.toEqual({ updated: false, updatedAt: '2026-07-21T10:00:00Z', etag: 'x', market: undefined });
   });
 
   it('loadHistory() prefers a refreshed body over the cache and survives IPC faults', async () => {

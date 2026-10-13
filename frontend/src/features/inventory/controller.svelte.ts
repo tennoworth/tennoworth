@@ -1,6 +1,7 @@
 import { extractRivens, type OwnedRiven } from '../../domain/rivens';
 import { type Catalogs } from '../../domain/resolver';
 import { diffOwned, type SaveSnapshotInput } from '../../domain/snapshot';
+import { replacesMarket } from '../../domain/market';
 import { humanError } from '../../contracts/errors';
 import type { StateStore } from '../../contracts/state-store';
 import type { DesktopCapabilities } from '../../contracts/desktop';
@@ -82,12 +83,10 @@ export class InventoryController {
     try {
       const res = await this.transport.refreshMarket();
       if (!res.updated || !res.market) return;
-      const cur = this.market?.updated_at ? Date.parse(this.market.updated_at) : NaN;
-      const next = res.market.updated_at ? Date.parse(res.market.updated_at) : NaN;
-      // Swap when we have nothing yet, the current stamp is unusable, or the
-      // fetched snapshot is strictly newer (guards a server rollback serving an
-      // older snapshot than the cache we already show).
-      if (!this.market || !Number.isFinite(cur) || (Number.isFinite(next) && next > cur)) {
+      // Swap when we have nothing yet, the current stamp is unusable or
+      // implausibly far ahead, or the fetched snapshot is strictly newer
+      // (guards a server rollback serving an older snapshot than we show).
+      if (replacesMarket(this.market?.updated_at, res.market.updated_at, Date.now())) {
         this.market = res.market;
         this.marketLoadError = null;
       }

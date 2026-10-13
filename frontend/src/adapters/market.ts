@@ -4,6 +4,7 @@
 // so the browser never has to call warframe.market directly.
 
 import type { Market } from '../contracts/data';
+import { isMarket } from '../domain/market';
 
 const MARKET_URL = '/market.json';
 export const MARKET_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
@@ -19,7 +20,10 @@ export async function loadMarket(): Promise<Market> {
         `In dev, run \`wfm-scrape build\` from the Rust workspace to bootstrap one.`
     );
   }
-  cached = (await r.json()) as Market;
+  const body: unknown = await r.json();
+  // A 200 is not a snapshot: `null` used to leave the page loading forever.
+  if (!isMarket(body)) throw new Error("The market snapshot is incomplete or malformed.");
+  cached = body;
   return cached;
 }
 

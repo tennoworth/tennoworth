@@ -1,0 +1,51 @@
+[
+  {
+    "name": "nothing held yet",
+    "now": "2026-10-13T12:00:00Z",
+    "current": null,
+    "next": "2026-10-13T10:00:00Z",
+    "replaces": true
+  },
+  {
+    "name": "a newer snapshot",
+    "now": "2026-10-13T12:00:00Z",
+    "current": "2026-10-13T08:00:00Z",
+    "next": "2026-10-13T10:00:00Z",
+    "replaces": true
+  },
+  {
+    "name": "an older snapshot after a rollback",
+    "now": "2026-10-13T12:00:00Z",
+    "current": "2026-10-13T10:00:00Z",
+    "next": "2026-10-13T08:00:00Z",
+    "replaces": false
+  },
+  {
+    "name": "held stamp within clock skew still orders",
+    "now": "2026-10-13T12:00:00Z",
+    "current": "2026-10-13T12:30:00Z",
+    "next": "2026-10-13T11:00:00Z",
+    "replaces": false
+  },
+  {
+    "name": "held stamp far in the future cannot block",
+    "now": "2026-10-13T12:00:00Z",
+    "current": "2099-01-01T00:00:00Z",
+    "next": "2026-10-13T10:00:00Z",
+    "replaces": true
+  },
+  {
+    "name": "held stamp more than an hour ahead cannot block",
+    "now": "2026-10-13T12:00:00Z",
+    "current": "2026-10-13T13:01:00Z",
+    "next": "2026-10-13T11:00:00Z",
+    "replaces": true
+  },
+  {
+    "name": "slow clock: a newer real snapshot replaces",
+    "now": "2026-10-12T00:00:00Z",
+    "current": "2026-10-13T10:00:00Z",
+    "next": "2026-10-13T12:00:00Z",
+    "replaces": true
+  }
+]
