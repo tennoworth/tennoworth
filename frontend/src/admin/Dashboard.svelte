@@ -7,6 +7,7 @@
   import AnnouncementBanner from '../features/market-context/AnnouncementBanner.svelte';
   import { parseAnnouncements } from '../domain/announcements';
   import { calendarSuggestions, type Suggestion } from './suggestions';
+  import EventsPanel from './EventsPanel.svelte';
   import limits from '../../../tests/fixtures/announcements/limits.json';
 
   let { publisher, theme }: { publisher: Publisher; theme: ThemeController } = $props();
@@ -262,6 +263,7 @@
       {/if}
     </section>
   </div>
+  <EventsPanel {publisher} {dashboardState} onstate={(next) => { dashboardState = next; confirmPublication(); }} />
   <section class="ui-panel">
     <header><h2>Preview</h2><span>{Date.parse(form.starts_at) > now ? 'Scheduled — hidden until its start' : Date.parse(form.ends_at) <= now ? 'Expired — hidden from clients' : 'Active during its time window'}</span></header>
     {#if valid}<AnnouncementBanner message={preview} />{:else}<p>Complete the draft to preview the banner.</p>{/if}
@@ -271,7 +273,7 @@
     <header><h2>Revision history</h2><span>Latest 100 changes</span></header>
     {#if dashboardState && !dashboardState.snapshot.history.length}<p>No changes recorded yet.</p>{/if}
     {#each dashboardState?.snapshot.history ?? [] as entry (entry.revision)}
-      <details class="history-entry"><summary>Revision {entry.revision} · {entry.operation} · {local(entry.at)}</summary><p>{entry.actor}</p>{#if entry.content}<strong>{entry.content.title}</strong><p class="prose">{entry.content.body}</p><p>Starts {entry.content.starts_at} · Ends {entry.content.ends_at}</p><a href={entry.content.source_url} target="_blank" rel="noopener noreferrer">Verified source ↗</a>{/if}</details>
+      <details class="history-entry"><summary>Revision {entry.revision} · {entry.operation} · {local(entry.at)}</summary><p>{entry.actor}</p>{#if entry.content}<strong>{entry.content.title}</strong><p class="prose">{entry.content.body}</p><p>Starts {entry.content.starts_at} · Ends {entry.content.ends_at}</p><a href={entry.content.source_url} target="_blank" rel="noopener noreferrer">Verified source ↗</a>{/if}{#if entry.event}<strong>{entry.event.title}</strong><p>{entry.event.kind} · Starts {entry.event.starts_at}{entry.event.ends_at ? ` · Ends ${entry.event.ends_at}` : ''}</p>{#if entry.event.note}<p class="prose">{entry.event.note}</p>{/if}<a href={entry.event.source_url} target="_blank" rel="noopener noreferrer">Verified source ↗</a>{/if}</details>
     {/each}
   </section>
   <footer><details><summary>Appearance</summary><ThemeSwitcher {theme} /></details><p>Private publishing · public feed only</p></footer>

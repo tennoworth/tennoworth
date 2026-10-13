@@ -13,7 +13,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use contracts::{Change, DashboardState, PublicFeedCheck, RunJob, StatusState};
+use contracts::{Change, DashboardState, EventChange, PublicFeedCheck, RunJob, StatusState};
 use ops::Ops;
 use public::PublicFeed;
 use std::sync::{Arc, Mutex};
@@ -167,6 +167,33 @@ async fn change(
     }))
 }
 
+async fn change_event(
+    State(app): State<App>,
+    headers: HeaderMap,
+    Json(change): Json<EventChange>,
+) -> Result<Json<DashboardState>, ApiError> {
+    let actor = principal(&app, &headers).await?;
+    if headers.get("origin").and_then(|v| v.to_str().ok()) != Some(app.origin.as_str()) {
+        return Err(ApiError::Forbidden);
+    }
+    let author = actor.clone();
+    let (snapshot, message_id) = tokio::task::spawn_blocking(move || {
+        let mut store = app.store.lock().map_err(|_| Error::Unavailable)?;
+        let snapshot = store.apply_event(&change, &author, store::now())?;
+        Ok::<_, Error>((
+            snapshot,
+            store.request_message(&change.request_id, &author)?,
+        ))
+    })
+    .await
+    .map_err(|_| Error::Unavailable)??;
+    Ok(Json(DashboardState {
+        actor,
+        snapshot,
+        message_id,
+    }))
+}
+
 async fn public_feed(
     State(app): State<App>,
     headers: HeaderMap,
@@ -299,6 +326,7 @@ pub fn router(app: App) -> Router {
         .route("/api/announcements", get(read))
         .route("/api/announcements/change", post(change))
         .route("/api/announcements/public", get(public_feed))
+        .route("/api/announcements/events", post(change_event))
         .route("/api/status", get(status))
         .route("/api/jobs/run", post(run_job))
         .layer(DefaultBodyLimit::max(65536))

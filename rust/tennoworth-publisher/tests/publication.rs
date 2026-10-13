@@ -1,6 +1,6 @@
 use std::fs;
 use tennoworth_publisher::{
-    contracts::{Change, Content, Operation},
+    contracts::{Change, Content, EventChange, EventContent, EventOperation, Operation},
     store::{Error, Store},
 };
 
@@ -375,4 +375,190 @@ fn rotating_snapshots_restore_and_prune_only_their_own_files() {
     let snapshot = store.unwrap().snapshot().unwrap();
     assert_eq!(snapshot.revision, 1);
     assert_eq!(snapshot.messages.len(), 1);
+}
+
+fn stream() -> EventContent {
+    EventContent {
+        kind: "devstream".into(),
+        title: "Devstream 200".into(),
+        starts_at: "2026-10-23T19:00:00Z".into(),
+        ends_at: None,
+        source_url: "https://forums.warframe.com/topic/devstream-200/".into(),
+        note: Some("".into()),
+    }
+}
+fn event_change(
+    revision: i64,
+    operation: EventOperation,
+    id: Option<String>,
+    event: Option<EventContent>,
+) -> EventChange {
+    EventChange {
+        request_id: format!("event-request-{revision:016}"),
+        expected_revision: revision,
+        operation,
+        id,
+        event,
+    }
+}
+
+#[test]
+fn official_events_publish_correct_and_remove_through_the_public_feed() {
+    let dir = tempfile::tempdir().unwrap();
+    let export = dir.path().join("public/announcements.json");
+    let mut store = Store::open(&dir.path().join("state.sqlite"), export.clone(), SEED).unwrap();
+    let actor = "publisher@example.invalid";
+    let publish = event_change(0, EventOperation::Publish, None, Some(stream()));
+    let live = store.apply_event(&publish, actor, NOW).unwrap();
+    let events = live.feed.events.clone().unwrap();
+    let id = events[0].id.clone();
+    assert!(id.starts_with("event-"));
+    // An empty note is not published as one.
+    assert!(events[0].note.is_none());
+    assert_eq!(live.feed_revision, live.exported_revision);
+    let disk = tennoworth_announcements::parse(&fs::read_to_string(&export).unwrap()).unwrap();
+    assert_eq!(disk.events.unwrap()[0].title, "Devstream 200");
+    assert_eq!(live.history[0].operation, "event-publish");
+    assert_eq!(live.history[0].event.as_ref().unwrap().kind, "devstream");
+    assert!(live.history[0].content.is_none());
+
+    // A retried request changes nothing; a stale one conflicts.
+    assert_eq!(store.apply_event(&publish, actor, NOW).unwrap().revision, 1);
+    assert!(matches!(
+        store.apply_event(
+            &event_change(0, EventOperation::Publish, None, Some(stream())),
+            "other@example.invalid",
+            NOW
+        ),
+        Err(Error::Conflict)
+    ));
+
+    // A correction keeps the ID.
+    let corrected = EventContent {
+        title: "Devstream 200: Update 41".into(),
+        ..stream()
+    };
+    let live = store
+        .apply_event(
+            &event_change(
+                1,
+                EventOperation::Publish,
+                Some(id.clone()),
+                Some(corrected),
+            ),
+            actor,
+            NOW,
+        )
+        .unwrap();
+    let events = live.feed.events.unwrap();
+    assert_eq!(
+        (
+            events.len(),
+            events[0].id.as_str(),
+            events[0].title.as_str()
+        ),
+        (1, id.as_str(), "Devstream 200: Update 41")
+    );
+
+    // Publishing a message keeps the events in the feed.
+    let saved = store
+        .apply(
+            &change(2, Operation::Save, None, Some(content())),
+            actor,
+            NOW,
+        )
+        .unwrap();
+    let message = saved.messages[0].id.clone();
+    let live = store
+        .apply(
+            &change(3, Operation::Publish, Some(message), None),
+            actor,
+            NOW,
+        )
+        .unwrap();
+    assert_eq!(live.feed.events.as_ref().map(Vec::len), Some(1));
+
+    let removed = store
+        .apply_event(
+            &event_change(4, EventOperation::Remove, Some(id.clone()), None),
+            actor,
+            NOW,
+        )
+        .unwrap();
+    assert_eq!(removed.feed.events.as_ref().map(Vec::len), Some(0));
+    assert_eq!(removed.history[0].operation, "event-remove");
+    assert!(matches!(
+        store.apply_event(
+            &event_change(5, EventOperation::Remove, Some(id), None),
+            actor,
+            NOW
+        ),
+        Err(Error::Invalid(_))
+    ));
+}
+
+#[test]
+fn official_events_are_validated_and_old_ones_drop_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let export = dir.path().join("public/announcements.json");
+    let mut store = Store::open(&dir.path().join("state.sqlite"), export.clone(), SEED).unwrap();
+    let actor = "publisher@example.invalid";
+    for bad in [
+        EventContent {
+            kind: "rumour".into(),
+            ..stream()
+        },
+        EventContent {
+            source_url: "https://www.reddit.com/r/Warframe/".into(),
+            ..stream()
+        },
+        EventContent {
+            ends_at: Some("2027-03-01T00:00:00Z".into()),
+            ..stream()
+        },
+        EventContent {
+            starts_at: "2026-10-01T00:00:00Z".into(),
+            ..stream()
+        },
+    ] {
+        assert!(matches!(
+            store.apply_event(
+                &event_change(0, EventOperation::Publish, None, Some(bad)),
+                actor,
+                NOW
+            ),
+            Err(Error::Invalid(_))
+        ));
+    }
+    assert_eq!(fs::read_to_string(&export).unwrap(), SEED);
+    store
+        .apply_event(
+            &event_change(0, EventOperation::Publish, None, Some(stream())),
+            actor,
+            NOW,
+        )
+        .unwrap();
+    // Eight days after the stream it is pruned on the next publication.
+    let later = NOW + 20 * 86_400;
+    let next = EventContent {
+        starts_at: "2026-11-18T15:00:00Z".into(),
+        kind: "update".into(),
+        title: "Update 41".into(),
+        ..stream()
+    };
+    let live = store
+        .apply_event(
+            &event_change(1, EventOperation::Publish, None, Some(next)),
+            actor,
+            later,
+        )
+        .unwrap();
+    let titles: Vec<_> = live
+        .feed
+        .events
+        .unwrap()
+        .into_iter()
+        .map(|e| e.title)
+        .collect();
+    assert_eq!(titles, ["Update 41"]);
 }

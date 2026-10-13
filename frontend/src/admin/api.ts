@@ -1,10 +1,11 @@
 import type { Market } from '../contracts/data';
-import type { Change, DashboardState, PublicFeedCheck, RunJob, StatusState } from '../contracts/generated/publisher';
+import type { Change, DashboardState, EventChange, PublicFeedCheck, RunJob, StatusState } from '../contracts/generated/publisher';
 import { parseAnnouncements } from '../domain/announcements';
 
 export interface Publisher {
   load(): Promise<DashboardState>;
   change(change: Change): Promise<DashboardState>;
+  changeEvent(change: EventChange): Promise<DashboardState>;
   publicFeed(): Promise<PublicFeedCheck>;
   /** The live market snapshot, for its calendar dates. */
   market(): Promise<Market>;
@@ -37,8 +38,8 @@ async function call(url: string, body?: unknown): Promise<unknown> {
   return value;
 }
 
-async function request(change?: Change): Promise<DashboardState> {
-  const value = await call(change ? '/api/announcements/change' : '/api/announcements', change) as DashboardState | null;
+async function request(change?: Change, url = change ? '/api/announcements/change' : '/api/announcements', body: unknown = change): Promise<DashboardState> {
+  const value = await call(url, body) as DashboardState | null;
   if (!value || typeof value.actor !== 'string' || !value.snapshot
     || !Number.isSafeInteger(value.snapshot.revision) || !Array.isArray(value.snapshot.messages)
     || !Array.isArray(value.snapshot.history) || !parseAnnouncements(value.snapshot.feed)) {
@@ -74,5 +75,5 @@ async function market(): Promise<Market> {
   return value as Market;
 }
 
-export const publisher: Publisher = { load: () => request(), change: request, publicFeed, market };
+export const publisher: Publisher = { load: () => request(), change: request, changeEvent: (change) => request(undefined, '/api/announcements/events', change), publicFeed, market };
 export const boxApi: BoxApi = { load: () => status(), run: status };
