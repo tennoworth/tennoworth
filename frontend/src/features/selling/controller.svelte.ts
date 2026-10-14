@@ -150,9 +150,18 @@ export class WfmAccessController {
   start() {
     let live = true;
     let receivedEvent = false;
-    const stop = this.port.listenForTauriEvent<AccessStatus>(WFM_ACCESS_EVENT, status => { receivedEvent = true; this.status = status; });
-    void this.port.desktopAccessStatus().then(status => { if (live && !receivedEvent) this.status = status; }).catch(() => {});
-    const timer = setInterval(() => { this.now = Date.now(); }, 1000);
-    return () => { live = false; stop(); clearInterval(timer); };
+    // `now` only has to move when a cooldown ends, so one timer per cooldown
+    // replaces a once-a-second tick that ran for the whole session.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const sync = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      this.now = Date.now();
+      const until = this.status?.cooldown_until_ms ?? 0;
+      if (live && until > this.now) timer = setTimeout(sync, Math.min(until - this.now, 2 ** 31 - 1));
+    };
+    const stop = this.port.listenForTauriEvent<AccessStatus>(WFM_ACCESS_EVENT, status => { receivedEvent = true; this.status = status; sync(); });
+    void this.port.desktopAccessStatus().then(status => { if (live && !receivedEvent) { this.status = status; sync(); } }).catch(() => {});
+    return () => { live = false; stop(); clearTimeout(timer); };
   }
 }

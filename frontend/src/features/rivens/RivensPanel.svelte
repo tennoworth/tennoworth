@@ -3,6 +3,8 @@
   const { desktopRivenComps } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
   import CopyBtn from '../../ui/CopyBtn.svelte';
+  import Pager from '../../ui/Pager.svelte';
+  import { pageWindow } from '../../ui/paging';
 
   import type { RivenAuction, RivenStatFilter } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
@@ -73,8 +75,14 @@
     unread: string[];
   }
 
+  let page = $state(0);
+  let tableEl = $state<HTMLElement>();
+  let win = $derived(pageWindow(sorted.length, page));
+  // Only the page on screen is resolved; the key keeps the riven's place in
+  // the whole sorted list so rows stay distinct across pages.
   let rows = $derived<Row[]>(
-    sorted.map((riven, i) => {
+    sorted.slice(win.start, win.end).map((riven, j) => {
+      const i = win.start + j;
       const stats = resolveRivenStats(riven, attrs);
       const rivenType = riven.slug ? market?.rivens?.weapons?.[riven.slug]?.riven_type : undefined;
       return {
@@ -215,10 +223,10 @@
     <span class="exp">{rivens.length} owned</span>
   </div>
 
-  {#if rows.length === 0}
+  {#if sorted.length === 0}
     <div class="line"><span class="exp">No rivens in your scanned inventory. Crack some relics or buy veiled ones.</span></div>
   {:else}
-    <div class="scroll">
+    <div class="scroll" bind:this={tableEl}>
       <table class="tw fixed">
         <colgroup>
           <col style="width:9rem" />
@@ -398,6 +406,7 @@
         </tbody>
       </table>
     </div>
+    <Pager window={win} total={sorted.length} label="Riven pages" target={tableEl} onpage={(p) => (page = p)} />
   {/if}
 
 </section>
@@ -440,7 +449,7 @@
   .bad { color: var(--bad); }
   .similarity { color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-ctl); padding: 1px 5px; font: 600 var(--text-caption) var(--font-mono); white-space: nowrap; }
   /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
-  .comps-row td { background: var(--panel-2); height: auto; text-align: left; font-family: var(--font-body); white-space: normal; }
+  .comps-row td { background-color: var(--panel-2); height: auto; text-align: left; font-family: var(--font-body); white-space: normal; }
   .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
   .comps-sample { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
   .comp { border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: var(--s2); display: flex; flex-direction: column; gap: 4px; background: var(--panel); }

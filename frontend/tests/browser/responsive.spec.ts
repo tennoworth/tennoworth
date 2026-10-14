@@ -28,6 +28,7 @@ async function assertDocumentFits(page: Page): Promise<void> {
     }).map(cell => cell.textContent?.trim()),
   );
   expect(clippedStatus, 'status information and actions must fit even when the shell hides overflow').toEqual([]);
+  expect(await statusSpills(page), 'a status cell must not paint its content over the next cell').toEqual([]);
   const clippedRails = await page.locator('.rail:visible, .summary:visible, .orders .ui-segmented:visible').evaluateAll(elements =>
     elements.filter(element => element.scrollWidth > element.clientWidth + 2 || element.scrollHeight > element.clientHeight + 2)
       .map(element => element.textContent?.trim()),
@@ -39,6 +40,22 @@ async function assertDocumentFits(page: Page): Promise<void> {
     const parentBox = await parent.boundingBox();
     expect(parentBox!.height, 'short windows must not collapse a panel around its heading').toBeGreaterThanOrEqual(railBox!.height);
   }
+}
+
+// Cells have min-width: 0 and nothing clips them, so content wider than its
+// cell does not overflow the document: it draws over the neighbouring cell.
+async function statusSpills(page: Page): Promise<string[]> {
+  return page.locator('.statusbar > .cell').evaluateAll((cells) =>
+    cells.flatMap((cell) => {
+      const right = cell.getBoundingClientRect().right;
+      const spill = Math.max(0, ...[...cell.querySelectorAll('*')]
+        .filter((child) => !child.closest('.refresh-pop, .more-pop, [role="menu"]'))
+        .map((child) => child.getBoundingClientRect())
+        .filter((box) => box.width > 0)
+        .map((box) => box.right - right));
+      return spill > 1 ? [`${cell.textContent?.trim()} (+${Math.round(spill)}px)`] : [];
+    }),
+  );
 }
 
 async function assertReadableTableLabels(page: Page): Promise<void> {
@@ -246,6 +263,50 @@ test.describe('desktop responsive layout', () => {
       await page.setViewportSize({ width, height: width <= 560 ? 480 : 700 });
       await assertDocumentFits(page);
       await assertReadableTableLabels(page);
+    }
+  });
+
+  test('a failed scan keeps every status cell inside its own box', async ({ page }) => {
+    // The failed-refresh note and the activity result are the widest strip
+    // content; Refresh used to paint over the Market cell between them.
+    await page.goto('/?preview-desktop&sample');
+    await page.locator('.shell').waitFor();
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(page.locator('.statusbar .inv')).toContainText('Last refresh failed');
+    await expect(page.locator('.statusbar .cell.act')).toContainText('Scan failed');
+    for (let width = 901; width <= 1600; width += 50) {
+      await page.setViewportSize({ width, height: 700 });
+      expect(await statusSpills(page), `status cells spilled at ${width}px`).toEqual([]);
+    }
+  });
+
+  test('long histories page 100 entries at a time', async ({ page }) => {
+    await page.goto('/?preview-desktop&sample=long-history');
+    await page.locator('.shell').waitFor();
+    const lists = [
+      ['Ledger', 'Trade history pages', 'tbody > tr'],
+      ['Rivens', 'Riven pages', 'tbody > tr'],
+      ['Notifications', 'Notification pages', '.history > li > ol > li'],
+    ] as const;
+    for (const [view, pagerName, rowSelector] of lists) {
+      await page.locator('.sidebar').getByRole('button', { name: new RegExp(`^${view}`) }).click();
+      const pane = page.locator('.view-pane:not([hidden])');
+      const pager = pane.getByRole('navigation', { name: pagerName });
+      const rows = pane.locator(rowSelector);
+      await expect(pager).toContainText('Showing 1–100 of 250');
+      await expect(rows).toHaveCount(100);
+      // Next from the bottom of a long page lands on the top of the new one.
+      await pager.getByRole('button', { name: 'Next ›' }).click();
+      await expect(pager).toContainText('Showing 101–200 of 250');
+      await expect(rows).toHaveCount(100);
+      await expect(rows.first()).toBeInViewport();
+      await pager.getByRole('button', { name: 'Next ›' }).click();
+      await expect(rows).toHaveCount(50);
+      await expect(pager.getByRole('button', { name: 'Next ›' })).toBeDisabled();
+      await page.setViewportSize({ width: 320, height: 480 });
+      await assertDocumentFits(page);
+      await page.setViewportSize({ width: 1280, height: 700 });
     }
   });
 

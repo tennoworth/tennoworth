@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { cleanup, render } from '@testing-library/svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render } from '@testing-library/svelte';
+import { flushSync } from 'svelte';
 import ResultsTable from './ResultsTable.svelte';
 import type { SellRow } from '../../contracts/selling';
 
@@ -165,4 +166,28 @@ it('releases a held scan order when the preset changes the sort', async () => {
   expect(names(container)).toEqual(['A', 'B']);
   await rerender({ presetSort: { key: 'low_sell', dir: -1 } });
   expect(names(container)).toEqual(['B', 'A']);
+});
+
+describe('the name filter', () => {
+  const row = (slug: string, name: string): SellRow => ({ ...ROW, slug, name });
+  const names = (container: HTMLElement) => [...container.querySelectorAll('div.wrap.results tbody tr td.col-name')].map((td) => td.textContent?.trim().split(/\s/)[0]);
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('narrows the table once typing pauses, not on every key', async () => {
+    vi.useFakeTimers();
+    const { container, getByLabelText } = render(ResultsTable, {
+      results: [row('alpha', 'Alpha'), row('beta', 'Beta'), row('bezel', 'Bezel')], deltas: new Map(), visibleColumns: ['name'],
+    });
+    const box = getByLabelText('Filter by name') as HTMLInputElement;
+    await fireEvent.input(box, { target: { value: 'be' } });
+    await vi.advanceTimersByTimeAsync(100);
+    await fireEvent.input(box, { target: { value: 'bet' } });
+    await vi.advanceTimersByTimeAsync(149);
+    flushSync();
+    expect(box.value).toBe('bet');
+    expect(names(container)).toEqual(['Alpha', 'Beta', 'Bezel']);
+    await vi.advanceTimersByTimeAsync(1);
+    flushSync();
+    expect(names(container)).toEqual(['Beta']);
+  });
 });

@@ -121,7 +121,7 @@ import type { PresenceController } from '../features/presence/presence.svelte';
           {#if inventoryTimestamp}
             <time data-shell datetime={inventoryTimestamp} title={new Date(inventoryTimestamp).toLocaleString()}>{scanStamp(inventoryTimestamp)} · {inventoryStaleness}</time>
           {:else}<span data-shell>Timestamp unavailable</span>{/if}
-          {#if inventory.refreshFailed}<span data-shell class="bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell>No tradeable items found; showing saved inventory</span>{/if}
+          {#if inventory.refreshFailed}<span data-shell class="note bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell class="note">No tradeable items found; showing saved inventory</span>{/if}
         {:else}
           <span data-shell class="dot" aria-hidden="true"></span>
           <span data-shell>{inventory.restored ? 'No inventory yet' : 'Loading saved scan…'}</span>

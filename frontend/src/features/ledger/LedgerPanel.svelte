@@ -9,6 +9,8 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   import { totals, since, soldByItem, describeItems } from '../../domain/ledger';
   import { humanError } from '../../contracts/errors';
   import Toast from '../../ui/Toast.svelte';
+  import Pager from '../../ui/Pager.svelte';
+  import { pageWindow } from '../../ui/paging';
   import { createToastQueue } from '../../ui/toast-queue.svelte';
 
   interface Props {
@@ -99,6 +101,10 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   let all = $derived(totals(trades));
   let week = $derived(totals(since(trades, 7, nowSecs())));
   let byItem = $derived(soldByItem(trades).slice(0, 10));
+  let page = $state(0);
+  let historyEl = $state<HTMLElement>();
+  let win = $derived(pageWindow(trades.length, page));
+  let shown = $derived(trades.slice(win.start, win.end));
 
   function when(unixSecs: number): string {
     const d = new Date(unixSecs * 1000);
@@ -172,12 +178,12 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
       </details>
     {/if}
 
-    <div class="scroll">
+    <div class="scroll" bind:this={historyEl}>
       <table class="tw fixed">
         <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:17rem" /><col style="width:7rem" /><col style="width:11rem" /></colgroup>
         <thead><tr><th>When</th><th>Trade</th><th class="l">Items</th><th>With</th><th class="r">Plat</th><th>Listing</th></tr></thead>
         <tbody>
-          {#each trades as t (t.id)}
+          {#each shown as t (t.id)}
             <tr>
               <td class="mono muted">{when(t.at)}</td>
               <td><span class="kind {t.kind}">{kindLabel(t.kind)}</span></td>
@@ -190,6 +196,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
         </tbody>
       </table>
     </div>
+    <Pager window={win} total={trades.length} label="Trade history pages" target={historyEl} onpage={(p) => (page = p)} />
   {/if}
 
   </section>

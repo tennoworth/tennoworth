@@ -133,7 +133,9 @@ either its comparable totals in a `.ui-totals` strip or its primary action
 does not hide its description in a hover-only info mark.
 
 In the workspace the status strip holds to one line on wide windows: the scan
-cell takes the slack and a long scan name wraps inside its own box. Orders to
+cell takes the slack and a long scan name or status note wraps inside its own
+box. When the cells still do not fit, a whole cell moves to a second line; a
+cell never shrinks below its content and paints over its neighbour. Orders to
 fix and Baro's countdown are sidebar badges beside the views they open; the
 strip keeps them only on the first-run landing, which has no sidebar. The
 strip's activity cell is the one place scans, listing sends, visibility
@@ -262,7 +264,11 @@ four cells on one scale with the chosen rung inverted, picked only for a crack
 or refine verdict). My orders is one listings table: listing health is a
 column and a row state with each fix beside the item, and Live ask and bid are
 always reserved so a live check fills cells rather than moving controls.
-Analytical tables scroll locally when needed. Settings includes notification preferences within the same column.
+Analytical tables scroll locally when needed. Long histories (Ledger trades,
+Rivens, Notifications) show 100 entries a page through the shared
+`Pager.svelte`: the range shown, Prev and Next, and the page count, under the
+list. A page change brings the list's top back into view, and narrowing a
+list returns to its first page. Settings includes notification preferences within the same column.
 Settings is ordered by how often people return to it. A status strip leads,
 linking the automatic-scan, overlay and account state to their sections,
 followed by section links. Then come the everyday panels (Automatic scan,
@@ -304,7 +310,15 @@ The schematic page background uses bounded repeating tiles. WebKit can stretch
 a page-sized gradient raster on long surfaces even when computed CSS matches
 Chromium. The grid repeats every 28px; the diagonal’s 9px period projects to a
 12.7279220614px square tile. Keep the bounded sizes and verify the actual
-rendering in both engines when changing the pattern.
+rendering in both engines when changing the pattern. The pattern lives on a
+fixed, composited layer behind the page rather than on `body`, so scrolling
+the workspace does not re-raster it.
+
+Dense tables scroll often, so in `table.tw` the dotted row rule is a
+1px-on/1px-off background tile on each cell instead of a dotted border; it
+looks the same and costs a fraction of the raster time. Cell fills therefore
+set `background-color`, never the `background` shorthand, which would erase the
+rule on that row.
 
 ## Private announcement dashboard
 
