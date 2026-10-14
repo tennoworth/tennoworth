@@ -264,7 +264,11 @@ four cells on one scale with the chosen rung inverted, picked only for a crack
 or refine verdict). My orders is one listings table: listing health is a
 column and a row state with each fix beside the item, and Live ask and bid are
 always reserved so a live check fills cells rather than moving controls.
-Analytical tables scroll locally when needed. Settings includes notification preferences within the same column.
+Analytical tables scroll locally when needed. Long histories (Ledger trades,
+Rivens, Notifications) show 100 entries a page through the shared
+`Pager.svelte`: the range shown, Prev and Next, and the page count, under the
+list. A page change brings the list's top back into view, and narrowing a
+list returns to its first page. Settings includes notification preferences within the same column.
 Settings is ordered by how often people return to it. A status strip leads,
 linking the automatic-scan, overlay and account state to their sections,
 followed by section links. Then come the everyday panels (Automatic scan,

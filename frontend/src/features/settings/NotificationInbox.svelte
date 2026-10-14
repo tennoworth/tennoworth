@@ -7,6 +7,8 @@
   import { NOTIFICATIONS_EVENT } from '../../contracts/events';
   import { type NotificationEntry, type NotificationTarget } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
+  import Pager from '../../ui/Pager.svelte';
+  import { pageWindow } from '../../ui/paging';
   let { onopen, onsettings }: { onopen: (target: NotificationTarget) => void; onsettings: () => void } = $props();
   let entries = $state<NotificationEntry[]>([]);
   let loading = $state(true);
@@ -17,9 +19,14 @@
   let visible = $derived(entries.filter(n => !unreadOnly || !n.read));
   let now = $state(Date.now());
   let unread = $derived(entries.filter(entry => !entry.read).length);
+  let page = $state(0);
+  let historyEl = $state<HTMLElement>();
+  let win = $derived(pageWindow(visible.length, page));
+  // Days are grouped within the page, so a day split by a page boundary
+  // repeats its heading at the top of the next page.
   let groups = $derived.by(() => {
     const days = new Map<string, { date: ReturnType<typeof notificationDate>; entries: NotificationEntry[] }>();
-    for (const entry of visible) {
+    for (const entry of visible.slice(win.start, win.end)) {
       const date = notificationDate(entry.created_at, now);
       let group = days.get(date.key);
       if (!group) { group = { date, entries: [] }; days.set(date.key, group); }
@@ -59,7 +66,7 @@
     <div class="ui-toolbar"><button class="btn" onclick={onsettings}>Notification settings</button>
     <button class="btn" disabled={busy || !entries.some(n => !n.read)} onclick={() => action(() => desktopReadNotifications())}>Mark all read</button>
     <button class="btn" disabled={busy || !entries.length} onclick={() => confirmClear = true}>Clear history</button></div>
-    <label><input type="checkbox" bind:checked={unreadOnly} /> Unread only</label>
+    <label><input type="checkbox" bind:checked={unreadOnly} onchange={() => (page = 0)} /> Unread only</label>
     <span class="history-count">{unread} unread · {entries.length} {entries.length === 1 ? 'notification' : 'notifications'}</span>
   </div>
   {#if confirmClear}
@@ -73,7 +80,7 @@
   {#if loading}<p role="status">Loading notifications…</p>
   {:else if !visible.length && !error}<p>{unreadOnly ? 'You’re all caught up.' : 'No notifications yet. Trades, price watches, and timely reminders will appear here.'}</p>
   {:else}
-    <ol class="history">
+    <ol class="history" bind:this={historyEl}>
       {#each groups as group (group.date.key)}
         <li class="notification-day">
           <div class="day-heading"><h3>{group.date.label}</h3><span>{group.date.date}</span></div>
@@ -85,6 +92,7 @@
         </li>
       {/each}
     </ol>
+    <Pager window={win} total={visible.length} label="Notification pages" target={historyEl} onpage={(p) => (page = p)} />
   {/if}
 </section>
 <style>

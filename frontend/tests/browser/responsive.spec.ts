@@ -281,6 +281,35 @@ test.describe('desktop responsive layout', () => {
     }
   });
 
+  test('long histories page 100 entries at a time', async ({ page }) => {
+    await page.goto('/?preview-desktop&sample=long-history');
+    await page.locator('.shell').waitFor();
+    const lists = [
+      ['Ledger', 'Trade history pages', 'tbody > tr'],
+      ['Rivens', 'Riven pages', 'tbody > tr'],
+      ['Notifications', 'Notification pages', '.history > li > ol > li'],
+    ] as const;
+    for (const [view, pagerName, rowSelector] of lists) {
+      await page.locator('.sidebar').getByRole('button', { name: new RegExp(`^${view}`) }).click();
+      const pane = page.locator('.view-pane:not([hidden])');
+      const pager = pane.getByRole('navigation', { name: pagerName });
+      const rows = pane.locator(rowSelector);
+      await expect(pager).toContainText('Showing 1–100 of 250');
+      await expect(rows).toHaveCount(100);
+      // Next from the bottom of a long page lands on the top of the new one.
+      await pager.getByRole('button', { name: 'Next ›' }).click();
+      await expect(pager).toContainText('Showing 101–200 of 250');
+      await expect(rows).toHaveCount(100);
+      await expect(rows.first()).toBeInViewport();
+      await pager.getByRole('button', { name: 'Next ›' }).click();
+      await expect(rows).toHaveCount(50);
+      await expect(pager.getByRole('button', { name: 'Next ›' })).toBeDisabled();
+      await page.setViewportSize({ width: 320, height: 480 });
+      await assertDocumentFits(page);
+      await page.setViewportSize({ width: 1280, height: 700 });
+    }
+  });
+
   test('all views and the complete navigation remain reachable', async ({ page }) => {
     for (const width of [320, 560, 899, 900, 901, 1200]) {
       await page.setViewportSize({ width, height: width <= 560 ? 480 : 700 });

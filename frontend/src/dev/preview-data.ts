@@ -33,7 +33,7 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       owned.set(slug, { count: required * 2 + (slug.endsWith('barrel') ? 1 : 0), name, type: 'Misc', slug, subtype: null, kept_lvl: null, leveled: 0 });
     }
   }
-  const rivens: OwnedRiven[] = [{
+  const sampleRivens: OwnedRiven[] = [{
     path: '/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare',
     compat: '/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon',
     slug: null, weaponName: null, rerolls: 2, lvl: 0, pol: 'AP_ATTACK',
@@ -51,6 +51,12 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       curses: [{ Tag: 'WeaponZoomFovMod', Value: 401234567 }],
     }),
   }];
+  // Long histories exercise the 100-entry pages of Rivens, Ledger and Notifications.
+  const longHistory = scenario === 'long-history';
+  const LONG = 250;
+  const rivens = longHistory
+    ? Array.from({ length: LONG }, (_, i) => ({ ...sampleRivens[i % 2], rerolls: i }))
+    : sampleRivens;
   const settings = new Map<string, string>([
     ['last-owned-v2', serializeSnapshot({ invName: 'Sample inventory with a deliberately long name', owned, rivens, nativeSnapshotId: 1 }, Date.now())],
     ['sell-onboarding-dismissed', '1'], ['keep-copies-nudge-dismissed', '1'],
@@ -78,6 +84,11 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       { id: 2, category: 'calendar', title: 'Saved calendar reminder', body: 'Full saved context from before structured notification details. A deliberately long item identity remains readable in the history.', target: 'routines', created_at: yesterday.getTime() / 1000, read: true, delivery: 'pending' },
     ];
   }
+  if (longHistory) {
+    notifications = Array.from({ length: LONG }, (_, i) => ({
+      ...notifications[0], id: LONG - i, title: `Sample sale ${LONG - i}`, created_at: now - i * 3_600, read: i % 3 !== 0,
+    }));
+  }
   let notificationPreferences = { popups: true, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
     fetch_orders: empty || scenario.startsWith('buyers') ? [] : [
@@ -93,10 +104,10 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       id: 1, slug: 'pyrana_prime_set', name: 'Pyrana Prime Set', side: 'sell', threshold: 70,
       rank: 0, subtype: null, created_at: now, last_price: 76, last_checked_at: now, last_fired_at: null,
     }],
-    list_trades: empty ? [] : [{
-      id: 1, at: now, partner: 'Sample trading partner with a long name', kind: 'sale', plat: 90,
+    list_trades: empty ? [] : Array.from({ length: longHistory ? LONG : 1 }, (_, i) => ({
+      id: (longHistory ? LONG : 1) - i, at: now - i * 3_600, partner: 'Sample trading partner with a long name', kind: 'sale', plat: 90 + i,
       items: [{ name: 'Pyrana Prime Set', qty: 1, direction: 'given' }], log_stamp: null, wfm_closed: true,
-    }],
+    })),
     eelog_status: {
       path: '/sample/Warframe/EE.log',
       auto_close: false,
