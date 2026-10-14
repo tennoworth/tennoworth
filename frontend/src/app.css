@@ -485,7 +485,7 @@ table.tw th.l, table.tw td.l { text-align: left; }
 table.tw td.l { font-family: var(--font-body); color: var(--fg); white-space: normal; overflow-wrap: anywhere; padding-block: var(--s1); }
 table.tw:not(.fixed) th.l { width: 100%; min-width: 10rem; }
 table.tw tbody tr:first-child td { border-top: none; }
-table.tw tbody tr:hover td { background: var(--hover-tint); }
+table.tw tbody tr:hover td { background-color: var(--hover-tint); }
 table.tw td.l a { color: var(--fg); text-decoration: none; }
 table.tw td.l a:hover { color: var(--accent); text-decoration: underline; }
 table.tw td.score, table.tw td.strong { font-weight: 600; color: var(--fg); }
@@ -546,7 +546,7 @@ table.tw th.ghost { color: var(--muted); }
 table.tw td.ghost { color: var(--muted); }
 table.tw .g1 { border-left: 1px dashed var(--border); }
 /* Hand-off: the same columns, completed - accent wash + a solid lead rule. */
-table.tw th.you, table.tw td.you { background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); }
+table.tw th.you, table.tw td.you { background-color: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); }
 table.tw td.you.score { font-weight: 600; }
 table.tw th.you.y1, table.tw td.you.y1 { border-left: 1px solid var(--accent); }
 table.tw .up, table.tw .good { color: var(--good); }
@@ -565,7 +565,7 @@ table.tw tr.dim .spark { color: var(--faint); }
 table.tw .vis { font: 600 var(--text-caption)/1rem var(--font-mono); border: 1px solid currentColor; border-radius: var(--radius-tag); padding: 0 var(--s1); color: var(--good); letter-spacing: 0.06em; }
 table.tw .vis.off { color: var(--muted); }
 /* Pending destructive row - the two-tap delete's armed state. */
-table.tw tr.confirming td { background: color-mix(in srgb, var(--bad) 6%, transparent); }
+table.tw tr.confirming td { background-color: color-mix(in srgb, var(--bad) 6%, transparent); }
 table.tw tr.confirming td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 table.tw tr.busy td { color: var(--muted); }
 
@@ -725,8 +725,16 @@ table.tw tr.busy td { color: var(--muted); }
    ========================================================================== */
 
 /* ---------- yorha ---------------------------------------------------------- */
-/* Schematic ground: 28px line grid in ink at ~7% plus a 9px diagonal hatch. */
-html[data-look="yorha"] body {
+/* Schematic ground: 28px line grid in ink at ~7% plus a 9px diagonal hatch.
+   It sits on its own fixed, composited layer: painted on body, every scroll
+   of the transparent workspace re-rastered the three gradients beneath it. */
+html[data-look="yorha"]:not(.relic-overlay-surface) body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  will-change: transform;
   background-image:
     repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 28px),
     repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 28px),
@@ -734,6 +742,8 @@ html[data-look="yorha"] body {
   /* Page-sized gradient rasters can stretch in WebKit. The diagonal tile
      spans one 9px period projected onto both axes (9 × sqrt(2)). */
   background-size: 28px 28px, 28px 28px, 12.7279220614px 12.7279220614px;
+}
+html[data-look="yorha"] body {
   font-size: 0.84375rem;
 }
 html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }
@@ -742,6 +752,20 @@ html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bott
 html[data-look="yorha"] :is(td, th) a:not(.btn) { border-bottom-color: transparent; }
 html[data-look="yorha"] tr:is(:hover, :focus-within) :is(td, th) a:not(.btn) { border-bottom-color: var(--border); }
 html[data-look="yorha"] a.btn { border-bottom-style: solid; }
+/* Row rules are a 1px-on, 1px-off background tile rather than a dotted
+   border: per-cell dotted borders cost Meta Drift ~20x the raster time of
+   the default look on every scroll. :where() keeps the base rule's weight so
+   component borders still win; cell fills therefore set background-color,
+   never the background shorthand, or the row loses its rule. */
+:where(html[data-look="yorha"]) table.tw td {
+  border-top-style: solid;
+  border-top-color: transparent;
+  background-image: linear-gradient(to right, var(--hairline) 1px, transparent 1px);
+  background-size: 2px 1px;
+  background-repeat: repeat-x;
+  background-origin: border-box;
+}
+:where(html[data-look="yorha"]) table.tw tbody tr:first-child td { background-image: none; }
 html[data-look="yorha"] input[type="text"], html[data-look="yorha"] input[type="number"] { background: var(--panel); }
 html[data-look="yorha"][data-mode="dark"] input[type="text"],
 html[data-look="yorha"][data-mode="dark"] input[type="number"] { background: var(--bg); }

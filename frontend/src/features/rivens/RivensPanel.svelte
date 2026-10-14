@@ -440,7 +440,7 @@
   .bad { color: var(--bad); }
   .similarity { color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-ctl); padding: 1px 5px; font: 600 var(--text-caption) var(--font-mono); white-space: nowrap; }
   /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
-  .comps-row td { background: var(--panel-2); height: auto; text-align: left; font-family: var(--font-body); white-space: normal; }
+  .comps-row td { background-color: var(--panel-2); height: auto; text-align: left; font-family: var(--font-body); white-space: normal; }
   .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
   .comps-sample { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
   .comp { border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: var(--s2); display: flex; flex-direction: column; gap: 4px; background: var(--panel); }

@@ -28,6 +28,7 @@ async function assertDocumentFits(page: Page): Promise<void> {
     }).map(cell => cell.textContent?.trim()),
   );
   expect(clippedStatus, 'status information and actions must fit even when the shell hides overflow').toEqual([]);
+  expect(await statusSpills(page), 'a status cell must not paint its content over the next cell').toEqual([]);
   const clippedRails = await page.locator('.rail:visible, .summary:visible, .orders .ui-segmented:visible').evaluateAll(elements =>
     elements.filter(element => element.scrollWidth > element.clientWidth + 2 || element.scrollHeight > element.clientHeight + 2)
       .map(element => element.textContent?.trim()),
@@ -39,6 +40,22 @@ async function assertDocumentFits(page: Page): Promise<void> {
     const parentBox = await parent.boundingBox();
     expect(parentBox!.height, 'short windows must not collapse a panel around its heading').toBeGreaterThanOrEqual(railBox!.height);
   }
+}
+
+// Cells have min-width: 0 and nothing clips them, so content wider than its
+// cell does not overflow the document: it draws over the neighbouring cell.
+async function statusSpills(page: Page): Promise<string[]> {
+  return page.locator('.statusbar > .cell').evaluateAll((cells) =>
+    cells.flatMap((cell) => {
+      const right = cell.getBoundingClientRect().right;
+      const spill = Math.max(0, ...[...cell.querySelectorAll('*')]
+        .filter((child) => !child.closest('.refresh-pop, .more-pop, [role="menu"]'))
+        .map((child) => child.getBoundingClientRect())
+        .filter((box) => box.width > 0)
+        .map((box) => box.right - right));
+      return spill > 1 ? [`${cell.textContent?.trim()} (+${Math.round(spill)}px)`] : [];
+    }),
+  );
 }
 
 async function assertReadableTableLabels(page: Page): Promise<void> {
@@ -246,6 +263,21 @@ test.describe('desktop responsive layout', () => {
       await page.setViewportSize({ width, height: width <= 560 ? 480 : 700 });
       await assertDocumentFits(page);
       await assertReadableTableLabels(page);
+    }
+  });
+
+  test('a failed scan keeps every status cell inside its own box', async ({ page }) => {
+    // The failed-refresh note and the activity result are the widest strip
+    // content; Refresh used to paint over the Market cell between them.
+    await page.goto('/?preview-desktop&sample');
+    await page.locator('.shell').waitFor();
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(page.locator('.statusbar .inv')).toContainText('Last refresh failed');
+    await expect(page.locator('.statusbar .cell.act')).toContainText('Scan failed');
+    for (let width = 901; width <= 1600; width += 50) {
+      await page.setViewportSize({ width, height: 700 });
+      expect(await statusSpills(page), `status cells spilled at ${width}px`).toEqual([]);
     }
   });
 
