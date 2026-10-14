@@ -1,5 +1,6 @@
-import { expect, it, vi } from 'vitest';
-import { ListingController } from './controller.svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ListingController, WfmAccessController } from './controller.svelte';
+import type { AccessStatus } from '../../contracts/generated/desktop';
 import type { PendingPlan } from '../../contracts/data';
 
 /** A saved batch with one item still to send. */
@@ -120,4 +121,53 @@ it('keeps a failed post-resume journal read visible', async () => {
   expect(c.pendingPlan).toEqual(unfinished);
   expect(c.resumePhase).toBe('error');
   expect(c.resumeError).toContain('journal unreadable');
+});
+
+describe('WfmAccessController', () => {
+  const status = (cooldown_until_ms: number): AccessStatus => ({
+    revision: 1, reason: '', cooldown_until_ms, queue_count: 0, outstanding: 0, requests: 0, throttles: 0,
+    cache_hits: 0, cache_misses: 0, queue_rejections: 0,
+    restrictions: { spacing_ms: 0, concurrency: 1, contract_spacing_ms: 0, watch_interval_ms: 0, pause_all: false, pause_background: false, pause_contracts: false, pause_mutations: false, pause_websockets: false },
+  });
+  function harness(initial: AccessStatus) {
+    let handler: ((s: AccessStatus) => void) | undefined;
+    const access = new WfmAccessController({
+      desktopAccessStatus: vi.fn().mockResolvedValue(initial),
+      listenForTauriEvent: ((_event: string, h: (s: AccessStatus) => void) => { handler = h; return () => {}; }) as never,
+    });
+    return { access, push: (s: AccessStatus) => handler?.(s) };
+  }
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1_000_000); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('keeps no timer running while nothing is cooling down', async () => {
+    const { access } = harness(status(0));
+    const stop = access.start();
+    await vi.waitFor(() => expect(access.status).not.toBeNull());
+    expect(access.cooling).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    stop();
+  });
+
+  it('ends a cooldown exactly at its deadline without ticking', () => {
+    const { access, push } = harness(status(0));
+    const stop = access.start();
+    push(status(Date.now() + 5_000));
+    expect(access.cooling).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    vi.advanceTimersByTime(4_999);
+    expect(access.cooling).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(access.cooling).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    stop();
+  });
+
+  it('clears its cooldown timer when stopped', () => {
+    const { access, push } = harness(status(0));
+    const stop = access.start();
+    push(status(Date.now() + 60_000));
+    stop();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

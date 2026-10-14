@@ -34,8 +34,20 @@
   }
   onMount(() => {
     void refresh();
-    const timer = setInterval(() => { now = Date.now(); }, 1000);
-    return () => { disposed = true; clearInterval(timer); };
+    return () => { disposed = true; };
+  });
+  // `now` only matters where the comparison's freshness flips: when the
+  // observation time is reached (clock skew) and 60s after it. One timer per
+  // boundary replaces a once-a-second tick that ran even in hidden views; the
+  // write lands in the timer callback, outside this effect's tracking.
+  $effect(() => {
+    const observed = Date.parse(quote?.buyer_book?.observed_at ?? '');
+    const at = now;
+    if (!Number.isFinite(observed)) return;
+    const next = at < observed ? observed : observed + 60_000;
+    if (next <= at) return;
+    const timer = setTimeout(() => { now = Date.now(); }, next - at);
+    return () => clearTimeout(timer);
   });
 </script>
 
