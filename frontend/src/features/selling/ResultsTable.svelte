@@ -112,6 +112,24 @@
   // the filter box is the fastest path through a 400-row table.
   let filterInput: HTMLInputElement | undefined = $state();
   let filterFocused = $state(false);
+  // The box shows filterDraft at once; filter, which re-sorts and re-pages
+  // the whole table, follows once typing pauses rather than on every key.
+  const FILTER_DELAY_MS = 150;
+  let filterDraft = $state('');
+  let filterTimer: ReturnType<typeof setTimeout> | undefined;
+  function applyFilter(value: string): void {
+    clearTimeout(filterTimer);
+    filterTimer = undefined;
+    if (value === filter) return;
+    filter = value;
+    page = 0;
+    heldOrder = null;
+  }
+  function typeFilter(): void {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(() => applyFilter(filterDraft), FILTER_DELAY_MS);
+  }
+  $effect(() => () => clearTimeout(filterTimer));
   // One light pass marks where '/' moved the cursor; a click needs no pointer.
   let filterPulse = $state(0);
   $effect(() => {
@@ -594,9 +612,9 @@
       class="name-filter"
       placeholder="Filter by name… ( / )"
       aria-label="Filter by name"
-      bind:value={filter}
+      bind:value={filterDraft}
       bind:this={filterInput}
-      oninput={() => { page = 0; heldOrder = null; }}
+      oninput={typeFilter}
       onfocus={() => (filterFocused = true)}
       onblur={() => (filterFocused = false)}
     />
@@ -768,7 +786,7 @@
       <button
         type="button"
         class="no-match-clear"
-        onclick={() => { filter = ''; activePills = new Set(); page = 0; }}
+        onclick={() => { filterDraft = ''; applyFilter(''); activePills = new Set(); page = 0; }}
       >Clear filters</button>
     </div>
   {/if}
