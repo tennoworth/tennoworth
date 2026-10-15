@@ -1,5 +1,5 @@
 {
-  "version": "0.8.105",
+  "version": "0.8.106",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1259,6 +1259,67 @@
           "kind": "fixed",
           "title": "Keep getting new prices after a bad download",
           "body": "An incomplete market snapshot is set aside in favour of the app's built-in one, and a snapshot stamped with a date far in the future no longer blocks newer data. The next refresh replaces either.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.106",
+      "date": "2026-10-14",
+      "changes": [
+        {
+          "id": "status-bar-overlap",
+          "kind": "fixed",
+          "title": "Read the status bar at any window size",
+          "body": "At some window widths the scan details and the Refresh button drew over the market age at the top of the window. The status bar now moves an item to a second line instead.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "lighter-scrolling",
+          "kind": "improved",
+          "title": "Scroll long tables more smoothly",
+          "body": "The background grid and the dotted table lines now take a fraction of the work to draw while you scroll, most noticeably on long tables such as Meta Drift.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "long-history-pages",
+          "kind": "improved",
+          "title": "Open long histories quickly",
+          "body": "Ledger, Rivens and Notifications show 100 entries at a time with Prev and Next, instead of every entry at once.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-filter-pause",
+          "kind": "improved",
+          "title": "Type in the Opportunities filter without lag",
+          "body": "The table updates once you pause typing, rather than after every key.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "rustls-0-23-46",
+          "kind": "fixed",
+          "title": "Keep connections to warframe.market up to date",
+          "body": "The library that secures the app's connections is updated to a release that fixes four newly published security issues.",
           "platforms": [
             "windows",
             "linux"
