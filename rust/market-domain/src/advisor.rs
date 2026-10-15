@@ -2,7 +2,7 @@ use market_math::stat_median as median;
 use chrono::{DateTime, NaiveDate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS, PartialEq)]
@@ -214,7 +214,48 @@ fn slope_reason(reasons: &mut Vec<String>, slope: Option<f64>) {
         reasons.push(format!("30 d move {}", pct(s)));
     }
 }
-fn advise(slug: &str, set: &str, request: &AdvisorRequest) -> Option<Verdict> {
+/// Vaulted items the current Resurgence brings back by another route: relics
+/// reissued for its frames also drop them. Measured over the year to 2026-10,
+/// such items fell with the frames and had not recovered four weeks later
+/// (26 of the 48 Resurgence dips), so they get the frames' verdict rather than
+/// the generic near-low hold.
+fn reprint_companions(market: &Value, mapping: &BTreeMap<String, String>) -> BTreeSet<String> {
+    let Some(frames) = market
+        .get("calendar")
+        .and_then(|c| c.get("resurgence_current"))
+        .and_then(|rc| rc.get("frames"))
+        .and_then(Value::as_array)
+    else {
+        return BTreeSet::new();
+    };
+    let frames: BTreeSet<&str> = frames.iter().filter_map(Value::as_str).collect();
+    let mut companions = BTreeSet::new();
+    for rewards in market
+        .get("relic_rewards")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(|relics| relics.values())
+        .filter_map(Value::as_array)
+    {
+        let slugs: Vec<&str> = rewards.iter().filter_map(|r| string(r, "reward_slug")).collect();
+        if slugs
+            .iter()
+            .any(|s| mapping.get(*s).is_some_and(|set| frames.contains(set.as_str())))
+        {
+            companions.extend(slugs.into_iter().map(str::to_string));
+        }
+    }
+    // A set comes back when any of its parts does; a part only by itself.
+    let sets: Vec<String> = companions.iter().filter_map(|c| mapping.get(c).cloned()).collect();
+    companions.extend(sets);
+    companions
+}
+fn advise(
+    slug: &str,
+    set: &str,
+    request: &AdvisorRequest,
+    companions: &BTreeSet<String>,
+) -> Option<Verdict> {
     let calendar = request.market.get("calendar")?;
     let cal = calendar.get("primes")?.get(set)?;
     if !cal.is_object() {
@@ -251,10 +292,14 @@ fn advise(slug: &str, set: &str, request: &AdvisorRequest) -> Option<Verdict> {
         });
     }
     if let Some(rc) = calendar.get("resurgence_current") {
-        let active = rc
+        let reprinted = rc
             .get("frames")
             .and_then(Value::as_array)
-            .is_some_and(|frames| frames.iter().any(|f| f.as_str() == Some(set)))
+            .is_some_and(|frames| frames.iter().any(|f| f.as_str() == Some(set)));
+        let companion = !reprinted
+            && cal.get("vaulted").and_then(Value::as_bool).unwrap_or(false)
+            && companions.contains(slug);
+        let active = (reprinted || companion)
             && string(rc, "from")
                 .and_then(date_ms)
                 .is_some_and(|d| d <= request.now_ms)
@@ -266,7 +311,11 @@ fn advise(slug: &str, set: &str, request: &AdvisorRequest) -> Option<Verdict> {
                 .and_then(date_ms)
                 .and_then(|ms| DateTime::from_timestamp_millis(ms as i64))
                 .map(|d| d.format("%Y-%m-%d").to_string())?;
-            let mut reasons = vec![format!("Prime Resurgence is reprinting it until {end}")];
+            let mut reasons = vec![if reprinted {
+                format!("Prime Resurgence is reprinting it until {end}")
+            } else {
+                format!("Prime Resurgence relics also drop it until {end}")
+            }];
             let falling = slope.is_some_and(|s| s <= -0.05);
             reasons.push(match slope {
                 Some(s) if falling => format!("price falling: {} over 30 d", pct(s)),
@@ -380,6 +429,7 @@ fn part_to_set(market: &Value) -> BTreeMap<String, String> {
 }
 pub fn advise_owned(request: AdvisorRequest) -> BTreeMap<String, Verdict> {
     let mapping = part_to_set(&request.market);
+    let companions = reprint_companions(&request.market, &mapping);
     let mut out = BTreeMap::new();
     if !request.now_ms.is_finite() {
         return out;
@@ -391,7 +441,7 @@ pub fn advise_owned(request: AdvisorRequest) -> BTreeMap<String, Verdict> {
     {
         if let Some(verdict) = mapping
             .get(slug)
-            .and_then(|set| advise(slug, set, &request))
+            .and_then(|set| advise(slug, set, &request, &companions))
         {
             out.insert(slug.clone(), verdict);
         }
