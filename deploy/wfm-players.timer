@@ -1,0 +1,7 @@
+[Unit]
+Description=Log Warframe's Steam player count every 15 minutes
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=60
+[Install]
+WantedBy=timers.target

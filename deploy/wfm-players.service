@@ -1,0 +1,21 @@
+[Unit]
+Description=Log Warframe's Steam concurrent-player count
+Wants=network-online.target
+After=network-online.target
+# No OnFailure alert: a missed tick is a gap in a research series, not an
+# outage anyone has to act on.
+
+[Service]
+Type=oneshot
+User=wfm
+Group=wfm
+ExecStart=/srv/wfm/log-players.sh
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/wfm/players
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallFilter=@system-service
