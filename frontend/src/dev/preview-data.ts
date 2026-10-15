@@ -89,6 +89,12 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       ...notifications[0], id: LONG - i, title: `Sample sale ${LONG - i}`, created_at: now - i * 3_600, read: i % 3 !== 0,
     }));
   }
+  const noOutcome = { listings: 0, quantity_listed: 0, quantity_sold: 0, within_day: { eligible: 0, sold: 0 }, within_week: { eligible: 0, sold: 0 }, median_hours_to_first_sale: null, price_ratio: null, priced_quantity: 0 };
+  let listingOutcomes = {
+    enabled: true, window_days: 30,
+    session: empty ? noOutcome : { listings: 6, quantity_listed: 14, quantity_sold: 9, within_day: { eligible: 5, sold: 3 }, within_week: { eligible: 4, sold: 4 }, median_hours_to_first_sale: 7.5, price_ratio: 0.96, priced_quantity: 7 },
+    manual: empty ? noOutcome : { listings: 3, quantity_listed: 3, quantity_sold: 1, within_day: { eligible: 3, sold: 0 }, within_week: { eligible: 2, sold: 1 }, median_hours_to_first_sale: 61, price_ratio: null, priced_quantity: 0 },
+  };
   let notificationPreferences = { popups: true, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
     fetch_orders: empty || scenario.startsWith('buyers') ? [] : [
@@ -190,6 +196,8 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
     if (command === 'get_notification_preferences') return structuredClone(notificationPreferences);
     if (command === 'set_notification_preferences') { if (scenario === 'preferences-error') throw new Error('Could not save notification preferences.'); notificationPreferences = JSON.parse(JSON.stringify(args?.preferences)) as typeof notificationPreferences; return structuredClone(notificationPreferences); }
     if (command === 'test_notification') return 'Test sent (preview).';
+    if (command === 'listing_outcomes') return structuredClone(listingOutcomes);
+    if (command === 'set_listing_outcomes') { listingOutcomes = { ...listingOutcomes, enabled: Boolean(args?.enabled), session: noOutcome, manual: noOutcome }; return null; }
     if (command === 'get_setting') return settings.get(String(args?.key)) ?? null;
     if (command === 'set_setting') { settings.set(String(args?.key), String(args?.value)); return null; }
     if (command in responses) {

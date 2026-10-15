@@ -60,6 +60,31 @@ test('a healthy ledger shows no pause notice', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   await expect(page.locator('.shell')).toBeVisible();
   await page.locator('.sidebar').getByRole('button', { name: /^Ledger/ }).click();
-  await expect(page.locator('.ledger tbody tr').first()).toBeVisible();
+  await expect(page.locator('.ledger .trade-history tbody tr').first()).toBeVisible();
   await expect(page.locator('.ui-notice[role="status"]').filter({ hasText: PAUSED })).toHaveCount(0);
 });
+
+// The outcome table is wider than a narrow window. It scrolls in its own region;
+// the note and the record toggle beside it must not be widened with it, which
+// once clipped both at the panel edge.
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} listing outcomes stay readable in a narrow, short window`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.goto('/?preview-desktop&sample');
+    await expect(page.locator('.shell')).toBeVisible();
+    await page.locator('.sidebar').getByRole('button', { name: /^Ledger/ }).click();
+    const block = page.locator('[data-testid="listing-outcomes"]');
+    await block.locator('summary').click();
+    await expect(block.getByRole('checkbox', { name: /Keep a record of listings/ })).toBeVisible();
+    const fits = await block.evaluate((details) => {
+      const edge = details.getBoundingClientRect().right;
+      const inside = [...details.querySelectorAll<HTMLElement>('.note, .setting-line')]
+        .every((el) => el.getBoundingClientRect().right <= edge + 1 && el.scrollWidth <= el.clientWidth + 1);
+      const table = details.querySelector<HTMLElement>('.scroll');
+      return { inside, tableScrolls: !!table && table.scrollWidth > table.clientWidth };
+    });
+    expect(fits).toEqual({ inside: true, tableScrolls: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+  });
+}

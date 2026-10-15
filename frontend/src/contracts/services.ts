@@ -1,4 +1,4 @@
-import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from './desktop';
+import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, ListingOutcomes } from './desktop';
 import type { UpdateNotesServices, UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
 import type { BaroStock, Inventory, Market, OwnedRecord } from './data';
@@ -38,6 +38,8 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopListWatches(): Promise<Watch[]>;
   desktopEelogStatus(): Promise<EeLogStatus>;
   desktopListTrades(limit?: number): Promise<TradeRow[]>;
+  desktopListingOutcomes(): Promise<ListingOutcomes>;
+  desktopSetListingOutcomes(enabled: boolean): Promise<void>;
   currentOverlayResult(): Promise<import('./data').RelicOverlayResult | null>;
   desktopNotificationPreferences(): Promise<NotificationPreferences>;
   desktopSaveNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences>;

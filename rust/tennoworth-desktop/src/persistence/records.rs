@@ -11,6 +11,39 @@ pub struct TradeRow {
     pub wfm_closed: bool,
 }
 
+/// Whether a listing came out of a Trade Session batch, so the two flows can be
+/// compared rather than blended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListingOrigin {
+    Session,
+    Manual,
+}
+
+impl ListingOrigin {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Session => "session",
+            Self::Manual => "manual",
+        }
+    }
+}
+
+/// One sell listing a TennoWorth batch created or updated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedItem {
+    pub plan_id: String,
+    pub plan_index: i64,
+    pub slug: String,
+    pub rank: Option<i64>,
+    pub subtype: Option<String>,
+    pub platinum: i64,
+    pub quantity: i64,
+    pub origin: ListingOrigin,
+    /// Unix seconds.
+    pub listed_at: i64,
+    pub order_id: Option<String>,
+}
+
 /// A price watch, as stored and as handed to the SPA.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Watch {

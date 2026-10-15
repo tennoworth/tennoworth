@@ -6,6 +6,7 @@ import { renderDesktop as render } from '../../dev/render-desktop';
 import LedgerPanel from './LedgerPanel.svelte';
 import { installTauri, removeTauri } from '../../dev/test-utils';
 import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
+import type { ListingOutcomes } from '../../contracts/desktop';
 
 afterEach(() => { cleanup(); removeTauri(); vi.restoreAllMocks(); });
 
@@ -114,6 +115,60 @@ describe('LedgerPanel', () => {
     expect(box.checked).toBe(true);
     await fireEvent.click(box);
     await waitFor(() => expect(onsetautoclose).toHaveBeenCalledWith(false));
+  });
+});
+
+describe('LedgerPanel listing outcomes', () => {
+  const none = { listings: 0, quantity_listed: 0, quantity_sold: 0, within_day: { eligible: 0, sold: 0 }, within_week: { eligible: 0, sold: 0 }, median_hours_to_first_sale: null, price_ratio: null, priced_quantity: 0 };
+  const sample: ListingOutcomes = {
+    enabled: true, window_days: 30,
+    session: { listings: 4, quantity_listed: 10, quantity_sold: 6, within_day: { eligible: 4, sold: 2 }, within_week: { eligible: 3, sold: 3 }, median_hours_to_first_sale: 5.2, price_ratio: 0.95, priced_quantity: 5 },
+    manual: none,
+  };
+
+  function installOutcomes(initial: ListingOutcomes | Error) {
+    let current = initial;
+    const invoke = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === 'list_trades') return trades;
+      if (cmd === 'eelog_status') return { path: '/x/EE.log', auto_close: true, recording: 'recording' };
+      if (cmd === 'listing_outcomes') { if (current instanceof Error) throw current; return current; }
+      if (cmd === 'set_listing_outcomes') { current = { ...(current as ListingOutcomes), enabled: Boolean(args?.enabled), session: none, manual: none }; return null; }
+      throw new Error(`unexpected ${cmd}`);
+    });
+    installTauri(invoke, undefined);
+    return invoke;
+  }
+
+  it('summarises listings in a closed disclosure, omitting a group with none', async () => {
+    installOutcomes(sample);
+    render(LedgerPanel, { props: {} });
+    const block = await screen.findByTestId('listing-outcomes');
+    expect((block as HTMLDetailsElement).open).toBe(false);
+    expect(block.textContent).toContain('4 listings in 30 days · 3 of 3 sold within a week');
+    expect(screen.getByText('Trade Session')).toBeTruthy();
+    expect(screen.queryByText('Other listings')).toBeNull();
+    expect(screen.getByText('6 of 10')).toBeTruthy();
+    expect(screen.getByText('5 h')).toBeTruthy();
+    expect(screen.getByText('95%')).toBeTruthy();
+  });
+
+  it('turning the record off saves it and shows it as off', async () => {
+    const invoke = installOutcomes(sample);
+    render(LedgerPanel, { props: {} });
+    const box = (await screen.findByLabelText(/Keep a record of listings/)) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    await fireEvent.click(box);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('set_listing_outcomes', { enabled: false }));
+    await waitFor(() => expect(screen.getByTestId('listing-outcomes').textContent).toContain('· off'));
+    expect(screen.queryByText('Trade Session')).toBeNull();
+  });
+
+  it('a failed outcome read leaves the ledger working and shows no block', async () => {
+    installOutcomes(new Error('no such table'));
+    render(LedgerPanel, { props: {} });
+    await screen.findByText('+25p');
+    expect(screen.queryByTestId('listing-outcomes')).toBeNull();
+    expect(screen.queryByText(/no such table/)).toBeNull();
   });
 });
 

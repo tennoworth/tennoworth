@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { totals, since, soldByItem, describeItems } from './ledger.js';
+import { totals, since, soldByItem, describeItems, outcomeRows, outcomeHeadline } from './ledger.js';
 
 const t = (kind, plat, at, items) => ({ id: at, at, partner: 'P', kind, plat, items, log_stamp: null, wfm_closed: false });
 const g = (name, qty = 1) => ({ name, qty, direction: 'given' });
@@ -37,5 +37,26 @@ describe('ledger', () => {
     expect(describeItems(t('purchase', 1, 1, [r('Ash Prime Blueprint', 2)]))).toBe('Ash Prime Blueprint ×2');
     expect(describeItems(t('trade', 0, 1, [g('A'), r('B')]))).toBe('A');
     expect(describeItems(t('sale', 0, 1, []))).toBe('-');
+  });
+});
+
+describe('listing outcomes', () => {
+  const none = { listings: 0, quantity_listed: 0, quantity_sold: 0, within_day: { eligible: 0, sold: 0 }, within_week: { eligible: 0, sold: 0 }, median_hours_to_first_sale: null, price_ratio: null, priced_quantity: 0 };
+  const o = (session, manual = none, enabled = true) => ({ enabled, window_days: 30, session, manual });
+
+  it('shows unknowns as a dash, never as zero', () => {
+    const [row] = outcomeRows(o({ ...none, listings: 2, quantity_listed: 2 }));
+    expect(row).toMatchObject({ label: 'Trade Session', sold: '0 of 2', day: '-', week: '-', wait: '-', price: '-' });
+  });
+
+  it('formats waits in hours, then days', () => {
+    const wait = (h) => outcomeRows(o({ ...none, listings: 1, median_hours_to_first_sale: h }))[0].wait;
+    expect([wait(0.4), wait(5.2), wait(47.6), wait(61)]).toEqual(['under 1 h', '5 h', '48 h', '2.5 d']);
+  });
+
+  it('says when nothing is old enough to judge, or when it is off', () => {
+    expect(outcomeHeadline(o({ ...none, listings: 1 }))).toBe('1 listing in 30 days · too recent to judge');
+    expect(outcomeHeadline(o(none))).toBe('none in the last 30 days');
+    expect(outcomeHeadline(o(none, none, false))).toBe('off');
   });
 });

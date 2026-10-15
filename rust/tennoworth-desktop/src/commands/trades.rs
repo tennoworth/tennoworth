@@ -75,6 +75,28 @@ pub fn list_trades(db: State<'_, Db>, limit: Option<i64>) -> Result<Vec<TradeRow
         .map_err(|e| CmdError::internal(format!("list trades: {e}")))
 }
 
+#[tauri::command]
+pub fn listing_outcomes(
+    app: AppHandle,
+    db: State<'_, Db>,
+) -> Result<crate::services::outcomes::ListingOutcomes, CmdError> {
+    let market = crate::services::sellables::MarketData::load(
+        &app.state::<crate::services::market::MarketCache>(),
+    );
+    crate::services::outcomes::read(
+        &db,
+        &|name| market.report_item(name).map(|(slug, _)| slug),
+        crate::services::unix_now(),
+    )
+    .map_err(|e| CmdError::internal(format!("listing outcomes: {e}")))
+}
+
+#[tauri::command]
+pub fn set_listing_outcomes(db: State<'_, Db>, enabled: bool) -> Result<(), CmdError> {
+    crate::services::outcomes::set_enabled(&db, enabled)
+        .map_err(|e| CmdError::internal(format!("listing outcomes: {e}")))
+}
+
 #[derive(serde::Serialize)]
 pub struct EeLogStatus {
     /// The EE.log path being tailed, or null when the game's log could not be

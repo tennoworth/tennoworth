@@ -1,13 +1,17 @@
 mod inventory;
 pub(crate) mod keyring_store;
 mod notifications;
+mod outcomes;
 mod records;
 mod schema;
 mod settings;
 pub(crate) mod snapshot;
 mod trades;
 mod watches;
-pub(crate) use records::{NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow, Watch};
+pub(crate) use records::{
+    ListedItem, ListingOrigin, NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow, Watch,
+};
+pub(crate) use outcomes::RETENTION_SECS as LISTING_RETENTION_SECS;
 use schema::MIGRATIONS;
 
 // Canonical desktop state store (SQLite via rusqlite `bundled`). This is the
@@ -164,6 +168,7 @@ mod tests {
         assert_eq!(
             names,
             vec![
+                "listing_outcome".to_string(),
                 "notification".to_string(),
                 "notification_checkpoint".to_string(),
                 "reserve".to_string(),

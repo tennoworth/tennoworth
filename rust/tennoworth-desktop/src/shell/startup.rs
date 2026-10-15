@@ -137,6 +137,8 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::commands::watch::check_watches_now,
             crate::commands::trades::list_trades,
             crate::commands::trades::eelog_status,
+            crate::commands::trades::listing_outcomes,
+            crate::commands::trades::set_listing_outcomes,
             crate::commands::trades::trade_session_state,
             crate::commands::market::tray_state,
             crate::shell::update::check_update,

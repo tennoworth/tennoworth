@@ -25,6 +25,7 @@ export interface MarketRefreshResult {
  * desktop loop stores and reports.
  */
 export type { AutoScanSettings, AutoScanStatus } from './generated/desktop';
+export type { ListingOutcomes, OutcomeGroup } from './generated/desktop';
 export { AUTO_SCAN_CADENCE_CHOICES, APP_ICON_COLOURS } from './generated/desktop';
 import type { AutoScanSettings, AutoScanStatus, NotificationContent, AppIconOutcome } from './generated/desktop';
 import type { APP_ICON_COLOURS } from './generated/desktop';

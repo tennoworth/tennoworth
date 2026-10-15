@@ -13,6 +13,7 @@ fn desktop_bindings_match_rust() {
     types.add::<crate::services::presence::PresenceProblem>();
     types.add::<crate::services::presence::PresenceStatus>();
     types.add::<super::listing::OwnOrder>();
+    types.add::<crate::services::outcomes::ListingOutcomes>();
     types.add::<crate::notification_contract::NotificationContent>();
     types.add::<crate::services::announcements::AnnouncementFeed>();
     types.add::<crate::shell::app_icon::AppIconOutcome>();

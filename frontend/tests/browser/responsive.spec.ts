@@ -238,7 +238,7 @@ test('populated workspaces keep their content through width and height changes',
     ['Sell', '.col-name'], ['Set picks', '.set-table tbody tr'], ['Relics', '.relic-table tbody tr'],
     ['Rivens', '.weapon'], ['Baro', '.baro-card'], ['Routines', '.routine'],
     ['Meta Drift', '.meta-drift tbody tr'], ['My orders', '.orders tbody tr'],
-    ['Price watches', '.watchlist tbody tr'], ['Ledger', '.ledger tbody tr'],
+    ['Price watches', '.watchlist tbody tr'], ['Ledger', '.ledger .trade-history tbody tr'],
     ['FAQ', '.faq'], ['Settings', '.settings'],
   ];
   for (const [view, content] of surfaces) {
@@ -327,7 +327,7 @@ test.describe('desktop responsive layout', () => {
     await page.goto('/?preview-desktop&sample=long-history');
     await page.locator('.shell').waitFor();
     const lists = [
-      ['Ledger', 'Trade history pages', 'tbody > tr'],
+      ['Ledger', 'Trade history pages', '.trade-history tbody > tr'],
       ['Rivens', 'Riven pages', 'tbody > tr'],
       ['Notifications', 'Notification pages', '.history > li > ol > li'],
     ] as const;
