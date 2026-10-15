@@ -2098,3 +2098,67 @@ describe.skipIf(process.platform === 'win32')('lxc backup pull and verify', () =
     }
   });
 });
+
+// ---- Steam player-count logger ----------------------------------------------
+
+// The series is only useful if a gap stays a gap: a failed call or an
+// unexpected body that wrote `0` would read as nobody playing.
+describe.skipIf(process.platform === 'win32')('player-count logger', () => {
+  const script = fileURLToPath(new URL('../deploy/log-players.sh', import.meta.url));
+
+  function playersFixture(curl: string) {
+    const root = mkdtempSync(join(tmpdir(), 'players-')); directories.push(root);
+    const bin = join(root, 'bin'); mkdirSync(bin);
+    const dir = join(root, 'players');
+    write(join(bin, 'curl'), `#!/bin/sh\n${curl}\n`);
+    chmodSync(join(bin, 'curl'), 0o755);
+    for (const tool of ['sed', 'date', 'grep', 'mkdir']) {
+      const real = execFileSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf8' }).trim();
+      write(join(bin, tool), `#!/bin/sh\nexec ${real} "$@"\n`);
+      chmodSync(join(bin, tool), 0o755);
+    }
+    const run = () => spawnSync('/bin/sh', [script], { encoding: 'utf8', env: { PATH: bin, PLAYERS_DIR: dir } });
+    const rows = () => (existsSync(dir)
+      ? readdirSync(dir).flatMap(name => readFileSync(join(dir, name), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line)))
+      : []);
+    return { run, rows, dir };
+  }
+
+  test('appends one row per tick to the month file', () => {
+    const f = playersFixture(`printf '{"response":{"player_count":70198,"result":1}}'`);
+    expect(f.run().status).toBe(0);
+    expect(f.run().status).toBe(0);
+    const rows = f.rows();
+    expect(rows).toHaveLength(2);
+    expect(rows[0].player_count).toBe(70198);
+    expect(rows[0].at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(readdirSync(f.dir)).toEqual([`players-${new Date().toISOString().slice(0, 7)}.jsonl`]);
+  });
+
+  test('a failed request writes nothing and fails the unit', () => {
+    const f = playersFixture('exit 22');
+    expect(f.run().status).not.toBe(0);
+    expect(f.rows()).toEqual([]);
+  });
+
+  test('a non-success result code is not a count', () => {
+    const f = playersFixture(`printf '{"response":{"player_count":0,"result":42}}'`);
+    expect(f.run().status).not.toBe(0);
+    expect(f.rows()).toEqual([]);
+  });
+
+  test('a body without a count writes nothing', () => {
+    const f = playersFixture(`printf '{"response":{"result":1}}'`);
+    expect(f.run().status).not.toBe(0);
+    expect(f.rows()).toEqual([]);
+  });
+
+  test('the checkout puller keeps the script current and reports unit drift', () => {
+    const pullApp = readFileSync(puller, 'utf8');
+    expect(pullApp).toMatch(/for f in [^;]*log-players\.sh/);
+    expect(pullApp).toMatch(/for u in [^;]*wfm-players /);
+    const unit = readFileSync(fileURLToPath(new URL('../deploy/wfm-players.service', import.meta.url)), 'utf8');
+    expect(unit).toContain('ExecStart=/srv/wfm/log-players.sh');
+    expect(unit).toContain('ReadWritePaths=/srv/wfm/players');
+  });
+});
