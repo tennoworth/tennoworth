@@ -62,7 +62,7 @@ TennoWorth Desktop 0.8.106 is ready.
 
 This release keeps the app quick as your history grows. The status bar no longer draws over itself at some window sizes, scrolling long tables takes far less work, and long lists such as your trade ledger open a page at a time instead of all at once.
 
-## Changelog (4)
+## Changelog (5)
 
 ### Layout
 
@@ -73,6 +73,10 @@ This release keeps the app quick as your history grows. The status bar no longer
 - **Scroll long tables more smoothly** The background grid and the dotted table lines now take a fraction of the work to draw while you scroll, most noticeably on long tables such as Meta Drift. <!-- app-note {"id":"lighter-scrolling","kind":"improved"} -->
 - **Open long histories quickly** Ledger, Rivens and Notifications show 100 entries at a time with Prev and Next, instead of every entry at once. <!-- app-note {"id":"long-history-pages","kind":"improved"} -->
 - **Type in the Opportunities filter without lag** The table updates once you pause typing, rather than after every key. <!-- app-note {"id":"sell-filter-pause","kind":"improved"} -->
+
+### Security
+
+- **Keep connections to warframe.market up to date** The library that secures the app's connections is updated to a release that fixes four newly published security issues. <!-- app-note {"id":"rustls-0-23-46","kind":"fixed"} -->
 
 ## Updating
 

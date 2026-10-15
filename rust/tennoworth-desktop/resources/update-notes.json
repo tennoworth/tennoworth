@@ -1314,6 +1314,17 @@
             "linux"
           ],
           "supersedes": []
+        },
+        {
+          "id": "rustls-0-23-46",
+          "kind": "fixed",
+          "title": "Keep connections to warframe.market up to date",
+          "body": "The library that secures the app's connections is updated to a release that fixes four newly published security issues.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
         }
       ]
     }
