@@ -1,6 +1,6 @@
 <script lang="ts">
 import { ago, marketFreshness as marketFreshnessBucket } from '../ui/format';
-import { onMount } from 'svelte';
+import { onMount, tick } from 'svelte';
 import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
 import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
 import DesktopShowcase from '../features/market-context/DesktopShowcase.svelte';
@@ -48,6 +48,15 @@ let displayNow = $state(Date.now());
 // A tab left open used to rank the first snapshot's prices forever while the
 // age label kept counting. Only a newer valid snapshot replaces the shown one,
 // so search and other page state carry over, and a failed check changes nothing.
+// A #calendar, #faq or #trust link points into sections that render only once
+// the market arrives, after the browser's own anchor scroll has given up.
+let anchorDone = false;
+$effect(() => {
+  if (anchorDone || !(market || marketError)) return;
+  anchorDone = true;
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (id) void tick().then(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+});
 onMount(() => startHostedMarketRevalidation(async () => {
   if (!market) return;
   const next = await revalidateMarket(market);
@@ -95,7 +104,15 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
       </div>
       <DesktopShowcase />
     {:else if !market}
-      <p class="ui-notice" role="status">Loading market prices…</p>
+      <!-- The market panels' space is held while the snapshot loads, so the
+           sections below never sit at the top and then drop ~3000px when it
+           arrives (a refresh read as a jump to Community usage and back). -->
+      <div data-shell class="landing-loading">
+        <p class="ui-notice" role="status">Loading market prices…</p>
+        <div data-shell class="restoring" aria-hidden="true">
+          {#each { length: 10 }, i (i)}<div data-shell class="ph-row"><span data-shell></span><span data-shell></span><span data-shell></span></div>{/each}
+        </div>
+      </div>
     {:else}
       
         <!-- Hosted: the browser hands the visitor off to the desktop app with
@@ -124,8 +141,11 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
       <CalendarView {market} now={displayNow} loadAnnouncements={() => transport.loadAnnouncements()} {store} surface="hosted" />
     </div>
   {/if}
-  <UsageChart />
-  <Faq />
+  <!-- Later sections wait for the market, so the page never shows them first. -->
+  {#if market || marketError}
+    <UsageChart />
+    <Faq />
+  {/if}
 
   <footer data-shell class="sitefoot">
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>

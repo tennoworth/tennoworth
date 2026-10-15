@@ -185,8 +185,17 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
   }
+  /* The tagline takes whatever room the other cells leave and truncates
+     rather than counting toward wrapping: sized by its full text, the brand
+     pushed the links onto a second row the moment the market age arrived,
+     dropping the whole page 40px after load. */
   main.landing > .statusbar .brand[data-shell],
-  .desktop-landing > .statusbar .brand[data-shell] { flex: 1 1 auto; }
+  .desktop-landing > .statusbar .brand[data-shell] { flex: 1 1 0; min-width: min-content; }
+  main.landing > .statusbar .brand .sub[data-shell],
+  .desktop-landing > .statusbar .brand .sub[data-shell] { flex: 1 1 0; width: 0; min-width: 0; }
+  /* The brand takes the slack itself, so the spacer would only halve it. */
+  main.landing > .statusbar .grow[data-shell],
+  .desktop-landing > .statusbar .grow[data-shell] { display: none; }
 
   /* Sidebar - nav only, sticky under the strip; the theme switcher and the
      build string sit in its foot. */
@@ -897,6 +906,9 @@ dialog.feedback-dialog .feedback-check[data-shell] { flex-direction: row; font-f
 .restoring .ph-row[data-shell] { display: grid; grid-template-columns: minmax(0, 3fr) 1fr 1fr; gap: var(--s4); align-items: center; min-height: var(--row); padding: 0 var(--inset); border-bottom: 1px var(--rule) var(--hairline); }
 .restoring .ph-row span[data-shell] { display: block; height: 0.45rem; background: var(--hairline); }
 .restoring .ph-row span + span[data-shell] { width: 50%; justify-self: end; }
+/* The hosted landing holds a full screen while the market loads, keeping the
+   usage chart, FAQ and footer below the fold until their place is known. */
+.landing-loading[data-shell] { display: flex; flex-direction: column; gap: var(--stack); min-height: 100dvh; }
 .restoring .ph-gap[data-shell] { height: var(--s5); background: var(--bg); border-block: 1px solid var(--border); }
 /* A visited view stays mounted while another is on screen (it keeps its
    search, scroll and drafts); the pane carries the workspace rhythm. */

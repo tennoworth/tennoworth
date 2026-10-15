@@ -102,6 +102,48 @@ async function openDesktop(page: Page): Promise<void> {
 }
 
 test.describe('hosted responsive layout', () => {
+  // Holds /market.json until released, so the loading state can be inspected.
+  async function holdMarket(page: Page): Promise<() => void> {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    await page.route('**/market.json', async (route) => { await gate; await route.continue(); });
+    return release;
+  }
+
+  test('keeps later sections in place while the market loads', async ({ page, browserName }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { shift: number }).shift = 0;
+      try {
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) {
+            if (!entry.hadRecentInput) (window as unknown as { shift: number }).shift += entry.value;
+          }
+        }).observe({ type: 'layout-shift', buffered: true });
+      } catch { /* WebKit does not report layout shifts */ }
+    });
+    const release = await holdMarket(page);
+    await page.goto('/');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading market prices' })).toBeVisible();
+    // A refresh used to show Community usage at the top, then drop it ~3000px.
+    await expect(page.locator('#community-usage')).toHaveCount(0);
+    const footer = await page.locator('.sitefoot').boundingBox();
+    expect(footer!.y, 'the footer waits below the fold').toBeGreaterThanOrEqual(page.viewportSize()!.height);
+    release();
+    await expect(page.getByTestId('market-browser')).toBeVisible();
+    await expect(page.locator('#community-usage')).toBeVisible();
+    if (browserName === 'chromium') {
+      expect(await page.evaluate(() => (window as unknown as { shift: number }).shift), 'cumulative layout shift').toBeLessThan(0.1);
+    }
+  });
+
+  test('lands a deep link on its section once the market arrives', async ({ page }) => {
+    const release = await holdMarket(page);
+    await page.goto('/#trust');
+    await expect(page.getByRole('status').filter({ hasText: 'Loading market prices' })).toBeVisible();
+    release();
+    await expect(page.locator('#trust')).toBeInViewport();
+  });
+
   test('reflows continuously without losing table labels', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByTestId('market-browser')).toBeVisible();

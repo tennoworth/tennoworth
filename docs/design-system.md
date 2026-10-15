@@ -186,7 +186,11 @@ the first-run page appears only once the saved scan is known to be absent.
 Placeholders are static hairline bars at the final row height (no shimmer),
 and Top Picks holds its place while sale values calculate, so the table below
 does not drop when they arrive. Nav entries that depend on prices stay in
-place while the market snapshot loads.
+place while the market snapshot loads. The hosted landing holds a screen of
+placeholder rows under its loading notice, and the sections that follow the
+market (Community usage, Questions) wait for it, so a refresh never shows them
+at the top and then drops them below the market panels. A deep link into
+those sections lands once they render.
 
 A visited view stays mounted while another is on screen, so its search, page,
 scroll and drafts survive the trip; global shortcuts act only on the view on
@@ -504,6 +508,16 @@ the lit edges. The canvas ignores the pointer, is hidden from assistive
 technology and never replaces the focus outline; the animation stops when the
 window is hidden or the field is off screen. Select Field shimmer in the living
 styleguide's Data state control.
+
+### Landing strip tagline
+
+The landing strips' tagline beside the brand (hosted site and desktop first
+run) takes only the room the status cells leave and truncates with an
+ellipsis, an exception to "truncation needs an accessible full value". It
+repeats the page's statement, so nothing is lost. Sized by its full text, it
+used to wrap the site links onto a second row as soon as the market age
+loaded, dropping the page 40px after every load. Verified on the hosted
+landing in both themes from 320 to 1440px.
 
 For any additional exception, document the surface, the rule being varied, why
 the shared pattern is unsuitable, and the verification performed. Broad visual
