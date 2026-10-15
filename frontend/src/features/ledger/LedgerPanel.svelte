@@ -1,12 +1,12 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopEelogStatus, desktopListTrades, listenForTauriEvent } = useDesktopServices();
+  const { desktopEelogStatus, desktopListTrades, desktopListingOutcomes, desktopSetListingOutcomes, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy } from 'svelte';
 
 import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
-import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contracts/desktop';
-  
-  import { totals, since, soldByItem, describeItems } from '../../domain/ledger';
+import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeRow } from '../../contracts/desktop';
+
+  import { totals, since, soldByItem, describeItems, outcomeRows, outcomeHeadline } from '../../domain/ledger';
   import { humanError } from '../../contracts/errors';
   import Toast from '../../ui/Toast.svelte';
   import Pager from '../../ui/Pager.svelte';
@@ -25,6 +25,9 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   let loadError = $state<string | null>(null);
   let autoClose = $state(true);
   let savingAutoClose = $state(false);
+  /** Null until read, and when the read failed: the ledger must not fail with it. */
+  let outcomes = $state<ListingOutcomes | null>(null);
+  let savingOutcomes = $state(false);
   let loadGeneration = 0;
   let disposed = false;
 
@@ -52,10 +55,15 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   async function load(): Promise<void> {
     const generation = ++loadGeneration;
     try {
-      const [rows, st] = await Promise.all([desktopListTrades(500), desktopEelogStatus()]);
+      const [rows, st, listed] = await Promise.all([
+        desktopListTrades(500),
+        desktopEelogStatus(),
+        desktopListingOutcomes().catch(() => null),
+      ]);
       if (disposed || generation !== loadGeneration) return;
       trades = rows;
       status = st;
+      outcomes = listed;
       autoClose = st.auto_close;
       loadError = null;
     } catch (e) {
@@ -96,6 +104,21 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
       savingAutoClose = false;
     }
   }
+
+  async function toggleOutcomes(): Promise<void> {
+    if (!outcomes || savingOutcomes) return;
+    savingOutcomes = true;
+    try {
+      await desktopSetListingOutcomes(!outcomes.enabled);
+      outcomes = await desktopListingOutcomes();
+    } catch (e) {
+      pushToast(`Couldn't save: ${humanError(e)}`, 'error');
+    } finally {
+      savingOutcomes = false;
+    }
+  }
+
+  let outcomeTable = $derived(outcomes ? outcomeRows(outcomes) : []);
 
   const nowSecs = () => Math.floor(Date.now() / 1000);
   let all = $derived(totals(trades));
@@ -162,6 +185,39 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
 
   <section class="wrap tw" aria-labelledby="ledger-history-title">
     <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}{#if trades.length} · {all.sales} sold · {all.purchases} bought{/if}</span></div>
+  <!-- Closed by default and never announced: it answers "did listing through
+       TennoWorth work?" for whoever opens it, and is silent otherwise. -->
+  {#if outcomes && !loadError}
+    <details class="byitem outcomes" data-testid="listing-outcomes">
+      <summary>Listing outcomes <span class="muted">· {outcomeHeadline(outcomes)}</span></summary>
+      {#if outcomes.enabled && outcomeTable.length}
+        <p class="muted note">From listings TennoWorth sent on this device in the last {outcomes.window_days} days, and the sales the game logged while TennoWorth was running. Sales are matched by item name, so a rank or refinement is not told apart.</p>
+        <div class="scroll">
+          <table class="tw fixed outcome-table">
+            <colgroup><col style="width:9rem" /><col style="width:6rem" /><col style="width:8rem" /><col style="width:8rem" /><col style="width:8rem" /><col style="width:9rem" /><col style="width:9rem" /></colgroup>
+            <thead><tr><th class="l">Listed from</th><th class="r">Listings</th><th class="r">Copies sold</th><th class="r">Sold in a day</th><th class="r">Sold in a week</th><th class="r">Time to first sale</th><th class="r">Price vs listed</th></tr></thead>
+            <tbody>
+              {#each outcomeTable as row (row.label)}
+                <tr>
+                  <td class="l">{row.label}</td>
+                  <td class="mono r">{row.listings}</td>
+                  <td class="mono r">{row.sold}</td>
+                  <td class="mono r">{row.day}</td>
+                  <td class="mono r">{row.week}</td>
+                  <td class="mono r">{row.wait}</td>
+                  <td class="mono r" title={row.priceTitle}>{row.price}</td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+      <div class="setting-line">
+        <label class="check" for="ledger-outcomes"><input id="ledger-outcomes" type="checkbox" checked={outcomes.enabled} onchange={toggleOutcomes} disabled={savingOutcomes} /> Keep a record of listings sent from TennoWorth</label>
+        <span class="muted">Stays on this device. Turning it off deletes the record.</span>
+      </div>
+    </details>
+  {/if}
   {#if loadError}
     <div class="ui-notice" data-tone="bad" role="alert">Couldn't load the ledger: {loadError}</div>
   {:else if trades.length === 0}
@@ -179,7 +235,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     {/if}
 
     <div class="scroll" bind:this={historyEl}>
-      <table class="tw fixed">
+      <table class="tw fixed trade-history">
         <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:17rem" /><col style="width:7rem" /><col style="width:11rem" /></colgroup>
         <thead><tr><th>When</th><th>Trade</th><th class="l">Items</th><th>With</th><th class="r">Plat</th><th>Listing</th></tr></thead>
         <tbody>
@@ -214,6 +270,12 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   .byitem summary { cursor: pointer; font-size: var(--text-control); }
   .byitem ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-control); }
   .byitem li { display: flex; justify-content: space-between; gap: var(--s3); }
+  /* minmax(0, …): the wide table scrolls in its own region instead of widening
+     the column, which clipped the note and the toggle in narrow windows. */
+  .outcomes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+  .outcomes .note { margin: var(--s2) 0 0; font-size: var(--text-control); max-width: 70ch; }
+  .outcomes .setting-line { border-block-end: 0; }
+  table.outcome-table { min-width: 57rem; }
   table { min-width: 70rem; }
   .r { text-align: right; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }

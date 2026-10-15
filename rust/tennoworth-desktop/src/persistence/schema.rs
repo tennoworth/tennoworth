@@ -129,4 +129,24 @@ DROP TABLE IF EXISTS listing_log;
     r#"
 ALTER TABLE notification ADD COLUMN content TEXT;
 "#,
+    // What was listed through TennoWorth, so the Ledger can say how those
+    // listings did. Only the listing is stored: what sold is derived from the
+    // trade ledger when it is read, so nothing is copied twice. Unlike
+    // listing_log it has a reader from the start and is pruned on write.
+    r#"
+CREATE TABLE listing_outcome (
+  id INTEGER PRIMARY KEY,
+  plan_id TEXT NOT NULL,
+  plan_index INTEGER NOT NULL,
+  slug TEXT NOT NULL,
+  rank INTEGER,
+  subtype TEXT,
+  platinum INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  origin TEXT NOT NULL CHECK(origin IN ('session','manual')),
+  listed_at INTEGER NOT NULL          -- unix seconds
+);
+CREATE UNIQUE INDEX listing_outcome_plan_item ON listing_outcome(plan_id, plan_index);
+CREATE INDEX listing_outcome_listed_at ON listing_outcome(listed_at);
+"#,
 ];

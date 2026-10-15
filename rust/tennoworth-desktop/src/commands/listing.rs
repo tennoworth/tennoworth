@@ -256,6 +256,13 @@ fn finish_plan(path: &std::path::Path, response: &mut PlanResponse) {
     }
 }
 
+/// After the journal is settled, never before: this record must not be able to
+/// hold a finished batch's journal open, which is what retired listing_log.
+fn record_outcomes(app: &AppHandle, items: &[PlanItem], response: &PlanResponse) {
+    let db = app.state::<Db>();
+    crate::services::outcomes::record(&db, &response.plan_id, items, &response.results, crate::services::unix_now());
+}
+
 fn finished_plan_response(pending: &PendingPlan) -> PlanResponse {
     PlanResponse {
         plan_id: pending.plan_id.clone(),
@@ -308,6 +315,7 @@ pub async fn submit_plan(
             || validate_session_plan(&app, &reviewed),
         ));
         finish_plan(s.pending_path(), &mut response);
+        record_outcomes(&app, &reviewed, &response);
         Ok::<_, CmdError>(response)
     })
     .await
@@ -361,18 +369,20 @@ pub async fn resume_pending_plan(
         };
         let request = s.claim_plan_request(request_id)?;
         let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
         if pending.is_finished() {
             let _guard = mutations.begin_only()?;
             let mut response = finished_plan_response(&pending);
             finish_plan(s.pending_path(), &mut response);
+            record_outcomes(&app, &reviewed, &response);
             return Ok::<_, CmdError>(response);
         }
         let (_guard, unlocked) = mutations.begin()?;
-        let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
         let mut response = wfm_client::governor::with_context(request.context(), || run_pending(s.pending_path(), &unlocked, &mut pending, || {
             validate_session_plan(&app, &reviewed)
         }));
         finish_plan(s.pending_path(), &mut response);
+        record_outcomes(&app, &reviewed, &response);
         Ok::<_, CmdError>(response)
     })
     .await

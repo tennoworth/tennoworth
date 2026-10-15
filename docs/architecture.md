@@ -245,6 +245,13 @@ leaves the journal for recovery; finished records can retry cleanup without
 contacting the market. Only an absent journal permits a new batch, and an
 explicit discard removes a saved record.
 
+Only after that cleanup does the desktop record the batch's confirmed sell
+listings in `listing_outcome`, and a failure there is logged, never reported as
+a batch failure, so this record cannot hold a journal open. The Ledger derives
+what sold by joining it with the trade ledger when it reads the summary;
+nothing about the sale is copied. Writes prune rows older than 180 days, and
+turning the record off deletes it.
+
 ## Structural choices and remaining limits
 
 The old single application component mixed runtime selection, feature state,

@@ -2,7 +2,7 @@ import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
 import { isMarket } from '../domain/market';
-import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome, PresenceChoice, PresenceSettings, PresenceStatus } from '../contracts/desktop';
+import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, ListingOutcomes, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome, PresenceChoice, PresenceSettings, PresenceStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
 export async function desktopAnnouncements(): Promise<import('../contracts/generated/desktop').AnnouncementFeed | null> {
@@ -370,6 +370,14 @@ export async function desktopCheckWatchesNow(): Promise<WatchOutcome[]> {
 
 export async function desktopListTrades(limit = 200): Promise<TradeRow[]> {
   try { return await resolveInvoke()<TradeRow[]>('list_trades', { limit }); } catch (e) { rethrowInvoke(e); }
+}
+
+export async function desktopListingOutcomes(): Promise<ListingOutcomes> {
+  try { return await resolveInvoke()<ListingOutcomes>('listing_outcomes'); } catch (e) { rethrowInvoke(e); }
+}
+
+export async function desktopSetListingOutcomes(enabled: boolean): Promise<void> {
+  try { await resolveInvoke()('set_listing_outcomes', { enabled }); } catch (e) { rethrowInvoke(e); }
 }
 
 export async function desktopEelogStatus(): Promise<EeLogStatus> {

@@ -62,6 +62,8 @@ export type DigestNotification = { opportunities: Array<DigestOpportunity>, inve
 
 export type DigestOpportunity = { name: string, quantity: number, price: number, };
 
+export type ListingOutcomes = { enabled: boolean, window_days: number, session: OutcomeGroup, manual: OutcomeGroup, };
+
 export type NotificationContent = { "kind": "announcement" } & AnnouncementNotification | { "kind": "baro" } & BaroNotification | { "kind": "digest" } & DigestNotification;
 
 export type OfficialEvent = { id: string, kind: string, title: string, starts_at: string,
@@ -71,6 +73,17 @@ export type OfficialEvent = { id: string, kind: string, title: string, starts_at
 ends_at?: string, source_url: string, note?: string, };
 
 export type OrderSide = "sell" | "buy";
+
+export type OutcomeGroup = { listings: number, quantity_listed: number, quantity_sold: number, within_day: WithinDeadline, within_week: WithinDeadline,
+/**
+ * Over listings with a sale. Absent when none sold.
+ */
+median_hours_to_first_sale: number | null,
+/**
+ * Realised unit price over listed price, on sold copies whose trade had
+ * one unit price (plat for one kind of item). Absent when none did.
+ */
+price_ratio: number | null, priced_quantity: number, };
 
 export type OwnOrder = { id: string, item_id: string, slug: string | null, name: string | null, side: OrderSide, platinum: number, quantity: number, per_trade: number | null, visible: boolean | null, rank: number | null, subtype: string | null, };
 
@@ -149,6 +162,8 @@ satisfied: boolean,
  * Condition met AND not notified within [`REARM_AFTER_SECS`] → notify.
  */
 fire: boolean, };
+
+export type WithinDeadline = { eligible: number, sold: number, };
 
 export const WATCH_FIRED_EVENT = "watch-fired" as const;
 

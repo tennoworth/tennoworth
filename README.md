@@ -68,7 +68,9 @@ set-completion plays, relic expected value, Riven context, and listing health.
 - Watches target prices in the background and sends desktop notifications. A
   live order stream supplies the fast path, with a periodic check as fallback.
 - Reads confirmed trades from `EE.log` into a local platinum ledger and, when
-  enabled, shrinks or closes the matching listing after a sale.
+  enabled, shrinks or closes the matching listing after a sale. The Ledger also
+  shows how listings sent from TennoWorth did over the last 30 days: copies
+  sold, how soon, and at what share of the listed price.
 - Sets your warframe.market status (Online, Online in game, or Invisible) from
   the status strip, Settings, or the tray, and can keep it for a while or let
   it follow the game. The app goes invisible when you quit or sign out.
@@ -183,7 +185,9 @@ DE public data  ── drop tables + world state ►      └── optional WFM
 - The desktop scan extracts the session values needed to request inventory
   from Digital Extremes. The resulting inventory, snapshots, settings, watches,
   ledger, protected selling plan, notification history, and pending listing
-  plans remain in local application storage.
+  plans remain in local application storage. So does the record of listings
+  sent from TennoWorth (item, price, quantity, time; kept 180 days), which the
+  Ledger reads to show how they did; turning it off in the Ledger deletes it.
 - Scanning and public market browsing do not require a warframe.market login.
   Verified selling availability and buyer comparisons do. The bearer token is
   encrypted at rest

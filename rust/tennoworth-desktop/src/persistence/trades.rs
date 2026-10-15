@@ -190,7 +190,7 @@ impl Db {
         guard(&self.conn).query_row("SELECT COALESCE(MAX(id), 0) FROM trade", [], |r| r.get(0))
     }
 
-    fn query_trades(
+    pub(super) fn query_trades(
         &self,
         sql: &str,
         params: impl rusqlite::Params,
