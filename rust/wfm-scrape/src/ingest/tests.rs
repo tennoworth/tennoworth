@@ -516,7 +516,7 @@ fn resurgence_rotations_bound_each_window_by_the_previous_expiry() {
             {"expiry": "2023-02-02T19:00:00.000Z"}
         ]
     });
-    let (rot, cur) = resurgence_rotations(&vt, &set_catalog());
+    let (rot, cur) = resurgence_rotations(&vt, &set_catalog(), &HashMap::new());
     assert_eq!(
         rot.len(),
         2,
@@ -539,6 +539,44 @@ fn resurgence_rotations_bound_each_window_by_the_previous_expiry() {
         cur["frames"],
         serde_json::json!(["revenant_prime_set", "baruuk_prime_set"])
     );
+}
+
+#[test]
+fn the_current_rotation_names_what_varzia_sells_by_path() {
+    // Shapes from the 2026-10 Protea/Ivara rotation.
+    let vt = serde_json::json!({
+        "activation": "2026-10-01T18:00:00.000Z",
+        "expiry": "2026-10-29T18:00:00.000Z",
+        "inventory": [
+            {"item": "M P V Revenant Prime Single Pack", "uniqueName": "/Lotus/StoreItems/Packages/MegaPrimeVault/MPVRevenantPrimeSinglePack"},
+            {"item": "Revenant Prime", "uniqueName": "/Lotus/StoreItems/Powersuits/Revenant/RevenantPrime"},
+            {"item": "Prime Baruuk Gun", "uniqueName": "/Lotus/StoreItems/Weapons/Tenno/PrimeBaruuk/PrimeBaruukGun"},
+            {"item": "Revenant Prime Bobble Head", "uniqueName": "/Lotus/StoreItems/Types/Items/ShipDecos/RevenantPrimeBobbleHead"},
+            {"item": "T1 Void Projection Revenant Vault A Bronze", "uniqueName": "/Lotus/StoreItems/Types/Game/Projections/T1VoidProjectionRevenantVaultABronze"},
+            {"item": "Not in the catalogue", "uniqueName": "/Lotus/StoreItems/Weapons/Tenno/Unknown/Unknown"}
+        ]
+    });
+    let items = [
+        serde_json::json!({"name": "Revenant Prime", "uniqueName": "/Lotus/Powersuits/Revenant/RevenantPrime", "category": "Warframes"}),
+        serde_json::json!({"name": "Baruuk Prime", "uniqueName": "/Lotus/Weapons/Tenno/PrimeBaruuk/PrimeBaruukGun", "category": "Primary"}),
+        serde_json::json!({"name": "Noggle Statue - Revenant Prime", "uniqueName": "/Lotus/Types/Items/ShipDecos/RevenantPrimeBobbleHead", "category": "Misc"}),
+        serde_json::json!({"name": "Lith R1 Intact", "uniqueName": "/Lotus/Types/Game/Projections/T1VoidProjectionRevenantVaultABronze", "category": "Relics"}),
+    ];
+    let by_path = items
+        .iter()
+        .map(|it| (it["uniqueName"].as_str().unwrap(), it))
+        .collect();
+    let mut catalog = set_catalog();
+    catalog.insert("lith r1 relic".into(), "lith_r1_relic".into());
+    let (_, cur) = resurgence_rotations(&vt, &catalog, &by_path);
+    let cur = cur.unwrap();
+    assert_eq!(cur["frames"], serde_json::json!(["revenant_prime_set"]));
+    assert_eq!(
+        cur["sets"],
+        serde_json::json!(["revenant_prime_set", "baruuk_prime_set"]),
+        "the frame and its weapon; the cosmetic and the unknown path are dropped"
+    );
+    assert_eq!(cur["relics"], serde_json::json!(["lith_r1_relic"]));
 }
 
 #[test]

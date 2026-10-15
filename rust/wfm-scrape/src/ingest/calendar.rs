@@ -164,7 +164,9 @@ pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultT
 ///   rotation warframestat knows (its `vaultTrader.schedule` is the full
 ///   history since 2022, one entry per rotation with the pack name and its
 ///   expiry; a rotation runs from the previous expiry to its own), plus
-///   `resurgence_current` for the one running now.
+///   `resurgence_current` for the one running now. Only the current one also
+///   carries `sets` (every prime set Varzia sells, weapons included) and
+///   `relics` (the relics she reissues), read from her stock by DE path.
 ///
 /// Why: a set's price has three predictable shocks - Prime Access release
 /// (day-1 flood), vaulting (supply cap, months-long ramp), and Resurgence
@@ -231,9 +233,15 @@ pub fn fetch_calendar(
     }
 
     // ---- resurgence rotations ----
+    let by_path: HashMap<&str, &serde_json::Value> = wfstat_raw
+        .and_then(|v| v.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|it| Some((it.get("uniqueName")?.as_str()?, it)))
+        .collect();
     match http.get_json(WFSTAT_VAULT_TRADER_URL) {
         Ok(vt) => {
-            let (rotations, current) = resurgence_rotations(&vt, catalog);
+            let (rotations, current) = resurgence_rotations(&vt, catalog, &by_path);
             if !rotations.is_empty() {
                 out.insert("resurgence".into(), serde_json::Value::Array(rotations));
             }
@@ -272,13 +280,63 @@ pub fn frames_in_pack_name(name: &str) -> Vec<String> {
         .collect()
 }
 
+/// What Varzia is actually selling this rotation, by DE path: the prime sets
+/// (frames and their weapons) and the relics reissued for them. Her stock is
+/// listed under `/Lotus/StoreItems/...`; the item catalogue keys the same item
+/// without that segment, so the join is a lookup, never a name guess. A relic
+/// is a "Void Projection" whose catalogue name carries its refinement ("Lith
+/// B12 Intact"), mapped to WFM's refinement-free relic slug. Anything that does
+/// not resolve is dropped: an unknown item is not evidence of a reprint.
+fn current_offer(
+    inventory: &[serde_json::Value],
+    catalog: &HashMap<String, String>,
+    by_path: &HashMap<&str, &serde_json::Value>,
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+    let mut sets = Vec::new();
+    let mut relics = Vec::new();
+    for entry in inventory {
+        let Some(path) = entry.get("uniqueName").and_then(|u| u.as_str()) else {
+            continue;
+        };
+        let path = path.replacen("/Lotus/StoreItems/", "/Lotus/", 1);
+        let Some(item) = by_path.get(path.as_str()) else {
+            continue;
+        };
+        let Some(name) = item.get("name").and_then(|n| n.as_str()) else {
+            continue;
+        };
+        let slug = if item.get("category").and_then(|c| c.as_str()) == Some("Relics") {
+            ["Intact", "Exceptional", "Flawless", "Radiant"]
+                .iter()
+                .find_map(|r| name.strip_suffix(&format!(" {r}")))
+                .and_then(|base| catalog.get(&format!("{} relic", base.to_lowercase())))
+                .map(|s| (s, &mut relics))
+        } else if name.ends_with(" Prime") {
+            catalog
+                .get(&format!("{} set", name.to_lowercase()))
+                .map(|s| (s, &mut sets))
+        } else {
+            None
+        };
+        if let Some((slug, list)) = slug {
+            let value = serde_json::Value::String(slug.clone());
+            if !list.contains(&value) {
+                list.push(value);
+            }
+        }
+    }
+    (sets, relics)
+}
+
 /// Rotations from a `vaultTrader` payload: consecutive `schedule` entries
 /// bound each window (`from` = previous expiry or `initialStart`, `to` =
 /// own expiry). Returns (all rotations with ≥1 resolvable frame, the current
-/// one from activation/expiry).
+/// one from activation/expiry). Only the current one can say what Varzia
+/// sells: the schedule keeps pack names, not stock.
 pub fn resurgence_rotations(
     vt: &serde_json::Value,
     catalog: &HashMap<String, String>,
+    by_path: &HashMap<&str, &serde_json::Value>,
 ) -> (Vec<serde_json::Value>, Option<serde_json::Value>) {
     let slugs_for = |pack: &str| -> Vec<serde_json::Value> {
         frames_in_pack_name(pack)
@@ -319,18 +377,24 @@ pub fn resurgence_rotations(
         (Some(from), Some(to)) => {
             // The current pack is whichever inventory entry names frames.
             let mut frames: Vec<serde_json::Value> = Vec::new();
-            if let Some(inv) = vt.get("inventory").and_then(|i| i.as_array()) {
-                for e in inv {
-                    if let Some(item) = e.get("item").and_then(|i| i.as_str()) {
-                        for f in slugs_for(item) {
-                            if !frames.contains(&f) {
-                                frames.push(f);
-                            }
+            let inventory = vt
+                .get("inventory")
+                .and_then(|i| i.as_array())
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            for e in inventory {
+                if let Some(item) = e.get("item").and_then(|i| i.as_str()) {
+                    for f in slugs_for(item) {
+                        if !frames.contains(&f) {
+                            frames.push(f);
                         }
                     }
                 }
             }
-            Some(serde_json::json!({ "from": from, "to": to, "frames": frames }))
+            let (sets, relics) = current_offer(inventory, catalog, by_path);
+            Some(serde_json::json!({
+                "from": from, "to": to, "frames": frames, "sets": sets, "relics": relics,
+            }))
         }
         _ => None,
     };

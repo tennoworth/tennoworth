@@ -198,7 +198,11 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     raw_value: facts.raw_value,
     sell_score,
     patience,
-    timing,
+    // Near its 90-day low usually means "wait": over the year to 2026-10, a dip
+    // won back ~20% within four weeks. Where the advisor says sell now (a new
+    // prime, or a Resurgence reprint and its relic companions) the same dip
+    // kept falling instead, so the generic hold would contradict it.
+    timing: timing === 'hold' && verdict?.advice === 'sell_now' ? 'neutral' : timing,
     medians_7d: medians,
     median_90d,
     delta_90d_pct,

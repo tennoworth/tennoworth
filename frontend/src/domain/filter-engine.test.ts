@@ -186,6 +186,17 @@ describe('Hold/Sell preset (adviceOnly)', () => {
     expect(r.kind).toBe('advice');
   });
 
+  it('a sell-now verdict replaces the near-low hold instead of sitting beside it', () => {
+    const nearLow = item({ median_now: 22, donch_bot_90d: 20, donch_top_90d: 100 });
+    const timing = (verdict) => computeResults(
+      owned(rec('a')), market({ a: nearLow }), baseFilters(), 0,
+      verdict ? new Map([['a', verdict]]) : undefined,
+    )[0].timing;
+    expect(timing()).toBe('hold');
+    expect(timing({ advice: 'hold', reasons: [] })).toBe('hold');
+    expect(timing({ advice: 'sell_now', reasons: ['released 9 d ago'] })).toBe('neutral');
+  });
+
   it('rows outside the preset still carry no verdict noise', () => {
     const out = computeResults(owned(rec('a')), market({ a: item() }), baseFilters(), 0);
     expect(out[0].advice).toBeNull();

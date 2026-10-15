@@ -2,7 +2,7 @@ use market_math::stat_median as median;
 use chrono::{DateTime, NaiveDate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS, PartialEq)]
@@ -214,7 +214,58 @@ fn slope_reason(reasons: &mut Vec<String>, slope: Option<f64>) {
         reasons.push(format!("30 d move {}", pct(s)));
     }
 }
-fn advise(slug: &str, set: &str, request: &AdvisorRequest) -> Option<Verdict> {
+/// What the running Resurgence puts back into circulation, from the pipeline's
+/// record of Varzia's stock: the prime sets she sells (frames and their
+/// weapons), and every item the relics she reissues can drop. Over the year to
+/// 2026-10, Resurgence dips had not recovered four weeks later (-3%, against
+/// +20% for dips with no calendar cause), so these items get the reprint
+/// verdict rather than the generic near-low hold. Only this rotation's relics
+/// count: an item that once shared some other relic with a featured frame is
+/// not being reissued.
+struct Reprint {
+    sold: BTreeSet<String>,
+    from_relics: BTreeSet<String>,
+}
+fn current_reprint(market: &Value, mapping: &BTreeMap<String, String>) -> Reprint {
+    let current = market
+        .get("calendar")
+        .and_then(|c| c.get("resurgence_current"));
+    let slugs = |key: &str| -> BTreeSet<String> {
+        current
+            .and_then(|rc| rc.get(key))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect()
+    };
+    let sold = slugs("sets");
+    let mut from_relics = BTreeSet::new();
+    for relic in slugs("relics") {
+        for reward in market
+            .get("relic_rewards")
+            .and_then(|r| r.get(&relic))
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            if let Some(slug) = string(reward, "reward_slug") {
+                from_relics.insert(slug.to_string());
+            }
+        }
+    }
+    // A set comes back when any of its parts does; a part only by itself.
+    let sets: Vec<String> = from_relics.iter().filter_map(|c| mapping.get(c).cloned()).collect();
+    from_relics.extend(sets);
+    Reprint { sold, from_relics }
+}
+fn advise(
+    slug: &str,
+    set: &str,
+    request: &AdvisorRequest,
+    reprint: &Reprint,
+) -> Option<Verdict> {
     let calendar = request.market.get("calendar")?;
     let cal = calendar.get("primes")?.get(set)?;
     if !cal.is_object() {
@@ -251,10 +302,16 @@ fn advise(slug: &str, set: &str, request: &AdvisorRequest) -> Option<Verdict> {
         });
     }
     if let Some(rc) = calendar.get("resurgence_current") {
-        let active = rc
+        let reprinted = rc
             .get("frames")
             .and_then(Value::as_array)
             .is_some_and(|frames| frames.iter().any(|f| f.as_str() == Some(set)))
+            || reprint.sold.contains(set);
+        // Relic drops add supply only to an item that was out of circulation.
+        let companion = !reprinted
+            && cal.get("vaulted").and_then(Value::as_bool).unwrap_or(false)
+            && reprint.from_relics.contains(slug);
+        let active = (reprinted || companion)
             && string(rc, "from")
                 .and_then(date_ms)
                 .is_some_and(|d| d <= request.now_ms)
@@ -266,7 +323,11 @@ fn advise(slug: &str, set: &str, request: &AdvisorRequest) -> Option<Verdict> {
                 .and_then(date_ms)
                 .and_then(|ms| DateTime::from_timestamp_millis(ms as i64))
                 .map(|d| d.format("%Y-%m-%d").to_string())?;
-            let mut reasons = vec![format!("Prime Resurgence is reprinting it until {end}")];
+            let mut reasons = vec![if reprinted {
+                format!("Prime Resurgence is reprinting it until {end}")
+            } else {
+                format!("Prime Resurgence relics also drop it until {end}")
+            }];
             let falling = slope.is_some_and(|s| s <= -0.05);
             reasons.push(match slope {
                 Some(s) if falling => format!("price falling: {} over 30 d", pct(s)),
@@ -380,6 +441,7 @@ fn part_to_set(market: &Value) -> BTreeMap<String, String> {
 }
 pub fn advise_owned(request: AdvisorRequest) -> BTreeMap<String, Verdict> {
     let mapping = part_to_set(&request.market);
+    let reprint = current_reprint(&request.market, &mapping);
     let mut out = BTreeMap::new();
     if !request.now_ms.is_finite() {
         return out;
@@ -391,7 +453,7 @@ pub fn advise_owned(request: AdvisorRequest) -> BTreeMap<String, Verdict> {
     {
         if let Some(verdict) = mapping
             .get(slug)
-            .and_then(|set| advise(slug, set, &request))
+            .and_then(|set| advise(slug, set, &request, &reprint))
         {
             out.insert(slug.clone(), verdict);
         }
