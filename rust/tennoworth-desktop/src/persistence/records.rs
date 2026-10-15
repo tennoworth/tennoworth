@@ -41,6 +41,7 @@ pub struct ListedItem {
     pub origin: ListingOrigin,
     /// Unix seconds.
     pub listed_at: i64,
+    pub order_id: Option<String>,
 }
 
 /// A price watch, as stored and as handed to the SPA.

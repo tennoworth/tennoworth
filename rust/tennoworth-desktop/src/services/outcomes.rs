@@ -50,7 +50,7 @@ pub fn listed_items(
         .zip(results)
         .enumerate()
         .filter(|(_, (item, result))| item.order_type == "sell" && result.status == "ok")
-        .map(|(index, (item, _))| ListedItem {
+        .map(|(index, (item, result))| ListedItem {
             plan_id: plan_id.to_owned(),
             plan_index: i64::try_from(index).unwrap_or(i64::MAX),
             slug: item.slug.clone(),
@@ -64,6 +64,7 @@ pub fn listed_items(
                 ListingOrigin::Manual
             },
             listed_at: now,
+            order_id: result.order_id.clone(),
         })
         .collect()
 }
@@ -114,9 +115,16 @@ pub struct ListingOutcomes {
     pub manual: OutcomeGroup,
 }
 
-#[derive(Default)]
-struct Progress {
+/// One market order across every batch that touched it. WFM's update sets an
+/// order's quantity, so a later row for the same order replaces what is on
+/// offer; it does not add copies.
+struct Order<'a> {
+    first: &'a ListedItem,
+    /// Copies offered over the order's life: those sold before each update
+    /// plus the quantity the update left on the market.
+    offered: i64,
     remaining: i64,
+    platinum: i64,
     sold: i64,
     first_sale_at: Option<i64>,
     priced: i64,
@@ -124,8 +132,27 @@ struct Progress {
     listed_value: f64,
 }
 
-/// `resolve` maps a ledger item name to its slug; an unresolved name matches
-/// no listing.
+enum Step<'a> {
+    Listed(usize, &'a ListedItem),
+    Sold(&'a TradeRow),
+}
+
+impl Step<'_> {
+    /// A batch and a sale in the same second: the listing came first, or the
+    /// sale could not have been of it.
+    fn key(&self) -> (i64, u8) {
+        match self {
+            Step::Listed(_, row) => (row.listed_at, 0),
+            Step::Sold(trade) => (trade.at, 1),
+        }
+    }
+}
+
+/// `listings` is the whole retained record, oldest first, so a sale is
+/// allocated against every order it could belong to; only orders first listed
+/// inside the window are reported. Narrowing the record before allocating
+/// would hand an older order's sales to a newer one. `resolve` maps a ledger
+/// item name to its slug; an unresolved name matches no listing.
 pub fn summarize(
     enabled: bool,
     listings: &[ListedItem],
@@ -133,19 +160,48 @@ pub fn summarize(
     resolve: &dyn Fn(&str) -> Option<String>,
     now: i64,
 ) -> ListingOutcomes {
-    let mut progress: Vec<Progress> = listings
-        .iter()
-        .map(|listing| Progress {
-            remaining: listing.quantity.max(0),
-            ..Progress::default()
-        })
-        .collect();
+    let mut orders: Vec<Order> = Vec::new();
+    let mut order_of: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_slug: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
-    for (index, listing) in listings.iter().enumerate() {
-        by_slug.entry(listing.slug.as_str()).or_default().push(index);
+    let mut steps: Vec<Step> = Vec::new();
+    for row in listings {
+        let key = row
+            .order_id
+            .clone()
+            .unwrap_or_else(|| format!("{}#{}", row.plan_id, row.plan_index));
+        let index = *order_of.entry(key).or_insert_with(|| {
+            by_slug.entry(row.slug.as_str()).or_default().push(orders.len());
+            orders.push(Order {
+                first: row,
+                offered: 0,
+                remaining: 0,
+                platinum: row.platinum,
+                sold: 0,
+                first_sale_at: None,
+                priced: 0,
+                realised_value: 0.0,
+                listed_value: 0.0,
+            });
+            orders.len() - 1
+        });
+        steps.push(Step::Listed(index, row));
     }
+    steps.extend(sales.iter().filter(|trade| trade.kind == "sale").map(Step::Sold));
+    steps.sort_by_key(Step::key);
 
-    for sale in sales.iter().filter(|trade| trade.kind == "sale") {
+    for step in steps {
+        let sale = match step {
+            Step::Listed(index, row) => {
+                if let Some(order) = orders.get_mut(index) {
+                    let quantity = row.quantity.max(0);
+                    order.offered = order.sold + quantity;
+                    order.remaining = quantity;
+                    order.platinum = row.platinum;
+                }
+                continue;
+            }
+            Step::Sold(sale) => sale,
+        };
         let given: Vec<_> = sale
             .items
             .iter()
@@ -166,38 +222,40 @@ pub fn summarize(
                 continue;
             };
             let mut left = item.qty;
+            // Oldest order first; one not yet listed has nothing remaining.
             for &index in candidates {
                 if left == 0 {
                     break;
                 }
-                let (Some(listing), Some(state)) = (listings.get(index), progress.get_mut(index)) else {
+                let Some(order) = orders.get_mut(index) else {
                     continue;
                 };
-                if listing.listed_at > sale.at || state.remaining == 0 {
+                if order.remaining == 0 {
                     continue;
                 }
-                let take = left.min(state.remaining);
+                let take = left.min(order.remaining);
                 left -= take;
-                state.remaining -= take;
-                state.sold += take;
-                state.first_sale_at.get_or_insert(sale.at);
+                order.remaining -= take;
+                order.sold += take;
+                order.first_sale_at.get_or_insert(sale.at);
                 if let Some(unit) = unit {
-                    state.priced += take;
-                    state.realised_value += unit * take as f64;
-                    state.listed_value += listing.platinum as f64 * take as f64;
+                    order.priced += take;
+                    order.realised_value += unit * take as f64;
+                    order.listed_value += order.platinum as f64 * take as f64;
                 }
             }
         }
     }
 
+    let since = now - i64::from(WINDOW_DAYS) * DAY;
     let mut session = Group::default();
     let mut manual = Group::default();
-    for (listing, state) in listings.iter().zip(&progress) {
-        let group = match listing.origin {
+    for order in orders.iter().filter(|order| order.first.listed_at >= since) {
+        let group = match order.first.origin {
             ListingOrigin::Session => &mut session,
             ListingOrigin::Manual => &mut manual,
         };
-        group.add(listing, state, now);
+        group.add(order, now);
     }
     ListingOutcomes {
         enabled,
@@ -216,14 +274,15 @@ struct Group {
 }
 
 impl Group {
-    fn add(&mut self, listing: &ListedItem, state: &Progress, now: i64) {
+    fn add(&mut self, order: &Order, now: i64) {
+        let listed_at = order.first.listed_at;
         self.out.listings += 1;
-        self.out.quantity_listed += listing.quantity;
-        self.out.quantity_sold += state.sold;
-        self.out.priced_quantity += state.priced;
-        self.realised += state.realised_value;
-        self.listed += state.listed_value;
-        let waited = state.first_sale_at.map(|at| at - listing.listed_at);
+        self.out.quantity_listed += order.offered;
+        self.out.quantity_sold += order.sold;
+        self.out.priced_quantity += order.priced;
+        self.realised += order.realised_value;
+        self.listed += order.listed_value;
+        let waited = order.first_sale_at.map(|at| at - listed_at);
         if let Some(waited) = waited {
             self.hours.push(waited as f64 / 3600.0);
         }
@@ -231,7 +290,7 @@ impl Group {
             let sold_in_time = waited.is_some_and(|waited| waited <= deadline);
             // A listing younger than the deadline can be judged only if it
             // already sold; otherwise its outcome is not known yet.
-            if now - listing.listed_at >= deadline || sold_in_time {
+            if now - listed_at >= deadline || sold_in_time {
                 slot.eligible += 1;
                 if sold_in_time {
                     slot.sold += 1;
@@ -263,12 +322,11 @@ pub fn read(
     resolve: &dyn Fn(&str) -> Option<String>,
     now: i64,
 ) -> rusqlite::Result<ListingOutcomes> {
-    let since = now - i64::from(WINDOW_DAYS) * DAY;
-    let listings = db.listings_since(since)?;
-    let sales = if listings.is_empty() {
-        Vec::new()
-    } else {
-        db.sales_since(since)?
+    // The whole retained record, not just the window: see `summarize`.
+    let listings = db.listings_since(now - crate::persistence::LISTING_RETENTION_SECS)?;
+    let sales = match listings.first() {
+        Some(oldest) => db.sales_since(oldest.listed_at)?,
+        None => Vec::new(),
     };
     Ok(summarize(enabled(db), &listings, &sales, resolve, now))
 }
@@ -301,7 +359,81 @@ mod tests {
             quantity: qty,
             origin,
             listed_at: at,
+            order_id: None,
         }
+    }
+
+    fn on_order(mut row: ListedItem, plan: &str, order: &str) -> ListedItem {
+        row.plan_id = plan.into();
+        row.order_id = Some(order.into());
+        row
+    }
+
+    #[test]
+    fn resubmitting_an_order_does_not_count_its_copies_twice() {
+        let listed = [
+            on_order(listing(0, "ash_prime_systems", 10, 20, NOW - 3 * DAY, ListingOrigin::Manual), "a", "order-1"),
+            on_order(listing(0, "ash_prime_systems", 10, 20, NOW - 2 * DAY, ListingOrigin::Manual), "b", "order-1"),
+        ];
+        let out = summarize(true, &listed, &[], &resolve, NOW).manual;
+        assert_eq!((out.listings, out.quantity_listed), (1, 10));
+    }
+
+    #[test]
+    fn an_update_after_a_sale_offers_what_was_sold_plus_what_remains() {
+        let listed = [
+            on_order(listing(0, "ash_prime_systems", 10, 20, NOW - 9 * DAY, ListingOrigin::Manual), "a", "order-1"),
+            // Re-listed the seven left at a new price.
+            on_order(listing(0, "ash_prime_systems", 7, 25, NOW - 8 * DAY, ListingOrigin::Manual), "b", "order-1"),
+        ];
+        let sales = [
+            sale(1, NOW - 9 * DAY + HOUR, 60, &[("Ash Prime Systems", 3, "given")]),
+            sale(2, NOW - 7 * DAY, 175, &[("Ash Prime Systems", 7, "given")]),
+        ];
+        let out = summarize(true, &listed, &sales, &resolve, NOW).manual;
+        assert_eq!((out.listings, out.quantity_listed, out.quantity_sold), (1, 10, 10));
+        // 3 at 20p then 7 at 25p, each against the price listed at the time.
+        assert_eq!(out.price_ratio, Some(1.0));
+        assert_eq!(out.median_hours_to_first_sale, Some(1.0));
+    }
+
+    #[test]
+    fn an_order_older_than_the_window_keeps_its_own_sales() {
+        let listed = [
+            listing(0, "ash_prime_systems", 1, 20, NOW - 40 * DAY, ListingOrigin::Session),
+            listing(1, "ash_prime_systems", 1, 30, NOW - 5 * DAY, ListingOrigin::Manual),
+        ];
+        let sales = [sale(1, NOW - DAY, 20, &[("Ash Prime Systems", 1, "given")])];
+        let out = summarize(true, &listed, &sales, &resolve, NOW);
+        assert_eq!(out.session.listings, 0, "outside the window, not reported");
+        assert_eq!((out.manual.listings, out.manual.quantity_sold), (1, 0));
+        assert_eq!(out.manual.price_ratio, None);
+    }
+
+    #[test]
+    fn the_summary_reads_the_retained_record_not_just_the_window() {
+        let db = Db::open_in_memory().expect("db");
+        let item = [plan_item("ash_prime_systems", "sell", false)];
+        let ok = [result("ash_prime_systems", "ok")];
+        record(&db, "old", &item, &ok, NOW - 40 * DAY);
+        record(&db, "new", &item, &ok, NOW - 5 * DAY);
+        let trade = crate::services::eelog::TradeEvent {
+            partner: "Buyer".into(),
+            kind: "sale".into(),
+            plat: 40,
+            items: vec![TradeItem { name: "Ash Prime Systems".into(), qty: 2, direction: "given".into() }],
+            log_stamp: None,
+        };
+        let position = crate::services::eelog::LogPosition {
+            session: "s".into(),
+            start: 0,
+            end: 1,
+            observed_after: NOW - DAY,
+        };
+        db.insert_trade(&trade, NOW - DAY, &position).expect("trade");
+        // plan_item lists two copies: the 40-day-old order takes both.
+        let out = read(&db, &resolve, NOW).expect("summary").manual;
+        assert_eq!((out.listings, out.quantity_sold), (1, 0));
     }
 
     fn sale(id: i64, at: i64, plat: i64, items: &[(&str, i64, &str)]) -> TradeRow {

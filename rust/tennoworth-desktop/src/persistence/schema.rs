@@ -144,9 +144,13 @@ CREATE TABLE listing_outcome (
   platinum INTEGER NOT NULL,
   quantity INTEGER NOT NULL,
   origin TEXT NOT NULL CHECK(origin IN ('session','manual')),
-  listed_at INTEGER NOT NULL          -- unix seconds
+  listed_at INTEGER NOT NULL,         -- unix seconds
+  -- WFM's order id. An update sets an existing order's quantity rather than
+  -- adding copies, so rows sharing it are one order seen several times.
+  order_id TEXT
 );
 CREATE UNIQUE INDEX listing_outcome_plan_item ON listing_outcome(plan_id, plan_index);
+CREATE INDEX listing_outcome_order ON listing_outcome(order_id);
 CREATE INDEX listing_outcome_listed_at ON listing_outcome(listed_at);
 "#,
 ];

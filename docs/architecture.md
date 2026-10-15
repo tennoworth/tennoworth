@@ -249,7 +249,10 @@ Only after that cleanup does the desktop record the batch's confirmed sell
 listings in `listing_outcome`, and a failure there is logged, never reported as
 a batch failure, so this record cannot hold a journal open. The Ledger derives
 what sold by joining it with the trade ledger when it reads the summary;
-nothing about the sale is copied. Writes prune rows older than 180 days, and
+nothing about the sale is copied. Rows that share a warframe.market order id are
+one order: an update sets what is still offered rather than adding copies. Sales
+are allocated across the whole retained record before the 30-day summary is
+taken, so an older order keeps its own sales. Writes prune rows older than 180 days, and
 turning the record off deletes it.
 
 ## Structural choices and remaining limits

@@ -17,8 +17,8 @@ impl Db {
         for item in items {
             tx.execute(
                 "INSERT OR IGNORE INTO listing_outcome
-                 (plan_id, plan_index, slug, rank, subtype, platinum, quantity, origin, listed_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                 (plan_id, plan_index, slug, rank, subtype, platinum, quantity, origin, listed_at, order_id)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 (
                     &item.plan_id,
                     item.plan_index,
@@ -29,6 +29,7 @@ impl Db {
                     item.quantity,
                     item.origin.as_str(),
                     item.listed_at,
+                    &item.order_id,
                 ),
             )?;
         }
@@ -39,7 +40,7 @@ impl Db {
     pub fn listings_since(&self, since: i64) -> rusqlite::Result<Vec<ListedItem>> {
         let conn = guard(&self.conn);
         let mut stmt = conn.prepare(
-            "SELECT plan_id, plan_index, slug, rank, subtype, platinum, quantity, origin, listed_at
+            "SELECT plan_id, plan_index, slug, rank, subtype, platinum, quantity, origin, listed_at, order_id
              FROM listing_outcome WHERE listed_at >= ?1 ORDER BY listed_at, id",
         )?;
         let rows = stmt.query_map([since], |r| {
@@ -58,6 +59,7 @@ impl Db {
                     super::ListingOrigin::Manual
                 },
                 listed_at: r.get(8)?,
+                order_id: r.get(9)?,
             })
         })?;
         rows.collect()

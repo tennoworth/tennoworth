@@ -11,7 +11,6 @@ mod watches;
 pub(crate) use records::{
     ListedItem, ListingOrigin, NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow, Watch,
 };
-#[cfg(test)]
 pub(crate) use outcomes::RETENTION_SECS as LISTING_RETENTION_SECS;
 use schema::MIGRATIONS;
 
