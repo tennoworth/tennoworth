@@ -770,11 +770,14 @@
     }
   },
   {
-    "name": "resurgence relic companion",
+    "name": "resurgence sells a featured weapon and reissues a relic",
     "request": {
-      "slugs": ["companion_prime_part", "companion_prime_set", "frame_prime_part"],
+      "slugs": ["weapon_prime_part", "companion_prime_part", "companion_prime_set"],
       "market": {
         "items": {
+          "weapon_prime_part": {
+            "median_now": 80
+          },
           "companion_prime_part": {
             "median_now": 80
           }
@@ -787,6 +790,13 @@
               }
             ]
           },
+          "weapon_prime_set": {
+            "parts": [
+              {
+                "slug": "weapon_prime_part"
+              }
+            ]
+          },
           "companion_prime_set": {
             "parts": [
               {
@@ -796,7 +806,7 @@
           }
         },
         "relic_rewards": {
-          "axi_x1_relic": [
+          "axi_r1_relic": [
             {
               "reward_slug": "frame_prime_part"
             },
@@ -812,6 +822,11 @@
               "vaulted": true,
               "vault_date": "2023-06-10"
             },
+            "weapon_prime_set": {
+              "released": "2022-01-01",
+              "vaulted": true,
+              "vault_date": "2023-06-10"
+            },
             "companion_prime_set": {
               "released": "2022-01-01",
               "vaulted": true,
@@ -820,6 +835,8 @@
           },
           "resurgence_current": {
             "frames": ["frame_prime_set"],
+            "sets": ["frame_prime_set", "weapon_prime_set"],
+            "relics": ["axi_r1_relic"],
             "from": "2026-08-01T00:00:00Z",
             "to": "2026-09-01T18:00:00+02:00"
           }
@@ -829,6 +846,10 @@
         "start": "2026-01-01",
         "days": 30,
         "items": {
+          "weapon_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          },
           "companion_prime_part": {
             "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
             "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
@@ -846,18 +867,21 @@
         "advice": "neutral",
         "reasons": ["Prime Resurgence relics also drop it until 2026-09-01", "no price series yet"]
       },
-      "frame_prime_part": {
-        "advice": "neutral",
-        "reasons": ["Prime Resurgence is reprinting it until 2026-09-01", "no price series yet"]
+      "weapon_prime_part": {
+        "advice": "sell_now",
+        "reasons": ["Prime Resurgence is reprinting it until 2026-09-01", "price falling: -20% over 30 d"]
       }
     }
   },
   {
-    "name": "resurgence relic companion still in normal drops",
+    "name": "resurgence ignores a relic this rotation does not reissue",
     "request": {
-      "slugs": ["companion_prime_part", "companion_prime_set", "frame_prime_part"],
+      "slugs": ["weapon_prime_part", "companion_prime_part", "companion_prime_set"],
       "market": {
         "items": {
+          "weapon_prime_part": {
+            "median_now": 80
+          },
           "companion_prime_part": {
             "median_now": 80
           }
@@ -870,6 +894,13 @@
               }
             ]
           },
+          "weapon_prime_set": {
+            "parts": [
+              {
+                "slug": "weapon_prime_part"
+              }
+            ]
+          },
           "companion_prime_set": {
             "parts": [
               {
@@ -879,7 +910,7 @@
           }
         },
         "relic_rewards": {
-          "axi_x1_relic": [
+          "lith_old1_relic": [
             {
               "reward_slug": "frame_prime_part"
             },
@@ -895,13 +926,21 @@
               "vaulted": true,
               "vault_date": "2023-06-10"
             },
+            "weapon_prime_set": {
+              "released": "2022-01-01",
+              "vaulted": true,
+              "vault_date": "2023-06-10"
+            },
             "companion_prime_set": {
               "released": "2022-01-01",
-              "vaulted": false
+              "vaulted": true,
+              "vault_date": "2023-06-10"
             }
           },
           "resurgence_current": {
             "frames": ["frame_prime_set"],
+            "sets": ["frame_prime_set"],
+            "relics": [],
             "from": "2026-08-01T00:00:00Z",
             "to": "2026-09-01T18:00:00+02:00"
           }
@@ -911,6 +950,10 @@
         "start": "2026-01-01",
         "days": 30,
         "items": {
+          "weapon_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          },
           "companion_prime_part": {
             "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
             "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
@@ -920,9 +963,121 @@
       "now_ms": 1787184000000
     },
     "expected": {
-      "companion_prime_part": { "advice": "neutral", "reasons": ["not vaulted", "at 80% of its 1-year high", "30 d move -20%"] },
-      "companion_prime_set": { "advice": "neutral", "reasons": ["not vaulted"] },
-      "frame_prime_part": { "advice": "neutral", "reasons": ["Prime Resurgence is reprinting it until 2026-09-01", "no price series yet"] }
+      "companion_prime_part": {
+        "advice": "neutral",
+        "reasons": ["vaulted 1167 d ago", "at 80% of its 1-year high", "30 d move -20%"]
+      },
+      "companion_prime_set": {
+        "advice": "neutral",
+        "reasons": ["vaulted 1167 d ago"]
+      },
+      "weapon_prime_part": {
+        "advice": "neutral",
+        "reasons": ["vaulted 1167 d ago", "at 80% of its 1-year high", "30 d move -20%"]
+      }
+    }
+  },
+  {
+    "name": "resurgence relic drops leave an unvaulted item alone",
+    "request": {
+      "slugs": ["weapon_prime_part", "companion_prime_part", "companion_prime_set"],
+      "market": {
+        "items": {
+          "weapon_prime_part": {
+            "median_now": 80
+          },
+          "companion_prime_part": {
+            "median_now": 80
+          }
+        },
+        "set_to_parts": {
+          "frame_prime_set": {
+            "parts": [
+              {
+                "slug": "frame_prime_part"
+              }
+            ]
+          },
+          "weapon_prime_set": {
+            "parts": [
+              {
+                "slug": "weapon_prime_part"
+              }
+            ]
+          },
+          "companion_prime_set": {
+            "parts": [
+              {
+                "slug": "companion_prime_part"
+              }
+            ]
+          }
+        },
+        "relic_rewards": {
+          "axi_r1_relic": [
+            {
+              "reward_slug": "frame_prime_part"
+            },
+            {
+              "reward_slug": "companion_prime_part"
+            }
+          ]
+        },
+        "calendar": {
+          "primes": {
+            "frame_prime_set": {
+              "released": "2022-01-01",
+              "vaulted": true,
+              "vault_date": "2023-06-10"
+            },
+            "weapon_prime_set": {
+              "released": "2022-01-01",
+              "vaulted": true,
+              "vault_date": "2023-06-10"
+            },
+            "companion_prime_set": {
+              "released": "2022-01-01",
+              "vaulted": false
+            }
+          },
+          "resurgence_current": {
+            "frames": ["frame_prime_set"],
+            "sets": ["frame_prime_set"],
+            "relics": ["axi_r1_relic"],
+            "from": "2026-08-01T00:00:00Z",
+            "to": "2026-09-01T18:00:00+02:00"
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 30,
+        "items": {
+          "weapon_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          },
+          "companion_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "companion_prime_part": {
+        "advice": "neutral",
+        "reasons": ["not vaulted", "at 80% of its 1-year high", "30 d move -20%"]
+      },
+      "companion_prime_set": {
+        "advice": "neutral",
+        "reasons": ["not vaulted"]
+      },
+      "weapon_prime_part": {
+        "advice": "neutral",
+        "reasons": ["vaulted 1167 d ago", "at 80% of its 1-year high", "30 d move -20%"]
+      }
     }
   }
 ]
