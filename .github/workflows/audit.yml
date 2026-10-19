@@ -403,7 +403,9 @@ jobs:
   # suite look broken or preventing its cache from being saved.
   de-endpoints:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # DE returns 403 to the Ubuntu runner while the production host answers
+    # 200. Use a separate runner network for the external contract check.
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: rust
