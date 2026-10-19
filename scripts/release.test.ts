@@ -479,3 +479,12 @@ describe('release signing isolation', () => {
     expect(downloads[0].with?.name, 'publish must consume only the signed bundles').toBe('signed-bundles');
   });
 });
+
+test('raw desktop updates do not enable archive extraction', () => {
+  const manifest = Bun.TOML.parse(readFileSync(new URL('../rust/tennoworth-desktop/Cargo.toml', import.meta.url), 'utf8')) as any;
+  const updater = manifest.dependencies['tauri-plugin-updater'];
+  expect(updater['default-features']).toBe(false);
+  expect(updater.features).toEqual(['rustls-tls']);
+  const lock = Bun.TOML.parse(readFileSync(new URL('../rust/Cargo.lock', import.meta.url), 'utf8')) as any;
+  expect(lock.package.some((entry: any) => entry.name === 'zip')).toBe(false);
+});

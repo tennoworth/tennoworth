@@ -398,12 +398,19 @@ jobs:
         run: >-
           cargo test -p tennoworth-desktop
           real_three_reward_capture_survives_common_display_shapes -- --ignored --nocapture
-      # DE's endpoints are undocumented and move without notice, and this live
-      # test is what notices. It needs the network and must not gate a pull
-      # request or a release, so it runs only on the weekly schedule and on
-      # demand, where a failure is a notification rather than a blocker.
+
+  # External availability must stay visible without making a successful Rust
+  # suite look broken or preventing its cache from being saved.
+  de-endpoints:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-rust
       - name: DE endpoints still answer
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: cargo test -p wfm-scrape --test fixture_gates -- --ignored de_endpoints_are_still_alive
 
   # The desktop version is pinned in two places (Cargo.toml and Cargo.lock's
@@ -552,6 +559,7 @@ jobs:
       - cargo-audit
       - cargo-shear
       - cargo-test
+      - de-endpoints
       - cargo-clippy
       - version-pins
       - market-data

@@ -1,8 +1,7 @@
 # cargo-audit policy for the companion workspace.
 #
-# Everything ignored below is UNMAINTAINED/UNSOUND-class (no known
-# vulnerabilities) and enters the tree exclusively through Tauri v2's
-# Linux GUI stack (tennoworth-desktop → tauri → gtk3-rs + friends).
+# Exceptions below cover upstream maintenance notices and the pinned glib
+# unsoundness advisory in the Linux desktop dependency stack.
 # Tauri is pinned to GTK3/WebKitGTK-4.1 bindings until upstream moves to
 # GTK4/webkitgtk-6; every Tauri v2 Linux app carries this exact set.
 # Revisit on each Tauri minor bump - remove entries that stop firing.
@@ -12,6 +11,12 @@
 
 [advisories]
 ignore = [
+    # D-Bus types moved into zbus 6. Tauri plugins still require zbus 5,
+    # and the keyring Secret Service backend requires zbus 4. Revisit when
+    # those upstream consumers migrate; no standalone patched versions exist.
+    "RUSTSEC-2026-0370", # zvariant
+    "RUSTSEC-2026-0371", # zbus_names
+    "RUSTSEC-2026-0372", # zvariant_derive
     # gtk-rs GTK3 bindings - "no longer maintained" (2024-08 batch)
     "RUSTSEC-2024-0411", # gdkwayland-sys
     "RUSTSEC-2024-0412", # gdk
