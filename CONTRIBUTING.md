@@ -301,8 +301,9 @@ does not run doctests. For reward recognition/capture changes, also run
 `cargo test -p tennoworth-desktop real_three_reward_capture_survives_common_display_shapes -- --ignored`.
 
 Install the separate check tools with `cargo install cargo-nextest cargo-shear cargo-audit --locked`. The ordinary
-suite uses local fixtures and mock servers; the opt-in live DE endpoint test
-is separate. Mock HTTP tests need permission to bind localhost. Diagnose
+suite uses local fixtures and mock servers. The weekly audit runs the opt-in
+live DE endpoint test in a separate job; external availability failures still
+fail the audit gate. Mock HTTP tests need permission to bind localhost. Diagnose
 permission or disk-space failures before changing product code.
 
 On Linux, from the repository root, run `bash scripts/probe-smoke-linux.sh`.
