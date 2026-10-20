@@ -22,7 +22,6 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
 const target = document.getElementById('app');
 if (!target) throw new Error('#app mount target missing in index.html');
 const publicPayload = document.getElementById('public-page-data');
-if (!publicPayload) target.replaceChildren();
 installDesktopExternalLinkHandler();
 
 // Pick the persistence backend (localStorage vs SQLite-over-IPC) and prime its
@@ -52,8 +51,17 @@ const app = styleguideSurface && !overlaySurface
     if (publicPayload && store.mode !== 'tauri') {
       return import('./shells/PublicPage.svelte').then(({ default: PublicPage }) => hydrate(PublicPage, { target, props: { ...JSON.parse(publicPayload.textContent ?? '{}'), theme } }));
     }
+    // mount() appends to #app instead of replacing its children. The hosted
+    // build prerenders content there, so drop it only once the shell chunk has
+    // loaded: a chunk that fails to load must leave the readable page intact.
     return store.mode === 'tauri'
-      ? Promise.all([import('./shells/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
-      : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => mount(HostedShell, { target, props: { theme, store } }));
+      ? Promise.all([import('./shells/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => {
+          target.replaceChildren();
+          return mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) });
+        })
+      : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => {
+          target.replaceChildren();
+          return mount(HostedShell, { target, props: { theme, store } });
+        });
   });
 export default app;

@@ -20,6 +20,16 @@ test('built public routes expose their answers, metadata and discoverable links'
   expect((await request.get('/assets/unknown.js')).status()).toBe(404);
 });
 
+test('a failed interactive shell leaves the prerendered homepage readable', async ({ page }) => {
+  let blocked = 0;
+  await page.route(/\/HostedShell-[^/]+\.js$/, route => { blocked++; return route.abort(); });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1, name: 'TennoWorth' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sell Prime sets or parts?' })).toBeVisible();
+  // A renamed chunk would stop matching the route; fail instead of passing blind.
+  expect(blocked).toBeGreaterThan(0);
+});
+
 for (const mode of ['light', 'dark'] as const) for (const size of [{ width:320, height:740 }, { width:900, height:480 }, { width:1440, height:900 }]) {
   test(`public pages retain their theme and fit ${mode} ${size.width}x${size.height}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: mode }); await page.setViewportSize(size);
