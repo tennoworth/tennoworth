@@ -94,7 +94,7 @@
   let dialog: HTMLDialogElement;
   let tokenDialog: HTMLDialogElement;
   let swatches = $state<{ token: string; value: string }[]>([]);
-  const tokens = ['--bg', '--panel', '--panel-2', '--fg', '--muted', '--border', '--accent', '--good', '--warn', '--bad', '--ducat', '--vault'];
+  const tokens = ['--bg', '--panel', '--panel-2', '--fg', '--muted', '--border', '--accent', '--good', '--warn', '--bad', '--ducat', '--vault', '--row-selected', '--row-selected-hover'];
   const rows = [
     { name: 'Ivara Prime Neuroptics Blueprint', owned: 4, price: 15, note: '2 copies kept · sample inventory' },
     { name: 'Pyrana Prime Set', owned: 30, price: 95, note: 'Existing visible order · sample inventory' },
@@ -137,7 +137,7 @@
       {/each}
     </div>
     <div class="specimens ui-stack">
-      <h2>Archivo Narrow / clear headings</h2>
+      <h2>IBM Plex Sans Condensed / clear headings</h2>
       <p>IBM Plex Sans / Long item names, explanations, and important caveats deserve enough space to read.</p>
       <p class="numeric">IBM Plex Mono / 1,250 p · 36 trades · 12:45 UTC</p>
     </div>
@@ -158,6 +158,8 @@
           <button class="btn" class:primary={selected === item} aria-pressed={selected === item} onclick={() => selected = item}>{item}</button>
         {/each}
       </div>
+      <p class="muted">Reading scale: supporting text, controls and data scale together on wide screens. Selection keeps its fill when hovered; focus adds an outline.</p>
+      <div class="interaction-examples"><div class="selected-row-example">✓ Selected row</div><button class="selected-row-example" onclick={() => message = 'Selected row focus example activated.'}>✓ Selected row · Tab here to inspect focus</button></div>
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
@@ -225,7 +227,7 @@
   {#if dataState === 'app-icon'}<section class="wrap tw ui-reading" aria-labelledby="app-icon-title"><div class="rail"><h3 id="app-icon-title">App icon setting</h3></div><AppIconSetting appIcon={sampleAppIcon} /></section>{/if}
   {#if dataState === 'calendar'}<CalendarView market={calendarSample} now={calendarNow} surface="desktop" loadAnnouncements={async () => calendarFeed} />{/if}
   {#if dataState === 'presence'}<section class="wrap tw ui-reading" aria-labelledby="presence-title"><div class="rail"><h3 id="presence-title">Trade presence</h3></div><p class="presence-marks"><span><PresenceMark kind="ingame" />Online in game</span><span><PresenceMark kind="online" />Online</span><span><PresenceMark kind="invisible" />Invisible</span><span><PresenceMark kind="warn" />Needs action</span></p><PresenceSettings presence={samplePresence} /></section>{/if}
-  {#if dataState === 'frame'}<section class="ui-stack"><h2>View header</h2><p>Every task view: the title, a one-line lede beside it, and its totals or primary action at the far edge.</p>
+  {#if dataState === 'frame'}<section class="ui-stack"><h2>View header</h2><p>Every task view: the title, a one-line lede beside it, and its totals or primary action beside the context.</p>
     <section class="view-header"><h2>Sell</h2><p class="lede">Items worth listing right now, ranked by priority.</p><div class="vh-end"><div class="ui-totals" role="group" aria-label="Sample totals"><div class="cell"><span class="k">Owned</span><span class="v">5</span></div><div class="cell"><span class="k">Sellable</span><span class="v">3</span><span class="d up">+1</span></div><div class="cell"><span class="k">Stack value</span><span class="v">292<span class="unit">p</span></span></div><div class="cell attn"><span class="k">Needs fixing</span><span class="v">1</span></div></div></div></section>
     <section class="view-header"><h2>My orders</h2><p class="lede">Your active warframe.market listings, fetched live from the desktop app.</p><div class="vh-end"><button class="btn primary" onclick={() => message = 'Check live is the view’s primary action.'}>Check live</button></div></section>
   </section>{/if}
@@ -255,6 +257,10 @@
 </dialog>
 
 <style>
+  .interaction-examples { display: grid; gap: var(--s2); }
+  .selected-row-example { padding: var(--s2) var(--s3); background: var(--row-selected); box-shadow: inset 3px 0 0 var(--ink-bar); }
+  .selected-row-example:hover { background: var(--row-selected-hover); }
+  .selected-row-example:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
   .styleguide { max-width: 76rem; margin: 0 auto; padding: var(--s5) var(--gutter); gap: var(--s5); }
   .styleguide > * { flex-shrink: 0; }
   .edition { flex: 1 1 20rem; font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; }

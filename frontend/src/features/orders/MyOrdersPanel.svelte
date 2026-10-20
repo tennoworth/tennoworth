@@ -112,7 +112,6 @@
       <button type="button" class:issues={controller.counts.issues > 0} aria-pressed={controller.show === 'issues'} onclick={() => (controller.show = 'issues')}>Issues <span class="n">{controller.counts.issues}</span></button>
     </span>
     <input class="input order-search" use:searchShortcut type="text" placeholder="Filter by name…" aria-label="Filter orders by name" bind:value={controller.nameFilter} />
-    <span class="grow"></span>
     <button
       class="btn ghost"
       onclick={() => controller.bulkSetVisible(true)}

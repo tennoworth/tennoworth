@@ -59,6 +59,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Boundaries | `--border`, `--rule` | Solid outer outlines, dotted inner dividers |
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
 | Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted`, `--rail-edge` | Panel, card, FAQ and dialog title rails. Light: the ink bar. Dark: a raised `--panel-2` band under a 2px rag rule, because the ink fill is reserved for selected state |
+| Row interaction | `--row-selected`, `--row-selected-hover` | Restrained selected-table fills; hover preserves selection, focus adds an outline |
 | Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault` | Success, caution, error, ducat data, and vaulted status; not decoration |
 | Type | `--font-ui`, `--font-body`, `--font-mono` | Headings/labels, reading, numeric/technical data |
 | Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--text-statement`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
@@ -67,7 +68,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Shape and layering | `--radius-*`, `--shadow-pop`, `--scrim` | Square active-theme shapes and restrained overlay separation |
 | Stacking | `--layer-chrome`, `--layer-menu`, `--layer-popover`, `--layer-modal`, `--layer-toast` | Header, menus, floating panels, review overlays, and notifications |
 
-- Archivo Narrow (`--font-ui`) is for headings and short labels. Uppercase and
+- IBM Plex Sans Condensed (`--font-ui`) is for headings and short labels. Uppercase and
   tracking stay limited to short labels, not paragraphs or long item names.
 - IBM Plex Sans (`--font-body`) is for names, explanations, instructions, and
   other reading. IBM Plex Mono (`--font-mono`) is for numerals, units attached
@@ -80,6 +81,15 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
   bold is off, so request 600 rather than 700; code, kbd and samp use the mono
   face at the size of the surrounding words. Exact semantic type-size consolidation belongs in
   the shared stylesheet, not a new per-panel scale.
+- The type roles are 0.8125rem for supporting text, 0.875rem for controls,
+  and 0.9375rem for body and analytical table data. The root remains 16px,
+  grows to 17px at 1900 CSS pixels and 18px at 2500, giving a 2560px-wide
+  workspace approximately 15px supporting text and 17px data text. Keep close
+  grouping through spacing and alignment rather than reducing these sizes.
+- Related controls share a compact group. Setup fields stay together, keep-rule
+  actions follow their summary, and batch actions follow the totals. Settings
+  uses a bounded description column so the control does not drift away from its
+  label on a wide window. Narrow layouts wrap without remounting fields.
 - Controls inherit the intended typography. Reserve sufficient height and
   padding for their labels; content may grow beyond the baseline density.
 - The light-mode supporting-text token is dark enough for all three standard
@@ -127,9 +137,10 @@ add this attribute. The reward surface does not consume those selectors.
 
 Shared panel and banner rules replace formerly component-scoped copies in the
 shell, Watches, Ledger, and update notices. Every task view shares one header
-grammar: the title, a one-line lede beside it, and at the far edge (`.vh-end`)
+grammar: the title, a one-line lede beside it, and in the adjacent end slot (`.vh-end`)
 either its comparable totals in a `.ui-totals` strip or its primary action
-(Check live on My orders). The lede wraps before the end slot does. A view
+(Check live on My orders). Related context and actions sit beside each other
+rather than stretching to opposite window edges. The lede wraps before the end slot does. A view
 does not hide its description in a hover-only info mark.
 
 In the workspace the status strip holds to one line on wide windows: the scan
@@ -147,8 +158,13 @@ Listing review uses the shared button patterns, readable deselected rows, and
 keyboard focus containment/restoration; native authentication dialogs retain
 their own browser-provided modal behavior.
 
-Trade Session uses the existing mode-button, field, notice, and fixed analytical
-table patterns. Its expanded listing review scrolls as a whole in short windows
+Trade Session groups the joined goal choices and trade budget in one setup
+region. The active goal description stays visible; the optional platinum target
+and complete-set choice live in an in-place disclosure. Allowance uncertainty,
+scan/retry actions and failures remain visible outside that disclosure. A titled
+batch panel groups totals with live-price and review actions, followed by the
+fixed analytical table. All quantity, per-trade, price-source and buyer-comparison
+details stay available. Its expanded listing review scrolls as a whole in short windows
 while keeping a usable table region; before/after order details must not collapse
 the editable rows. The keyboard boundary also handles focus moving to the document
 when a focused refresh button temporarily disables itself.
@@ -555,6 +571,12 @@ repeats the page's statement, so nothing is lost. Sized by its full text, it
 used to wrap the site links onto a second row as soon as the market age
 loaded, dropping the page 40px after every load. Verified on the hosted
 landing in both themes from 320 to 1440px.
+
+Checked table rows use a restrained selected fill and a leading ink mark.
+Hover has its own selected fill, and keyboard focus adds an inset outline.
+These states supplement the checkbox rather than replace it. Selected light
+rows retain at least 4.5:1 supporting-text contrast. Input placeholders use the
+readable muted token with full opacity.
 
 For any additional exception, document the surface, the rule being varied, why
 the shared pattern is unsuitable, and the verification performed. Broad visual

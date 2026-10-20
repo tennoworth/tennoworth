@@ -15,7 +15,10 @@
    ========================================================================== */
 
 /* ---------- self-hosted fonts (public/fonts, OFL - see LICENSES.md) -------- */
-@font-face { font-family: "Archivo Narrow"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/fonts/archivo-narrow-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-sans-condensed-400-latin.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-sans-condensed-500-latin.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-sans-condensed-600-latin.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/ibm-plex-sans-condensed-700-latin.woff2) format("woff2"); }
 @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 100 700; font-display: swap; src: url(/fonts/ibm-plex-sans-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-mono-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
@@ -28,9 +31,9 @@
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-ui: var(--font-body);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --text-caption: 0.75rem;
-  --text-control: 0.8125rem;
-  --text-body: 0.875rem;
+  --text-caption: 0.8125rem;
+  --text-control: 0.875rem;
+  --text-body: 0.9375rem;
   --text-heading: 1.25rem;
   --text-dialog-title: 2rem;
   --text-section: 1rem;
@@ -140,7 +143,7 @@ html[data-look="yorha"] {
   --grid: rgba(70, 66, 47, 0.07);
   --hatch: rgba(70, 66, 47, 0.035);
   --scrim: rgba(70, 66, 47, 0.45);
-  --font-ui: "Archivo Narrow", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-ui: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-lg: 0; --radius-panel: 0; --radius-ctl: 0; --radius-input: 0; --radius-tag: 0; --radius-pill: 0;
@@ -148,6 +151,8 @@ html[data-look="yorha"] {
   --shadow-pop: none;
   --hover: var(--panel-2);
   --hover-tint: var(--panel-2);
+  --row-selected: color-mix(in srgb, var(--ink-bar) 10%, var(--panel));
+  --row-selected-hover: color-mix(in srgb, var(--ink-bar) 11%, var(--panel));
   color-scheme: light;
 }
 /* yorha dark - "Oil & Rag": the same object with the roles swapped, seen on a
@@ -187,6 +192,8 @@ html[data-look="yorha"][data-mode="dark"] {
   --hatch: rgba(211, 199, 166, 0.035);
   /* Light's scrim is its ink because that is the palette's darkest colour; in
      dark that role falls to --bg (a light scrim cannot darken a modal). */
+  --row-selected: color-mix(in srgb, var(--ink-bar) 15%, var(--panel));
+  --row-selected-hover: color-mix(in srgb, var(--ink-bar) 19%, var(--panel));
   --scrim: rgba(30, 25, 19, 0.55);
   color-scheme: dark;
 }
@@ -239,7 +246,7 @@ input[type="text"], input[type="number"] {
   border-radius: var(--radius-input);
   padding: 6px 10px;
 }
-input::placeholder { color: var(--faint); }
+input::placeholder { color: var(--muted); opacity: 1; }
 /* One disclosure glyph: ▸ closed, ▾ open, in the label face. Menus keep a
    trailing ▾ of their own; "+" is kept for add actions only. */
 summary { cursor: pointer; list-style: none; }
@@ -451,8 +458,8 @@ dialog.cryptobox footer {
 table.tw {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--text-control);
-  line-height: 1.25rem;
+  font-size: var(--text-body);
+  line-height: var(--leading-control);
   font-variant-numeric: tabular-nums;
 }
 table.tw.fixed { table-layout: fixed; }
@@ -486,6 +493,10 @@ table.tw td.l { font-family: var(--font-body); color: var(--fg); white-space: no
 table.tw:not(.fixed) th.l { width: 100%; min-width: 10rem; }
 table.tw tbody tr:first-child td { border-top: none; }
 table.tw tbody tr:hover td { background-color: var(--hover-tint); }
+table.tw tbody tr:has(input[type="checkbox"]:checked) td { background-color: var(--row-selected); }
+table.tw tbody tr:has(input[type="checkbox"]:checked):hover td { background-color: var(--row-selected-hover); }
+table.tw tbody tr:has(input[type="checkbox"]:checked) td:first-child { box-shadow: inset 3px 0 0 var(--ink-bar); }
+table.tw tbody tr:focus-within { outline: 2px solid var(--fg); outline-offset: -2px; }
 table.tw td.l a { color: var(--fg); text-decoration: none; }
 table.tw td.l a:hover { color: var(--accent); text-decoration: underline; }
 table.tw td.score, table.tw td.strong { font-weight: 600; color: var(--fg); }
@@ -621,14 +632,12 @@ table.tw tr.busy td { color: var(--muted); }
 .ui-stack { display: flex; flex-direction: column; gap: var(--stack); min-width: 0; }
 .ui-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: var(--s3) var(--inset); display: flex; flex-direction: column; gap: var(--stack); min-width: 0; }
 .ui-panel.warn-banner { border-left: 3px solid var(--warn); }
-.ui-panel > header { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
+.ui-panel > header { display: flex; align-items: center; justify-content: flex-start; gap: var(--s2); flex-wrap: wrap; }
 .ui-panel > header h2 { margin: 0; font-size: var(--text-heading); line-height: var(--leading-control); }
-/* One header grammar for every view: TITLE · one-line lede · totals or the
-   view's primary action at the far edge. The lede wraps before the end slot
-   does, so a long description never pushes the totals off the row. */
+/* Related context and actions stay beside the view title rather than at the opposite window edge. */
 .view-header { display: flex; align-items: center; gap: var(--s2) var(--s4); min-height: var(--rail); flex-wrap: wrap; margin-bottom: var(--s2); }
-.view-header > .lede { flex: 1 1 18rem; min-width: 0; max-width: none; margin: 0; color: var(--muted); }
-.view-header > .vh-end { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-width: 0; }
+.view-header > .lede { flex: 0 1 auto; min-width: 0; max-width: 58ch; margin: 0; color: var(--muted); }
+.view-header > .vh-end { margin-left: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-width: 0; }
 /* Comparable totals beside a view title: one outlined strip, dotted dividers. */
 .ui-totals { display: flex; flex-wrap: wrap; align-items: stretch; min-height: var(--rail); min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-ctl); font-size: var(--text-caption); }
 .ui-totals > .cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: var(--rail); border-left: 1px var(--rule) var(--hairline); }
@@ -645,7 +654,7 @@ table.tw tr.busy td { color: var(--muted); }
 .view-header h2 { margin: 0; color: var(--fg); font-size: var(--text-heading); font-weight: 600; line-height: var(--leading-control); letter-spacing: -.01em; text-transform: none; }
 /* Reading surfaces share one edge; analytical tables retain the workspace. */
 .ui-reading { width: 100%; max-width: 64rem; }
-.ui-setting-row { display: grid; grid-template-columns: minmax(0, 1fr) 19rem; gap: var(--s3) var(--s6); align-items: start; padding: var(--s4) var(--inset); min-width: 0; }
+.ui-setting-row { display: grid; grid-template-columns: minmax(0, 34rem) minmax(0, 19rem); gap: var(--s2) var(--s5); align-items: start; padding: var(--s3) var(--inset); min-width: 0; }
 .ui-setting-row + .ui-setting-row { border-top: 1px var(--rule) var(--hairline); }
 .ui-setting-copy { min-width: 0; }
 .ui-setting-copy > :is(label, strong) { display: block; font-weight: 500; }
@@ -664,7 +673,7 @@ table.tw tr.busy td { color: var(--muted); }
 .ui-summary-strip > div + div { border-left: 1px var(--rule) var(--border); }
 .ui-summary-strip strong { font: 600 var(--text-metric)/var(--leading-body) var(--font-mono); }
 .ui-summary-strip .k { color: var(--muted); font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .1em; text-transform: uppercase; }
-@media (max-width: 1050px) { .ui-setting-row { grid-template-columns: minmax(0, 1fr) 15rem; gap: var(--s4); } }
+@media (max-width: 1050px) { .ui-setting-row { grid-template-columns: minmax(0, 1fr) minmax(0, 15rem); gap: var(--s4); } }
 @media (max-width: 760px) { .ui-setting-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } }
 @media (max-width: 480px) { .ui-summary-strip { grid-template-columns: minmax(0, 1fr); } .ui-summary-strip > div + div { border-left: 0; border-top: 1px var(--rule) var(--border); } }
 .lede-dot { display: inline-flex; align-items: center; justify-content: center; width: var(--ctl-xs); height: var(--ctl-xs); font-size: var(--text-caption); line-height: 1; color: var(--muted); border: 1px var(--rule) var(--border); cursor: help; }
@@ -744,7 +753,7 @@ html[data-look="yorha"]:not(.relic-overlay-surface) body::before {
   background-size: 28px 28px, 28px 28px, 12.7279220614px 12.7279220614px;
 }
 html[data-look="yorha"] body {
-  font-size: 0.84375rem;
+  font-size: var(--text-body);
 }
 html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }
 /* In tables every item name is a link, so a standing underline turns dense

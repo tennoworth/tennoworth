@@ -261,9 +261,9 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   .add > .btn { min-height: var(--ctl-lg); }
   .pick-input { display: flex; gap: var(--s1); min-width: 0; }
   .watch-create { overflow: visible; }
-  .watchlist { gap: var(--s4); }
+  .watchlist { gap: var(--stack); }
   .threshold input { width: 7rem; }
-  .pick { position: relative; flex: 1 1 16rem; min-width: 0; }
+  .pick { position: relative; flex: 0 1 28rem; min-width: 0; }
   .pick input { flex: 1; min-width: 0; }
   .suggest {
     position: absolute; top: 100%; left: 0; right: 0; z-index: var(--layer-menu);

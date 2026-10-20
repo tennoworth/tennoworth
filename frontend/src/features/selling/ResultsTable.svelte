@@ -271,11 +271,11 @@
     { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 5.5 },
     { key: 'ratio',          label: 'Demand',   align: 'right', width: 5.75 },
     { key: 'usage',          label: 'Played',   align: 'left',  width: 7.5, noSort: true },
-    { key: 'advice',         label: 'Advice',   align: 'left',  width: 5 },
+    { key: 'advice',         label: 'Advice',   align: 'left',  width: 5.5 },
     { key: 'ducats',         label: 'Ducats',   align: 'right', width: 5.5 },
     { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 5 },
     { key: 'raw_value',      label: 'Raw value', align: 'right', width: 7 },
-    { key: 'potential_plat', label: 'Stack value', align: 'right', width: 7.75 },
+    { key: 'potential_plat', label: 'Stack value', align: 'right', width: 8.5 },
   ];
 
   // Ducat-deal threshold: anything below ~20p per 100 ducats is a row
@@ -667,7 +667,6 @@
   {#if scope}
     <div class="bar raised scope-row">
       {@render scope()}
-      <span class="grow"></span>
       {@render nameFilter()}
       {@render filters?.()}
     </div>
@@ -705,7 +704,6 @@
     {#if columns.some((c) => c.key === 'sell_score')}
       <span class="formula">Priority = price × sell-through × usage weight, not plat/day</span>
     {/if}
-    <span class="grow"></span>
     <ColumnGuide entries={guideEntries} />
     {#if oncolumnschange}
       <div class="col-chooser">

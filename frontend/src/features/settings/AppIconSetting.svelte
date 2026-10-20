@@ -49,7 +49,7 @@
   .options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2); min-width: 0; }
   @media (max-width: 760px) { .options { grid-template-columns: minmax(0, 1fr); } }
   .option {
-    display: flex; align-items: center; gap: var(--s3); min-width: 0;
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); min-width: 0;
     padding: var(--s3); border: 1px solid var(--border); border-radius: var(--radius-panel);
     cursor: pointer;
   }
@@ -63,7 +63,7 @@
   .option.selected input[type="radio"]:checked::before { background: var(--on-ink); }
   .option.selected input[type="radio"]:focus-visible { outline-color: var(--on-ink); }
   img { flex: 0 0 auto; width: 4.5rem; height: 2.25rem; border: 1px solid var(--hairline); }
-  .text { display: flex; flex-direction: column; min-width: 0; }
+  .text { display: flex; flex: 1 1 8rem; flex-direction: column; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
   .name { font: 600 var(--text-control)/var(--leading-control) var(--font-ui); }
   .hint { font-size: var(--text-caption); line-height: var(--leading-body); color: var(--muted); }
   .error { margin: 0; color: var(--bad); font-size: var(--text-control); }

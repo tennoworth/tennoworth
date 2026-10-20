@@ -213,7 +213,7 @@
     margin: 0;
     padding-left: 1rem;
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: var(--text-caption);
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
