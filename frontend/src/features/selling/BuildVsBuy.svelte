@@ -204,7 +204,7 @@
   thead th {
     background: var(--panel-2);
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: var(--text-caption);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     white-space: nowrap;

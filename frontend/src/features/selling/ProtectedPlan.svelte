@@ -142,10 +142,10 @@
   .keeping { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); min-width: 0; padding: var(--s1) 0; border-block: 1px var(--rule) var(--hairline); font-size: var(--text-control); }
   .keeping h3 { font: 500 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
   .keep-rules { min-width: 0; overflow-wrap: anywhere; }
-  /* Closed, the disclosure and Change sit at the end of the line; open, the details take their own row under it. */
-  .keeping > details { min-width: 0; margin-left: auto; }
+  /* Expanded quantities get a full row without moving the keep-rule controls apart. */
+  .keeping > details { min-width: 0; margin-left: 0; }
   .keeping > details[open] { flex: 1 0 100%; order: 1; margin-left: 0; }
-  .keeping > details[open] ~ .change { margin-left: auto; }
+  .keeping > details[open] ~ .change { margin-left: 0; }
   .keep-status { color: var(--muted); }
   .keep-status.verified { color: var(--good); }
   .keep-dialog { width: min(40rem, calc(100vw - var(--s6))); max-height: calc(100dvh - var(--s6)); overflow: auto; padding: var(--s5); background: var(--panel); color: var(--fg); border: 1px solid var(--border); }

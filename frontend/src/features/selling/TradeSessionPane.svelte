@@ -190,18 +190,34 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
 {@render keep?.()}
 
 <div class="ui-stack">
-  <div class="ui-toolbar modes" role="group" aria-label="Trade intent">
-    {#each SESSION_MODES as choice}
-      <button class="btn mode" class:primary={mode === choice.id} aria-pressed={mode === choice.id}
-        disabled={cap === 0 && !!retained}
-        onclick={() => mode = choice.id}>
-        <span class="mode-name">{choice.name}</span><span class="description">{choice.description}</span>
-      </button>
-    {/each}
-  </div>
-
-  <section class="ui-panel ui-stack" aria-label="Trade allowance and budget">
-    <div class="ui-toolbar">
+  <section class="ui-panel session-setup" aria-label="Trade allowance and budget">
+    <div class="ui-toolbar planning-controls">
+      <div class="ui-field">
+        <span>Trade goal</span>
+        <div class="ui-segmented modes" role="group" aria-label="Trade intent">
+          {#each SESSION_MODES as choice}
+            <button aria-pressed={mode === choice.id} title={choice.description}
+              disabled={cap === 0 && !!retained} onclick={() => mode = choice.id}>{choice.name}</button>
+          {/each}
+        </div>
+      </div>
+      <label class="ui-field budget-field">Trade budget
+        <input class="ui-input" aria-label="Trade budget" type="number" min="1" max={cap} step="1"
+          bind:value={budget} disabled={cap === 0} />
+      </label>
+      <span class="muted">{cap > 0 && cap === allowance?.remaining ? `Can't exceed the ${cap} trades left today.` : `Up to ${cap} estimated trades per batch.`}</span>
+    </div>
+    <p class="muted">{SESSION_MODES.find(choice => choice.id === mode)?.description}</p>
+    <details class="session-options">
+      <summary>Target and complete sets</summary>
+      <div class="ui-toolbar">
+        <label class="ui-field">Platinum target · optional
+          <input class="ui-input" aria-label="Platinum target" type="number" min="1" step="1" bind:value={target} placeholder="No target" disabled={cap === 0 && !!retained} />
+        </label>
+        <label class="sets-check"><input type="checkbox" bind:checked={includeSets} disabled={cap === 0 && !!retained} /> Include complete owned sets</label>
+      </div>
+    </details>
+    <div class="ui-toolbar allowance-status">
       <strong>
         {#if loading}Reading trade allowance…
         {:else if allowance?.remaining != null}
@@ -221,28 +237,19 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     {#if !loading && allowance?.remaining === 0}
       <p class="ui-notice" data-tone="warn">No trades remaining. This batch is read-only; existing WFM listings are unchanged. The allowance resets at 00:00 UTC.</p>
     {/if}
-    <div class="ui-toolbar">
-      <label class="ui-field">Trade budget
-        <input class="ui-input" aria-label="Trade budget" type="number" min="1" max={cap} step="1"
-          bind:value={budget} disabled={cap === 0} />
-      </label>
-      <label class="ui-field">Platinum target · optional
-        <input class="ui-input" aria-label="Platinum target" type="number" min="1" step="1" bind:value={target} placeholder="No target" disabled={cap === 0 && !!retained} />
-      </label>
-      <span class="muted">{cap > 0 && cap === allowance?.remaining ? `Can't exceed the ${cap} trades left today.` : `Up to ${cap} estimated trades per batch.`}</span>
-      <label><input type="checkbox" bind:checked={includeSets} disabled={cap === 0 && !!retained} /> Include complete owned sets</label>
-    </div>
   </section>
 
-  <section class="ui-panel ui-stack" aria-label="Suggested batch">
+  <section class="wrap tw session-batch" aria-label="Suggested batch">
+    <div class="rail"><h3>Suggested batch</h3><span class="exp">Review before posting</span></div>
+    <div class="ui-stack session-body">
     {#if listingBlockReason}<p class="ui-notice" data-tone="warn" role="status">{listingBlockReason} {#if onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{/if}</p>{/if}
     <div class="ui-toolbar">
       <h3>{display.rows.length} listings · {display.trades} estimated trades · {display.total.toLocaleString()}p potential</h3>
-      <button class="btn primary" disabled={!!listingBlockReason || loading || planning || !!planningError || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
-        onclick={() => !listingBlockReason && sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>Review batch</button>
       <button class="btn ghost" onclick={refreshPrices} disabled={planning || !!planningError || liveBusy || !plan.rows.length || cap === 0}>
         {liveBusy ? 'Checking prices…' : 'Check live prices'}
       </button>
+      <button class="btn primary" disabled={!!listingBlockReason || loading || planning || !!planningError || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
+        onclick={() => !listingBlockReason && sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>Review batch</button>
     </div>
     <p class="muted">Potential assumes sales at the listed unit asks, rounded up to whole platinum. Bids are per-unit comparisons, not instant proceeds.
       Cached market: {market?.updated_at ? new Date(market.updated_at).toLocaleString() : 'unknown age'}.
@@ -288,6 +295,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
         <ul>{#each plan.excluded as row}<li>{row.name}: {row.reason}</li>{/each}</ul>
       </details>
     {/if}
+    </div>
   </section>
   {#if buyerSelection}
     {#key buyerSelection}
@@ -298,11 +306,14 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
 </div>
 
 <style>
-  .modes { align-items: stretch; }
-  .mode { flex: 1 1 12rem; min-height: var(--ctl-lg); height: auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left; white-space: normal; padding: var(--s3); }
-  /* The card title outranks its own description. */
-  .mode-name { font: 600 var(--text-section)/var(--leading-control) var(--font-ui); }
-  .description { font-family: var(--font-body); font-size: var(--text-caption); line-height: var(--leading-body); text-transform: none; letter-spacing: normal; font-weight: 400; }
+  .planning-controls { align-items: end; gap: var(--s3) var(--s4); }
+  .session-setup { gap: var(--s2); }
+  .budget-field input { width: 5rem; }
+  .session-options { padding-block: var(--s2); border-block: 1px var(--rule) var(--hairline); }
+  .session-options > .ui-toolbar { margin-top: var(--s2); gap: var(--s4); align-items: end; }
+  .sets-check { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-lg); }
+  .allowance-status { font-size: var(--text-control); }
+  .session-body { padding: var(--s3) var(--inset); }
   .session-table { min-width: 70rem; }
   .reason { min-width: 18rem; white-space: normal; font-family: var(--font-body); }
   small { display: block; font-family: var(--font-body); font-size: var(--text-caption); color: var(--muted); line-height: var(--leading-body); }

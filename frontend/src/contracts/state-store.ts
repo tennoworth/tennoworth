@@ -33,7 +33,9 @@ export type SettingKey =
    *  keeps the resolved colour it applied in its own `app-icon.applied` row. */
   | 'app-icon'
   /** Calendar view and hidden event kinds (JSON, features/calendar). */
-  | 'calendar';
+  | 'calendar'
+  /** User-selected character shortcuts; keyboard layout data is never persisted. */
+  | 'keyboard';
 
 
 /** The scalar settings every build persists. */

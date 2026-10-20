@@ -422,7 +422,7 @@
 
   /* The strip holds one to three cells, depending on what this build offers. */
   .glance { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
-  .glance > a { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3) var(--inset); min-width: 0; color: var(--fg); border-bottom: 0; }
+  .glance > a { overflow-wrap: anywhere; display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3) var(--inset); min-width: 0; color: var(--fg); border-bottom: 0; }
   .glance > a + a { border-left: 1px var(--rule) var(--border); }
   .glance > a:hover { background: var(--panel-2); }
   .glance strong { font: 500 var(--text-body)/var(--leading-control) var(--font-body); overflow-wrap: anywhere; }

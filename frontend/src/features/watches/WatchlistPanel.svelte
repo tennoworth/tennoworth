@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { searchShortcut } from '../../ui/keyboard.svelte';
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopAddWatch, desktopCheckWatchesNow, desktopDeleteWatch, desktopListWatches, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy } from 'svelte';
@@ -179,7 +180,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
       <label for="watch-item">Item to watch</label>
       <div class="pick-input">
       <input
-        id="watch-item"
+        id="watch-item" use:searchShortcut
         class="ui-input"
         type="text"
         placeholder="Item to watch - try “primed flow”, “ash prime set”…"
@@ -260,9 +261,9 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   .add > .btn { min-height: var(--ctl-lg); }
   .pick-input { display: flex; gap: var(--s1); min-width: 0; }
   .watch-create { overflow: visible; }
-  .watchlist { gap: var(--s4); }
+  .watchlist { gap: var(--stack); }
   .threshold input { width: 7rem; }
-  .pick { position: relative; flex: 1 1 16rem; min-width: 0; }
+  .pick { position: relative; flex: 0 1 28rem; min-width: 0; }
   .pick input { flex: 1; min-width: 0; }
   .suggest {
     position: absolute; top: 100%; left: 0; right: 0; z-index: var(--layer-menu);

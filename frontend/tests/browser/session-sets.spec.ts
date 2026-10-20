@@ -7,6 +7,7 @@ test('complete sets compete with their parts and edited quantities cannot reuse 
   const table = page.locator('.session-table');
   await expect(table).toContainText('Akbolto Prime Set');
   await expect(table).toContainText('Akbolto Prime Barrel ×2');
+  await page.getByText('Target and complete sets', { exact: true }).click();
   await page.getByLabel('Include complete owned sets').uncheck();
   await expect(table).not.toContainText('Akbolto Prime Set');
   await page.getByLabel('Include complete owned sets').check();

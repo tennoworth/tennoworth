@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import { buildMetaDrift } from '../../domain/meta-drift';
   import { baroLocation, humanWindow, plat, wfmItemUrl } from '../../ui/format';
   import { onMount, onDestroy, type Snippet } from 'svelte';
@@ -45,24 +46,10 @@
   } = $props();
 
   let query = $state('');
-  let searchInput: HTMLInputElement | undefined = $state();
   let searchFocused = $state(false);
   // Quietly shimmers at rest; in full while focused and waiting for a query, and
   // quiet again once results show so the eye moves to the table.
   let searchShimmer = $derived<ShimmerMode>(searchFocused && !query.trim() ? 'live' : 'idle');
-
-  // '/' focuses the search from anywhere on the landing (unless already typing).
-  $effect(() => {
-    const handler = (e: KeyboardEvent): void => {
-      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      e.preventDefault();
-      searchInput?.focus();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  });
 
   // ---- 1-year view (history.json, on demand) ----
   let showYear = $state(false);
@@ -237,9 +224,9 @@
 {#snippet price(v: number | null | undefined)}{plat(v)}{#if plat(v) !== '-'}<span class="unit">p</span>{/if}{/snippet}
 
 <!-- Mini table: Item · Δ 90d · Trend · Avg · Vol 48h (+ Ducats) - movers and vaulted. -->
-{#snippet miniTable(rows: BrowseRow[], sortedKey: 'delta' | 'avg', ducats: boolean, emptyText: string)}
+{#snippet miniTable(rows: BrowseRow[], sortedKey: 'delta' | 'avg', ducats: boolean, emptyText: string, label: string)}
   {#if rows.length}
-    <div class="scroll">
+    <div class="scroll" use:tableNavigation={label}>
     <table class="tw fixed mini-table" class:with-ducats={ducats}>
       <colgroup>
         <col />
@@ -288,13 +275,15 @@
           type="text"
           placeholder="Search any item - try “primed”, “mag”, “ash prime set”…"
           bind:value={query}
-          bind:this={searchInput}
+
+          use:searchShortcut
+          id="item-search"
           aria-label="Search items"
           onfocus={() => (searchFocused = true)}
           onblur={() => (searchFocused = false)}
         />
       </span>
-      <span class="exp">any tradeable item · price, 48h volume, 7-day trend · <kbd>/</kbd> to focus</span>
+      <span class="exp">any tradeable item · price, 48h volume, 7-day trend · {#if keyboard.enabled}<kbd>{keyboard.search}</kbd> to focus{/if}</span>
       {#if loadHistory}
         <button class="btn xs ghost year-toggle" class:on={showYear} onclick={toggleYear} aria-pressed={showYear}
           title="Show each item's last year of daily prices (relics.run archive) instead of the last 7 days">
@@ -309,7 +298,7 @@
     {/if}
     {#if query.trim()}
       {#if results.length}
-        <div class="scroll">
+        <div class="scroll" use:tableNavigation={'Search results table'}>
         <table class="tw fixed results">
           <colgroup>
             <col />
@@ -382,14 +371,14 @@
         <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">▲ Rising</h3>
         <span class="exp">vs 90-day median · vol ≥ 20</span>
       </div>
-      {@render miniTable(movers.risers, 'delta', false, 'No risers.')}
+      {@render miniTable(movers.risers, 'delta', false, 'No risers.', 'Rising prices table')}
     </div>
     <div class="wrap tw movers">
       <div class="rail">
         <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">▼ Falling</h3>
         <span class="exp">vs 90-day median · vol ≥ 20</span>
       </div>
-      {@render miniTable(movers.fallers, 'delta', false, 'No fallers.')}
+      {@render miniTable(movers.fallers, 'delta', false, 'No fallers.', 'Falling prices table')}
     </div>
   </section>
 
@@ -400,7 +389,7 @@
         <h3>Vaulted &amp; valuable</h3>
         <span class="exp">no longer drop, so supply is capped</span>
       </div>
-      {@render miniTable(vaulted, 'avg', true, 'No vault data in this snapshot.')}
+      {@render miniTable(vaulted, 'avg', true, 'No vault data in this snapshot.', 'Vaulted items table')}
       <div class="line"><span class="exp">High-value vaulted items tend to hold or climb.</span></div>
     </div>
     {#if baro && baroState}
@@ -424,7 +413,7 @@
           </p>
         </div>
         {#if baroStock.length}
-          <div class="scroll">
+          <div class="scroll" use:tableNavigation={'Baro stock table'}>
           <table class="tw fixed baro-stock">
             <colgroup><col /><col style="width:4rem" /><col style="width:4.5rem" /></colgroup>
             <thead><tr>
@@ -476,7 +465,7 @@
             <h3>Riven disposition changes</h3>
             <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
           </div>
-      <div class="scroll">
+      <div class="scroll" use:tableNavigation={'Riven dispositions table'}>
       <table class="tw fixed dispo-table">
         <colgroup><col /><col style="width:8rem" /><col style="width:4rem" /><col style="width:5rem" /></colgroup>
         <thead><tr>
