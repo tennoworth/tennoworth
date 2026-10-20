@@ -58,6 +58,19 @@ tests/fixtures/             shared parity and pipeline inputs/expectations
 deploy/                      live-data refresh and deployment operations
 ```
 
+## Public page generation
+
+`frontend/scripts/prerender.ts` runs after the hosted Vite build. It renders
+shared Svelte public content into the homepage and physical guide, tool,
+desktop and selected item directories, with route-specific metadata and a
+generated sitemap. `src/public-site/pages.ts` owns the route/pilot selection;
+`src/public-site/model.ts` projects bounded snapshot data for initial HTML.
+The homepage then mounts the interactive hosted shell; dedicated pages hydrate
+`PublicPage.svelte` and refresh estimates from the existing same-origin market
+adapter. Build examples retain their explicit snapshot timestamp until a valid,
+newer snapshot replaces them. Unknown paths remain static-server 404s.
+Desktop and private dashboard builds do not run public-page generation.
+
 ## Runtime shape
 
 Three runtime surfaces share one codebase: a public hosted site, an installed

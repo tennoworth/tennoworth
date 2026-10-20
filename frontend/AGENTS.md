@@ -12,6 +12,10 @@ This gate is repeated in the root and rust instruction files on purpose: missing
 it is expensive, and each copy is read where UI work starts.
 
 Shared frontend for the desktop app, overlay, and static informational site.
+Hosted builds also prerender physical public pages through `scripts/prerender.ts`;
+the route manifest owns their sitemap and pilot item links. Keep generated
+examples timestamped and preserve unknown-path 404s.
+
 The private announcement dashboard has its own `admin.html` entry and
 `vite.admin.config.ts` build; never import it from a player-facing entry.
 The hosted surface has no accounts or inventory input; the desktop app owns

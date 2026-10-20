@@ -1,4 +1,6 @@
 <script lang="ts">
+import Introduction from '../public-site/Introduction.svelte';
+import Links from '../public-site/Links.svelte';
 import KeyboardNavigation from '../ui/KeyboardNavigation.svelte';
 import { ago, marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { onMount, tick } from 'svelte';
@@ -87,12 +89,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
        control. The theme switcher used to ride this line's right end; it now
        lives in Settings → Appearance, with a quiet copy in the site footer for
        visitors who never search their way into the shell. -->
-  <header data-shell class="landing-head">
-    <!-- The page's statement: the first thing read, in the reading face, with
-         no hero, image or display numerals. -->
-    <p data-shell class="statement"><strong data-shell>What's worth selling in Warframe right now.</strong> Search any item, spot the movers, see what's vaulted.</p>
-    <p data-shell class="lede">Live warframe.market prices · no install, no login on this site</p>
-  </header>
+  <Introduction />
 
   <MarketAnnouncement now={displayNow} {store} load={() => transport.loadAnnouncements()} />
 
@@ -149,6 +146,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
     <Faq />
   {/if}
 
+  <Links />
   <footer data-shell class="sitefoot">
     <KeyboardNavigation {store} />
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>

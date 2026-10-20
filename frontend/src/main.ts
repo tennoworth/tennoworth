@@ -1,5 +1,5 @@
 import { DESKTOP_CONTEXT } from './contracts/services';
-import { mount } from 'svelte';
+import { mount, hydrate } from 'svelte';
 // Shared theme rules follow shell layout rules so existing specificity ties
 // retain the production cascade.
 import './shells/shell.css';
@@ -21,6 +21,8 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
 
 const target = document.getElementById('app');
 if (!target) throw new Error('#app mount target missing in index.html');
+const publicPayload = document.getElementById('public-page-data');
+if (!publicPayload) target.replaceChildren();
 installDesktopExternalLinkHandler();
 
 // Pick the persistence backend (localStorage vs SQLite-over-IPC) and prime its
@@ -47,6 +49,9 @@ const app = styleguideSurface && !overlaySurface
     const theme = initTheme(store);
     // createStateStore picked the store by the same runtime sniff, so its mode
     // decides the shell, and only the desktop store carries a snapshot.
+    if (publicPayload && store.mode !== 'tauri') {
+      return import('./shells/PublicPage.svelte').then(({ default: PublicPage }) => hydrate(PublicPage, { target, props: { ...JSON.parse(publicPayload.textContent ?? '{}'), theme } }));
+    }
     return store.mode === 'tauri'
       ? Promise.all([import('./shells/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
       : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => mount(HostedShell, { target, props: { theme, store } }));

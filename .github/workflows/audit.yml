@@ -278,8 +278,15 @@ jobs:
       # locals not exports, and svelte-check skips @ts-nocheck files.
       - name: dead-export check
         run: bun run knip
-      - name: build
-        run: bun run build
+      - name: public page build and browser gate
+        run: bun run test:public-site
+      - name: Upload public page failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-page-test-evidence
+          path: frontend/test-results/public
+          if-no-files-found: ignore
       - name: private dashboard build and artifact boundaries
         run: |
           bun run build:desktop

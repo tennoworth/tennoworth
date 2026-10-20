@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "bun ../scripts/check-announcements.ts && bun ../scripts/release.ts app-notes --check && bun ../scripts/sync-csp.ts --check && bun ../scripts/build-icons.ts --check",
-    "build": "vite build",
+    "build": "vite build && bun scripts/prerender.ts",
     "build:desktop": "bun ../scripts/check-announcements.ts && bun ../scripts/release.ts app-notes --check && bun ../scripts/sync-csp.ts --check && bun ../scripts/build-icons.ts --check && vite build --outDir dist-desktop --emptyOutDir && bun ../scripts/sync-csp.ts --desktop dist-desktop/index.html",
     "preview": "vite preview",
     "test": "vitest run",
@@ -22,7 +22,8 @@
     "icons": "bun ../scripts/build-icons.ts --raster",
     "dev:admin": "vite --config vite.admin.config.ts",
     "build:admin": "bun ../scripts/sync-csp.ts --check && vite build --config vite.admin.config.ts",
-    "test:admin": "playwright test --config playwright.admin.config.ts"
+    "test:admin": "playwright test --config playwright.admin.config.ts",
+    "test:public-site": "bun run build && playwright test --config playwright.public.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
