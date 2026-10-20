@@ -75,15 +75,16 @@ test('search handles empty results and refresh failure preserves the dated compa
 test('new snapshots replace comparisons together; older or malformed data cannot erase them', async ({ page }) => {
   const { readFileSync } = await import('node:fs');
   const bundled = JSON.parse(readFileSync('public/market.json', 'utf8'));
+  const bundledAt = Date.parse(bundled.updated_at);
   const newer = structuredClone(bundled);
-  newer.updated_at = '2026-10-20T12:00:00Z';
+  newer.updated_at = new Date(bundledAt + 60 * 60 * 1000).toISOString();
   newer.items.bo_prime_set.median_now = 999;
   await page.route('**/market.json', route => route.fulfill({ json:newer }));
   await page.goto('/items/bo_prime_set/');
   await expect(page.getByRole('status')).toContainText('Snapshot checked');
   await expect(page.getByText('999 p', { exact:true }).first()).toBeVisible();
   await expect(page.locator('time')).toHaveAttribute('datetime', newer.updated_at);
-  const older = structuredClone(bundled); older.updated_at = '2025-01-01T00:00:00Z'; older.items.bo_prime_set.median_now = 888;
+  const older = structuredClone(bundled); older.updated_at = new Date(bundledAt - 60 * 60 * 1000).toISOString(); older.items.bo_prime_set.median_now = 888;
   await page.route('**/market.json', route => route.fulfill({ json:older }));
   await page.reload();
   await expect(page.getByRole('status')).toContainText('Snapshot checked');
