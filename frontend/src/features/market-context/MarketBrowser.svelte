@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { pilotItems, itemPath } from '../../public-site/pages';
   import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import { buildMetaDrift } from '../../domain/meta-drift';
   import { baroLocation, humanWindow, plat, wfmItemUrl } from '../../ui/format';
@@ -168,7 +169,7 @@
 
 <!-- Item cell: name link + vault tag. Same in every table. -->
 {#snippet itemCell(r: BrowseRow)}
-  <a href={wfmItemUrl(r.slug)} target="_blank" rel="noopener noreferrer" title={r.name}>{r.name}</a>
+  <a href={handoff && pilotItems.includes(r.slug) ? itemPath(r.slug) : wfmItemUrl(r.slug)} target={handoff && pilotItems.includes(r.slug) ? undefined : "_blank"} rel="noopener noreferrer" title={r.name}>{r.name}</a>
   {#if r.vault === 'vaulted'}
     <span class="tag vaulted" title="Vaulted - no longer dropping, supply is capped">vaulted</span>
   {:else if r.vault === 'vaulting-soon'}

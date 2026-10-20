@@ -732,3 +732,20 @@ reachable. Theme/resizing preserve expanded content. Automatic presentation wait
 for the hydrated, visible, focused main window and never stacks over another
 modal or pending recovery. Select Update notes in the living styleguide to open
 the production dialog with a fictional upgrade state.
+
+## Public selling guides
+
+Public decision pages reuse the hosted shell palette, reading typography,
+`.ui-panel`, title rails, `.ui-toolbar`, and `table.tw`. Prose caps its reading
+width; numerical comparisons stay tables with local horizontal scrolling and
+keyboard skip/scroll controls. No separate marketing palette or decorative
+hero is introduced. Shared selling-guide navigation links the homepage, sets,
+ducats and equally visible Windows/Linux download information.
+
+The initial HTML contains the dated comparison and explanation. Enhancement
+refreshes the comparison atomically from same-origin market data; failed or
+older refreshes retain the timestamped values. No-JavaScript visitors receive
+the same explanation and data with search/sort controls disabled. Public item
+pages label missing values and recent observations explicitly; they never
+imply that absent dates form a continuous history. The existing theme control
+is available after enhancement, and theme boot resolves the initial mode.

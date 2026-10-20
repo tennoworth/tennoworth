@@ -903,3 +903,19 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
   border: 1px solid var(--border);
 }
 .skip-navigation:focus { transform: none; }
+
+/* Public decision pages keep the shell palette and analytical table grammar. */
+.public-page { max-width: 76rem; margin-inline: auto; }
+.public-page > * { margin-block-end: 0; }
+.public-page .public-prose { padding: var(--inset); gap: var(--s3); }
+.public-prose > p, .public-prose > ol, .public-prose > dl { margin-block: 0; }
+.public-prose > p, .public-prose > ol, .public-prose > dl { max-width: 64rem; line-height: var(--leading-body); }
+.public-prose h1 { margin-block: 0; font-size: var(--text-heading); }
+.public-prose h2 { margin-block: var(--s3) 0; padding: var(--s2) var(--s3); color: var(--rail-fg); background-color: var(--rail-bg); border-top: 2px solid var(--rail-edge); font-size: var(--text-section); }
+.public-brand, .public-footer { padding: var(--inset); border-bottom: 1px dotted var(--border); }
+.public-table { overflow-x: auto; max-width: 100%; }
+.public-table table { min-width: 34rem; width: 100%; }
+.public-table th, .public-table td { padding: var(--cell); text-align: right; }
+.public-table th:first-child, .public-table td:first-child { text-align: left; min-width: 12rem; }
+.public-controls label { display: grid; gap: var(--s2); }
+.public-prose dd { margin-block-end: var(--s3); font-family: var(--font-mono); }

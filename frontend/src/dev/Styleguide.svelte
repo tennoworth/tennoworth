@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tableNavigation } from '../ui/keyboard.svelte';
   import KeyboardNavigation from '../ui/KeyboardNavigation.svelte';
   import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
   import announcementCases from '../../../tests/fixtures/announcements/cases.json';
@@ -227,6 +228,14 @@
   {#if dataState === 'app-icon'}<section class="wrap tw ui-reading" aria-labelledby="app-icon-title"><div class="rail"><h3 id="app-icon-title">App icon setting</h3></div><AppIconSetting appIcon={sampleAppIcon} /></section>{/if}
   {#if dataState === 'calendar'}<CalendarView market={calendarSample} now={calendarNow} surface="desktop" loadAnnouncements={async () => calendarFeed} />{/if}
   {#if dataState === 'presence'}<section class="wrap tw ui-reading" aria-labelledby="presence-title"><div class="rail"><h3 id="presence-title">Trade presence</h3></div><p class="presence-marks"><span><PresenceMark kind="ingame" />Online in game</span><span><PresenceMark kind="online" />Online</span><span><PresenceMark kind="invisible" />Invisible</span><span><PresenceMark kind="warn" />Needs action</span></p><PresenceSettings presence={samplePresence} /></section>{/if}
+  {#if dataState === 'frame'}
+    <section class="ui-panel public-prose" aria-label="Public selling guide reference">
+      <h2>Public selling guide</h2>
+      <p>Compare the same price basis before choosing a sale. These fictional values demonstrate the public page’s reading rhythm.</p>
+      <p class="ui-notice">Dated example · PC · Estimates, not live orders. Missing prices remain unavailable.</p>
+      <div class="public-table" use:tableNavigation={'Guide comparison'}><table class="tw"><thead><tr><th>Item</th><th>Required quantity</th><th>Daily median</th></tr></thead><tbody><tr><td>Example Prime ornament</td><td>2</td><td>7 p</td></tr><tr><td>Unpriced component</td><td>1</td><td>Unavailable</td></tr></tbody></table></div>
+    </section>
+  {/if}
   {#if dataState === 'frame'}<section class="ui-stack"><h2>View header</h2><p>Every task view: the title, a one-line lede beside it, and its totals or primary action beside the context.</p>
     <section class="view-header"><h2>Sell</h2><p class="lede">Items worth listing right now, ranked by priority.</p><div class="vh-end"><div class="ui-totals" role="group" aria-label="Sample totals"><div class="cell"><span class="k">Owned</span><span class="v">5</span></div><div class="cell"><span class="k">Sellable</span><span class="v">3</span><span class="d up">+1</span></div><div class="cell"><span class="k">Stack value</span><span class="v">292<span class="unit">p</span></span></div><div class="cell attn"><span class="k">Needs fixing</span><span class="v">1</span></div></div></div></section>
     <section class="view-header"><h2>My orders</h2><p class="lede">Your active warframe.market listings, fetched live from the desktop app.</p><div class="vh-end"><button class="btn primary" onclick={() => message = 'Check live is the view’s primary action.'}>Check live</button></div></section>

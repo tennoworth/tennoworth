@@ -131,8 +131,8 @@
 		respond "{http.error.status_text}" {http.error.status_code}
 	}
 
-	# The hosted site uses root-page fragments, not path-based routes. Let
-	# file_server return 404 for missing paths instead of indexing homepage copies.
+	# Public pages are physical directories with index.html. Missing paths must
+	# return 404 instead of indexing homepage copies.
 	handle {
 		# Missing chunks must not pin a 404 in browser or CDN caches.
 		@assets {
