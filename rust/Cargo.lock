@@ -5601,7 +5601,7 @@ dependencies = [
 
 [[package]]
 name = "tennoworth-desktop"
-version = "0.8.106"
+version = "0.8.107"
 dependencies = [
  "anyhow",
  "axum",
