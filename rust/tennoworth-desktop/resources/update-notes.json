@@ -1,5 +1,5 @@
 {
-  "version": "0.8.106",
+  "version": "0.8.107",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1320,6 +1320,45 @@
           "kind": "fixed",
           "title": "Keep connections to warframe.market up to date",
           "body": "The library that secures the app's connections is updated to a release that fixes four newly published security issues.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.107",
+      "date": "2026-10-20",
+      "changes": [
+        {
+          "id": "workspace-grouping",
+          "kind": "improved",
+          "title": "Related actions sit together",
+          "body": "Trade-session goals keep their budget beside them, price and review actions sit by the batch totals, and keep-rule controls join the table filters.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "readable-type-scale",
+          "kind": "improved",
+          "title": "Larger, clearer text",
+          "body": "Interface headings and labels use a condensed face and a larger shared text scale, so item names, prices and controls stay comfortable at 1440p and in narrow windows.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "keyboard-navigation",
+          "kind": "improved",
+          "title": "Keyboard navigation, shortcut help and a view picker",
+          "body": "Move through the app without the mouse, open the shortcut reference, and switch views from one control. Shortcut preferences stay on your device.",
           "platforms": [
             "windows",
             "linux"

@@ -54,6 +54,32 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.107 - 2026-10-20
+
+# 🎨 TennoWorth Desktop 0.8.107
+
+TennoWorth Desktop 0.8.107 is ready.
+
+Everything that matters for a sale now reads and sits better: larger type on a calm layout, related controls grouped where you use them, and keyboard navigation for the whole window. If you work through long sell lists, the reduced scanning and mouse travel add up.
+
+## Changelog (3)
+
+### Workspace
+
+- **Related actions sit together** Trade-session goals keep their budget beside them, price and review actions sit by the batch totals, and keep-rule controls join the table filters. <!-- app-note {"id":"workspace-grouping","kind":"improved"} -->
+
+### Readability
+
+- **Larger, clearer text** Interface headings and labels use a condensed face and a larger shared text scale, so item names, prices and controls stay comfortable at 1440p and in narrow windows. <!-- app-note {"id":"readable-type-scale","kind":"improved"} -->
+
+### Keyboard
+
+- **Keyboard navigation, shortcut help and a view picker** Move through the app without the mouse, open the shortcut reference, and switch views from one control. Shortcut preferences stay on your device. <!-- app-note {"id":"keyboard-navigation","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.106 - 2026-10-14
 
 # ⚡ TennoWorth Desktop 0.8.106
