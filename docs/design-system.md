@@ -177,6 +177,43 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 Loading, empty, error, disabled, selected, hover, and keyboard-focus states are
 part of each applicable pattern, not finishing touches.
 
+## Keyboard navigation
+
+The hosted page starts its tab order with Skip to item search; the desktop
+starts with Skip to current view. Long market tables offer a focus-only Skip
+link and a named, keyboard-scrollable region. These links appear above chrome
+only while focused, using the standard panel, border and focus tokens.
+
+Keyboard shortcuts opens a native dialog from the hosted footer or desktop
+sidebar footer, alongside the project utilities (also available in the header
+before the first scan). The workspace uses one quiet, unboxed help row;
+shortcut utilities never precede or push down the view navigation. Select
+Keyboard navigation in the living reference’s Data state control. Search defaults to `/`, help to
+`?`: these match the typed character on the active layout, including Shift and
+AltGr, rather than assuming US punctuation positions. Each can be recorded
+again or disabled; only these deliberate preferences persist through the
+settings store. Layout information stays in memory and is never transmitted.
+Optional browser keyboard-map access adapts the desktop destination shortcut's
+key label, refreshes on layout changes/window focus, and falls back gracefully
+when unavailable or denied. It does not guess shifted punctuation combinations.
+
+Desktop help includes Go to a view; Ctrl+K opens the same picker directly.
+The shortcut uses Ctrl (Command on Apple browsers) and the locally labelled
+KeyK position when a layout map is available, or the letter K otherwise. Its character can also be recorded in help when automatic
+labels are unavailable or a different binding is preferred. The picker lists the currently available sidebar views;
+arrow keys choose, Enter opens and Escape restores focus. F6 / Shift+F6 cycle
+between the status strip, sidebar and workspace. Keyboard activation of a view
+focuses its heading without resetting retained search, drafts or scroll.
+Keyboard-opened disclosure menus focus their first usable choice; Escape keeps
+the owning menu's existing close-and-return behavior.
+
+Shortcuts leave text fields, selects, editable content, composition, open dialogs
+and expanded popovers alone. They are confined to the focused main window;
+they never register game-global keys or bypass listing review. Help and the
+picker scroll as whole dialogs in short windows, contain focus and restore it
+when dismissed. Character choices remain reachable by visible controls even
+when single-character shortcuts are disabled.
+
 ## Continuity and waiting
 
 The app never shows the wrong screen while it waits. Until startup has looked

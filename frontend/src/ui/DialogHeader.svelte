@@ -35,6 +35,10 @@
     font-weight: 600;
   }
   .x {
+    display: grid;
+    place-items: center;
+    padding: 0;
+    flex-shrink: 0;
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);

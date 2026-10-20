@@ -1,4 +1,5 @@
 <script lang="ts">
+import KeyboardNavigation from '../ui/KeyboardNavigation.svelte';
 import { createDesktopSession } from './desktop-session.svelte';
 import { createSellWorkspace } from '../features/selling/sell-workspace.svelte';
 import StatusStrip from './StatusStrip.svelte';
@@ -382,17 +383,19 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
   let restoring = $derived(!inventory.restored && !hasInventory);
 </script>
 
+<a class="skip-navigation" href="#workspace" onclick={(event) => { event.preventDefault(); workspaceElement?.focus(); }}>Skip to current view</a>
+
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
 <div data-shell data-testid="desktop-mode" class={showWorkspace ? 'shell' : 'desktop-landing'}>
-  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
+  <StatusStrip keyboardTools={firstRunKeyboard} bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
   <aside data-shell class="sidebar">
-    <nav data-shell>
+    <nav data-shell aria-label="App views">
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Trade</div>
-        <button data-shell type="button" class="nav-item" data-testid="nav-sell" class:active={effectiveView === 'sell'} onclick={() => filters.setView('sell')}>
+        <button data-shell type="button" class="nav-item" data-testid="nav-sell" class:active={effectiveView === 'sell'} aria-current={effectiveView === 'sell' ? 'page' : undefined} onclick={() => filters.setView('sell')}>
           <span data-shell>{hasInventory ? estimatedGuidance ? 'Opportunities' : 'Sell' : 'Inventory'}</span>
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven
@@ -400,16 +403,16 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
           {#if hasInventory}<span data-shell class="badge">{defaultFacts.phase === 'done' && !guidanceUnavailable ? sellableCount : '—'}</span>{/if}
         </button>
         
-          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} onclick={() => filters.setView('session')}><span data-shell>Trade Session</span></button>
+          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} aria-current={effectiveView === 'session' ? 'page' : undefined} onclick={() => filters.setView('session')}><span data-shell>Trade Session</span></button>
         
-          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sets'} onclick={() => filters.setView('sets')}>
+          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sets'} aria-current={effectiveView === 'sets' ? 'page' : undefined} onclick={() => filters.setView('sets')}>
             <span data-shell>Set picks</span>
             <span data-shell class="badge">{setResult.phase === 'done' ? setRecos.length : '—'}</span>
           </button>
         <!-- Hidden only once the plan is known to be empty, so the nav does not
              shift when relic values arrive after the inventory. -->
         {#if relicPlan.length > 0 || relicResult.phase !== 'done' || relicResult.error}
-          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} onclick={() => filters.setView('relics')}>
+          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} aria-current={effectiveView === 'relics' ? 'page' : undefined} onclick={() => filters.setView('relics')}>
             <span data-shell>Relics</span>
             <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
@@ -417,26 +420,26 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
         <!-- Shown from the scan itself, not once prices arrive, so the nav does
              not shift when the market snapshot lands after the inventory. -->
         {#if resolvedRivens.length > 0 || (inventory.ownedRivens.length > 0 && !inventory.market)}
-          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} onclick={() => filters.setView('rivens')}>
+          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} aria-current={effectiveView === 'rivens' ? 'page' : undefined} onclick={() => filters.setView('rivens')}>
             <span data-shell>Rivens</span>
             <span data-shell class="badge">{resolvedRivens.length}</span>
           </button>
         {/if}
         {#if showBaroCard || (hasInventory && !inventory.market && !inventory.marketLoadError)}
-          <button data-shell type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} onclick={() => filters.setView('baro')}>
+          <button data-shell type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} aria-current={effectiveView === 'baro' ? 'page' : undefined} onclick={() => filters.setView('baro')}>
             <span data-shell>Baro</span>
             {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>
             {:else if baroState && baroState.phase !== 'unknown'}<span data-shell class="badge when" title="Baro arrives in {humanWindow(baroState.windowMs)}">{humanWindow(baroState.windowMs).split(' ')[0]}</span>{/if}
           </button>
         {/if}
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} onclick={() => filters.setView('routines')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} aria-current={effectiveView === 'routines' ? 'page' : undefined} onclick={() => filters.setView('routines')}>
           <span data-shell>Routines</span>
         </button>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'calendar'} onclick={() => filters.setView('calendar')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'calendar'} aria-current={effectiveView === 'calendar' ? 'page' : undefined} onclick={() => filters.setView('calendar')}>
           <span data-shell>Calendar</span>
         </button>
         {#if buildMetaDrift(inventory.market) || (hasInventory && !inventory.market && !inventory.marketLoadError)}
-          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'meta'} onclick={() => filters.setView('meta')}>
+          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'meta'} aria-current={effectiveView === 'meta' ? 'page' : undefined} onclick={() => filters.setView('meta')}>
             <span data-shell>Meta Drift</span>
           </button>
         {/if}
@@ -444,27 +447,27 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
 
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Manage</div>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} onclick={() => filters.setView('orders')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} aria-current={effectiveView === 'orders' ? 'page' : undefined} onclick={() => filters.setView('orders')}>
           <span data-shell>My orders</span>
           {#if ordersToFix > 0}<span data-shell class="badge warn" title="{ordersToFix} {ordersToFix === 1 ? 'order' : 'orders'} to fix">{ordersToFix}</span>{/if}
         </button>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'watches'} onclick={() => filters.setView('watches')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'watches'} aria-current={effectiveView === 'watches' ? 'page' : undefined} onclick={() => filters.setView('watches')}>
           <span data-shell>Price watches</span>
         </button>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'notifications'} onclick={() => filters.setView('notifications')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'notifications'} aria-current={effectiveView === 'notifications' ? 'page' : undefined} onclick={() => filters.setView('notifications')}>
           <span data-shell>Notifications</span>{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}
         </button>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'ledger'} onclick={() => filters.setView('ledger')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'ledger'} aria-current={effectiveView === 'ledger' ? 'page' : undefined} onclick={() => filters.setView('ledger')}>
           <span data-shell>Ledger</span>
         </button>
       </div>
 
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Library</div>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'install'} onclick={() => filters.setView('install')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'install'} aria-current={effectiveView === 'install' ? 'page' : undefined} onclick={() => filters.setView('install')}>
           <span data-shell>FAQ</span>
         </button>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'settings'} onclick={() => filters.setView('settings')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'settings'} aria-current={effectiveView === 'settings' ? 'page' : undefined} onclick={() => filters.setView('settings')}>
           <span data-shell>Settings</span>
         </button>
       </div>
@@ -473,7 +476,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
   </aside>
 
   {/if}
-  <main bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-first-run' : undefined}>
+  <main id="workspace" tabindex="-1" aria-label="Current view" bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-first-run' : undefined}>
     {@render generalBanners()}
     {#if !showWorkspace}
   {#if !inventory.error && !inventory.pullError}
@@ -649,6 +652,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
        foot instead of above the first decision; wide windows place it under
        the sidebar. -->
   <div data-shell class="sfoot">
+    <KeyboardNavigation desktop compact {store} />
     <nav data-shell class="project-links" aria-label="Project links">
       {@render projectLinkAnchors()}
     </nav>
@@ -780,3 +784,5 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
 />
 
 <UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} onautomatic={(state) => prompts.notes(state)} />
+
+{#snippet firstRunKeyboard()}<KeyboardNavigation {store} />{/snippet}

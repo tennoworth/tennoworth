@@ -1,4 +1,5 @@
 <script lang="ts">
+import KeyboardNavigation from '../ui/KeyboardNavigation.svelte';
 import { ago, marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { onMount, tick } from 'svelte';
 import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
@@ -78,7 +79,8 @@ let marketStaleness = $derived(ago(market?.updated_at, displayNow));
 let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, displayNow));
 </script>
 
-<main data-shell class="landing" >
+<a class="skip-navigation" href={market ? '#item-search' : '#hosted-content'} onclick={(event) => { event.preventDefault(); (document.querySelector<HTMLElement>('[data-shortcut-search]') ?? document.getElementById('hosted-content'))?.focus(); }}>{market ? 'Skip to item search' : 'Skip to content'}</a>
+<main id="hosted-content" tabindex="-1" data-shell class="landing" >
   {@render statusStrip()}
   <!-- One lede line under the strip (the strip's descriptor already says what
        this is). The old pitch paragraph / hero is gone - search is the first
@@ -148,6 +150,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
   {/if}
 
   <footer data-shell class="sitefoot">
+    <KeyboardNavigation {store} />
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
     {#if market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
     <a data-shell href="#trust">Trust &amp; safety</a>

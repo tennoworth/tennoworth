@@ -880,3 +880,17 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 [data-kind="vault"] { --k: var(--vault); }
 [data-kind="notice"] { --k: var(--good); }
 [data-kind="deal"] { --k: var(--muted); }
+
+/* Focus-only links let a keyboard cross long navigation and market tables. */
+.skip-navigation {
+  position: fixed;
+  top: var(--s2);
+  left: var(--s2);
+  z-index: var(--layer-toast);
+  transform: translateY(-200%);
+  padding: var(--s2) var(--s3);
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+.skip-navigation:focus { transform: none; }

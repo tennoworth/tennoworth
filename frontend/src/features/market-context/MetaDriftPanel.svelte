@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { searchShortcut } from '../../ui/keyboard.svelte';
   import type { Market } from '../../contracts/data';
   import { buildMetaDrift, formatDeltaPp, type OnlyRow } from '../../domain/meta-drift';
 
@@ -45,7 +46,7 @@
       <button type="button" aria-pressed={tab === 'only'} onclick={() => tab = 'only'}>Only in year data</button>
     </div>
     </div>
-    <label class="ui-field meta-search"><span>Equipment</span><input bind:value={query} placeholder="Search equipment" /></label>
+    <label class="ui-field meta-search"><span>Equipment</span><input bind:value={query} use:searchShortcut placeholder="Search equipment" /></label>
     <label class="ui-field"><span>Category</span><select bind:value={category}>
       <option value="all">All categories</option>
       {#each model.categories as value}<option value={value}>{value}</option>{/each}

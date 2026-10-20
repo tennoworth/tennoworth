@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import DemandCell from './DemandCell.svelte';
   import ColumnGuide from './ColumnGuide.svelte';
   import { untrack, type Snippet } from 'svelte';
@@ -108,9 +109,6 @@
   ];
   let activePills = $state<Set<PillKey>>(new Set());
 
-  // '/' focuses the name filter from anywhere (unless already typing) -
-  // the filter box is the fastest path through a 400-row table.
-  let filterInput: HTMLInputElement | undefined = $state();
   let filterFocused = $state(false);
   // The box shows filterDraft at once; filter, which re-sorts and re-pages
   // the whole table, follows once typing pauses rather than on every key.
@@ -130,22 +128,7 @@
     filterTimer = setTimeout(() => applyFilter(filterDraft), FILTER_DELAY_MS);
   }
   $effect(() => () => clearTimeout(filterTimer));
-  // One light pass marks where '/' moved the cursor; a click needs no pointer.
   let filterPulse = $state(0);
-  $effect(() => {
-    const handler = (e: KeyboardEvent): void => {
-      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      // Views stay mounted while hidden; only the table on screen takes '/'.
-      if (!filterInput || filterInput.offsetParent === null) return;
-      e.preventDefault();
-      filterInput.focus();
-      filterPulse += 1;
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  });
 
   function rowPills(r: Row): PillKey[] {
     const out: PillKey[] = [];
@@ -610,10 +593,11 @@
       id="inventory-name-filter"
       type="text"
       class="name-filter"
-      placeholder="Filter by name… ( / )"
+      placeholder={keyboard.enabled ? `Filter by name… ( ${keyboard.search} )` : 'Filter by name…'}
+      use:searchShortcut={() => filterPulse += 1}
       aria-label="Filter by name"
       bind:value={filterDraft}
-      bind:this={filterInput}
+
       oninput={typeFilter}
       onfocus={() => (filterFocused = true)}
       onblur={() => (filterFocused = false)}
@@ -652,7 +636,7 @@
     </div>
     {#if picksOpen}
       {#if picks.length > 0}
-        <div class="scroll">
+        <div class="scroll" use:tableNavigation={'Top picks table'}>
         <table class:comfortable={density === 'comfortable'} class="picks-table">
           <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
           <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
@@ -742,7 +726,7 @@
   {#if results.length === 0 && empty}
     <div class="empty-slot">{@render empty()}</div>
   {:else}
-  <div class="scroll">
+  <div class="scroll" use:tableNavigation={'Inventory table'}>
   <table class:comfortable={density === 'comfortable'} style="min-width:{floorRem}rem">
     {@render colgroup()}
     <thead>

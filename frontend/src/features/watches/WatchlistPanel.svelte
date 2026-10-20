@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { searchShortcut } from '../../ui/keyboard.svelte';
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopAddWatch, desktopCheckWatchesNow, desktopDeleteWatch, desktopListWatches, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy } from 'svelte';
@@ -179,7 +180,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
       <label for="watch-item">Item to watch</label>
       <div class="pick-input">
       <input
-        id="watch-item"
+        id="watch-item" use:searchShortcut
         class="ui-input"
         type="text"
         placeholder="Item to watch - try “primed flow”, “ash prime set”…"

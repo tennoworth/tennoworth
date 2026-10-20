@@ -8,7 +8,7 @@ import { humanWindow } from '../ui/format';
 import PresenceMenu from '../features/presence/PresenceMenu.svelte';
 import type { ActivityLog } from '../ui/activity.svelte';
 import type { PresenceController } from '../features/presence/presence.svelte';
-  let { inShell, inventory, listing, filters, unresolvedCount, unresolvedSummary, inventoryFreshness, inventoryStaleness, inventoryTimestamp, marketFreshness, marketStaleness, baroState, unreadNotifications, wfmLabel, projectLinkAnchors, onexport, onimport, onclear, onupdates, onfeedback, onauth, presence, onpresencesettings, activity }: {
+  let { inShell, inventory, listing, filters, unresolvedCount, unresolvedSummary, inventoryFreshness, inventoryStaleness, inventoryTimestamp, marketFreshness, marketStaleness, baroState, unreadNotifications, wfmLabel, projectLinkAnchors, onexport, onimport, onclear, onupdates, onfeedback, onauth, presence, onpresencesettings, activity, keyboardTools }: {
     inShell: boolean;
     inventory: InventoryController;
     listing: ListingController;
@@ -24,6 +24,7 @@ import type { PresenceController } from '../features/presence/presence.svelte';
     unreadNotifications: number;
     wfmLabel: string;
     projectLinkAnchors: Snippet;
+    keyboardTools?: Snippet;
     onexport: () => void;
     onimport: () => void;
     onclear: () => void;
@@ -137,6 +138,7 @@ import type { PresenceController } from '../features/presence/presence.svelte';
             class:busy={inventory.pullingInventory}
             onclick={() => (refreshOpen = !refreshOpen)}
             aria-expanded={refreshOpen}
+            aria-controls="refresh-pop"
             aria-busy={inventory.pullingInventory}
             disabled={inventory.pullingInventory}
             title={inventory.pullingInventory
@@ -144,7 +146,7 @@ import type { PresenceController } from '../features/presence/presence.svelte';
               : 'Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too.'}
           >{inventory.pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
-            <div data-shell class="refresh-pop">
+            <div data-shell id="refresh-pop" class="refresh-pop">
               <p data-shell class="rp-lede">Scan the running game - no file needed.</p>
               <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={inventory.pullingInventory}>
                 {inventory.pullingInventory ? 'Scanning game…' : 'Scan game'}
@@ -194,6 +196,7 @@ import type { PresenceController } from '../features/presence/presence.svelte';
       <div data-shell class="cell">
         <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('settings')}><span data-shell aria-hidden="true">⚙</span>Settings</button>
       </div>
+      {#if keyboardTools}<div data-shell class="cell">{@render keyboardTools()}</div>{/if}
       <div data-shell class="cell end more">
         <button data-shell type="button" class="cellbtn more-trigger" bind:this={moreTrigger} aria-expanded={moreOpen} aria-controls="more-pop" onclick={() => (moreOpen = !moreOpen)}>More ▾</button>
         {#if moreOpen}
