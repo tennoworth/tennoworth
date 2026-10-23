@@ -749,3 +749,12 @@ the same explanation and data with search/sort controls disabled. Public item
 pages label missing values and recent observations explicitly; they never
 imply that absent dates form a continuous history. The existing theme control
 is available after enhancement, and theme boot resolves the initial mode.
+
+Public selling decisions reuse the same analytical table grammar: activity is
+reported volume, never a prediction of sale time. The desktop download page
+reuses FeatureRail with an explicit illustrative-data label. Its initial HTML
+loads the shared component CSS before hydration so the no-JavaScript sample
+keeps the same layout. Item history loads on demand, retains exact UTC dates
+and source gaps, and uses the existing 100-row Pager. The public-guide example
+in the living reference includes the production history interaction with
+fictional data.

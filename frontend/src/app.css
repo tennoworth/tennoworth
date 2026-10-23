@@ -919,3 +919,5 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 .public-table th:first-child, .public-table td:first-child { text-align: left; min-width: 12rem; }
 .public-controls label { display: grid; gap: var(--s2); }
 .public-prose dd { margin-block-end: var(--s3); font-family: var(--font-mono); }
+
+.selling-article > p { margin-block: 0; max-width: 64rem; line-height: var(--leading-body); }
