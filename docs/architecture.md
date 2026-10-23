@@ -65,6 +65,10 @@ shared Svelte public content into the homepage and physical guide, tool,
 desktop and selected item directories, with route-specific metadata and a
 generated sitemap. `src/public-site/pages.ts` owns the route/pilot selection;
 `src/public-site/model.ts` projects bounded snapshot data for initial HTML.
+Generation uses a production SSR build so server and client markup and style
+hashes agree. Hosted builds emit a Vite manifest to collect dedicated pages’
+shared component styles, then remove the manifest from the public artifact. Public item history remains an on-demand same-origin enhancement;
+initial HTML carries the dated snapshot comparison and explanation.
 The homepage then mounts the interactive hosted shell; dedicated pages hydrate
 `PublicPage.svelte` and refresh estimates from the existing same-origin market
 adapter. Build examples retain their explicit snapshot timestamp until a valid,

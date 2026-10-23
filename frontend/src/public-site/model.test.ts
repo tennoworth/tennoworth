@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { publicData, partTotal } from './model';
+import { activityCandidates, datedHistory, ducatParts, publicData, partTotal } from './model';
 import type { Market } from '../contracts/data';
 
 const market = {
@@ -31,5 +31,57 @@ describe('public selling comparisons', () => {
     const invalid = structuredClone(market); invalid.items.bo_prime_set.median_now = NaN;
     expect(publicData(invalid, ['bo_prime_set']).items).toMatchObject([{ price:null, volume:0, ducats:null }]);
     expect(publicData(invalid, ['bo_prime_set']).items).toHaveLength(1);
+  });
+});
+
+describe('public discovery lists', () => {
+  it('includes evidenced individual Prime parts and never treats a set total as kiosk eligibility', () => {
+    const m = structuredClone(market);
+    m.items.bo_prime_set.tags = ['prime', 'set']; m.items.bo_prime_set.ducats = 90;
+    m.items.bo_prime_ornament.tags = ['prime'];
+    const data = publicData(m);
+    expect(ducatParts(data).map(item => item.slug)).toEqual(['bo_prime_ornament']);
+    delete m.set_to_parts;
+    expect(ducatParts(publicData(m))).toEqual([]);
+    m.items.bo_prime_ornament.tags = ['prime', 'component'];
+    expect(ducatParts(publicData(m)).map(item => item.slug)).toEqual(['bo_prime_ornament']);
+  });
+  it('requires a positive known unit price for the ducat comparison', () => {
+    const m = structuredClone(market); m.items.bo_prime_ornament.tags = ['prime','component'];
+    m.items.bo_prime_ornament.median_now = 0;
+    expect(ducatParts(publicData(m))).toEqual([]);
+  });
+  it('orders candidates by observed activity, excluding unknowns instead of fabricating a score', () => {
+    const m = structuredClone(market);
+    m.items.bo_prime_set.tags = ['prime','set']; m.items.bo_prime_set.vol = 50;
+    m.items.bo_prime_ornament.tags = ['prime','component']; m.items.bo_prime_ornament.vol = 100;
+    expect(activityCandidates(publicData(m)).map(item => item.slug)).toEqual(['bo_prime_ornament','bo_prime_set']);
+    m.items.bo_prime_ornament.median_now = NaN;
+    expect(activityCandidates(publicData(m)).map(item => item.slug)).toEqual(['bo_prime_set']);
+    m.items.bo_prime_set.vol = 0;
+    expect(activityCandidates(publicData(m))).toEqual([]);
+  });
+});
+
+const dated = { start:'2025-12-30', through:'2026-01-02', days:4, generated_at:'2026-01-03T00:00:00Z',
+  missing_days:['2025-12-31'], items:{ bo_prime_set:{ median:[5,6,null,9], volume:[1,2,0,3] } } };
+describe('dated item history', () => {
+  it('aligns exact UTC dates across a year boundary and retains source gaps', () => {
+    expect(datedHistory(dated,'bo_prime_set')?.rows).toEqual([
+      {date:'2026-01-02',median:9,volume:3}, {date:'2026-01-01',median:null,volume:0},
+      {date:'2025-12-31',median:null,volume:null}, {date:'2025-12-30',median:5,volume:1},
+    ]);
+  });
+  it('refuses malformed dates, mismatched arrays and incompatible subtypes', () => {
+    for (const change of [{ start:'2025-02-31' }, { through:'2026-99-31' }, { days:0 }, { days:4001 }, { items:{bo_prime_set:{median:[1],volume:[]}} }, { items:{bo_prime_set:{...dated.items.bo_prime_set,subtype:'rank5'}} }]) {
+      expect(datedHistory({...dated,...change},'bo_prime_set')).toBeNull();
+    }
+    expect(datedHistory(null,'bo_prime_set')).toBeNull();
+    expect(datedHistory(dated,'unknown')).toBeNull();
+  });
+  it('does not turn invalid observations into plausible prices or carry data beyond through', () => {
+    const h = structuredClone(dated); h.through='2025-12-31'; h.items.bo_prime_set.median[0]=NaN;
+    expect(datedHistory(h,'bo_prime_set')?.rows).toHaveLength(2);
+    expect(datedHistory(h,'bo_prime_set')?.rows[1].median).toBeNull();
   });
 });

@@ -40,6 +40,6 @@
   // counts the test as a caller, which is how a dozen such exports survived.
   // The `!` entries are what production mode keeps: index.html loads
   // theme-boot.js by URL, and the dev helpers exist only for tests.
-  "entry": ["public/theme-boot.js!", "src/admin/main.ts!", "src/public-site/render.ts!", "src/shells/PublicHome.svelte!"],
+  "entry": ["public/theme-boot.js!", "src/admin/main.ts!", "src/public-site/render.ts!"],
   "project": ["src/**/*.{ts,svelte}!", "public/**/*.js!", "*.ts", "!src/dev/test-utils.ts!", "!src/dev/render-desktop.ts!", "!src/dev/controller-test-root.svelte.ts!"]
 }

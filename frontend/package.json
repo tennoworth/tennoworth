@@ -1,14 +1,15 @@
 {
   "name": "tennoworth-frontend",
   "overrides": {
-    "devalue": "^5.9.2"
+    "devalue": "^5.9.2",
+    "zod": "^4.6.7"
   },
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "prebuild": "bun ../scripts/check-announcements.ts && bun ../scripts/release.ts app-notes --check && bun ../scripts/sync-csp.ts --check && bun ../scripts/build-icons.ts --check",
-    "build": "vite build && bun scripts/prerender.ts",
+    "build": "vite build --manifest && bun scripts/prerender.ts",
     "build:desktop": "bun ../scripts/check-announcements.ts && bun ../scripts/release.ts app-notes --check && bun ../scripts/sync-csp.ts --check && bun ../scripts/build-icons.ts --check && vite build --outDir dist-desktop --emptyOutDir && bun ../scripts/sync-csp.ts --desktop dist-desktop/index.html",
     "preview": "vite preview",
     "test": "vitest run",
@@ -36,7 +37,7 @@
     "svelte": "^5.0.0",
     "svelte-check": "^4.4.8",
     "typescript": "^6.0.3",
-    "vite": "^6.4.3",
-    "vitest": "^5.0.2"
+    "vite": "^6.4.5",
+    "vitest": "^5.0.5"
   }
 }

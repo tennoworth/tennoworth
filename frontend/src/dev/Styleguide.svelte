@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tableNavigation } from '../ui/keyboard.svelte';
+  import ItemHistory from '../public-site/ItemHistory.svelte';
   import KeyboardNavigation from '../ui/KeyboardNavigation.svelte';
   import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
   import announcementCases from '../../../tests/fixtures/announcements/cases.json';
@@ -230,6 +231,7 @@
   {#if dataState === 'presence'}<section class="wrap tw ui-reading" aria-labelledby="presence-title"><div class="rail"><h3 id="presence-title">Trade presence</h3></div><p class="presence-marks"><span><PresenceMark kind="ingame" />Online in game</span><span><PresenceMark kind="online" />Online</span><span><PresenceMark kind="invisible" />Invisible</span><span><PresenceMark kind="warn" />Needs action</span></p><PresenceSettings presence={samplePresence} /></section>{/if}
   {#if dataState === 'frame'}
     <section class="ui-panel public-prose" aria-label="Public selling guide reference">
+      <ItemHistory slug="example_prime_part" load={async () => ({ start:'2026-01-01', through:'2026-01-03', days:3, generated_at:'2026-01-04T00:00:00Z', missing_days:['2026-01-02'], items:{example_prime_part:{median:[7,null,8],volume:[2,0,3]}} })} />
       <h2>Public selling guide</h2>
       <p>Compare the same price basis before choosing a sale. These fictional values demonstrate the public page’s reading rhythm.</p>
       <p class="ui-notice">Dated example · PC · Estimates, not live orders. Missing prices remain unavailable.</p>
