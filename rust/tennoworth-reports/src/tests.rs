@@ -194,6 +194,11 @@ fn a_contributor_past_the_weekly_cap_is_refused() {
         add(&mut store, over, "2026-10-08"),
         Err(StatusCode::TOO_MANY_REQUESTS)
     );
+    assert_eq!(
+        store.conn().query_row("SELECT COUNT(*) FROM sale", [], |r| r.get::<_, i64>(0)).unwrap(),
+        MAX_SALES_PER_CONTRIBUTOR_WEEK,
+        "an over-cap batch must roll back all inserts"
+    );
 }
 
 #[test]
@@ -422,4 +427,54 @@ fn iso_weeks_match_the_shared_vectors() {
         let day: NaiveDate = v["day"].as_str().unwrap().parse().unwrap();
         assert_eq!(contract::iso_week(day), v["week"].as_str().unwrap());
     }
+}
+
+#[test]
+fn retries_at_the_weekly_cap_do_not_consume_quota() {
+    let mut store = store_at(at("2026-10-08T12:00:00Z"));
+    for offset in (0..500).step_by(50) {
+        let mut body = batch(1, "primed_flow", "2026-10-08", &[40; 50]);
+        for (i, sale) in body["sales"].as_array_mut().unwrap().iter_mut().enumerate() {
+            sale["ref"] = json!(hex(offset + i as u64));
+        }
+        add(&mut store, body, "2026-10-08").unwrap();
+    }
+    add(
+        &mut store,
+        batch(1, "primed_flow", "2026-10-08", &[40; 50]),
+        "2026-10-08",
+    )
+    .unwrap();
+    assert_eq!(
+        store
+            .conn()
+            .query_row("SELECT COUNT(*) FROM sale", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        500
+    );
+}
+
+#[test]
+fn duplicate_refs_in_a_batch_only_consume_one_slot() {
+    let mut store = store_at(at("2026-10-08T12:00:00Z"));
+    for offset in (0..450).step_by(50) {
+        let mut body = batch(1, "primed_flow", "2026-10-08", &[40; 50]);
+        for (i, sale) in body["sales"].as_array_mut().unwrap().iter_mut().enumerate() {
+            sale["ref"] = json!(hex(offset + i as u64));
+        }
+        add(&mut store, body, "2026-10-08").unwrap();
+    }
+    let mut repeated = batch(1, "primed_flow", "2026-10-08", &[40; 50]);
+    for sale in repeated["sales"].as_array_mut().unwrap() {
+        sale["ref"] = json!(hex(999));
+    }
+    add(&mut store, repeated.clone(), "2026-10-08").unwrap();
+    add(&mut store, repeated, "2026-10-08").unwrap();
+    assert_eq!(
+        store
+            .conn()
+            .query_row("SELECT COUNT(*) FROM sale", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        451
+    );
 }

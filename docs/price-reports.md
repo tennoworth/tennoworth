@@ -24,7 +24,13 @@ keeps the trades for the next pass, with the pause doubling up to 30 minutes.
 Turning sharing off stops the next request and cancels one in flight.
 
 "Delete recent reports" in Settings sends the erase secrets for this week and
-the previous one. Debug builds, tests, OCR test builds and probes never send,
+the previous one. It waits for an active upload pass to finish and persists a
+queue boundary before contacting the service, so trades already recorded at
+that boundary are not uploaded again, even if deletion must be retried. New
+trades remain eligible while sharing is enabled. A failed deletion must be
+retried to remove reports already held by the service.
+
+Debug builds, tests, OCR test builds and probes never send,
 and neither does a release launched with `TENNOWORTH_DISABLE_USAGE=1`.
 
 ## What a report contains

@@ -5,8 +5,7 @@ actually commit to from what we can't promise.
 
 ## Trust boundaries
 
-The product has three components with three different trust
-characteristics:
+The product crosses the following trust boundaries:
 
 1. **The web app** (`frontend/`, deployed as static files).
    Client-side informational site; a separate service publishes aggregate desktop usage counts. We see no inventory
@@ -38,7 +37,24 @@ characteristics:
    requests the same account inventory from Digital Extremes that the manual
    scan does.
 
-3. **Our build + release pipeline** (GitHub Actions):
+3. **Opt-in collectors** (`rust/tennoworth-usage` and
+   `rust/tennoworth-reports`). Separate loopback services receive daily usage
+   tokens and anonymous trade-price reports through the public proxy. They
+   receive no inventory or account credentials. Their unauthenticated inputs
+   are untrusted: random contributor ids do not establish independent people.
+   Reported prices remain separate from sell-priority scoring. Retention and
+   infrastructure visibility are described below.
+
+4. **Private announcement publisher** (`rust/tennoworth-publisher`). Its
+   separately built dashboard is protected by Cloudflare Access. The API
+   verifies signed identity tokens against its configured issuer, audience and
+   allowed identities; mutations also require the dashboard Origin. It can
+   publish public announcements and request a fixed list of scheduled host
+   jobs. It has no player inventory or WFM account access. Compromising an
+   authorized publisher identity can change public feed content or request
+   those jobs; public feed readers still validate the feed contract.
+
+5. **Our build + release pipeline** (GitHub Actions):
    - `build-web.yml` - on a push touching `frontend/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
@@ -81,10 +97,11 @@ characteristics:
   are scraped from game memory and used as URL parameters in a single
   HTTPS request to `api.warframe.com/api/inventory.php`, then
   discarded.
-- **The WFM JWT never reaches the webview.** Login is handled in the
-  Rust process; the encrypted token lives on disk and is decrypted
-  only in memory. Listing and order operations are relayed by
-  wfm-core - the webview only sees results.
+- **Rust never returns the WFM JWT to the application webview.** The
+  sign-in window holds WFM's cookie separately from the application page.
+  The paste-token fallback temporarily accepts a user-supplied JWT in the
+  application webview, sends it to Rust and clears the input. The persisted
+  token is encrypted; listing and order operations return results without it.
 - **Relic reward screenshots stay local and ephemeral.** The overlay is off by
   default. After the user enables it, a reward log marker or retry shortcut
   captures the Warframe window into memory, crops the reward band, and runs
@@ -128,8 +145,9 @@ characteristics:
   sends the item, quantity, price, side and UTC day of trades for platinum
   recorded after that moment, under an id that changes every ISO week. Never
   the trading partner, time of day, inventory, game or warframe.market account,
-  app version or platform. The service deletes raw reports when their week
-  closes and publishes an item only once five ids reported it that week. See
+  app version or platform. The service retains raw reports for the current
+  and previous ISO week, then folds older weeks into aggregates and deletes
+  their raw rows during maintenance. It publishes an item only once five ids reported it that week. See
   [price reports](docs/price-reports.md).
 
 See [daily installation counts](docs/usage-counting.md) for the data flow,
