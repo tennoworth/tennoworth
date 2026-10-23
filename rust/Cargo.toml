@@ -41,7 +41,8 @@ resolver = "2"
 url = "2.5"
 # RS256 verification for private Cloudflare Access requests; AWS-LC avoids system OpenSSL and the RSA timing advisory.
 jsonwebtoken = { version = "11.1", default-features = false, features = ["aws_lc_rs"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
+# 1.53.3 is the first release on this line that patches RUSTSEC-2026-0386.
+tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
 
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 anyhow = "1"

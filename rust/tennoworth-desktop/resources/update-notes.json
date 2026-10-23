@@ -1383,6 +1383,17 @@
           "supersedes": []
         },
         {
+          "id": "tokio-asyncfd-io-safety",
+          "kind": "fixed",
+          "title": "Use a patched async runtime",
+          "body": "Tokio is updated to a release that fixes an unsound Unix file-descriptor constructor in the async I/O layer.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
           "id": "price-reports-delete-queue",
           "kind": "fixed",
           "title": "Delete recent reports without resending queued trades",
