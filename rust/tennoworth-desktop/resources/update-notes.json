@@ -1,5 +1,5 @@
 {
-  "version": "0.8.107",
+  "version": "0.8.108",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1359,6 +1359,45 @@
           "kind": "improved",
           "title": "Keyboard navigation, shortcut help and a view picker",
           "body": "Move through the app without the mouse, open the shortcut reference, and switch views from one control. Shortcut preferences stay on your device.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.108",
+      "date": "2026-10-23",
+      "changes": [
+        {
+          "id": "tls-distrusted-intermediates",
+          "kind": "fixed",
+          "title": "Use updated certificate verification",
+          "body": "The app's TLS libraries and trusted certificate list now reject newly distrusted certificate chains.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "price-reports-delete-queue",
+          "kind": "fixed",
+          "title": "Delete recent reports without resending queued trades",
+          "body": "Deletion waits for an active upload to finish and excludes trades already recorded from later uploads, including when deletion needs another attempt. New trades remain eligible while sharing is enabled.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "price-reports-idempotent-cap",
+          "kind": "fixed",
+          "title": "Keep sharing after a delivery retry",
+          "body": "Sending an already accepted report batch again no longer consumes extra weekly quota, so a lost acknowledgement does not block later reports at the limit.",
           "platforms": [
             "windows",
             "linux"
