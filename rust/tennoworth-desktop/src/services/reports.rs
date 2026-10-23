@@ -52,6 +52,7 @@ pub struct PriceReportStatus {
 pub struct PriceReports {
     consent: watch::Sender<bool>,
     mutation: std::sync::Mutex<()>,
+    delivery: tokio::sync::Mutex<()>,
     available: bool,
 }
 
@@ -333,14 +334,31 @@ pub async fn erase_price_reports(
     db: State<'_, Db>,
     reports: State<'_, PriceReports>,
 ) -> Result<(), String> {
+    let client = usage::client()
+        .map_err(|_| "Could not reach the price-report service. Try again later.".to_string())?;
+    erase_recent(&db, &reports, &client, BASE).await
+}
+
+async fn erase_recent(
+    db: &Db,
+    reports: &PriceReports,
+    client: &reqwest::Client,
+    base: &str,
+) -> Result<(), String> {
     if !reports.available {
         return Err("Price sharing is disabled in this build or launch.".into());
     }
-    let unavailable = || "Could not reach the price-report service. Try again later.".to_string();
-    let Some(key) = load_key(&db, false).map_err(|_| unavailable())? else {
+    // Finish the sender's pass before erasing; otherwise its acknowledgement can
+    // overwrite our queue boundary, or its upload can restore deleted reports.
+    let _delivery = reports.delivery.lock().await;
+    let unavailable = || "Could not delete recent reports. Try again later.".to_string();
+    let Some(key) = load_key(db, false).map_err(|_| unavailable())? else {
         return Ok(());
     };
-    let client = usage::client().map_err(|_| unavailable())?;
+    // Persist this before contacting the service, including when deletion fails:
+    // retries must never upload the trades the user has asked us to remove.
+    let through = db.last_trade_id().map_err(|_| unavailable())?;
+    db.set_setting(MARK, &through.to_string()).map_err(|_| unavailable())?;
     let today = Utc::now().date_naive();
     for week in open_weeks(today) {
         let request = serde_json::json!({
@@ -348,12 +366,12 @@ pub async fn erase_price_reports(
             "week": week,
             "secret": week_ids(&key, &week).erase_secret,
         });
-        let accepted = post(&client, &format!("{BASE}/erase"), &request).await;
+        let accepted = post(client, &format!("{base}/erase"), &request).await;
         if accepted != Ok(reqwest::StatusCode::NO_CONTENT) {
             return Err(unavailable());
         }
     }
-    let _ = db.set_setting(SENT, "");
+    db.set_setting(SENT, "").map_err(|_| unavailable())?;
     Ok(())
 }
 
@@ -384,8 +402,8 @@ async fn post(
 }
 
 enum Delivery {
-    /// Accepted, or refused for good (malformed, over the weekly cap): either
-    /// way the batch is settled and must not be offered again.
+    /// Accepted, or refused for good (malformed): either way the batch is
+    /// settled and must not be offered again.
     Settled { accepted: bool },
     /// Network failure, timeout, server trouble or withdrawn consent: retry later.
     Retry,
@@ -425,7 +443,9 @@ async fn pass(
     client: &reqwest::Client,
     endpoint: &str,
     consent: &mut watch::Receiver<bool>,
+    reports: &PriceReports,
 ) -> bool {
+    let _delivery = reports.delivery.lock().await;
     let (Ok(Some(key)), Ok(from)) = (load_key(db, false), mark(db)) else {
         return true;
     };
@@ -469,6 +489,7 @@ pub fn start(app: tauri::AppHandle) {
         consent,
         available,
         mutation: std::sync::Mutex::new(()),
+        delivery: tokio::sync::Mutex::new(()),
     });
     if !available {
         return;
@@ -491,6 +512,7 @@ pub fn start(app: tauri::AppHandle) {
                     &client,
                     &endpoint,
                     &mut receiver,
+                    &app.state::<PriceReports>(),
                 )
                 .await;
                 wait = if delivered {

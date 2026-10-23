@@ -186,8 +186,9 @@ DE public data  ── drop tables + world state ►      └── optional WFM
   from Digital Extremes. The resulting inventory, snapshots, settings, watches,
   ledger, protected selling plan, notification history, and pending listing
   plans remain in local application storage. So does the record of listings
-  sent from TennoWorth (item, price, quantity, time; kept 180 days), which the
-  Ledger reads to show how they did; turning it off in the Ledger deletes it.
+  sent from TennoWorth (item, price, quantity and time), which the Ledger reads
+  to show how they did. Rows older than 180 days are deleted when another
+  listing is recorded; turning the record off in the Ledger deletes it.
 - Scanning and public market browsing do not require a warframe.market login.
   Verified selling availability and buyer comparisons do. The bearer token is
   encrypted at rest

@@ -262,17 +262,6 @@ impl Store {
 
     pub fn add_sales(&mut self, batch: ValidBatch) -> Result<(), StatusCode> {
         let tx = self.conn.transaction().map_err(unavailable)?;
-        let held: i64 = tx
-            .query_row(
-                "SELECT COUNT(*) FROM sale WHERE contributor=?1",
-                [&batch.contributor],
-                |r| r.get(0),
-            )
-            .map_err(unavailable)?;
-        let incoming = i64::try_from(batch.sales.len()).map_err(unavailable)?;
-        if held + incoming > MAX_SALES_PER_CONTRIBUTOR_WEEK {
-            return Err(StatusCode::TOO_MANY_REQUESTS);
-        }
         for sale in &batch.sales {
             tx.execute(
                 "INSERT OR IGNORE INTO sale VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
@@ -289,6 +278,18 @@ impl Store {
                 ),
             )
             .map_err(unavailable)?;
+        }
+        // Enforce the cap on actual inserts so lost acknowledgements and repeated
+        // references remain idempotent even when the contributor is at the cap.
+        let held: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM sale WHERE contributor=?1",
+                [&batch.contributor],
+                |r| r.get(0),
+            )
+            .map_err(unavailable)?;
+        if held > MAX_SALES_PER_CONTRIBUTOR_WEEK {
+            return Err(StatusCode::TOO_MANY_REQUESTS);
         }
         tx.commit().map_err(unavailable)
     }

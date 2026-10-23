@@ -223,6 +223,7 @@ fn reports(available: bool) -> PriceReports {
         consent,
         available,
         mutation: std::sync::Mutex::new(()),
+        delivery: tokio::sync::Mutex::new(()),
     }
 }
 
@@ -316,6 +317,7 @@ async fn run_pass(endpoint: &str, consent_on: bool) -> (Db, i64, i64) {
         &usage::client().unwrap(),
         endpoint,
         &mut receiver,
+        &state,
     )
     .await;
     let newest = db.last_trade_id().unwrap();
@@ -398,4 +400,104 @@ async fn nothing_is_sent_without_consent() {
         listener.accept().unwrap_err().kind(),
         std::io::ErrorKind::WouldBlock
     );
+}
+
+#[tokio::test]
+async fn deleting_reports_skips_queued_trades_even_if_the_service_is_unavailable() {
+    for status in [204, 503] {
+        let db = Db::open_in_memory().unwrap();
+        let state = reports(true);
+        update_preferences(&db, &state, true).unwrap();
+        let newest = record(&db, 10, Utc::now().timestamp(), "Primed Flow", 40);
+        let (endpoint, task) = answering(status).await;
+        let client = usage::client().unwrap();
+        let result = erase_recent(&db, &state, &client, endpoint.trim_end_matches("/sales")).await;
+        assert_eq!(result.is_ok(), status == 204);
+        assert_eq!(mark(&db).unwrap(), newest);
+        assert!(
+            opted_in(&db),
+            "deletion preserves consent for future trades"
+        );
+        let mut receiver = state.consent.subscribe();
+        assert!(pass(&db, &market, &client, &endpoint, &mut receiver, &state).await);
+        assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 0);
+        if status == 204 {
+            let future = record(&db, 11, Utc::now().timestamp(), "Primed Flow", 41);
+            assert!(pass(&db, &market, &client, &endpoint, &mut receiver, &state).await);
+            assert_eq!(mark(&db).unwrap(), future);
+            assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 1);
+        }
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn deletion_waits_for_an_active_upload_then_erases_its_results() {
+    use axum::{routing::post, Router};
+    use std::sync::Arc;
+    let db = Db::open_in_memory().unwrap();
+    let state = reports(true);
+    update_preferences(&db, &state, true).unwrap();
+    record(&db, 10, Utc::now().timestamp(), "Primed Flow", 40);
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let release = Arc::new(tokio::sync::Notify::new());
+    let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let app = Router::new()
+        .route(
+            "/sales",
+            post({
+                let (entered, release, events) = (entered.clone(), release.clone(), events.clone());
+                move || {
+                    let (entered, release, events) =
+                        (entered.clone(), release.clone(), events.clone());
+                    async move {
+                        entered.notify_one();
+                        release.notified().await;
+                        events.lock().unwrap().push("sale");
+                        axum::http::StatusCode::NO_CONTENT
+                    }
+                }
+            }),
+        )
+        .route(
+            "/erase",
+            post({
+                let events = events.clone();
+                move || {
+                    let events = events.clone();
+                    async move {
+                        events.lock().unwrap().push("erase");
+                        axum::http::StatusCode::NO_CONTENT
+                    }
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let endpoint = format!("{base}/sales");
+    let server = tokio::spawn(axum::serve(listener, app).into_future());
+    let client = usage::client().unwrap();
+    let mut receiver = state.consent.subscribe();
+    let upload = pass(&db, &market, &client, &endpoint, &mut receiver, &state);
+    let delete = async {
+        entered.notified().await;
+        let deletion = erase_recent(&db, &state, &client, &base);
+        tokio::pin!(deletion);
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), &mut deletion).await.is_err(),
+            "deletion must wait while the upload is blocked"
+        );
+        assert!(events.lock().unwrap().is_empty());
+        release.notify_one();
+        deletion.await.unwrap();
+    };
+    let (sent, ()) = tokio::time::timeout(Duration::from_secs(10), async {
+        tokio::join!(upload, delete)
+    })
+    .await
+    .unwrap();
+    assert!(sent);
+    assert_eq!(*events.lock().unwrap(), ["sale", "erase", "erase"]);
+    assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 0);
+    server.abort();
 }
