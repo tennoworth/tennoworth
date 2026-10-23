@@ -54,6 +54,29 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.108 - 2026-10-23
+
+# 🔒 TennoWorth Desktop 0.8.108
+
+TennoWorth Desktop 0.8.108 is ready.
+
+This security update refreshes certificate verification and fixes two failures in optional price sharing: deleting recent reports while an upload is running, and retrying a report batch near the weekly limit.
+
+## Changelog (3)
+
+### Security
+
+- **Use updated certificate verification** The app's TLS libraries and trusted certificate list now reject newly distrusted certificate chains. <!-- app-note {"id":"tls-distrusted-intermediates","kind":"fixed"} -->
+
+### Price sharing
+
+- **Delete recent reports without resending queued trades** Deletion waits for an active upload to finish and excludes trades already recorded from later uploads, including when deletion needs another attempt. New trades remain eligible while sharing is enabled. <!-- app-note {"id":"price-reports-delete-queue","kind":"fixed"} -->
+- **Keep sharing after a delivery retry** Sending an already accepted report batch again no longer consumes extra weekly quota, so a lost acknowledgement does not block later reports at the limit. <!-- app-note {"id":"price-reports-idempotent-cap","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically. Downloads are available below.
+
 ## 0.8.107 - 2026-10-20
 
 # 🎨 TennoWorth Desktop 0.8.107
