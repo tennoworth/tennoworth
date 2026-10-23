@@ -60,13 +60,14 @@ format; the app explicitly identifies incomplete coverage for older upgrades.
 
 TennoWorth Desktop 0.8.108 is ready.
 
-This security update refreshes certificate verification and fixes two failures in optional price sharing: deleting recent reports while an upload is running, and retrying a report batch near the weekly limit.
+This security update refreshes certificate verification and the async runtime, and fixes two failures in optional price sharing: deleting recent reports while an upload is running, and retrying a report batch near the weekly limit.
 
-## Changelog (3)
+## Changelog (4)
 
 ### Security
 
 - **Use updated certificate verification** The app's TLS libraries and trusted certificate list now reject newly distrusted certificate chains. <!-- app-note {"id":"tls-distrusted-intermediates","kind":"fixed"} -->
+- **Use a patched async runtime** Tokio is updated to a release that fixes an unsound Unix file-descriptor constructor in the async I/O layer. <!-- app-note {"id":"tokio-asyncfd-io-safety","kind":"fixed"} -->
 
 ### Price sharing
 
