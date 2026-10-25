@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { activityCandidates, datedHistory, ducatParts, publicData, partTotal } from './model';
+import { activityCandidates, datedHistory, decisionAnswer, decisionText, ducatParts, formatStampUtc, formatStampUtcTime, publicData, partTotal, priceText } from './model';
 import type { Market } from '../contracts/data';
 
 const market = {
@@ -83,5 +83,70 @@ describe('dated item history', () => {
     const h = structuredClone(dated); h.through='2025-12-31'; h.items.bo_prime_set.median[0]=NaN;
     expect(datedHistory(h,'bo_prime_set')?.rows).toHaveLength(2);
     expect(datedHistory(h,'bo_prime_set')?.rows[1].median).toBeNull();
+  });
+});
+
+
+describe('public set-versus-parts decision', () => {
+  const data = () => publicData(market);
+  it('uses a quantity-weighted sum and states one set versus copies and distinct items', () => {
+    const answer = decisionAnswer(data(), 'bo_prime_set');
+    expect(answer).not.toBeNull();
+    expect(answer).toMatchObject({ outcome: 'set-higher', setPrice: 30, partsTotal: 14, gap: 16, componentCopies: 2, distinctComponents: 1, setVolume48h: 0 });
+    const text = decisionText(answer!);
+    expect(text.headline).toBe('The set is 16p above the summed parts.');
+    expect(text.quantities).toBe('One set versus 2 component copies across 1 distinct item.');
+    expect(text.clipboard).toContain('set 30p vs 14p summed parts');
+    expect(text.clipboard).toContain('https://tennoworth.app/items/bo_prime_set/');
+    expect(formatStampUtc('2026-10-20T12:00:00Z')).toBe('20 Oct 2026');
+    expect(formatStampUtcTime('2026-10-20T12:00:00Z')).toBe('20 Oct 2026 12:00 UTC');
+    expect(priceText(30)).toBe('30p');
+    expect(priceText(null)).toBe('Unavailable');
+  });
+  it('covers parts-higher, tie and missing/zero volume without claiming sale speed', () => {
+    const higher = structuredClone(market); higher.items.bo_prime_set.median_now = 5;
+    expect(decisionAnswer(publicData(higher), 'bo_prime_set')).toMatchObject({ outcome: 'parts-higher', gap: -9 });
+    const tie = structuredClone(market); tie.items.bo_prime_set.median_now = 14;
+    const tieAnswer = decisionAnswer(publicData(tie), 'bo_prime_set')!;
+    expect(tieAnswer.outcome).toBe('tie');
+    expect(decisionText(tieAnswer).headline).toBe('The set and summed parts are equal at 14p.');
+    const noVolume = structuredClone(market); delete (noVolume.items.bo_prime_set as unknown as { vol?: number }).vol;
+    expect(decisionText(decisionAnswer(publicData(noVolume), 'bo_prime_set')!).evidence).toContain('Set reported volume: unavailable.');
+    expect(decisionText(tieAnswer).evidence).toContain('Source: warframe.market');
+    expect(decisionText(tieAnswer).evidence).toContain('does not establish which sells faster');
+    expect(decisionText(tieAnswer).clipboard).toContain('not evidence of sale speed');
+  });
+  it('suppresses the verdict when a component price, quantity or platform is not comparable', () => {
+    const noPrice = structuredClone(market); delete noPrice.items.bo_prime_ornament.median_now;
+    const missingPrice = decisionAnswer(publicData(noPrice), 'bo_prime_set')!;
+    expect(missingPrice).toMatchObject({ outcome: 'unavailable', reason: 'missing-data', partsTotal: null, gap: null });
+    expect(decisionText(missingPrice).clipboard).toContain('comparison unavailable');
+    const noQuantity = structuredClone(market); delete noQuantity.set_to_parts!.bo_prime_set.parts[0].quantity;
+    const missingQuantity = decisionAnswer(publicData(noQuantity), 'bo_prime_set')!;
+    expect(missingQuantity).toMatchObject({ outcome: 'unavailable', reason: 'missing-data', componentCopies: null });
+    const console = structuredClone(market); console.platform = 'ps4';
+    expect(decisionAnswer(publicData(console), 'bo_prime_set')).toMatchObject({ outcome: 'unavailable', reason: 'incomparable-data' });
+    const badStamp = structuredClone(market); badStamp.updated_at = 'not-a-date';
+    expect(decisionAnswer(publicData(badStamp), 'bo_prime_set')).toMatchObject({ outcome: 'unavailable', reason: 'invalid-snapshot' });
+  });
+  it('rejects duplicate component mappings, nonfinite totals and a missing mapping without dropping the answer', () => {
+    const duplicate = structuredClone(market);
+    duplicate.set_to_parts!.bo_prime_set.parts.push({ slug: 'bo_prime_ornament', component_name: 'Bo Prime Ornament', quantity: 2 });
+    const duplicateAnswer = decisionAnswer(publicData(duplicate), 'bo_prime_set')!;
+    expect(duplicateAnswer).toMatchObject({ outcome: 'unavailable', reason: 'incomparable-data' });
+    expect(duplicateAnswer.missing.join(' ')).toContain('duplicate component mapping');
+    const overflow = structuredClone(market); overflow.items.bo_prime_ornament.median_now = Number.MAX_VALUE;
+    const overflowAnswer = decisionAnswer(publicData(overflow), 'bo_prime_set')!;
+    expect(overflowAnswer).toMatchObject({ outcome: 'unavailable', reason: 'incomparable-data', partsTotal: null });
+    const noMapping = structuredClone(market); delete noMapping.set_to_parts;
+    const noMappingAnswer = decisionAnswer(publicData(noMapping), 'bo_prime_set')!;
+    expect(noMappingAnswer).toMatchObject({ outcome: 'unavailable', reason: 'missing-data' });
+    expect(noMappingAnswer.setOrdersUrl).toContain('warframe.market/items/bo_prime_set');
+  });
+  it('is absent outside the pilot sets and preserves unknown volume', () => {
+    expect(decisionAnswer(data(), 'not_a_pilot_set')).toBeNull();
+    expect(decisionAnswer(data(), 'bo_prime_blueprint')).toBeNull();
+    const noVolume = structuredClone(market); delete (noVolume.items.bo_prime_set as unknown as { vol?: number }).vol;
+    expect(decisionAnswer(publicData(noVolume), 'bo_prime_set')?.setVolume48h).toBeNull();
   });
 });

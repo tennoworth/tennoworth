@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { build } from 'vite';
 import { pathToFileURL } from 'node:url';
 import { pages, pilotItems, itemPath } from '../src/public-site/pages';
-import { activityCandidates, ducatParts, publicData } from '../src/public-site/model';
+import { activityCandidates, decisionAnswer, decisionText, ducatParts, publicData } from '../src/public-site/model';
 import type { Market } from '../src/contracts/data';
 
 const root = resolve(import.meta.dirname, '..');
@@ -41,13 +41,17 @@ try {
   for (const route of routes) {
     const props = { heading: route.heading, kind: route.kind, slug: 'slug' in route ? route.slug : '', initial, published: selected };
     const rendered = render(PublicPage, { props });
+    const decision = 'slug' in route ? decisionAnswer(initial, route.slug) : null;
+    const social = decision ? decisionText(decision) : null;
+    const socialTitle = social ? `${social.ogTitle} | TennoWorth` : `${route.title} | TennoWorth`;
+    const socialDescription = social ? social.ogDescription : route.description;
     const url = `https://tennoworth.app${route.path}`;
     const html = routeTemplate.replace(/<title>[\s\S]*?<\/title>/, `<title>${escape(route.title)} | TennoWorth</title>`)
       .replace(/(<meta\s+name="description"\s+content=")[^"]*/, `$1${escape(route.description)}`)
       .replace(/(<link rel="canonical" href=")[^"]*/, `$1${url}`)
       .replace(/(<meta property="og:url" content=")[^"]*/, `$1${url}`)
-      .replace(/(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*/g, `$1${escape(route.title)} | TennoWorth`)
-      .replace(/(<meta\s+(?:property="og:description"|name="twitter:description")\s+content=")[^"]*/g, `$1${escape(route.description)}`)
+      .replace(/(<meta (?:property="og:title"|name="twitter:title") content=")[^"]*/g, `$1${escape(socialTitle)}`)
+      .replace(/(<meta\s+(?:property="og:description"|name="twitter:description")\s+content=")[^"]*/g, `$1${escape(socialDescription)}`)
       .replace('<div id="app"></div>', `<div id="app" data-public-page>${rendered.body}</div><script id="public-page-data" type="application/json">${JSON.stringify(props).replaceAll('<','\\u003c')}</script>`);
     const directory = resolve(root, `dist${route.path}`);
     await mkdir(directory, { recursive: true });

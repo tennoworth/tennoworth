@@ -3,11 +3,12 @@
   import { onMount } from 'svelte';
   import type { PublicData } from '../public-site/model';
   import { replacesMarket } from '../domain/market';
-  import { activityCandidates, ducatParts, partTotal, publicData } from '../public-site/model';
+  import { activityCandidates, decisionAnswer, ducatParts, partTotal, publicData } from '../public-site/model';
   import { itemPath } from '../public-site/pages';
   import Links from '../public-site/Links.svelte';
   import Faq from './Faq.svelte';
   import ItemHistory from '../public-site/ItemHistory.svelte';
+  import DecisionSummary from '../public-site/DecisionSummary.svelte';
   import FeatureRail from '../features/market-context/FeatureRail.svelte';
   import { HostedTransport } from '../adapters/hosted';
   import { loadMarket, revalidateMarket, startHostedMarketRevalidation } from '../adapters/market';
@@ -25,6 +26,7 @@
   const transport = new HostedTransport();
   let candidates = $derived(activityCandidates(data));
   let item = $derived(data.items.find(i => i.slug === slug));
+  let decision = $derived(decisionAnswer(data, slug));
   let rows = $derived(ducatParts(data).filter(i => i.name.toLowerCase().includes(query.toLowerCase())).sort((a,b) => sort === 'cost' ? a.price! / a.ducats! - b.price! / b.ducats! : a.name.localeCompare(b.name)).slice(0, 60));
   onMount(() => {
     if (kind === 'desktop' || kind === 'troubleshooting') return;
@@ -36,7 +38,7 @@
       if (!active) return;
       latest = market;
       if (market.platform !== initial.platform) throw new Error('Snapshot platform changed');
-      if (replacesMarket(data.stamp, market.updated_at, Date.now()) || market.updated_at === data.stamp) data = publicData(market);
+      if (replacesMarket(data.stamp, market.updated_at, Date.now())) data = publicData(market);
       status = 'Snapshot checked. Prices are estimates, not live offers.';
     };
     void loadMarket().then(accept).catch(() => { if (active) status = 'Refresh unavailable. The dated build snapshot remains visible.'; });
@@ -55,9 +57,10 @@
 <a class="skip-navigation" href="#public-content">Skip to content</a>
 <main data-shell class="landing public-page" id="public-content" tabindex="-1">
   <header class="ui-toolbar public-brand"><a href="/">TennoWorth</a><span>What’s worth selling in Warframe</span></header>
-  <Links />
+  {#if !decision}<Links />{/if}
   <section class="ui-panel public-prose">
     <h1>{heading}</h1>
+    {#if decision}<DecisionSummary answer={decision} buildStamp={initial.stamp} {enhanced} />{/if}
     {#if kind === 'desktop'}
       <p>Find the tradeable items you own that are worth a closer look. TennoWorth ranks your inventory, compares sets and parts, and helps you review your next sale.</p>
       <p>Free and open source for Windows and Linux. No Overwolf. No TennoWorth account. Your inventory stays on your machine.</p>
@@ -89,7 +92,7 @@
       {:else}
         <p>Compare {heading}’s dated market median with its longer-term baseline before choosing a listing price. Check current offers and trading activity: a historical median does not guarantee a buyer.</p>
       {/if}
-      <p class="ui-notice">Snapshot <time datetime={data.stamp}>{data.stamp.replace('T', ' ').replace('Z', ' UTC')}</time> · Platform: {data.platform}. Source: warframe.market. Latest daily medians, not live orders. Data may be stale.</p>
+      {#if !decision}<p class="ui-notice">Snapshot <time datetime={data.stamp}>{data.stamp.replace('T', ' ').replace('Z', ' UTC')}</time> · Platform: {data.platform}. Source: warframe.market. Latest daily medians, not live orders. Data may be stale.</p>{/if}
       <p role="status">{status}</p>
       {#if kind === 'decisions'}
         <h2>Prime listings with observed activity</h2>
@@ -102,10 +105,10 @@
       {/if}
       {#if kind === 'sets' || kind === 'item' && data.sets.some(s => s.slug === slug || s.parts.some(p => p.slug === slug))}
         {#each data.sets.filter(s => kind === 'sets' || s.slug === slug || s.parts.some(p => p.slug === slug)) as set}
-          <h2>{set.name}: set versus components</h2>
-          <div class="public-table" use:tableNavigation={`${set.name} price comparison`}><table class="tw"><thead><tr><th>Item</th><th>Quantity</th><th>Daily median per unit</th></tr></thead><tbody>
-            <tr><td>{@render itemLink(set.slug)}</td><td>1 set</td><td>{price(data.items.find(i => i.slug === set.slug)?.price)}</td></tr>
-            {#each set.parts as part}<tr><td>{@render itemLink(part.slug)}</td><td>{part.quantity ?? 'Unknown'}</td><td>{price(data.items.find(i => i.slug === part.slug)?.price)}</td></tr>{/each}
+          <h2 id={decision ? 'set-vs-parts' : undefined}>{set.name}: set versus components</h2>
+          <div class="public-table" use:tableNavigation={`${set.name} price comparison`}><table class="tw"><thead><tr><th>Item</th><th>Quantity</th><th>Daily median per unit</th>{#if decision}<th>Orders</th>{/if}</tr></thead><tbody>
+            <tr><td>{@render itemLink(set.slug)}</td><td>1 set</td><td>{price(data.items.find(i => i.slug === set.slug)?.price)}</td>{#if decision}<td><a href={`https://warframe.market/items/${set.slug}`} target="_blank" rel="noopener noreferrer">Check set orders</a></td>{/if}</tr>
+            {#each set.parts as part}<tr><td>{@render itemLink(part.slug)}</td><td>{part.quantity ?? 'Unknown'}</td><td>{price(data.items.find(i => i.slug === part.slug)?.price)}</td>{#if decision}<td><a href={`https://warframe.market/items/${part.slug}`} target="_blank" rel="noopener noreferrer">Check part orders</a></td>{/if}</tr>{/each}
           </tbody></table></div>
           {@const total = partTotal(set, data)}
           {@const setPrice = data.items.find(i => i.slug === set.slug)?.price}
@@ -163,6 +166,7 @@
       </div>
     {/if}
   </section>
+  {#if decision}<Links />{/if}
   {#if kind === 'desktop'}<Faq />{/if}
   <footer class="ui-toolbar public-footer"><a href="/">Market search</a><a href="https://github.com/tennoworth/tennoworth">Source code</a><span>Fan project. Not affiliated with Digital Extremes or warframe.market.</span>{#if theme}<ThemeSwitcher {theme} compact />{/if}</footer>
 </main>

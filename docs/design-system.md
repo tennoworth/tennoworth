@@ -758,3 +758,34 @@ keeps the same layout. Item history loads on demand, retains exact UTC dates
 and source gaps, and uses the existing 100-row Pager. The public-guide example
 in the living reference includes the production history interaction with
 fictional data.
+
+### Public decision summary
+
+The three pilot set item pages (`bo_prime_set`, `braton_prime_set`,
+`burston_prime_set`) open with a decision summary immediately below the H1,
+before the introductory prose. It answers one question — is the observed set
+median above or below the quantity-weighted sum of its component medians? — and
+then hands the reader to current orders or the desktop app. It is not a personal
+sell list and does not expose inventory, earnings or an intended sale.
+
+- The verdict has explicit set-higher, parts-higher, tie and unavailable
+  states. Copies are counted across distinct components; the page never turns
+  component copies into a claim about listings, buyers or sale speed. The parts
+  total is labelled as a quantity-weighted sum, not a bundle median, and the
+  48-hour volume is labelled as the set's reported volume only.
+- The snapshot timestamp is the only date shown; per-item observation dates are
+  explicitly unavailable. Missing prices or quantities suppress the verdict and
+  keep the known values, orders links and explanation. Ties and parts-positive
+  cases use their own wording.
+- `Copy decision` copies the same model-derived text shown in the disclosure,
+  announces success or failure through a persistent polite live region, and
+  falls back to a selectable text block. It is disabled before enhancement.
+- Open Graph and Twitter metadata are generated from the build snapshot and
+  keep the search title stable. The page may hydrate to a newer snapshot and
+  then shows an ageing notice; shared previews can remain older, so the date is
+  part of the answer and the page does not promise that previews and the live
+  page agree.
+- The set-versus-components table gains an Orders column only on these set
+  pages, so component order links sit beside the quantities they refer to. The
+  public-guide reference in the living styleguide shows the summary with
+  fictional data.

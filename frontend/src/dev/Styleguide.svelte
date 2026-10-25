@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tableNavigation } from '../ui/keyboard.svelte';
   import ItemHistory from '../public-site/ItemHistory.svelte';
+  import DecisionSummary from '../public-site/DecisionSummary.svelte';
+  import { decisionAnswer } from '../public-site/model';
   import KeyboardNavigation from '../ui/KeyboardNavigation.svelte';
   import MarketAnnouncement from '../features/market-context/MarketAnnouncement.svelte';
   import announcementCases from '../../../tests/fixtures/announcements/cases.json';
@@ -46,6 +48,19 @@
     is_augment: false, vault_status: 'available',
   });
   const sellSample = [sellRow('Primed Flow', 'primed_flow', 6, 23, 107, 138), sellRow('Arcane Energize', 'arcane_energize', 12, 7, 362, 84), sellRow('Sample long item name for wrapping', 'sample_long', 4, 4, 68, 18)];
+  // Fictional pilot-set answer for the public decision-summary reference.
+  const decisionSample = decisionAnswer({
+    stamp: '2026-10-23T14:31:54Z', platform: 'pc',
+    items: [
+      { slug: 'bo_prime_set', name: 'Bo Prime Set', price: 70, volume: 63, ducats: 90, ducatPart: false, prime: true, baseline: 75, recent: [] },
+      { slug: 'bo_prime_blueprint', name: 'Bo Prime Blueprint', price: 15, volume: 16, ducats: 15, ducatPart: true, prime: true, baseline: 15, recent: [] },
+      { slug: 'bo_prime_handle', name: 'Bo Prime Handle', price: 15, volume: 25, ducats: 45, ducatPart: true, prime: true, baseline: 16.8, recent: [] },
+      { slug: 'bo_prime_ornament', name: 'Bo Prime Ornament', price: 24, volume: 33, ducats: 15, ducatPart: true, prime: true, baseline: 24, recent: [] },
+    ],
+    sets: [{ slug: 'bo_prime_set', name: 'Bo Prime', parts: [
+      { slug: 'bo_prime_blueprint', quantity: 1 }, { slug: 'bo_prime_handle', quantity: 1 }, { slug: 'bo_prime_ornament', quantity: 2 },
+    ] }],
+  }, 'bo_prime_set')!;
   const notesServices = { updateNotes: async () => ({ ...notesSample, auto_show: false } as UpdateNotesStatus), acknowledgeUpdateNotes: async () => {}, updateNotesCanPresent: async () => true };
   import { onMount, untrack } from 'svelte';
   import { applyTheme, systemMode, type Mode } from '../ui/theme';
@@ -236,6 +251,11 @@
       <p>Compare the same price basis before choosing a sale. These fictional values demonstrate the public page’s reading rhythm.</p>
       <p class="ui-notice">Dated example · PC · Estimates, not live orders. Missing prices remain unavailable.</p>
       <div class="public-table" use:tableNavigation={'Guide comparison'}><table class="tw"><thead><tr><th>Item</th><th>Required quantity</th><th>Daily median</th></tr></thead><tbody><tr><td>Example Prime ornament</td><td>2</td><td>7 p</td></tr><tr><td>Unpriced component</td><td>1</td><td>Unavailable</td></tr></tbody></table></div>
+    </section>
+    <section class="ui-panel public-prose" aria-label="Public decision summary reference">
+      <h1>Bo Prime Set</h1>
+      <DecisionSummary answer={decisionSample} buildStamp="2026-10-23T14:31:54Z" enhanced={true} />
+      <p>The summary is the public answer, not a personal sell plan. The parts total is a quantity-weighted sum of component medians; no per-item observation date is claimed, and the copy text is selectable when the Clipboard API is unavailable.</p>
     </section>
   {/if}
   {#if dataState === 'frame'}<section class="ui-stack"><h2>View header</h2><p>Every task view: the title, a one-line lede beside it, and its totals or primary action beside the context.</p>
