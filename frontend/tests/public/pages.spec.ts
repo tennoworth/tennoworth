@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { pages, pilotItems, itemPath } from '../../src/public-site/pages';
+import { pages, pilotItems, pilotSets, itemPath } from '../../src/public-site/pages';
+import { formatStampUtc } from '../../src/public-site/model';
 
 const routes = ['/', ...pages.map(p => p.path), ...pilotItems.map(itemPath)];
 test('built public routes expose their answers, metadata and discoverable links', async ({ request }) => {
@@ -189,4 +190,149 @@ test('desktop sample styles are present before JavaScript', async ({ browser }) 
   expect(await page.locator('.rail-panel .tabs').evaluate(element => getComputedStyle(element).display)).toBe('flex');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await context.close();
+});
+
+
+test('decision summaries and dated metadata are in the initial HTML for pilot sets', async ({ request }) => {
+  const { readFileSync } = await import('node:fs');
+  const bundled = JSON.parse(readFileSync('public/market.json', 'utf8'));
+  const snapshotDay = formatStampUtc(bundled.updated_at);
+  for (const slug of pilotSets) {
+    const html = await (await request.get(itemPath(slug))).text();
+    expect(html, slug).toContain('Set or parts?');
+    expect(html, slug).toMatch(/class="decision/);
+    expect(html, slug).toContain('summed parts');
+    expect(html, slug).toContain('quantity-weighted sum of component medians, not a bundle median');
+    expect(html, slug).toContain('Copy decision');
+    expect(html, slug).toContain('Decision text');
+    expect(html, slug).toMatch(/<meta property="og:title" content="[^"]+summed parts[^"]*" \/>/);
+    expect(html, slug).toMatch(/<meta\s+property="og:description"\s+content="[^"]+Snapshot 23 Oct 2026[^"]*"/);
+  }
+  const bo = await (await request.get(itemPath('bo_prime_set'))).text();
+  expect(bo).toContain('The summed parts are 8p above the set.');
+  expect(bo).toContain('One set versus 4 component copies across 3 distinct items.');
+  expect(bo).toContain('<title>Bo Prime Set Prices &amp; Selling Context | TennoWorth</title>');
+  const part = await (await request.get(itemPath('bo_prime_blueprint'))).text();
+  expect(part).not.toContain('Set or parts?');
+  expect(part).not.toContain('Check part orders');
+});
+
+test('a newer snapshot refreshes the decision atomically while the built preview stays dated', async ({ page, request }) => {
+  const { readFileSync } = await import('node:fs');
+  const bundled = JSON.parse(readFileSync('public/market.json', 'utf8'));
+  const newer = structuredClone(bundled);
+  newer.updated_at = new Date(Date.parse(bundled.updated_at) + 3_600_000).toISOString();
+  newer.items.bo_prime_set.median_now = 70;
+  newer.items.bo_prime_set.vol = 72;
+  newer.items.bo_prime_blueprint.median_now = 12;
+  newer.items.bo_prime_handle.median_now = 15;
+  newer.items.bo_prime_ornament.median_now = 19;
+  await page.route('**/market.json', route => route.fulfill({ json: newer }));
+  await page.goto(itemPath('bo_prime_set'));
+  const block = page.locator('.decision');
+  await expect(block).toContainText('The set is 5p above the summed parts.');
+  await expect(block).toContainText('65p');
+  await expect(block).toContainText('Updated since this page was built (23 Oct 2026)');
+  await expect(block).not.toContainText('78p');
+  await expect(page.getByText('65 p', { exact: true }).first()).toBeVisible();
+  await expect(block.locator('pre')).toContainText('65p');
+  await expect(block.locator('pre')).toContainText('not evidence of sale speed');
+  const built = await (await request.get(itemPath('bo_prime_set'))).text();
+  expect(built).toContain('70p set vs 78p summed parts (23 Oct 2026)');
+});
+
+test('missing evidence suppresses the verdict and keeps the links', async ({ page }) => {
+  const { readFileSync } = await import('node:fs');
+  const newer = JSON.parse(readFileSync('public/market.json', 'utf8'));
+  newer.updated_at = new Date(Date.parse(newer.updated_at) + 3_600_000).toISOString();
+  delete newer.items.bo_prime_ornament.median_now;
+  await page.route('**/market.json', route => route.fulfill({ json: newer }));
+  await page.goto(itemPath('bo_prime_set'));
+  const block = page.locator('.decision');
+  await expect(block).toContainText('Not enough comparable evidence for a set-versus-parts verdict.');
+  await expect(block).not.toContainText('above the set');
+  await expect(block).toContainText('Unavailable');
+  await expect(block.getByRole('link', { name: 'Check current set orders' })).toBeVisible();
+  await expect(block.getByRole('button', { name: 'Copy decision' })).toBeEnabled();
+});
+
+test('decision answer survives without JavaScript and announces copy failure', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto('http://127.0.0.1:5189' + itemPath('bo_prime_set'));
+  await expect(page.getByRole('heading', { name: 'The summed parts are 8p above the set.' })).toBeVisible();
+  await expect(page.locator('.decision-quantities')).toHaveText('One set versus 4 component copies across 3 distinct items.');
+  await expect(page.getByRole('button', { name: 'Copy decision' })).toBeDisabled();
+  await expect(page.getByText('Decision text')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Check current set orders' })).toHaveAttribute('href', 'https://warframe.market/items/bo_prime_set');
+  await context.close();
+});
+
+test('decision copy reports success', async ({ browser, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit does not expose clipboard permissions');
+  const context = await browser.newContext();
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:5189' });
+  const page = await context.newPage();
+  await page.goto(itemPath('bo_prime_set'));
+  await page.getByRole('button', { name: 'Copy decision' }).click();
+  await expect(page.getByText('Decision copied.')).toBeVisible();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain('Bo Prime Set: set 70p vs 78p summed parts');
+  expect(copied).toContain('not evidence of sale speed');
+  await context.close();
+});
+
+test('decision copy falls back when the Clipboard API is absent', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'clipboard', { configurable: true, get: () => undefined });
+    document.execCommand = () => true;
+  });
+  await page.goto(itemPath('bo_prime_set'));
+  await page.getByRole('button', { name: 'Copy decision' }).click();
+  await expect(page.getByText('Decision copied.')).toBeVisible();
+  await context.close();
+});
+
+test('decision copy failure opens the selectable text and announces it', async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, 'clipboard', { configurable: true, get: () => ({ writeText: () => Promise.reject(new Error('blocked')) }) });
+    document.execCommand = () => false;
+  });
+  await page.goto(itemPath('bo_prime_set'));
+  await page.getByRole('button', { name: 'Copy decision' }).click();
+  await expect(page.getByText(/Couldn.t copy/)).toBeVisible();
+  await expect(page.locator('.decision-text')).toHaveJSProperty('open', true);
+  await context.close();
+});
+
+test('equal or older snapshots do not replace the decision', async ({ page }) => {
+  const { readFileSync } = await import('node:fs');
+  const bundled = JSON.parse(readFileSync('public/market.json', 'utf8'));
+  const equal = structuredClone(bundled);
+  equal.items.bo_prime_set.median_now = 777;
+  await page.route('**/market.json', route => route.fulfill({ json: equal }));
+  await page.goto(itemPath('bo_prime_set'));
+  await expect(page.locator('.decision')).not.toContainText('777p');
+  await expect(page.locator('.decision')).toContainText('78p');
+  await expect(page.getByRole('status')).toContainText('Snapshot checked');
+});
+
+test('decision is before the prose and exposes component orders on set pages only', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.goto(itemPath('bo_prime_set'));
+  const decision = await page.locator('.decision').boundingBox();
+  const prose = await page.locator('.public-prose > p').first().boundingBox();
+  expect(decision!.y).toBeLessThan(prose!.y);
+  const partOrders = await page.getByRole('link', { name: 'Check part orders' }).evaluateAll(links => links.map(link => link.getAttribute('href')));
+  expect(partOrders).toEqual(['https://warframe.market/items/bo_prime_blueprint', 'https://warframe.market/items/bo_prime_handle', 'https://warframe.market/items/bo_prime_ornament']);
+  const action = await page.getByRole('button', { name: 'Copy decision' }).boundingBox();
+  expect(action!.y).toBeLessThan(740);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto(itemPath('bo_prime_blueprint'));
+  await expect(page.locator('.decision')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Check part orders' })).toHaveCount(0);
 });
