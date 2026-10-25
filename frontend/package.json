@@ -2,7 +2,8 @@
   "name": "tennoworth-frontend",
   "overrides": {
     "devalue": "^5.9.2",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "undici": "^7.30.1"
   },
   "private": true,
   "type": "module",
