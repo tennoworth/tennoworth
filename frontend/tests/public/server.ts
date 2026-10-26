@@ -14,6 +14,8 @@ Bun.serve({
       return new Response(index);
     }
     const file = Bun.file(path);
-    return await file.exists() ? new Response(file) : new Response('Not found', { status:404 });
+    if (await file.exists()) return new Response(file);
+    // Mirrors deploy/Caddyfile's handle_errors: the built page with a 404 status.
+    return new Response(Bun.file(resolve(root, '404.html')), { status:404 });
   },
 });

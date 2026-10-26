@@ -30,9 +30,24 @@ const clock: Clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-di
 
 /** The status word, or what stands in for it before the server has answered. */
 export function presenceWord(status: PresenceStatus): string {
-  if (status.problem === 'not_verified') return 'Refused';
+  if (status.problem === 'not_verified') return 'Verify account';
   if (status.status) return PRESENCE_LABEL[status.status];
-  return status.connected ? 'Unknown' : 'Connecting…';
+  return status.connected || status.problem === 'unreachable' ? 'Unknown' : 'Connecting…';
+}
+
+/** Invisible while Warframe runs: buyers who filter for online sellers miss you. */
+export function presenceHiddenWhilePlaying(status: PresenceStatus): boolean {
+  return presenceUsable(status) && status.status === 'invisible' && status.gameRunning;
+}
+
+/**
+ * What sits beside the status in the strip: the one-click fix while playing
+ * invisible, the note that Follow the game holds the status, or the retry.
+ */
+export function presenceAside(status: PresenceStatus): 'go-online' | 'auto' | 'retrying' | null {
+  if (status.problem === 'unreachable') return 'retrying';
+  if (presenceHiddenWhilePlaying(status)) return 'go-online';
+  return status.following && status.problem !== 'not_verified' ? 'auto' : null;
 }
 
 /** One line on how the status is held, for the menu and Settings. */

@@ -219,7 +219,9 @@ import type { PresenceController } from '../features/presence/presence.svelte';
       <div data-shell class="cell end">
         <span data-shell>WFM</span>
         {#if listing.wfmStatus && !listing.wfmStatus.unlocked}
-          <button data-shell type="button" class="link" data-testid="wfm-auth-link" onclick={() => onauth(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{wfmLabel}</button>
+          <!-- The state, then the click that moves it on, so the step is visible. -->
+          <span data-shell class="wfm-state">{listing.wfmStatus.logged_in ? 'Locked' : 'Signed out'}</span>
+          <button data-shell type="button" class="wfm-auth" data-testid="wfm-auth-link" onclick={() => onauth(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{listing.wfmStatus.logged_in ? 'Unlock' : 'Sign in'} <span data-shell aria-hidden="true">→</span></button>
         {:else if presence?.status?.signedIn}
           <PresenceMenu {presence} onsettings={onpresencesettings} />
         {:else}

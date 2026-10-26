@@ -78,3 +78,66 @@ it('hosts Meta Drift below the market reports when annual usage is present', () 
   expect(screen.getByTestId('meta-drift')).toBeTruthy();
   expect(screen.getByText('+1.00 pp')).toBeTruthy();
 });
+
+// Hosted search lives in `?q=` so Back from an item page restores it. It must
+// rewrite the current history entry, never add one per keystroke.
+describe('MarketBrowser search URL', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    window.history.replaceState(null, '', '/');
+  });
+  const input = () => screen.getByLabelText('Search items') as HTMLInputElement;
+
+  it('opens on the query in the URL', async () => {
+    window.history.replaceState(null, '', '/?q=primed');
+    render(MarketBrowser, { props: { market, syncUrl: true } });
+    expect(input().value).toBe('primed');
+    expect(screen.getByText(/1 match/)).toBeTruthy();
+  });
+
+  it('replaces the current entry once typing settles, keeping other params and the hash', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState(null, '', '/?ref=x#faq');
+    const length = window.history.length;
+    const replace = vi.spyOn(window.history, 'replaceState');
+    const push = vi.spyOn(window.history, 'pushState');
+    render(MarketBrowser, { props: { market, syncUrl: true } });
+    for (const value of ['b', 'bo', 'bo prime']) await fireEvent.input(input(), { target: { value } });
+    expect(replace).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(250);
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(`${location.pathname}${location.search}${location.hash}`).toBe('/?ref=x&q=bo+prime#faq');
+    expect(push).not.toHaveBeenCalled();
+    expect(window.history.length).toBe(length);
+  });
+
+  it('writes a pending query on blur so a clicked result never outruns it', async () => {
+    vi.useFakeTimers();
+    render(MarketBrowser, { props: { market, syncUrl: true } });
+    await fireEvent.input(input(), { target: { value: 'flow' } });
+    await fireEvent.blur(input());
+    expect(location.search).toBe('?q=flow');
+  });
+
+  it('removes q when the search is cleared', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState(null, '', '/?q=primed');
+    render(MarketBrowser, { props: { market, syncUrl: true } });
+    await fireEvent.input(input(), { target: { value: '  ' } });
+    vi.advanceTimersByTime(250);
+    expect(location.search).toBe('');
+  });
+
+  it('leaves the URL alone where search is not URL-backed (the desktop app)', async () => {
+    vi.useFakeTimers();
+    window.history.replaceState(null, '', '/?q=primed');
+    const replace = vi.spyOn(window.history, 'replaceState');
+    render(MarketBrowser, { props: { market } });
+    expect(input().value).toBe('');
+    await fireEvent.input(input(), { target: { value: 'flow' } });
+    vi.advanceTimersByTime(250);
+    await fireEvent.blur(input());
+    expect(replace).not.toHaveBeenCalled();
+  });
+});

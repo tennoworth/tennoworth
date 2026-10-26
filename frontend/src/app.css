@@ -599,7 +599,7 @@ table.tw tr.busy td { color: var(--muted); }
 /* Stale data is a caution to act on (refresh), so it takes the solid edge. */
 .tag.stale { color: var(--warn); }
 /* Facts */
-.tag:is(.vaulted, .soon, .vaulting-soon, .aug, .augment, .thin, .unpriced, .relic-tag) { border-style: dotted; }
+.tag:is(.vaulted, .soon, .vaulting-soon, .aug, .augment, .thin, .unpriced, .relic-tag, .auto) { border-style: dotted; }
 .tag.vaulted { color: var(--vault); }
 .tag:is(.soon, .vaulting-soon, .thin) { color: var(--warn); }
 .tag:is(.aug, .augment) { color: var(--fg); }
@@ -918,6 +918,8 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 .public-table th, .public-table td { padding: var(--cell); text-align: right; }
 .public-table th:first-child, .public-table td:first-child { text-align: left; min-width: 12rem; }
 .public-controls label { display: grid; gap: var(--s2); }
+/* The 404 search: its button sits on the input's line, not centred on the label. */
+form.public-controls { align-items: end; }
 .public-prose dd { margin-block-end: var(--s3); font-family: var(--font-mono); }
 
 .selling-article > p { margin-block: 0; max-width: 64rem; line-height: var(--leading-body); }

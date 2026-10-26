@@ -5,7 +5,7 @@
   import { PRESENCE_KEEP_FOR_CHOICES, type PresenceChoice } from '../../contracts/desktop';
   import type { PresenceController } from './presence.svelte';
   import PresenceMark from './PresenceMark.svelte';
-  import { PRESENCE_CHOICES, PRESENCE_HINT, PRESENCE_LABEL, keepForLabel, presenceLine, presenceMark, presenceProblem, presenceUsable, presenceWord } from './presence';
+  import { PRESENCE_CHOICES, PRESENCE_HINT, PRESENCE_LABEL, keepForLabel, presenceAside, presenceHiddenWhilePlaying, presenceLine, presenceMark, presenceProblem, presenceUsable, presenceWord } from './presence';
 
   let { presence, onsettings }: { presence: PresenceController; onsettings?: () => void } = $props();
 
@@ -19,11 +19,13 @@
   // Every word the trigger can show, so its width never depends on which one
   // is showing. A changing width rewrapped the status strip and moved the
   // whole window by a row on every status change.
-  const sizers = [...PRESENCE_CHOICES.map((choice) => PRESENCE_LABEL[choice]), 'Refused', 'Unknown', 'Connecting…'];
+  const sizers = [...PRESENCE_CHOICES.map((choice) => PRESENCE_LABEL[choice]), 'Verify account', 'Unknown', 'Connecting…'];
 
   let status = $derived(presence.status);
   let usable = $derived(presenceUsable(status));
   let problem = $derived(status ? presenceProblem(status) : null);
+  let aside = $derived(status ? presenceAside(status) : null);
+  let tone = $derived(status?.problem === 'not_verified' ? 'bad' : status && presenceHiddenWhilePlaying(status) ? 'warn' : null);
 
   $effect(() => {
     if (!open) return;
@@ -71,9 +73,21 @@
 
 {#if status}
   <div class="presence">
-    <button type="button" class="trigger" bind:this={trigger} aria-busy={presence.pending !== null} aria-expanded={open} aria-controls="presence-menu" onclick={() => (open = !open)}>
+    <button type="button" class="trigger" data-tone={tone} bind:this={trigger} aria-busy={presence.pending !== null} aria-expanded={open} aria-controls="presence-menu" onclick={() => (open = !open)}>
       <PresenceMark kind={presenceMark(status)} /><span class="word"><span class="current">{presenceWord(status)}</span>{#each sizers as sizer (sizer)}<span class="sizer" aria-hidden="true">{sizer}</span>{/each}</span> <span class="caret" aria-hidden="true">{presence.pending ? '…' : '▾'}</span>
     </button>
+    <!-- One reserved slot for whatever sits beside the status, so none of
+         them changes the strip's width when it appears. -->
+    <span class="aside">
+      {#if aside === 'go-online'}
+        <button type="button" class="btn primary xs go" title="Set Online in game, as in the menu" disabled={presence.pending !== null} onclick={() => void presence.set('ingame')}>Go online</button>
+      {:else if aside === 'auto'}
+        <span class="tag auto" title="Follow the game is keeping this status">Auto</span>
+      {:else if aside === 'retrying'}
+        <span class="retry">retrying</span>
+      {/if}
+      <span class="sizer btn primary xs go" aria-hidden="true">Go online</span>
+    </span>
     {#if open}
       <div id="presence-menu" class="pop" role="dialog" aria-label="Your warframe.market status" bind:this={pop} style:translate="{shift}px 0">
         <p class="head">What buyers see</p>
@@ -116,13 +130,22 @@
 {/if}
 
 <style>
-  .presence { position: relative; display: inline-flex; }
+  .presence { position: relative; display: inline-flex; align-items: center; gap: var(--s2); }
+  /* Outlined like Refresh ▾ beside it, so it reads as a menu and not a label. */
   .trigger {
-    display: inline-flex; align-items: center; gap: var(--s1); min-height: var(--ctl-xs); padding: 0;
-    font: inherit; font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.12em;
-    color: var(--fg); background: transparent; border: 0; cursor: pointer; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-xs); padding: 0 var(--s2);
+    font: inherit; font-family: var(--font-ui); font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--fg); background: transparent; border: 1px solid var(--border); border-radius: var(--radius-ctl); cursor: pointer; white-space: nowrap;
   }
-  .trigger:hover { text-decoration: underline dotted; }
+  .trigger:hover { border-color: var(--accent); }
+  /* Playing while Invisible: the action-needed edge. */
+  .trigger[data-tone="warn"] { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); padding-left: calc(var(--s2) + 3px); }
+  .trigger[data-tone="bad"] { border-color: var(--bad); }
+  .aside { display: inline-grid; align-items: center; justify-items: start; }
+  .aside > * { grid-area: 1 / 1; }
+  .go { text-transform: uppercase; letter-spacing: 0.1em; font-family: var(--font-ui); white-space: nowrap; }
+  .aside .tag { margin-inline-start: 0; }
+  .retry { color: var(--muted); }
   .word { display: inline-grid; justify-items: start; }
   .word > * { grid-area: 1 / 1; }
   .sizer { visibility: hidden; }

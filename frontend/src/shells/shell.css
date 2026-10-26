@@ -337,6 +337,14 @@
     margin-left: var(--s1);
   }
   .refresh-trigger:hover:not(:disabled)[data-shell] { color: var(--fg); border-color: var(--accent); background: transparent; }
+  /* Signed out or locked: the WFM cell's action, outlined like Refresh ▾ in ink. */
+  .statusbar .cell .wfm-state[data-shell] { color: var(--fg); }
+  .statusbar .cell .wfm-auth[data-shell] {
+    display: inline-flex; align-items: center; gap: var(--s1); height: var(--ctl-xs); padding: 0 var(--s2);
+    font: inherit; font-family: var(--font-ui); font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--fg); background: transparent; border: 1px solid var(--fg); border-radius: var(--radius-ctl); cursor: pointer; white-space: nowrap;
+  }
+  .statusbar .cell .wfm-auth:hover[data-shell] { border-color: var(--accent); background: transparent; }
   .refresh-wrap[data-shell] { position: relative; }
   /* The trigger is disabled mid-scan, and the global button:disabled rule
      dims it to 0.5 - which reads as "unavailable", the opposite of the

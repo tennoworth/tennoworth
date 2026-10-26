@@ -37,6 +37,7 @@
     freshness = 'unknown',
     loadHistory = null,
     handoff = undefined,
+    syncUrl = false,
   }: {
     market: Market;
     staleness?: string | null;
@@ -44,9 +45,32 @@
     loadHistory?: (() => Promise<History | null>) | null;
     /** Hosted only: the hand-off panel (same rows, completed + install). */
     handoff?: Snippet<[HandoffRow[]]>;
+    /** Hosted only: mirror the search in `?q=` so Back from an item restores it. */
+    syncUrl?: boolean;
   } = $props();
 
-  let query = $state('');
+  // svelte-ignore state_referenced_locally
+  let query = $state(syncUrl ? new URLSearchParams(window.location.search).get('q') ?? '' : '');
+  // Rewrites the current entry rather than pushing one per keystroke. Debounced
+  // because Safari throws once a page calls replaceState 100 times in 10 seconds,
+  // which a held Backspace reaches; blur flushes so a clicked result never
+  // leaves before its query is in the URL.
+  let urlTimer: ReturnType<typeof setTimeout> | undefined;
+  function writeQueryUrl(): void {
+    clearTimeout(urlTimer);
+    urlTimer = undefined;
+    const url = new URL(window.location.href);
+    const next = query.trim() ? query : null;
+    if (url.searchParams.get('q') === next) return;
+    if (next === null) url.searchParams.delete('q');
+    else url.searchParams.set('q', next);
+    window.history.replaceState(window.history.state, '', url);
+  }
+  function scheduleQueryUrl(): void {
+    if (!syncUrl) return;
+    clearTimeout(urlTimer);
+    urlTimer = setTimeout(writeQueryUrl, 250);
+  }
   let searchFocused = $state(false);
   // Quietly shimmers at rest; in full while focused and waiting for a query, and
   // quiet again once results show so the eye moves to the table.
@@ -147,7 +171,10 @@
   onMount(() => {
     timer = setInterval(() => { now = Date.now(); }, 60000);
   });
-  onDestroy(() => { if (timer) clearInterval(timer); });
+  onDestroy(() => {
+    if (timer) clearInterval(timer);
+    clearTimeout(urlTimer);
+  });
 
   let baroState = $derived.by(() => {
     if (!baro) return null;
@@ -276,12 +303,15 @@
           type="text"
           placeholder="Search any item - try “primed”, “mag”, “ash prime set”…"
           bind:value={query}
-
+          oninput={scheduleQueryUrl}
           use:searchShortcut
           id="item-search"
           aria-label="Search items"
           onfocus={() => (searchFocused = true)}
-          onblur={() => (searchFocused = false)}
+          onblur={() => {
+            searchFocused = false;
+            if (urlTimer) writeQueryUrl();
+          }}
         />
       </span>
       <span class="exp">any tradeable item · price, 48h volume, 7-day trend · {#if keyboard.enabled}<kbd>{keyboard.search}</kbd> to focus{/if}</span>
