@@ -117,7 +117,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
         <!-- Hosted: the browser hands the visitor off to the desktop app with
              the same rows completed (DesktopShowcase renders inside the
              browser's flow so it can use the browser's sample rows). -->
-        <MarketBrowser market={market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} handoff={handoffPanel} />
+        <MarketBrowser market={market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} handoff={handoffPanel} syncUrl />
       
     {/if}
   

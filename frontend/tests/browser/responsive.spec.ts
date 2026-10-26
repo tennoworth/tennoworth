@@ -390,7 +390,7 @@ test.describe('desktop responsive layout', () => {
     await assertWithinViewport(page, dialog);
     await dialog.getByRole('button', { name: 'Cancel' }).click();
 
-    await page.locator('.statusbar .cell.end').getByRole('button', { name: 'logged out' }).click();
+    await page.locator('.statusbar .cell.end').getByRole('button', { name: 'Sign in' }).click();
     const authDialog = page.locator('dialog.cryptobox[open]');
     await expect(authDialog).toBeVisible();
     await assertWithinViewport(page, authDialog);

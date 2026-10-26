@@ -336,3 +336,65 @@ test('decision is before the prose and exposes component orders on set pages onl
   await expect(page.locator('.decision')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Check part orders' })).toHaveCount(0);
 });
+
+const missing = ['/no-such-page/', '/items/not-a-real-item/', '/guides/nope'];
+test('missing pages are a real 404 with the public chrome and no indexable copy', async ({ request }) => {
+  const sitemap = await (await request.get('/sitemap.xml')).text();
+  expect(sitemap).not.toContain('404');
+  for (const path of missing) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(404);
+    const html = await response.text();
+    expect(html).toContain('<title>Page not found | TennoWorth</title>');
+    expect(html).toContain('<meta name="robots" content="noindex">');
+    expect(html).not.toContain('rel="canonical"');
+    expect(html).not.toMatch(/<script type=|modulepreload|public-page-data/);
+    expect(html).toContain('<script src="/theme-boot.js"></script>');
+    expect(html).toContain('aria-label="Selling guides"');
+    for (const [,link] of html.matchAll(/<a[^>]+href="(\/[^"#]*)/g)) expect((await request.get(link)).status(), link).toBe(200);
+  }
+});
+
+for (const mode of ['light', 'dark'] as const) test(`the 404 page is themed and fits ${mode}`, async ({ page }) => {
+  await page.emulateMedia({ colorScheme: mode });
+  for (const size of [{ width:320, height:740 }, { width:900, height:480 }, { width:1440, height:900 }]) {
+    await page.setViewportSize(size);
+    const response = await page.goto('/no-such-page/');
+    expect(response!.status()).toBe(404);
+    await expect(page.getByRole('heading', { level:1, name:'Page not found' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name:'Selling guides' }).getByRole('link')).toHaveCount(pages.length);
+    expect(await page.locator('html').getAttribute('data-look')).toBe('yorha');
+    expect(await page.locator('html').getAttribute('data-mode')).toBe(mode);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/public/${test.info().project.name}-${mode}-${size.width}-404.png`, fullPage: true });
+  }
+});
+
+test('the 404 search works without JavaScript and lands on the restored search', async ({ browser, page }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const noJs = await context.newPage();
+  await noJs.goto('http://127.0.0.1:5189/no-such-page/');
+  await noJs.getByRole('searchbox', { name:'Search the market' }).fill('bo prime');
+  await noJs.getByRole('button', { name:'Search' }).click();
+  expect(new URL(noJs.url()).search).toBe('?q=bo+prime');
+  await context.close();
+  await page.goto('/no-such-page/');
+  await page.getByRole('searchbox', { name:'Search the market' }).fill('bo prime');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox', { name:'Search items' })).toHaveValue('bo prime');
+  await expect(page.getByRole('region', { name:/Search results/ }).getByRole('link', { name:'Bo Prime Set', exact:true })).toBeVisible();
+});
+
+test('Back from an item page returns to the same search', async ({ page }) => {
+  await page.goto('/');
+  const search = page.getByRole('textbox', { name:'Search items' });
+  await search.fill('bo prime');
+  await expect(page).toHaveURL(/\/\?q=bo\+prime$/);
+  const results = page.getByRole('region', { name:/Search results/ });
+  await results.getByRole('link', { name:'Bo Prime Set', exact:true }).click();
+  await expect(page).toHaveURL(/\/items\/bo_prime_set\/$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/\?q=bo\+prime$/);
+  await expect(search).toHaveValue('bo prime');
+  await expect(results.getByRole('link', { name:'Bo Prime Set', exact:true })).toBeVisible();
+});
