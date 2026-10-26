@@ -742,6 +742,14 @@ keyboard skip/scroll controls. No separate marketing palette or decorative
 hero is introduced. Shared selling-guide navigation links the homepage, sets,
 ducats and equally visible Windows/Linux download information.
 
+The homepage search keeps its query in `?q=`, rewriting the current history
+entry as typing settles rather than adding one per keystroke, so Back from an
+item page returns to the same results. The canonical address stays `/`. A
+missing address is a real HTTP 404 rendered from the same public page: brand
+header, guide links, a panel titled Page not found with a plain search form
+that submits to `/?q=`, and the footer. It is static and not indexed; the theme
+boot script still runs so it follows the visitor's mode.
+
 The initial HTML contains the dated comparison and explanation. Enhancement
 refreshes the comparison atomically from same-origin market data; failed or
 older refreshes retain the timestamped values. No-JavaScript visitors receive

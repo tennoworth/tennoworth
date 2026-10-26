@@ -10,22 +10,17 @@
 # `:8081` with no `bind` listens on every interface, so the boundary has to be
 # stated rather than assumed.
 
-:8081 {
-	# Both loopback addresses. `localhost` resolves to ::1 on hosts where IPv6 is
-	# preferred (this one included), and cloudflared dials `localhost` - so
-	# binding only 127.0.0.1 leaves the tunnel with no listener to reach.
-	bind 127.0.0.1 ::1
-	root * /srv/wfm/app/frontend/dist
-	encode gzip zstd
-
-	# Security headers. This is the only place the site's real HTTP headers are set;
-	# the CSP line is kept in sync by scripts/sync-csp.ts. HSTS is `max-age` only on
-	# purpose: adding `includeSubDomains; preload` is an APEX-WIDE, hard-to-undo
-	# commitment (it forces HTTPS on every sibling subdomain for a year, and `preload`
-	# gets baked into browsers). That's wrong for a single subdomain sharing a domain
-	# with your other services. Re-add those two only if you own the apex and intend
-	# HTTPS across ALL of it. Verify the headers land:
-	#   curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame|content-security'
+# Security headers. This is the only place the site's real HTTP headers are set;
+# the site and its error routes both import it, because error routes do not
+# inherit the site's headers. The CSP line is kept in sync by
+# scripts/sync-csp.ts. HSTS is `max-age` only on
+# purpose: adding `includeSubDomains; preload` is an APEX-WIDE, hard-to-undo
+# commitment (it forces HTTPS on every sibling subdomain for a year, and `preload`
+# gets baked into browsers). That's wrong for a single subdomain sharing a domain
+# with your other services. Re-add those two only if you own the apex and intend
+# HTTPS across ALL of it. Verify the headers land:
+#   curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame|content-security'
+(public_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		X-Frame-Options "DENY"
@@ -37,6 +32,17 @@
 		Content-Security-Policy "default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
+}
+
+:8081 {
+	# Both loopback addresses. `localhost` resolves to ::1 on hosts where IPv6 is
+	# preferred (this one included), and cloudflared dials `localhost` - so
+	# binding only 127.0.0.1 leaves the tunnel with no listener to reach.
+	bind 127.0.0.1 ::1
+	root * /srv/wfm/app/frontend/dist
+	encode gzip zstd
+
+	import public_headers
 
 	handle /wfm-policy.json {
 		root * /srv/wfm/policy
@@ -124,10 +130,24 @@
 	# Handled proxy outages stay out of runtime error logs, which otherwise include client metadata.
 	# Keep debug logging disabled in production.
 	handle_errors {
+		import public_headers
 		@usageError path /api/usage/check-in /api/usage/daily
 		respond @usageError "Usage counts are currently unavailable." 503
 		@reportsError path /api/reports/*
 		respond @reportsError "Price reports are currently unavailable." 503
+		# Missing pages get the built 404 page. file_server inside handle_errors keeps
+		# the error status, so this stays a real 404 rather than a soft one. The root is
+		# restated because the live-data and announcement handlers point elsewhere;
+		# API paths keep their plain-text errors.
+		@notFound {
+			expression {http.error.status_code} == 404
+			not path /api/*
+		}
+		handle @notFound {
+			root * /srv/wfm/app/frontend/dist
+			rewrite * /404.html
+			file_server
+		}
 		respond "{http.error.status_text}" {http.error.status_code}
 	}
 

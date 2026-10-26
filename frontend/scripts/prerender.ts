@@ -57,6 +57,19 @@ try {
     await mkdir(directory, { recursive: true });
     await writeFile(resolve(directory, 'index.html'), html);
   }
+  // Served by Caddy's handle_errors with the 404 status. It stays static: the
+  // shell would mount the homepage here. theme-boot.js is kept because it
+  // stamps the data-look attribute every theme rule is scoped by.
+  const notFound = render(PublicPage, { props: { heading: 'Page not found', kind: 'not-found', initial, published: selected } });
+  const notFoundHtml = routeTemplate
+    .replace(/<script type="(?:module|application\/ld\+json)"[^>]*>[\s\S]*?<\/script>/g, '')
+    .replace(/<link rel="modulepreload"[^>]*>/g, '')
+    .replace(/<link rel="canonical"[^>]*>/, '')
+    .replace(/<meta property="og:url"[^>]*>/, '')
+    .replace(/<title>[\s\S]*?<\/title>/, '<title>Page not found | TennoWorth</title><meta name="robots" content="noindex">')
+    .replace('<div id="app"></div>', `<div id="app" data-public-page>${notFound.body}</div>`);
+  if (/<script type=|modulepreload|rel="canonical"|property="og:url"/.test(notFoundHtml) || !notFoundHtml.includes('noindex') || !notFoundHtml.includes('/theme-boot.js')) throw new Error('404 page template changed shape');
+  await writeFile(resolve(root, 'dist/404.html'), notFoundHtml);
   await writeFile(resolve(root, 'dist/sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${['/', ...routes.map(r => r.path)].map(path => `<url><loc>https://tennoworth.app${path}</loc></url>`).join('')}</urlset>\n`);
   await rm(resolve(root, 'dist/.vite'), { recursive: true });
   console.log(`Prerendered homepage and ${routes.length} public pages.`);

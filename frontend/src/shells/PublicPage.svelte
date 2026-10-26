@@ -29,7 +29,7 @@
   let decision = $derived(decisionAnswer(data, slug));
   let rows = $derived(ducatParts(data).filter(i => i.name.toLowerCase().includes(query.toLowerCase())).sort((a,b) => sort === 'cost' ? a.price! / a.ducats! - b.price! / b.ducats! : a.name.localeCompare(b.name)).slice(0, 60));
   onMount(() => {
-    if (kind === 'desktop' || kind === 'troubleshooting') return;
+    if (kind === 'desktop' || kind === 'troubleshooting' || kind === 'not-found') return;
     enhanced = true;
     status = 'Checking for a newer snapshot…';
     let active = true;
@@ -61,7 +61,14 @@
   <section class="ui-panel public-prose">
     <h1>{heading}</h1>
     {#if decision}<DecisionSummary answer={decision} buildStamp={initial.stamp} {enhanced} />{/if}
-    {#if kind === 'desktop'}
+    {#if kind === 'not-found'}
+      <p>There is no page at this address. The link may be mistyped, or the page may have moved.</p>
+      <form class="ui-toolbar public-controls" action="/" method="get" role="search">
+        <label>Search the market <input class="ui-input" type="search" name="q" autocomplete="off" /></label>
+        <button class="btn primary lg" type="submit">Search</button>
+      </form>
+      <p>Or choose a selling guide above, or go to the <a href="/">homepage</a>.</p>
+    {:else if kind === 'desktop'}
       <p>Find the tradeable items you own that are worth a closer look. TennoWorth ranks your inventory, compares sets and parts, and helps you review your next sale.</p>
       <p>Free and open source for Windows and Linux. No Overwolf. No TennoWorth account. Your inventory stays on your machine.</p>
       <h2>From inventory to selling decision</h2>
