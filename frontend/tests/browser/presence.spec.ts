@@ -54,13 +54,19 @@ for (const width of [1200, 1440]) test(`changing status never changes the status
   const strip = page.locator('.statusbar');
   const trigger = strip.locator('.presence .trigger');
   await trigger.click();
+  const cell = strip.locator('.cell.end');
   const heights = new Set<number>();
+  // Height alone only fails when a neighbour sits at its wrap point, which
+  // depends on the data's age; any width change can rewrap the strip.
+  const widths = new Set<number>();
   for (const choice of ['online', 'invisible', 'ingame']) {
     await page.locator(`#presence-menu input[value="${choice}"]`).check();
     await expect(trigger).toHaveAttribute('aria-busy', 'false');
     heights.add(Math.round((await strip.boundingBox())!.height));
+    widths.add(Math.round((await cell.boundingBox())!.width));
   }
   expect([...heights]).toHaveLength(1);
+  expect([...widths]).toHaveLength(1);
 });
 
 test('presence settings open at the account panel and keep a refused account readable', async ({ page }) => {
