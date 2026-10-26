@@ -485,6 +485,14 @@ jobs:
           [ "$removed" -gt 0 ] || { echo "::error title=libwayland not stripped::no bundled libwayland in usr/lib - linuxdeploy behavior changed"; exit 1; }
           left=$(find squashfs-root -name 'libwayland-*.so*' -print)
           [ -z "$left" ] || { echo "::error title=libwayland still bundled::$left"; exit 1; }
+          # --appimage-extract creates every directory with mode 0700 (the type2
+          # runtime's mkdir_p) and appimagetool packs those modes. The user who
+          # mounts the image never notices, because FUSE ignores the bits for
+          # its mounter, but a root mount does not: firejail's --appimage, app
+          # centers that loop-mount, and root extraction all fail with
+          # "AppRun: Permission denied". Tauri's 0770 AppRun launcher is the
+          # same class and is fixed here too.
+          chmod -R a+rX squashfs-root
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool -n squashfs-root dist/TennoWorth-x86_64.AppImage
@@ -493,6 +501,31 @@ jobs:
           # it adds a detached .sig beside the file - so this stays correct for
           # the signed artifact the `sign` job produces.
           sha256sum TennoWorth-x86_64.AppImage | tee TennoWorth-x86_64.AppImage.sha256
+
+      # Extraction cannot verify this: the type2 runtime recreates every
+      # directory with mode 0700, so an extracted tree reports the wrong modes
+      # no matter what the image holds. Read the squashfs that was packed.
+      - name: Verify the AppImage is usable when mounted by another user
+        run: |
+          set -euo pipefail
+          command -v unsquashfs >/dev/null || sudo apt-get install -y --no-install-recommends squashfs-tools
+          img=dist/TennoWorth-x86_64.AppImage
+          offset=$("$img" --appimage-offset)
+          bad=$(unsquashfs -o "$offset" -ll "$img" | awk '
+            $1 ~ /^[d-]/ {
+              other_r = substr($1, 8, 1) == "r"
+              other_x = substr($1, 10, 1) == "x"
+              if (!other_r ||
+                  (substr($1, 1, 1) == "d" && !other_x) ||
+                  (substr($1, 1, 1) == "-" && substr($1, 4, 1) == "x" && !other_x))
+                print $6
+            }')
+          if [ -n "$bad" ]; then
+            echo "::error title=AppImage unusable by other users::a root mount cannot run it (AppRun: Permission denied):"
+            printf '%s\n' "$bad" | sed 's/^/  /'
+            exit 1
+          fi
+          echo "Every directory and file is readable, and executable where needed, by other users."
 
       # Run the repacked AppImage. This happens after the libwayland surgery
       # because those bytes, not Tauri's first bundle, are

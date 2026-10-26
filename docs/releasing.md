@@ -139,7 +139,10 @@ the desktop release contains the complete, tested `main` commit.
    key and its password live only in the `desktop-release` environment and in
    the maintainer's offline backups. Before publication, it silently
    installs and probes the final Windows NSIS package and runs the final repacked
-   Linux AppImage under the same native probe contract. It then publishes the
+   Linux AppImage under the same native probe contract. The Linux build also
+   refuses an AppImage whose directories or files other users cannot read and
+   execute, because a root mount - firejail's `--appimage`, an app center that
+   loop-mounts - cannot run one. It then publishes the
    immutable `desktop-vX.Y.Z` release and refreshes the `desktop-latest` updater
    feed. Do not replace these steps with a hand-created tag or GitHub Release.
 7. Verify the public release assets and updater manifest. For an urgent
