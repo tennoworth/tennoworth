@@ -40,7 +40,13 @@
 	# binding only 127.0.0.1 leaves the tunnel with no listener to reach.
 	bind 127.0.0.1 ::1
 	root * /srv/wfm/app/frontend/dist
-	encode gzip zstd
+	# zstd first: Caddy prefers config order when the browser accepts both.
+	# `better` sends market.json at ~386 KB instead of gzip's ~438 KB for ~14 ms
+	# of CPU; `best` saves 14 KB more for three times the CPU on every request.
+	encode {
+		zstd better
+		gzip
+	}
 
 	import public_headers
 

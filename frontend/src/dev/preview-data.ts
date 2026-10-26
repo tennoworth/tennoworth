@@ -9,7 +9,7 @@ import { sampleAllocation, sampleGuidance } from './protection-preview';
 import type { ProtectionInventory, ProtectionPlan } from '../contracts/protection';
 
 // This module is dynamically imported only by the development preview.
-export function createPreview(scenario: string, announcementFeed: AnnouncementFeed | null = null) {
+export function createPreview(scenario: string, announcementFeed: AnnouncementFeed | null = null, largeSlugs: string[] = []) {
   const now = Math.floor(Date.now() / 1000);
   const owned = new Map([
     ['pyrana_prime_set', { count: 30, name: 'Pyrana Prime Set', type: 'Weapon', slug: 'pyrana_prime_set', subtype: null, kept_lvl: null, leveled: 0 }],
@@ -21,6 +21,11 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
     owned.set('arcane_energize', { count: sessionSample ? 24 : 12, name: 'Arcane Energize', type: 'Arcanes', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
     owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mods', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
   }
+  // `large`: a long-time player's inventory, for performance work.
+  largeSlugs.forEach((slug, i) => {
+    const name = slug.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    owned.set(slug, { count: 1 + (i % 7), name, type: 'Misc', slug, subtype: null, kept_lvl: null, leveled: 0 });
+  });
   if (scenario.startsWith('protection')) {
     owned.set('akbolto_prime_barrel', { count: 5, name: 'Akbolto Prime Barrel', type: 'Misc', slug: 'akbolto_prime_barrel', subtype: null, kept_lvl: null, leveled: 0 });
   }

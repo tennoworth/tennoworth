@@ -15,6 +15,9 @@ import BuildVsBuy from './BuildVsBuy.svelte';
     adviceMap: Map<string, Verdict>;
     onretry: () => void;
   } = $props();
+  // Each comparison is a native calculation over the snapshot, so it runs
+  // when its section is first opened rather than for every collapsed row.
+  let buildOpened = $state<Record<string, boolean>>({});
 
 </script>
 
@@ -110,15 +113,17 @@ import BuildVsBuy from './BuildVsBuy.svelte';
                      actually assembling - on a spares play there is nothing to
                      build. -->
                 {#if r.kind === 'near-complete' && inventory.market?.set_to_parts?.[r.set_slug]}
-                  <details data-shell class="build-vs-buy">
+                  <details data-shell class="build-vs-buy" ontoggle={(event) => { if (event.currentTarget.open) buildOpened[r.set_slug] = true; }}>
                     <summary data-shell>build it or buy it</summary>
-                    <BuildVsBuy
-                      setSlug={r.set_slug}
-                      setName={r.set_name}
-                      parts={inventory.market.set_to_parts[r.set_slug].parts}
-                      market={inventory.market}
-                      owned={inventory.resolved.owned}
-                    />
+                    {#if buildOpened[r.set_slug]}
+                      <BuildVsBuy
+                        setSlug={r.set_slug}
+                        setName={r.set_name}
+                        parts={inventory.market.set_to_parts[r.set_slug].parts}
+                        market={inventory.market}
+                        owned={inventory.resolved.owned}
+                      />
+                    {/if}
                   </details>
                 {/if}
               </td>

@@ -24,7 +24,9 @@ export class InventoryController {
   nativeSnapshotId = $state<number | null>(null);
   lastUpdated = $state<number | null>(null);
   catalogs = $state<Catalogs | null>(null);
-  market = $state<Market | null>(null);
+  // Raw: the snapshot is only ever replaced whole. Deep state proxied its
+  // ~3 MB, which every planner call serialized through proxy traps.
+  market = $state.raw<Market | null>(null);
   resolved = $state<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number> }>({
     owned: new Map(),
     unresolved: {},

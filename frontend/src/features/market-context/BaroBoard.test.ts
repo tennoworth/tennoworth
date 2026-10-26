@@ -50,3 +50,17 @@ it('shows failed pricing without claiming an empty stock', async () => {
   expect((await screen.findByRole('alert')).textContent).toContain('Stock pricing unavailable');
   expect(screen.queryByText(/No items in the current value filter/)).toBeNull();
 });
+
+it('plans the scrap basket once, after the stock is priced', async () => {
+  let priced!: (value: typeof emptyValue) => void;
+  const value = vi.fn(() => new Promise<typeof emptyValue>((resolve) => { priced = resolve; }));
+  const ducatPlan = vi.fn().mockResolvedValue({ candidates: [], plan: { picks: [], heldBack: [] } });
+  const owned = new Map([['a', { slug: 'a', name: 'A', count: 3 } as OwnedRecord]]);
+  render(BaroBoard, { props: { market: null, baro: null, owned }, context: new Map([[DESKTOP_CONTEXT, { ducatPlan, baroValue: value }]]) });
+  await screen.findByText("Pricing Baro's stock…");
+  expect(ducatPlan).not.toHaveBeenCalled();
+  priced(emptyValue);
+  await vi.waitFor(() => expect(ducatPlan).toHaveBeenCalledTimes(1));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(ducatPlan).toHaveBeenCalledTimes(1);
+});

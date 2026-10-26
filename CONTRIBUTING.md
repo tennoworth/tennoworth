@@ -45,6 +45,7 @@ build host, or maintainer configuration is not required.
 | `/?preview-desktop&sample=price-sharing` | Price sharing invitation (`price-sharing-error` refuses the save) |
 | `/?preview-desktop&sample=support-prompt` | Support invitation on the launch after an update, once What’s new is closed |
 | `/?preview-desktop&sample=long-history` | 250 rivens, trades and notifications, paged 100 at a time |
+| `/?preview-desktop&sample=large` | A long-time player's inventory: 1,500 items from the bundled snapshot, for performance work |
 | `/?styleguide` | Living design reference, both themes, controls, and editable dialog |
 
 The `?preview-desktop` URLs compute with the native planners compiled to

@@ -80,6 +80,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   let planning = $state(false);
   let planningError = $state<string | null>(null);
   $effect(() => {
+    // Until the session loads every quantity is 0, so there is nothing to plan.
+    if (!sessionData) return;
     const input = { candidates, mode, budget: budget ?? 0, target: target ?? null };
     let cancelled = false;
     planning = true;
