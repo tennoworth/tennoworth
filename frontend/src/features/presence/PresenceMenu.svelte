@@ -139,7 +139,8 @@
   }
   .trigger:hover { border-color: var(--accent); }
   /* Playing while Invisible: the action-needed edge. */
-  .trigger[data-tone="warn"] { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); padding-left: calc(var(--s2) + 3px); }
+  /* The edge is drawn inside the existing padding: widening the trigger here rewrapped the strip. */
+  .trigger[data-tone="warn"] { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
   .trigger[data-tone="bad"] { border-color: var(--bad); }
   .aside { display: inline-grid; align-items: center; justify-items: start; }
   .aside > * { grid-area: 1 / 1; }

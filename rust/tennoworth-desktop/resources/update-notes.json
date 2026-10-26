@@ -1,5 +1,5 @@
 {
-  "version": "0.8.108",
+  "version": "0.8.109",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1411,6 +1411,55 @@
           "body": "Sending an already accepted report batch again no longer consumes extra weekly quota, so a lost acknowledgement does not block later reports at the limit.",
           "platforms": [
             "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.109",
+      "date": "2026-10-26",
+      "changes": [
+        {
+          "id": "presence-go-online-while-playing",
+          "kind": "improved",
+          "title": "Go online in one click while playing",
+          "body": "When Warframe is running and your warframe.market status is Invisible, the status corner turns amber and offers Go online, which sets you Online in game. Invisible after the game closes stays calm, because that is what Follow the game is meant to do.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "presence-auth-step",
+          "kind": "improved",
+          "title": "See the next step when signed out or locked",
+          "body": "The status corner now names the state and offers Sign in or Unlock as a button, instead of a plain word you had to guess was clickable.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "presence-menu-readable",
+          "kind": "improved",
+          "title": "Recognise the status menu at a glance",
+          "body": "Your warframe.market status is outlined like the other menus, an Auto tag marks a status Follow the game is managing, and an account warframe.market refuses now reads Verify account.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "appimage-root-mount",
+          "kind": "fixed",
+          "title": "Run the AppImage from a root mount",
+          "body": "Sandboxes such as firejail's AppImage mode and app centers that mount the AppImage as another user can now start TennoWorth.",
+          "platforms": [
             "linux"
           ],
           "supersedes": []

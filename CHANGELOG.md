@@ -54,6 +54,30 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.109 - 2026-10-26
+
+# 🟢 TennoWorth Desktop 0.8.109
+
+TennoWorth Desktop 0.8.109 is ready.
+
+If you sell through warframe.market, the status corner of the window now shows what to do next without opening anything: sign in, unlock, or go online when you are hidden while playing. Most buyers only see online sellers, so being Invisible in game quietly costs sales. Linux users who run the AppImage through firejail or an app center can now start it.
+
+## Changelog (4)
+
+### Trade status
+
+- **Go online in one click while playing** When Warframe is running and your warframe.market status is Invisible, the status corner turns amber and offers Go online, which sets you Online in game. Invisible after the game closes stays calm, because that is what Follow the game is meant to do. <!-- app-note {"id":"presence-go-online-while-playing","kind":"improved"} -->
+- **See the next step when signed out or locked** The status corner now names the state and offers Sign in or Unlock as a button, instead of a plain word you had to guess was clickable. <!-- app-note {"id":"presence-auth-step","kind":"improved"} -->
+- **Recognise the status menu at a glance** Your warframe.market status is outlined like the other menus, an Auto tag marks a status Follow the game is managing, and an account warframe.market refuses now reads Verify account. <!-- app-note {"id":"presence-menu-readable","kind":"improved"} -->
+
+### Linux
+
+- **Run the AppImage from a root mount** Sandboxes such as firejail's AppImage mode and app centers that mount the AppImage as another user can now start TennoWorth. <!-- app-note {"id":"appimage-root-mount","kind":"fixed","platforms":["linux"]} -->
+
+## Updating
+
+TennoWorth checks for updates automatically. Downloads are available below.
+
 ## 0.8.108 - 2026-10-23
 
 # 🔒 TennoWorth Desktop 0.8.108

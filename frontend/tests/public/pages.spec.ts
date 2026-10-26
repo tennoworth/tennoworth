@@ -1,6 +1,15 @@
 import { test, expect } from '@playwright/test';
 import { pages, pilotItems, pilotSets, itemPath } from '../../src/public-site/pages';
-import { formatStampUtc } from '../../src/public-site/model';
+import { readFileSync } from 'node:fs';
+import { decisionAnswer, decisionText, formatStampUtc, priceText, publicData } from '../../src/public-site/model';
+
+// The built pages carry the bundled snapshot, which every desktop release
+// refreshes. Expected text comes from it; model.test.ts pins the arithmetic.
+function builtBo() {
+  const answer = decisionAnswer(publicData(JSON.parse(readFileSync('public/market.json', 'utf8'))), 'bo_prime_set')!;
+  expect(answer.outcome).not.toBe('unavailable');
+  return { answer, text: decisionText(answer), day: formatStampUtc(answer.stamp) };
+}
 
 const routes = ['/', ...pages.map(p => p.path), ...pilotItems.map(itemPath)];
 test('built public routes expose their answers, metadata and discoverable links', async ({ request }) => {
@@ -206,10 +215,10 @@ test('decision summaries and dated metadata are in the initial HTML for pilot se
     expect(html, slug).toContain('Copy decision');
     expect(html, slug).toContain('Decision text');
     expect(html, slug).toMatch(/<meta property="og:title" content="[^"]+summed parts[^"]*" \/>/);
-    expect(html, slug).toMatch(/<meta\s+property="og:description"\s+content="[^"]+Snapshot 23 Oct 2026[^"]*"/);
+    expect(html, slug).toMatch(new RegExp(`<meta\\s+property="og:description"\\s+content="[^"]+Snapshot ${snapshotDay}[^"]*"`));
   }
   const bo = await (await request.get(itemPath('bo_prime_set'))).text();
-  expect(bo).toContain('The summed parts are 8p above the set.');
+  expect(bo).toContain(builtBo().text.headline);
   expect(bo).toContain('One set versus 4 component copies across 3 distinct items.');
   expect(bo).toContain('<title>Bo Prime Set Prices &amp; Selling Context | TennoWorth</title>');
   const part = await (await request.get(itemPath('bo_prime_blueprint'))).text();
@@ -232,13 +241,14 @@ test('a newer snapshot refreshes the decision atomically while the built preview
   const block = page.locator('.decision');
   await expect(block).toContainText('The set is 5p above the summed parts.');
   await expect(block).toContainText('65p');
-  await expect(block).toContainText('Updated since this page was built (23 Oct 2026)');
-  await expect(block).not.toContainText('78p');
+  const built = builtBo();
+  await expect(block).toContainText(`Updated since this page was built (${built.day})`);
+  if (built.answer.partsTotal !== 65) await expect(block).not.toContainText(priceText(built.answer.partsTotal));
   await expect(page.getByText('65 p', { exact: true }).first()).toBeVisible();
   await expect(block.locator('pre')).toContainText('65p');
   await expect(block.locator('pre')).toContainText('not evidence of sale speed');
-  const built = await (await request.get(itemPath('bo_prime_set'))).text();
-  expect(built).toContain('70p set vs 78p summed parts (23 Oct 2026)');
+  const html = await (await request.get(itemPath('bo_prime_set'))).text();
+  expect(html).toContain(`${priceText(built.answer.setPrice)} set vs ${priceText(built.answer.partsTotal)} summed parts (${built.day})`);
 });
 
 test('missing evidence suppresses the verdict and keeps the links', async ({ page }) => {
@@ -260,7 +270,7 @@ test('decision answer survives without JavaScript and announces copy failure', a
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto('http://127.0.0.1:5189' + itemPath('bo_prime_set'));
-  await expect(page.getByRole('heading', { name: 'The summed parts are 8p above the set.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: builtBo().text.headline })).toBeVisible();
   await expect(page.locator('.decision-quantities')).toHaveText('One set versus 4 component copies across 3 distinct items.');
   await expect(page.getByRole('button', { name: 'Copy decision' })).toBeDisabled();
   await expect(page.getByText('Decision text')).toBeVisible();
@@ -277,7 +287,8 @@ test('decision copy reports success', async ({ browser, browserName }) => {
   await page.getByRole('button', { name: 'Copy decision' }).click();
   await expect(page.getByText('Decision copied.')).toBeVisible();
   const copied = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copied).toContain('Bo Prime Set: set 70p vs 78p summed parts');
+  const { answer } = builtBo();
+  expect(copied).toContain(`Bo Prime Set: set ${priceText(answer.setPrice)} vs ${priceText(answer.partsTotal)} summed parts`);
   expect(copied).toContain('not evidence of sale speed');
   await context.close();
 });
@@ -317,7 +328,7 @@ test('equal or older snapshots do not replace the decision', async ({ page }) =>
   await page.route('**/market.json', route => route.fulfill({ json: equal }));
   await page.goto(itemPath('bo_prime_set'));
   await expect(page.locator('.decision')).not.toContainText('777p');
-  await expect(page.locator('.decision')).toContainText('78p');
+  await expect(page.locator('.decision')).toContainText(builtBo().text.headline);
   await expect(page.getByRole('status')).toContainText('Snapshot checked');
 });
 
