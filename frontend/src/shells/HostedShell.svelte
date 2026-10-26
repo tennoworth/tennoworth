@@ -23,7 +23,8 @@ let { theme, store }: { theme: ThemeController; store?: SettingsStore } = $props
 const APP_COMMIT = __APP_COMMIT__;
 const transport = new HostedTransport();
 const reportUrl = bugReportUrl({ surface: 'Website', version: `build ${APP_COMMIT}` });
-let market = $state<Market | null>(null);
+// Raw: the snapshot is only replaced whole, and deep state proxied every read of it.
+let market = $state.raw<Market | null>(null);
 // A failed load must say so: it used to drop silently to the install pitch,
 // which swapped the page's task without telling the visitor why.
 let marketError = $state(false);
@@ -184,8 +185,14 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
       {:else}
         <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
         <span data-shell>Market</span>
-        <b data-shell>{marketStaleness ?? '-'}</b>
-        {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
+        {#if !market && !marketError}
+          <!-- Placeholders as wide as a typical age, so its arrival does not
+               re-wrap the strip and move the page. -->
+          <b data-shell class="pending">-</b><span data-shell class="reserve" aria-hidden="true">· aging</span>
+        {:else}
+          <b data-shell>{marketStaleness ?? '-'}</b>
+          {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
+        {/if}
       {/if}
     </div>
     
@@ -194,6 +201,14 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
         <span data-shell class="ducat" aria-hidden="true">⌬</span>
         <span data-shell>{baroState.phase === 'here' ? 'Baro leaves in' : 'Baro arrives in'}</span>
         <b data-shell>{humanWindow(baroState.windowMs)}</b>
+      </div>
+    {:else if !market && !marketError}
+      <!-- Holds the cell's place while the snapshot loads: the strip re-wrapped
+           when it appeared and pushed the page down. -->
+      <div data-shell class="cell baro">
+        <span data-shell class="ducat" aria-hidden="true">⌬</span>
+        <span data-shell>Baro arrives in</span>
+        <b data-shell class="pending">-</b>
       </div>
     {/if}
     <span data-shell class="grow"></span>

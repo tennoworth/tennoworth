@@ -40,7 +40,13 @@
 	# binding only 127.0.0.1 leaves the tunnel with no listener to reach.
 	bind 127.0.0.1 ::1
 	root * /srv/wfm/app/frontend/dist
-	encode gzip zstd
+	# zstd first: Caddy prefers config order when the browser accepts both.
+	# `better` sends market.json at ~386 KB instead of gzip's ~438 KB for ~14 ms
+	# of CPU; `best` saves 14 KB more for three times the CPU on every request.
+	encode {
+		zstd better
+		gzip
+	}
 
 	import public_headers
 
@@ -68,7 +74,8 @@
 	# in place on the box. Served from dist/ it would need a web rebuild+deploy,
 	# which is the exact latency it exists to avoid.
 	# history.json (relics.run-derived, box-only state) is live data too.
-	@livedata path /market.json /wfstat-catalog.json /definitions.json /history.json
+	# market-public.json is the slim copy the prerendered pages refresh from.
+	@livedata path /market.json /market-public.json /wfstat-catalog.json /definitions.json /history.json
 	handle @livedata {
 		root * /srv/wfm/app/frontend/public
 		header Cache-Control "public, max-age=300, must-revalidate"

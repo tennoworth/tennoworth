@@ -37,6 +37,16 @@ function deferred<T>() {
 }
 
 describe('native Trade Session planning', () => {
+  it('does not plan before the session quantities arrive', async () => {
+    const session = deferred<{ allowance: { remaining: number; snapshot_id: string }; quantities: Record<string, number>; bulk_slugs: string[] }>();
+    services.desktopTradeSessionState.mockReturnValue(session.promise);
+    services.evaluateTradeSession.mockImplementation(async () => plan('Initial'));
+    render(TradeSessionPane, { props: { owned: new Map(), market: null, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(services.evaluateTradeSession).not.toHaveBeenCalled();
+    session.resolve({ allowance: { remaining: 8, snapshot_id: 'one' }, quantities: {}, bulk_slugs: [] });
+    await waitFor(() => expect(services.evaluateTradeSession).toHaveBeenCalledTimes(1));
+  });
   // The header's "8 remaining" sat beside "Up to 8 estimated trades": one
   // number with two meanings. Both now say what the number counts.
   it('names the daily allowance and the budget cap it sets', async () => {

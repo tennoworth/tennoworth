@@ -105,6 +105,16 @@ fn build_produces_full_shape_market_json() {
     let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(&market_path).unwrap())
         .expect("market.json is valid JSON");
 
+    // The site's prerendered pages refresh from the slim copy written beside it.
+    let public: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market-public.json")).expect("market-public.json written"))
+            .expect("market-public.json is valid JSON");
+    assert_eq!(public["updated_at"], snap["updated_at"]);
+    assert_eq!(
+        public["items"].as_object().unwrap().keys().collect::<Vec<_>>(),
+        snap["items"].as_object().unwrap().keys().collect::<Vec<_>>()
+    );
+
     let obj = snap.as_object().expect("market.json is an object");
     for key in [
         "updated_at",

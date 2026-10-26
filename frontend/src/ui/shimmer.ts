@@ -293,7 +293,9 @@ export function shimmer(node: HTMLElement, initial: ShimmerParams) {
       });
       intersect.observe(node);
     }
-    measure();
+    // No measure() here: the observer reports the first size after layout.
+    // Reading clientWidth now forced a synchronous layout of the whole page
+    // that had just rendered.
     return inst;
   }
 

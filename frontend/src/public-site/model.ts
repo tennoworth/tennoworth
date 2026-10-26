@@ -1,4 +1,4 @@
-import type { Market } from '../contracts/data';
+import type { PublicMarket } from '../contracts/data';
 import { buildBrowseIndex } from '../domain/market-browse';
 import { itemPath, pilotSets } from './pages';
 
@@ -9,7 +9,7 @@ export interface PublicItem {
 export interface Comparison { slug: string; name: string; parts: { slug: string; quantity: number | null }[] }
 export interface PublicData { stamp: string; platform: string; items: PublicItem[]; sets: Comparison[] }
 const positive = (n: unknown): number | null => typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null;
-export function publicData(market: Market, slugs?: string[]): PublicData {
+export function publicData(market: PublicMarket, slugs?: string[]): PublicData {
   const names = buildBrowseIndex(market);
   const selected = slugs ? new Set(slugs) : null;
   const sets = market.set_to_parts ?? {};

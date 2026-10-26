@@ -138,3 +138,74 @@ fn subnormal_prices_cannot_turn_a_priced_ducat_ratio_into_null() {
     assert!(validate_ducat_request(&request).is_ok());
     assert_eq!(ducat_plan(&request).plan.ducats, 0.0);
 }
+
+// The webview sends each planner only the snapshot keys listed in
+// market-keys.json. Run every planner on the bundled snapshot with the whole
+// market and with only those keys: a planner that starts reading another key
+// changes its answer here instead of silently in the app.
+#[test]
+fn planners_answer_the_same_from_their_declared_market_keys() {
+    use market_domain::dispatch::DomainRequest;
+    use serde_json::json;
+    let keys: serde_json::Map<String, Value> = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/planners/market-keys.json"
+    ))
+    .unwrap();
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../frontend/public/market.json"
+    );
+    let market: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let items = market["items"].as_object().unwrap();
+    let owned: Vec<Value> = items
+        .keys()
+        .enumerate()
+        .map(|(i, slug)| {
+            let subtype = slug.ends_with("_relic").then_some("intact");
+            json!({"slug": slug, "name": slug, "count": 1 + i % 5, "subtype": subtype})
+        })
+        .collect();
+    let stock: Vec<Value> = items.iter().filter(|(_, item)| item.get("ducats").is_some()).take(40)
+        .map(|(slug, item)| json!({"item": slug, "slug": slug, "ducats": item["ducats"], "credits": 100_000})).collect();
+    let sets = market["set_to_parts"].as_object().unwrap();
+    let mut inputs: Vec<(&str, Value)> = vec![
+        ("relic_plan", json!({"owned": owned, "limit": 400})),
+        ("set_recos", json!({"owned": owned, "limit": 400})),
+        (
+            "ducat_plan",
+            json!({"owned": owned, "target": 900, "keepAbove": 15}),
+        ),
+        ("baro_value", json!({"stock": stock, "owned": owned})),
+    ];
+    for (slug, set) in sets.iter().take(8) {
+        inputs.push(("build_plan", json!({"setSlug": slug, "setName": set["name"], "parts": set["parts"], "owned": owned, "recipes": market["recipes"]})));
+    }
+    let run = |operation: &str, input: &Value, market: Value| {
+        let mut input = input.clone();
+        input["market"] = market;
+        let request: DomainRequest =
+            serde_json::from_value(json!({"operation": operation, "input": input})).unwrap();
+        serde_json::to_value(request.execute().unwrap()).unwrap()
+    };
+    for (operation, input) in &inputs {
+        let declared = keys[*operation]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|key| {
+                let key = key.as_str().unwrap();
+                (key.to_string(), market[key].clone())
+            })
+            .collect();
+        let full = run(operation, input, market.clone());
+        assert!(
+            full["result"].to_string().len() > 40,
+            "{operation}: the bundled snapshot gives this case too little to compare"
+        );
+        compare(
+            &run(operation, input, Value::Object(declared)),
+            &full,
+            operation,
+        );
+    }
+}

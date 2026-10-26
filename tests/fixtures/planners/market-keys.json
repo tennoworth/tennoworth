@@ -1,0 +1,7 @@
+{
+  "relic_plan": ["items", "relic_rewards"],
+  "set_recos": ["items", "set_to_parts"],
+  "ducat_plan": ["items"],
+  "baro_value": ["items"],
+  "build_plan": ["items"]
+}

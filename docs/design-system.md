@@ -75,6 +75,10 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
   to numerals, IDs and hashes, and keyboard shortcuts only; status words use
   `--font-ui` and sentences use `--font-body`, even inside a mono table cell.
   Align comparable numeric columns consistently and keep units clear.
+- Until Plex Sans loads, `--font-body` draws with "IBM Plex Sans Fallback":
+  local Arial or Liberation Sans scaled to Plex's measured width (102.7%) and
+  line metrics, so the swap does not re-wrap text and move the page. Re-measure
+  it when the body face or its weights change.
 - Use relative text sizes and readable line heights. Never shrink text as a
   responsive escape hatch. `--text-caption` is the floor for anything read,
   units after a number included. Plex Mono ships 400–600 only and synthetic

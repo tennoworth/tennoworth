@@ -18,7 +18,11 @@ export async function installPreview() {
   const domain = loadDomainEvaluator();
   domain.catch(error => console.error(error));
   const preview = scenario !== null
-    ? (await import('./preview-data')).createPreview(scenario || 'populated', scenario === 'announcements' ? await loadAnnouncements().catch(() => null) : null)
+    ? (await import('./preview-data')).createPreview(
+      scenario || 'populated',
+      scenario === 'announcements' ? await loadAnnouncements().catch(() => null) : null,
+      scenario === 'large' ? Object.keys((await (await fetch('/market.json')).json()).items).slice(0, 1500) : [],
+    )
     : null;
   let notes: import('../contracts/update').UpdateNotesStatus = structuredClone(notesSample) as import('../contracts/update').UpdateNotesStatus;
   // `support-prompt` is a launch that installed an update: notes first, then the prompt.

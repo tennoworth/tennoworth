@@ -2,6 +2,7 @@
   import { tableNavigation } from '../ui/keyboard.svelte';
   import { onMount } from 'svelte';
   import type { PublicData } from '../public-site/model';
+  import type { PublicMarket } from '../contracts/data';
   import { replacesMarket } from '../domain/market';
   import { activityCandidates, decisionAnswer, ducatParts, partTotal, publicData } from '../public-site/model';
   import { itemPath } from '../public-site/pages';
@@ -11,7 +12,7 @@
   import DecisionSummary from '../public-site/DecisionSummary.svelte';
   import FeatureRail from '../features/market-context/FeatureRail.svelte';
   import { HostedTransport } from '../adapters/hosted';
-  import { loadMarket, revalidateMarket, startHostedMarketRevalidation } from '../adapters/market';
+  import { loadPublicMarket, revalidatePublicMarket, startHostedMarketRevalidation } from '../adapters/market';
   import type { ThemeController } from '../ui/theme';
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
   let { heading, kind, initial, slug = '', published, theme }: { heading: string; kind: string; initial: PublicData; slug?: string; published: string[]; theme?: ThemeController } = $props();
@@ -33,19 +34,19 @@
     enhanced = true;
     status = 'Checking for a newer snapshot…';
     let active = true;
-    let latest: Awaited<ReturnType<typeof loadMarket>> | null = null;
-    const accept = (market: Awaited<ReturnType<typeof loadMarket>>) => {
+    let latest: PublicMarket | null = null;
+    const accept = (market: PublicMarket) => {
       if (!active) return;
       latest = market;
       if (market.platform !== initial.platform) throw new Error('Snapshot platform changed');
       if (replacesMarket(data.stamp, market.updated_at, Date.now())) data = publicData(market);
       status = 'Snapshot checked. Prices are estimates, not live offers.';
     };
-    void loadMarket().then(accept).catch(() => { if (active) status = 'Refresh unavailable. The dated build snapshot remains visible.'; });
+    void loadPublicMarket().then(accept).catch(() => { if (active) status = 'Refresh unavailable. The dated build snapshot remains visible.'; });
     const stop = startHostedMarketRevalidation(async () => {
       try {
-        if (!latest) { accept(await loadMarket()); return; }
-        const next = await revalidateMarket(latest);
+        if (!latest) { accept(await loadPublicMarket()); return; }
+        const next = await revalidatePublicMarket(latest);
         if (next) accept(next);
       } catch {
         if (active) status = 'Refresh unavailable. The displayed snapshot remains visible with its original date.';

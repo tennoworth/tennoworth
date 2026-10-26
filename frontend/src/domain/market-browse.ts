@@ -39,7 +39,7 @@ export function titleCase(name: string): string {
   return name.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function buildBrowseIndex(market: Market | null | undefined): BrowseIndex {
+export function buildBrowseIndex(market: { catalog?: Market['catalog'] | null; items?: Record<string, unknown> } | null | undefined): BrowseIndex {
   const names: BrowseIndex['names'] = [];
   const bySlug = new Map<string, string>();
   const catalog = market?.catalog;

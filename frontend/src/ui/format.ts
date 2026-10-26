@@ -47,7 +47,15 @@ export function plat(
   options: { useGrouping?: boolean } = {},
 ): string {
   if (v == null || !Number.isFinite(v)) return '-';
-  return Math.round(v).toLocaleString(undefined, options);
+  return platFormat(options.useGrouping !== false).format(Math.round(v));
+}
+// toLocaleString with options builds a formatter per call; the market browser
+// formats thousands of prices on load.
+const platFormats = new Map<boolean, Intl.NumberFormat>();
+function platFormat(grouping: boolean): Intl.NumberFormat {
+  let format = platFormats.get(grouping);
+  if (!format) platFormats.set(grouping, format = new Intl.NumberFormat(undefined, { useGrouping: grouping }));
+  return format;
 }
 
 /** Split the copies a row holds back into "leveled" (untradeable in-game) and

@@ -38,7 +38,8 @@ The crates:
   and is parity-gated against it on a shared fixture.
 - `wfm-scrape/` - host-only pipeline binary; the ONLY market pipeline.
   `scrape` runs the full WFM scrape to CSV; `build` renders
-  `market.json` + `wfstat-catalog.json`. Fixture regression gates in its
+  `market.json` + `wfstat-catalog.json` (+ the site's slim
+  `market-public.json`). Fixture regression gates in its
   `tests/` dir shell the freshly-built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`)
   against the frozen fixtures in tests/fixtures/{scrape,convert} - cargo
   rebuilds the binary before they run, so a stale one cannot green them.

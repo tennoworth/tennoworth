@@ -24,6 +24,16 @@ export interface MarketItemEntry {
   donch_bot_90d?: number;
 }
 
+/** `market-public.json`: the fields the site's prerendered pages read, listed
+ *  in tests/fixtures/public-market/fields.json and written beside market.json. */
+export interface PublicMarket {
+  updated_at: string;
+  platform: string;
+  catalog?: Record<string, string> | null;
+  set_to_parts?: Record<string, SetEntry> | null;
+  items: Record<string, Pick<MarketItemEntry, 'price_basis' | 'median_now' | 'median_90d' | 'medians_7d' | 'vol' | 'ducats' | 'tags'>>;
+}
+
 /** Component path → display info, baked from warframestat parent walk. */
 interface PathInfo {
   name: string;

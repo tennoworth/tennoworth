@@ -68,6 +68,8 @@
     scrapError = '';
     scrapLoading = !!inventory && !quantitiesUnavailable;
     if (quantitiesUnavailable) return () => { active = false; };
+    // The target comes from the stock valuation; a plan made before it arrives is thrown away.
+    if (valueResult.phase === 'loading') return () => { active = false; };
     if (inventory) ducatPlan(inventory, snapshot, target, 15, available).then((result) => {
       if (active) { candidates = result.candidates; scrapPlan = target > 0 ? result.plan : null; scrapLoading = false; }
     }).catch(() => { if (active) { scrapError = 'Scrap planning unavailable. Try reopening the Baro board.'; scrapLoading = false; } });

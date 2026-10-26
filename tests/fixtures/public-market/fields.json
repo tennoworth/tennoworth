@@ -1,0 +1,4 @@
+{
+  "snapshot": ["updated_at", "platform", "catalog", "set_to_parts"],
+  "item": ["price_basis", "median_now", "median_90d", "medians_7d", "vol", "ducats", "tags"]
+}
