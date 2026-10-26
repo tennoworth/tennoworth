@@ -54,6 +54,25 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.110 - 2026-10-26
+
+# ⚡ TennoWorth Desktop 0.8.110
+
+TennoWorth Desktop 0.8.110 is ready.
+
+If you have a large inventory, TennoWorth now keeps up with you. Baro, Set picks and Trade Session used to freeze the window for a second or more while they worked out their suggestions; they now open without a pause, and the app starts about twice as fast while using less memory.
+
+## Changelog (2)
+
+### Speed
+
+- **Open Baro, Set picks and Trade Session without a freeze** With a large inventory these views paused the window for over a second while they calculated. They now open straight away, and build-or-buy comparisons are worked out when you open them. <!-- app-note {"id":"large-inventory-views-responsive","kind":"improved"} -->
+- **Start faster with a large inventory** The app is ready about twice as fast after launch and uses less memory, because it no longer copies the whole price list for every calculation. <!-- app-note {"id":"large-inventory-startup","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.109 - 2026-10-26
 
 # 🟢 TennoWorth Desktop 0.8.109
