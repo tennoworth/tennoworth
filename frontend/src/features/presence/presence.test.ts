@@ -2,7 +2,7 @@
 // committed, and a pick must never be reported as applied when it was not.
 import { describe, expect, it, vi } from 'vitest';
 import { PresenceController } from './presence.svelte';
-import { keepForLabel, presenceLine, presenceProblem, presenceUsable, presenceWord } from './presence';
+import { keepForLabel, presenceAside, presenceLine, presenceProblem, presenceUsable, presenceWord } from './presence';
 import { PRESENCE_CHANGED_EVENT } from '../../contracts/events';
 import { DesktopCmdError } from '../../contracts/errors';
 import type { PresenceStatus } from '../../contracts/desktop';
@@ -95,10 +95,25 @@ describe('presence text', () => {
 
   it('never shows a status it does not have', () => {
     expect(presenceWord({ ...BASE, status: null, connected: false })).toBe('Connecting…');
-    expect(presenceWord({ ...BASE, problem: 'not_verified' })).toBe('Refused');
+    expect(presenceWord({ ...BASE, problem: 'not_verified' })).toBe('Verify account');
+    expect(presenceWord({ ...BASE, status: null, connected: false, problem: 'unreachable' })).toBe('Unknown');
     expect(presenceUsable({ ...BASE, problem: 'not_verified' })).toBe(false);
     expect(presenceUsable({ ...BASE, connected: false })).toBe(false);
     expect(presenceUsable(BASE)).toBe(true);
+  });
+
+  // The strip offers the fix only when it matters: invisible while Warframe
+  // runs. Invisible after the game closes is what following is meant to do.
+  it('puts the one useful next step beside the status', () => {
+    expect(presenceAside(BASE)).toBe('auto');
+    const handInvisible = { ...BASE, status: 'invisible' as const, following: false, followPaused: true };
+    expect(presenceAside(handInvisible)).toBe('go-online');
+    expect(presenceAside({ ...handInvisible, gameRunning: false })).toBeNull();
+    expect(presenceAside({ ...BASE, status: 'invisible', gameRunning: false })).toBe('auto');
+    expect(presenceAside({ ...handInvisible, problem: 'not_verified' })).toBeNull();
+    expect(presenceAside({ ...BASE, problem: 'not_verified' })).toBeNull();
+    expect(presenceAside({ ...handInvisible, connected: false, problem: 'unreachable' })).toBe('retrying');
+    expect(presenceAside({ ...BASE, following: false, status: 'online' })).toBeNull();
   });
 
   it('explains each problem with what happens next', () => {

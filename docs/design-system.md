@@ -123,7 +123,7 @@ do not globally restyle similarly named legacy component classes by accident.
 Inline status tags use the one `.tag` primitive in `app.css`; components may
 position a tag but never recolour it. The border style carries the kind as well
 as the hue: solid for advice (`peak`, `flip`, `hold`, `deal`, `stale`, advisor
-verdicts, and neutral `patience`/`skip`), dotted for facts (`vaulted`, `soon`,
+verdicts, and neutral `patience`/`skip`), dotted for facts (`vaulted`, `soon`, `auto`,
 `aug`, `thin`, `unpriced`, `relic-tag`). Vaulted uses `--vault`; no tag uses
 `--bad`. Filter chips that select by a tag reuse its class.
 Use `table.tw.fixed` when declaring fixed column proportions; setting only
@@ -679,12 +679,24 @@ activity or mission text. Following the game is the app's addition and is off
 until the user turns it on.
 
 Once the session is unlocked, the status strip's WFM cell shows the status word
-and a 7px mark, opening a menu with the same shape as More ▾. The mark's shape
+and a 7px mark in a trigger outlined like Refresh ▾, so it reads as a menu
+rather than a label; it opens a menu with the same shape as More ▾. The mark's shape
 carries the state as well as its hue: filled `--good` for Online in game, a
 `--good` outline for Online, a faint `--muted` outline for Invisible, and filled
 `--warn` when the user has something to fix. `PresenceMark.svelte` is its only
-definition, and the word always sits beside it. A locked or signed-out session
-keeps the strip's existing link to the sign-in dialogs.
+definition, and the word always sits beside it. An account warframe.market
+refuses reads Verify account, with a `--bad` outline.
+
+The cell shows the next step without being opened. Signed out and Locked show
+the state and an ink-outlined Sign in → or Unlock → that opens the matching
+dialog. Invisible while Warframe is running is the costly case, because most
+buyers filter for online sellers: the trigger takes the `--warn` action edge and
+a filled Go online sets Online in game in one click. Invisible after the game
+closes is what Follow the game is meant to do, so it stays calm with a dotted
+Auto tag, which marks any status that following is holding. An unreachable
+status channel reads Unknown with "retrying". These share one reserved slot
+beside the trigger, as the word does inside it, so a status change never
+changes the strip's width or height.
 
 Settings shows the status first on the warframe.market summary card, with the
 session on its second line. The account panel's Trade presence group holds the

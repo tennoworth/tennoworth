@@ -147,7 +147,7 @@ test('a sign-in failure offers a bug report that carries its code, not its text'
       ? Promise.reject({ code: 'wfm', message: '/v2/me returned 403 Forbidden: private-token' })
       : original(command, args);
   });
-  await page.getByRole('button', { name: 'logged out', exact: true }).click();
+  await page.getByTestId('wfm-auth-link').click();
   const login = page.getByTestId('wfm-login-dialog');
   const passphrase = login.locator('input[type="password"]').nth(0);
   const confirm = login.locator('input[type="password"]').nth(1);

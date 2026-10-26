@@ -599,7 +599,7 @@ table.tw tr.busy td { color: var(--muted); }
 /* Stale data is a caution to act on (refresh), so it takes the solid edge. */
 .tag.stale { color: var(--warn); }
 /* Facts */
-.tag:is(.vaulted, .soon, .vaulting-soon, .aug, .augment, .thin, .unpriced, .relic-tag) { border-style: dotted; }
+.tag:is(.vaulted, .soon, .vaulting-soon, .aug, .augment, .thin, .unpriced, .relic-tag, .auto) { border-style: dotted; }
 .tag.vaulted { color: var(--vault); }
 .tag:is(.soon, .vaulting-soon, .thin) { color: var(--warn); }
 .tag:is(.aug, .augment) { color: var(--fg); }
