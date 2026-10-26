@@ -89,7 +89,10 @@ contract, so it lives in [`../AGENTS.md`](../AGENTS.md) rather than here.
 ## Pipeline output
 
 `scrape` runs the full WFM scrape to CSV; `build` renders `market.json` and
-`wfstat-catalog.json` and is the complete snapshot/catalog generator. With
+`wfstat-catalog.json` and is the complete snapshot/catalog generator. It also
+writes `market-public.json` just before `market.json`: the fields listed in
+`tests/fixtures/public-market/fields.json`, which the site's prerendered pages
+refresh from (the frontend checks they give the same page data). With
 `--observations-dir`, `scrape` also streams a per-item observation log (one
 JSONL file per sweep, `src/observations.rs`) holding what each attempted item's
 statistics and book said; it is evidence for the statistics-refresh decision and

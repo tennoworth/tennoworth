@@ -56,6 +56,41 @@ describe('loadMarket', () => {
   });
 });
 
+describe('loadPublicMarket', () => {
+  const snapshot = { updated_at: '2026-10-26T12:00:00Z', platform: 'pc', items: { a: { median_now: 5 } } };
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+
+  it('reads the slim copy written beside the snapshot', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => snapshot });
+    const { loadPublicMarket } = await freshMarket();
+    await expect(loadPublicMarket()).resolves.toEqual(snapshot);
+    expect(globalThis.fetch.mock.calls.map(([url]) => url)).toEqual(['/market-public.json']);
+  });
+
+  it('reads the full snapshot while the slim copy does not exist yet', async () => {
+    globalThis.fetch.mockImplementation(async url => url === '/market-public.json'
+      ? { ok: false, status: 404 }
+      : { ok: true, status: 200, json: async () => snapshot });
+    const { loadPublicMarket } = await freshMarket();
+    await expect(loadPublicMarket()).resolves.toEqual(snapshot);
+    expect(globalThis.fetch.mock.calls.map(([url]) => url)).toEqual(['/market-public.json', '/market.json']);
+  });
+
+  it('reports a failing server instead of downloading the full snapshot', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 503 });
+    const { loadPublicMarket } = await freshMarket();
+    await expect(loadPublicMarket()).rejects.toThrow(/503/);
+    expect(globalThis.fetch).toHaveBeenCalledOnce();
+  });
+
+  it('revalidates the slim copy with the server', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...snapshot, updated_at: '2026-10-26T14:00:00Z' }) });
+    const { revalidatePublicMarket } = await freshMarket();
+    await expect(revalidatePublicMarket(snapshot)).resolves.toMatchObject({ updated_at: '2026-10-26T14:00:00Z' });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/market-public.json', { cache: 'no-cache' });
+  });
+});
+
 describe('lookup', () => {
   it('returns the stats entry for a known slug', async () => {
     const { lookup } = await freshMarket();

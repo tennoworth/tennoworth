@@ -193,6 +193,11 @@
   .desktop-landing > .statusbar .brand[data-shell] { flex: 1 1 0; min-width: min-content; }
   main.landing > .statusbar .brand .sub[data-shell],
   .desktop-landing > .statusbar .brand .sub[data-shell] { flex: 1 1 0; width: 0; min-width: 0; }
+  /* Loading placeholders for the market age and Baro countdown hold the width
+     of a typical value ("6 h ago · aging", "3d 19h"); narrower ones let the
+     strip fit one row that the real values then broke. */
+  main.landing > .statusbar .cell b.pending[data-shell] { min-width: 7ch; }
+  main.landing > .statusbar .cell .reserve[data-shell] { visibility: hidden; }
   /* The brand takes the slack itself, so the spacer would only halve it. */
   main.landing > .statusbar .grow[data-shell],
   .desktop-landing > .statusbar .grow[data-shell] { display: none; }
@@ -523,6 +528,10 @@
       max-height: calc(100dvh - 2rem);
       overflow-y: auto;
     }
+    /* The market age and Baro countdown each end up on a row of their own on a
+       phone. Before the snapshot loads, "Market -" was short enough to sit
+       beside the brand, so its arrival re-wrapped the strip and moved the page. */
+    main.landing > .statusbar .cell:not(.end)[data-shell] { flex-basis: 100%; }
     .statusbar .site-links[data-shell] {
       width: 100%;
       justify-content: center;

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { activityCandidates, datedHistory, decisionAnswer, decisionText, ducatParts, formatStampUtc, formatStampUtcTime, publicData, partTotal, priceText } from './model';
-import type { Market } from '../contracts/data';
+import type { Market, PublicMarket } from '../contracts/data';
+import bundled from '../../public/market.json';
+import publicFields from '../../../tests/fixtures/public-market/fields.json';
 
 const market = {
   updated_at: '2026-10-20T12:00:00Z', platform: 'pc',
@@ -8,6 +10,23 @@ const market = {
   items: { bo_prime_set: { price_basis:'unit', median_now:30, vol:0 }, bo_prime_ornament: { price_basis:'unit', median_now:7, ducats:15, medians_7d:[7,8] } },
   set_to_parts: { bo_prime_set: { name:'Bo Prime', parts:[{ slug:'bo_prime_ornament', quantity:2 }] } },
 } as unknown as Market;
+
+// The site's pages refresh from market-public.json, which the scraper writes
+// with only the fields listed in the fixture (and catalog names of priced
+// items). On the real snapshot they must read the same answer from it.
+describe('market-public.json', () => {
+  it('gives the prerendered pages the same data as the full snapshot', () => {
+    const full = bundled as unknown as Market;
+    const pick = (source: object, keys: string[]) => Object.fromEntries(keys.filter(key => key in source).map(key => [key, (source as Record<string, unknown>)[key]]));
+    const top = pick(full, publicFields.snapshot) as Partial<Market>;
+    if (top.catalog) top.catalog = Object.fromEntries(Object.entries(top.catalog).filter(([, slug]) => slug in full.items));
+    const slim = {
+      ...top,
+      items: Object.fromEntries(Object.entries(full.items).map(([slug, item]) => [slug, pick(item, publicFields.item)])),
+    } as unknown as PublicMarket;
+    expect(publicData(slim)).toEqual(publicData(full));
+  });
+});
 
 describe('public selling comparisons', () => {
   it('compares required component quantities and preserves genuine zero activity', () => {

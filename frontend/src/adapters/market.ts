@@ -3,7 +3,7 @@
 // is built on the production box's schedule and served from the same origin,
 // so the browser never has to call warframe.market directly.
 
-import type { Market } from '../contracts/data';
+import type { Market, PublicMarket } from '../contracts/data';
 import { isMarket, replacesMarket } from '../domain/market';
 
 const MARKET_URL = '/market.json';
@@ -41,6 +41,32 @@ export async function revalidateMarket(current: Market): Promise<Market | null> 
   const next = await fetchMarket(fetch(MARKET_URL, { cache: 'no-cache' }));
   if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;
   cached = next;
+  return next;
+}
+
+const PUBLIC_MARKET_URL = '/market-public.json';
+let publicCached: PublicMarket | null = null;
+
+// The slim copy is written by the next scrape after a deploy, and a dev
+// checkout has none: until it exists, read the full snapshot.
+async function fetchPublicMarket(init?: RequestInit): Promise<PublicMarket> {
+  const response = await fetch(PUBLIC_MARKET_URL, init);
+  if (response.status === 404) return fetchMarket(fetch(MARKET_URL, init));
+  return fetchMarket(Promise.resolve(response));
+}
+
+/** The prerendered pages' refresh: only the fields they read. */
+export async function loadPublicMarket(): Promise<PublicMarket> {
+  if (publicCached) return publicCached;
+  publicCached = await fetchPublicMarket();
+  return publicCached;
+}
+
+/** As revalidateMarket, for the prerendered pages' copy. */
+export async function revalidatePublicMarket(current: PublicMarket): Promise<PublicMarket | null> {
+  const next = await fetchPublicMarket({ cache: 'no-cache' });
+  if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;
+  publicCached = next;
   return next;
 }
 

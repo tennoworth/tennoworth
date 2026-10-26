@@ -762,6 +762,8 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // self-consistent older snapshot) rather than new-market + old-catalog
     // (which could leave fresh snapshot rows unresolvable until the catalog
     // lands).
+    // The site's slim copy goes first, so market.json stays the last write.
+    publish::public_snapshot(&snapshot, &json_out.with_file_name("market-public.json"))?;
     publish::snapshot(&snapshot, &json_out)?;
 
     Ok(())

@@ -112,7 +112,9 @@ The desktop app is the only interactive product. The standalone companion CLI
 (`wfm-fetch-inventory` with `fetch`/`login`/`serve`) was removed on 2026-08-02,
 and the dormant advisor command and implementation were removed after it. The
 hosted site is informational only - no accounts, no file access, no scan - and
-`market.json` plus `wfstat-catalog.json` are the artifacts it consumes.
+`market.json` plus `wfstat-catalog.json` are the artifacts it consumes; its
+prerendered pages refresh from `market-public.json`, a slim copy of the
+snapshot written beside it.
 
 ## CI inventory
 
