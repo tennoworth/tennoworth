@@ -1,5 +1,5 @@
 {
-  "version": "0.8.109",
+  "version": "0.8.110",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1460,6 +1460,34 @@
           "title": "Run the AppImage from a root mount",
           "body": "Sandboxes such as firejail's AppImage mode and app centers that mount the AppImage as another user can now start TennoWorth.",
           "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.110",
+      "date": "2026-10-26",
+      "changes": [
+        {
+          "id": "large-inventory-views-responsive",
+          "kind": "improved",
+          "title": "Open Baro, Set picks and Trade Session without a freeze",
+          "body": "With a large inventory these views paused the window for over a second while they calculated. They now open straight away, and build-or-buy comparisons are worked out when you open them.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "large-inventory-startup",
+          "kind": "improved",
+          "title": "Start faster with a large inventory",
+          "body": "The app is ready about twice as fast after launch and uses less memory, because it no longer copies the whole price list for every calculation.",
+          "platforms": [
+            "windows",
             "linux"
           ],
           "supersedes": []
