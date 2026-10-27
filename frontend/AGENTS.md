@@ -230,15 +230,21 @@ run `bun run csp` to rewrite all copies; `bun run build` fails via its
 prebuild `--check` if any copy drifted. (The meta copies deliberately
 omits `frame-ancestors` - browsers ignore it in meta tags.)
 
-**Desktop (Tauri) is a build-variant, not a third committed copy.**
-`bun run build:desktop` builds to `dist-desktop/` (gitignored) and runs
-`sync-csp.ts --desktop dist-desktop/index.html`, which rewrites only that
-built file's meta CSP to
+**Desktop (Tauri) policy is a committed copy in
+`rust/tennoworth-desktop/tauri.conf.json`** (`app.security.csp`), generated
+by the same script with
 `connect-src 'self' ipc://localhost http://ipc.localhost`
 (the Tauri IPC scheme added so `invoke` uses the fast path with no CSP
-violations). Remote data, including everything from tennoworth.app, is
-fetched in Rust, so the desktop policy names no remote origin. It NEVER
-touches the hosted copies, so the hosted CSP stays byte-identical.
+violations). Tauri sends it as a response header, so `frame-ancestors`
+applies too, and adds hashes for its own scripts. `style-src` is excluded
+from that rewriting (`dangerousDisableAssetCspModification`): a hash or nonce
+there would switch off `'unsafe-inline'`, which Svelte's inline styles need.
+`bun run build:desktop` builds to `dist-desktop/` (gitignored) and runs
+`sync-csp.ts --desktop dist-desktop/index.html`, which removes that built
+file's meta CSP so the webview enforces one policy rather than the
+intersection of two. Remote data, including everything from tennoworth.app,
+is fetched in Rust, so the desktop policy names no remote origin. The hosted
+copies stay byte-identical.
 `rust/tennoworth-desktop`'s `frontendDist` points at `dist-desktop`.
 
 ---

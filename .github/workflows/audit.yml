@@ -142,6 +142,8 @@ jobs:
               - 'scripts/*.sh'
               - 'scripts/deploy-layout.test.ts'
               - 'scripts/sync-csp.ts'
+              # Generated desktop CSP copy, checked by sync-csp.ts --check.
+              - 'rust/tennoworth-desktop/tauri.conf.json'
               # deploy-layout.test.ts pins the observation retention on both
               # sides; without these only the weekly schedule would run it.
               - 'tests/fixtures/observation-retention.json'
