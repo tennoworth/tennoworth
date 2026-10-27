@@ -10,6 +10,24 @@
 # `:8081` with no `bind` listens on every interface, so the boundary has to be
 # stated rather than assumed.
 
+# Proxying shared by the opt-in collectors: client identity headers never reach
+# the loopback service, and a stalled service fails fast instead of holding the
+# connection. Imported inside each collector's reverse_proxy block.
+(collector_upstream) {
+	header_up -Forwarded
+	header_up -X-Forwarded-For
+	header_up -X-Real-IP
+	header_up -CF-*
+	header_up -Cookie
+	header_up -Authorization
+	header_up -User-Agent
+	header_up -Referer
+	transport http {
+		dial_timeout 2s
+		response_header_timeout 5s
+	}
+}
+
 # Security headers. This is the only place the site's real HTTP headers are set;
 # the site and its error routes both import it, because error routes do not
 # inherit the site's headers. The CSP line is kept in sync by
@@ -100,18 +118,7 @@
 	skip_log @usage
 	handle @usage {
 		reverse_proxy 127.0.0.1:8082 {
-			header_up -Forwarded
-			header_up -X-Forwarded-For
-			header_up -X-Real-IP
-			header_up -CF-*
-			header_up -Cookie
-			header_up -Authorization
-			header_up -User-Agent
-			header_up -Referer
-			transport http {
-				dial_timeout 2s
-				response_header_timeout 5s
-			}
+			import collector_upstream
 		}
 	}
 
@@ -121,18 +128,7 @@
 	skip_log @reports
 	handle @reports {
 		reverse_proxy 127.0.0.1:8083 {
-			header_up -Forwarded
-			header_up -X-Forwarded-For
-			header_up -X-Real-IP
-			header_up -CF-*
-			header_up -Cookie
-			header_up -Authorization
-			header_up -User-Agent
-			header_up -Referer
-			transport http {
-				dial_timeout 2s
-				response_header_timeout 5s
-			}
+			import collector_upstream
 		}
 	}
 
