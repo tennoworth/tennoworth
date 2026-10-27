@@ -760,6 +760,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "collector-gate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "tokio",
+]
+
+[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5679,6 +5688,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "collector-gate",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",
@@ -5694,6 +5704,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "collector-gate",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",

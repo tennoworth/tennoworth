@@ -6,6 +6,7 @@ license = "MIT"
 description = "Opt-in anonymous price and riven-shape report collector"
 
 [dependencies]
+collector-gate = { path = "../collector-gate" }
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

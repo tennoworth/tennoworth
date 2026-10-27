@@ -1,0 +1,14 @@
+[package]
+name = "collector-gate"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Request quota and serve loop shared by the opt-in collectors"
+
+[dependencies]
+axum = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

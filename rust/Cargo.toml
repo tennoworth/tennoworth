@@ -26,7 +26,7 @@
 #   tennoworth-announcements - pure feed contract shared by readers and publishers.
 #   tennoworth-publisher - private host-only announcement publication service.
 [workspace]
-members = ["wfm-core", "market-math", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "tennoworth-announcements", "tennoworth-publisher"]
+members = ["wfm-core", "market-math", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "collector-gate", "tennoworth-announcements", "tennoworth-publisher"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping
