@@ -72,7 +72,9 @@
 	# definitions.json (C7) is here for the same reason and one more: its whole
 	# purpose is fixing a broken scan WITHOUT a release, so it must be editable
 	# in place on the box. Served from dist/ it would need a web rebuild+deploy,
-	# which is the exact latency it exists to avoid.
+	# which is the exact latency it exists to avoid. Clients install it only as a
+	# signed envelope (docs/wfm-access.md), so editing it in place still needs the
+	# offline signing key.
 	# history.json (relics.run-derived, box-only state) is live data too.
 	# market-public.json is the slim copy the prerendered pages refresh from.
 	@livedata path /market.json /market-public.json /wfstat-catalog.json /definitions.json /history.json

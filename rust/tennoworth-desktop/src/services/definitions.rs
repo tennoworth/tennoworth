@@ -14,8 +14,15 @@
 //! client, `read_bounded`) are imported rather than re-implemented.
 //!
 //! Fail-open at every step, which is the whole safety argument for letting a
-//! remote file steer the scanner: offline, 404, garbage JSON and an unparseable
-//! pattern each leave scanning exactly as it was compiled.
+//! remote file steer the scanner: offline, 404, garbage JSON, a missing or bad
+//! signature and an unparseable pattern each leave scanning exactly as it was
+//! compiled.
+//!
+//! The file is a Minisign envelope signed with the WFM policy key, because the
+//! patterns it carries run over the game's memory to find the session
+//! credentials: whoever can edit the site's copy should not be able to steer
+//! that. Its payload names `purpose: "scan-definitions"`, so a signed policy can
+//! never be replayed as definitions. A build without the key fetches nothing.
 //!
 //! The arity check is the one step that does NOT buy that on its own: it counts
 //! capture groups, so a pattern whose required groups can be absent from a match
@@ -35,8 +42,11 @@ use wfm_core::acquisition::scan::{install_patterns, patterns_from_definitions, S
 
 use crate::services::market::{artifact_client, read_bounded, write_atomic};
 
+const PURPOSE: &str = "scan-definitions";
+
 #[derive(serde::Deserialize)]
 struct DesktopDefinitions {
+    purpose: String,
     #[serde(flatten)]
     scan: ScanDefinitions,
     #[serde(default)]
@@ -84,32 +94,53 @@ pub struct DefinitionsOutcome {
 /// simply uses the compiled-in defaults, which is the correct behaviour and not
 /// worth blocking app start for.
 pub fn refresh_and_install(dir: &Path) -> DefinitionsOutcome {
-    refresh_and_install_with(dir, &definitions_url())
-}
-
-fn refresh_and_install_with(dir: &Path, url: &str) -> DefinitionsOutcome {
-    let body = match fetch(dir, url) {
-        Some(fresh) => Some((fresh, true)),
-        // 304/offline/error: the cache is the last known-good file and is
-        // already validated-on-write, so re-installing it keeps a previously
-        // shipped fix working offline.
-        None => read_cache(dir).map(|c| (c, false)),
-    };
-    let Some((raw, fetched)) = body else {
+    let Some(key) = wfm_client::policy::PUBLIC_KEY else {
         return DefinitionsOutcome::default();
     };
+    let keys = Keys {
+        current: key,
+        previous: wfm_client::policy::PREVIOUS_PUBLIC_KEYS,
+    };
+    refresh_and_install_with(dir, &definitions_url(), &keys)
+}
 
-    let defs: DesktopDefinitions = match serde_json::from_str(&raw) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("tennoworth: definitions parse failed ({e}); keeping built-in patterns");
-            return DefinitionsOutcome {
-                installed: false,
-                fetched,
-                rejected: vec![],
-                reward_log_markers: vec![],
-            };
+/// The key a fetched file must verify with, and the retired keys a cached one
+/// may still verify with - the same rotation rule as the WFM policy.
+struct Keys<'a> {
+    current: &'a str,
+    previous: &'a [&'a str],
+}
+
+/// The verified definitions in an envelope, or None. Only a file already on
+/// disk may lean on a retired key.
+fn verified(raw: &str, keys: &Keys, cached: bool) -> Option<DesktopDefinitions> {
+    let max = MAX_DEFINITION_BYTES as u64;
+    let verify = |key: &str| wfm_client::policy::verify_envelope(raw.as_bytes(), key, max).ok();
+    let (_, payload) = verify(keys.current).or_else(|| {
+        cached
+            .then(|| keys.previous.iter().find_map(|old| verify(old)))
+            .flatten()
+    })?;
+    let defs: DesktopDefinitions = serde_json::from_slice(&payload).ok()?;
+    (defs.purpose == PURPOSE).then_some(defs)
+}
+
+fn refresh_and_install_with(dir: &Path, url: &str, keys: &Keys) -> DefinitionsOutcome {
+    let fresh = fetch(dir, url, keys);
+    let fetched = fresh.is_some();
+    // 304/offline/error: the cache is the last known-good file and is
+    // already validated-on-write, so re-installing it keeps a previously
+    // shipped fix working offline. It is verified again on every read.
+    let Some(defs) = fresh.or_else(|| {
+        let cached = read_cache(dir)?;
+        let defs = verified(&cached, keys, true);
+        if defs.is_none() {
+            eprintln!("tennoworth: cached definitions are not signed; dropping them");
+            reset_cache(dir);
         }
+        defs
+    }) else {
+        return DefinitionsOutcome::default();
     };
 
     let (patterns, rejections) = patterns_from_definitions(&defs.scan);
@@ -154,7 +185,7 @@ const MAX_DEFINITION_BYTES: usize = 64 * 1024;
 
 /// Conditional GET. Returns a body only on a validated 200; every other
 /// outcome is None and leaves the cache untouched.
-fn fetch(dir: &Path, url: &str) -> Option<String> {
+fn fetch(dir: &Path, url: &str, keys: &Keys) -> Option<DesktopDefinitions> {
     let prior_etag = std::fs::read_to_string(etag_path(dir))
         .ok()
         .map(|s| s.trim().to_string())
@@ -199,28 +230,22 @@ fn fetch(dir: &Path, url: &str) -> Option<String> {
     // must not disable the others. It must not become the cached known-good
     // file, though - the cache is what every future offline start re-installs,
     // so it holds only a definition that compiled without a single rejection.
-    let usable = match serde_json::from_str::<DesktopDefinitions>(&body) {
-        Ok(d) => {
-            let (_, rejections) = patterns_from_definitions(&d.scan);
-            if rejections.is_empty() {
-                true
-            } else {
-                eprintln!(
-                    "tennoworth: definitions body has {} unusable entry/entries; \
-                     using it for this run only",
-                    rejections.len()
-                );
-                false
-            }
-        }
-        Err(_) => {
-            eprintln!(
-                "tennoworth: definitions body invalid (len {}); keeping cache",
-                body.len()
-            );
-            return None;
-        }
+    let Some(defs) = verified(&body, keys, false) else {
+        eprintln!(
+            "tennoworth: definitions body is not a signed definitions file (len {}); keeping cache",
+            body.len()
+        );
+        return None;
     };
+    let (_, rejections) = patterns_from_definitions(&defs.scan);
+    let usable = rejections.is_empty();
+    if !usable {
+        eprintln!(
+            "tennoworth: definitions body has {} unusable entry/entries; \
+             using it for this run only",
+            rejections.len()
+        );
+    }
 
     if usable {
         let _ = write_atomic(&cache_path(dir), body.as_bytes());
@@ -234,7 +259,7 @@ fn fetch(dir: &Path, url: &str) -> Option<String> {
             }
         }
     }
-    Some(body)
+    Some(defs)
 }
 
 /// Drop the cached definitions and its validator, so the next start falls back
@@ -288,13 +313,38 @@ mod tests {
         url
     }
 
-    const GOOD: &str = r#"{"version":1,"cred_pattern":"acct=([0-9a-f]{24})&n=([0-9]{6,})"}"#;
+    fn fixture() -> &'static serde_json::Value {
+        static FIXTURE: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
+        FIXTURE.get_or_init(|| {
+            serde_json::from_str(include_str!(
+                "../../../../tests/fixtures/scan-definitions/signed.json"
+            ))
+            .unwrap()
+        })
+    }
+
+    /// A fixture case serialized as the file the site serves.
+    fn body(case: &str) -> &'static str {
+        Box::leak(fixture()[case].to_string().into_boxed_str())
+    }
+
+    fn keys() -> Keys<'static> {
+        static PREVIOUS: std::sync::OnceLock<[&'static str; 1]> = std::sync::OnceLock::new();
+        Keys {
+            current: fixture()["public_key"].as_str().unwrap(),
+            previous: PREVIOUS.get_or_init(|| [fixture()["previous_public_key"].as_str().unwrap()]),
+        }
+    }
+
+    fn run(dir: &Path, url: &str) -> DefinitionsOutcome {
+        refresh_and_install_with(dir, url, &keys())
+    }
 
     #[test]
     fn a_valid_file_installs_and_caches() {
         let dir = temp_dir();
-        let url = serve_once(GOOD, "200 OK", Some("\"d1\""));
-        let out = refresh_and_install_with(&dir, &url);
+        let url = serve_once(body("good"), "200 OK", Some("\"d1\""));
+        let out = run(&dir, &url);
         assert!(out.installed && out.fetched, "{out:?}");
         assert!(out.rejected.is_empty(), "{out:?}");
         assert!(cache_path(&dir).exists(), "body cached for offline starts");
@@ -310,9 +360,9 @@ mod tests {
     fn offline_with_a_cache_still_installs_from_it() {
         // A shipped fix must keep working when the server is unreachable.
         let dir = temp_dir();
-        std::fs::write(cache_path(&dir), GOOD).unwrap();
+        std::fs::write(cache_path(&dir), body("good")).unwrap();
         // Port 1 on localhost: refused immediately, no network wait.
-        let out = refresh_and_install_with(&dir, "http://127.0.0.1:1/definitions.json");
+        let out = run(&dir, "http://127.0.0.1:1/definitions.json");
         assert!(out.installed, "cache is the fallback");
         assert!(!out.fetched);
         let _ = std::fs::remove_dir_all(&dir);
@@ -321,7 +371,7 @@ mod tests {
     #[test]
     fn offline_with_no_cache_is_a_silent_noop() {
         let dir = temp_dir();
-        let out = refresh_and_install_with(&dir, "http://127.0.0.1:1/definitions.json");
+        let out = run(&dir, "http://127.0.0.1:1/definitions.json");
         assert_eq!(out, DefinitionsOutcome::default());
         assert!(!cache_path(&dir).exists());
         let _ = std::fs::remove_dir_all(&dir);
@@ -330,20 +380,20 @@ mod tests {
     #[test]
     fn a_garbage_200_does_not_poison_the_cache() {
         let dir = temp_dir();
-        std::fs::write(cache_path(&dir), GOOD).unwrap();
+        std::fs::write(cache_path(&dir), body("good")).unwrap();
         let url = serve_once("<html>502 from a proxy</html>", "200 OK", None);
-        let out = refresh_and_install_with(&dir, &url);
+        let out = run(&dir, &url);
         // Fell back to the good cache rather than caching the junk.
         assert!(out.installed && !out.fetched, "{out:?}");
-        assert_eq!(std::fs::read_to_string(cache_path(&dir)).unwrap(), GOOD);
+        assert_eq!(std::fs::read_to_string(cache_path(&dir)).unwrap(), body("good"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_bad_pattern_is_reported_and_scanning_survives() {
         let dir = temp_dir();
-        let url = serve_once(r#"{"cred_pattern":"([unclosed"}"#, "200 OK", None);
-        let out = refresh_and_install_with(&dir, &url);
+        let url = serve_once(body("bad_pattern"), "200 OK", None);
+        let out = run(&dir, &url);
         // Installed (with the default cred pattern), and the push is diagnosable.
         assert!(out.installed, "{out:?}");
         assert_eq!(out.rejected.len(), 1, "{out:?}");
@@ -355,7 +405,7 @@ mod tests {
     fn a_404_leaves_everything_alone() {
         let dir = temp_dir();
         let url = serve_once("not found", "404 Not Found", None);
-        let out = refresh_and_install_with(&dir, &url);
+        let out = run(&dir, &url);
         assert_eq!(out, DefinitionsOutcome::default());
         assert!(!cache_path(&dir).exists());
         let _ = std::fs::remove_dir_all(&dir);
@@ -368,8 +418,8 @@ mod tests {
         // compile. Installing it for this run is correct (the other fields
         // still work); persisting it is not, because the cache is the
         // known-good fallback that every future offline start re-installs.
-        let url = serve_once(r#"{"version":1,"cred_pattern":"([unclosed"}"#, "200 OK", None);
-        let out = refresh_and_install_with(&dir, &url);
+        let url = serve_once(body("bad_pattern"), "200 OK", None);
+        let out = run(&dir, &url);
         assert!(out.installed, "this run still gets the usable fields: {out:?}");
         assert_eq!(out.rejected.len(), 1, "{out:?}");
         assert!(
@@ -387,7 +437,7 @@ mod tests {
             "a".repeat(128 * 1024)
         );
         let url = serve_once(Box::leak(huge.into_boxed_str()), "200 OK", None);
-        let out = refresh_and_install_with(&dir, &url);
+        let out = run(&dir, &url);
         assert!(!out.installed, "an oversized body must be refused: {out:?}");
         assert!(!out.fetched, "{out:?}");
         assert!(!cache_path(&dir).exists());
@@ -399,13 +449,44 @@ mod tests {
         // The recovery path: a cache that turns out to be unusable must not keep
         // re-installing itself on every offline start.
         let dir = temp_dir();
-        std::fs::write(cache_path(&dir), r#"{"cred_pattern":"([unclosed"}"#).unwrap();
-        let out = refresh_and_install_with(&dir, "http://127.0.0.1:1/definitions.json");
+        std::fs::write(cache_path(&dir), body("bad_pattern")).unwrap();
+        let out = run(&dir, "http://127.0.0.1:1/definitions.json");
         assert!(!out.rejected.is_empty(), "{out:?}");
         assert!(
             !cache_path(&dir).exists(),
             "an unusable cached definition must be dropped so the built-ins take over"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_a_signed_definitions_file_installs() {
+        for case in ["unsigned", "wrong_purpose", "missing_purpose", "good_by_previous_key"] {
+            let dir = temp_dir();
+            let url = serve_once(body(case), "200 OK", None);
+            let out = run(&dir, &url);
+            assert_eq!(out, DefinitionsOutcome::default(), "{case}");
+            assert!(!cache_path(&dir).exists(), "{case}");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+        let mut tampered = fixture()["good"].clone();
+        tampered["payload"] = fixture()["bad_pattern"]["payload"].clone();
+        let dir = temp_dir();
+        let url = serve_once(Box::leak(tampered.to_string().into_boxed_str()), "200 OK", None);
+        assert_eq!(run(&dir, &url), DefinitionsOutcome::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_cache_signed_before_a_key_rotation_still_installs_but_an_unsigned_one_is_dropped() {
+        let dir = temp_dir();
+        std::fs::write(cache_path(&dir), body("good_by_previous_key")).unwrap();
+        let out = run(&dir, "http://127.0.0.1:1/definitions.json");
+        assert!(out.installed && !out.fetched, "{out:?}");
+        std::fs::write(cache_path(&dir), body("unsigned")).unwrap();
+        let out = run(&dir, "http://127.0.0.1:1/definitions.json");
+        assert_eq!(out, DefinitionsOutcome::default());
+        assert!(!cache_path(&dir).exists(), "an unsigned cache is not a fallback");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -167,3 +167,23 @@ and outstanding work are local.
 The status command and `wfm-access-changed` event expose no credentials or private
 payloads. Updated clients cannot coordinate unrelated applications or computers
 sharing an IP, and cannot enforce restrictions in older or modified clients.
+
+## Scan definitions
+
+`https://tennoworth.app/definitions.json` lets a scan fix ship without a
+release. Its patterns run over the game's memory to find the session
+credentials, so the desktop installs it only as an envelope signed with the
+policy key above, in the same format and with the same rotation rule: a
+fetched file must verify with the current key, and a cached one may verify with
+a retired key. A build without the key, an unsigned or tampered file, and a
+missing file all leave the compiled patterns in place.
+
+The payload is JSON with `purpose: "scan-definitions"`, which keeps a signed
+policy from being served as definitions, plus any of `cred_pattern` (two
+capture groups: accountId, nonce), `build_pattern` and `ct_pattern` (one group
+each), `reward_log_markers` (1-8 strings of at most 120 bytes), and an
+informational `version`. A pattern that does not compile is reported and keeps
+its default; the body is limited to 64 KiB. Sign the exact payload bytes with
+`minisign -S -H`, wrap them as `{"payload": <base64>, "signature": <signature
+text>}`, and place the envelope at `frontend/public/definitions.json` on the
+host, which Caddy serves live. Clients read it at startup.

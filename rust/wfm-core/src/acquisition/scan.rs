@@ -116,7 +116,7 @@ impl Default for ScanPatterns {
     }
 }
 
-/// The remote `definitions.json` shape. Every field is optional: a definitions
+/// The scan fields of the signed `definitions.json` payload. Every field is optional: a definitions
 /// file that only fixes the credential pattern leaves the other two alone.
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct ScanDefinitions {

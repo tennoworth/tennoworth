@@ -38,12 +38,20 @@ pub struct Policy {
     pub desktop: Restrictions,
     pub scraper: Restrictions,
 }
-pub fn verify(raw: &[u8], key: &str) -> Result<(Envelope, Policy), AccessError> {
-    let invalid = |_| AccessError::InvalidPolicy;
-    if raw.len() as u64 > MAX_POLICY_BYTES {
+/// Verify a Minisign envelope and return its envelope and payload bytes. The
+/// envelope format is shared by every signed artifact; each caller then parses
+/// and bounds its own payload, which must name its purpose so one artifact's
+/// signature cannot be replayed as another's.
+pub fn verify_envelope(
+    raw: &[u8],
+    key: &str,
+    max_bytes: u64,
+) -> Result<(Envelope, Vec<u8>), AccessError> {
+    if raw.len() as u64 > max_bytes {
         return Err(AccessError::InvalidPolicy);
     }
-    let envelope: Envelope = serde_json::from_slice(raw).map_err(invalid)?;
+    let envelope: Envelope =
+        serde_json::from_slice(raw).map_err(|_| AccessError::InvalidPolicy)?;
     let payload = base64::engine::general_purpose::STANDARD
         .decode(&envelope.payload)
         .map_err(|_| AccessError::InvalidPolicy)?;
@@ -53,6 +61,11 @@ pub fn verify(raw: &[u8], key: &str) -> Result<(Envelope, Policy), AccessError> 
         .map_err(|_| AccessError::InvalidPolicy)?;
     key.verify(&payload, &signature, false)
         .map_err(|_| AccessError::InvalidPolicy)?;
+    Ok((envelope, payload))
+}
+pub fn verify(raw: &[u8], key: &str) -> Result<(Envelope, Policy), AccessError> {
+    let invalid = |_| AccessError::InvalidPolicy;
+    let (envelope, payload) = verify_envelope(raw, key, MAX_POLICY_BYTES)?;
     let policy: Policy = serde_json::from_slice(&payload).map_err(invalid)?;
     if policy.schema != 1
         || policy.revision == 0

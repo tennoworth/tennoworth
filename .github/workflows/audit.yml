@@ -87,7 +87,6 @@ jobs:
               # it on main, so a snapshot-only change must reach it here.
               - 'frontend/public/market.json'
               - 'frontend/public/wfstat-catalog.json'
-              - 'frontend/public/definitions.json'
               - '.node-version'
               # The desktop preview the browser suite drives runs these, built
               # to wasm32 by scripts/build-domain-wasm.ts.
@@ -134,7 +133,6 @@ jobs:
             market_data:
               - 'frontend/public/market.json'
               - 'frontend/public/wfstat-catalog.json'
-              - 'frontend/public/definitions.json'
               - 'scripts/release.ts'
               - 'scripts/release/**'
               - 'scripts/release.test.ts'
@@ -486,7 +484,8 @@ jobs:
       - name: Validate committed data
         run: |
           bun scripts/release.ts snapshot-check
-          jq -e 'type == "object"' frontend/public/definitions.json
+          # Scan definitions are published only as a signed envelope (docs/wfm-access.md).
+          test ! -e frontend/public/definitions.json || jq -e 'keys == ["payload", "signature"]' frontend/public/definitions.json
 
   deploy-validation:
     needs: changes
