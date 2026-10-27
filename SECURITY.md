@@ -25,7 +25,10 @@ The product crosses the following trust boundaries:
    a separate window with no IPC access, so the WFM password never reaches
    the app. The one path that passes a JWT through the webview is the
    paste-token fallback, which sends a token the user copied from their own
-   browser to Rust once and clears the field. The core logic it drives lives in
+   browser to Rust once and clears the field. Each app window may call only
+   the commands its capability grants: the reward overlay can read its own
+   result and nothing else. Remote scan definitions are installed only when
+   signed with the offline WFM policy key. The core logic it drives lives in
    `rust/wfm-core`.
 
    Scanning is manual by default. An opt-in **Automatic scan** setting
