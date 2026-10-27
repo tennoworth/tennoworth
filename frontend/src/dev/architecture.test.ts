@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import ts from 'typescript';
+import homeMarket from '../../../tests/fixtures/public-market/home.json';
 
 const sources = import.meta.glob<string>(['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts', '!../dev/**'], { query: '?raw', import: 'default', eager: true });
 
@@ -61,6 +62,24 @@ describe('architecture boundaries', () => {
     const hosted = sources['../shells/HostedShell.svelte'];
     expect(hosted).toBeDefined();
     expect(imports(hosted).filter(specifier => /adapters\/(desktop|services)|ui\/desktop-context|features\/(inventory|selling|orders|watches)\//.test(specifier))).toEqual([]);
+  });
+  it('keeps the homepage off the fields its market copy omits', () => {
+    // The homepage loads market-home.json, which lacks these fields; a reader
+    // reachable from it would see them as missing data.
+    const graph = runtimeGraph();
+    const reached = new Set<string>();
+    const pending = ['../shells/HostedShell.svelte'];
+    while (pending.length) {
+      const path = pending.pop()!;
+      if (reached.has(path)) continue;
+      reached.add(path);
+      pending.push(...(graph.get(path) ?? []));
+    }
+    expect(reached.size).toBeGreaterThan(30);
+    const readers = [...reached].flatMap(path => homeMarket.omit
+      .filter(field => new RegExp(`(?:\\.|\\?\\.|\\[['"])${field}\\b`).test(sources[path]))
+      .map(field => `${path}: ${field}`));
+    expect(readers).toEqual([]);
   });
 });
 

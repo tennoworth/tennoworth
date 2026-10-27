@@ -1,0 +1,4 @@
+{
+  "_comment": "market-home.json is market.json without these top-level fields, which no code reachable from the hosted homepage reads. The scraper writes it; frontend/src/dev/architecture.test.ts fails if the homepage starts reading one.",
+  "omit": ["path_to_info", "relic_rewards", "recipes"]
+}

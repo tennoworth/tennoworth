@@ -47,12 +47,32 @@ export async function revalidateMarket(current: Market): Promise<Market | null> 
 const PUBLIC_MARKET_URL = '/market-public.json';
 let publicCached: PublicMarket | null = null;
 
-// The slim copy is written by the next scrape after a deploy, and a dev
-// checkout has none: until it exists, read the full snapshot.
-async function fetchPublicMarket(init?: RequestInit): Promise<PublicMarket> {
-  const response = await fetch(PUBLIC_MARKET_URL, init);
+// The slim copies are written by the next scrape after a deploy, and a dev
+// checkout has none: until one exists, read the full snapshot.
+async function fetchSlimMarket(url: string, init?: RequestInit): Promise<Market> {
+  const response = await fetch(url, init);
   if (response.status === 404) return fetchMarket(fetch(MARKET_URL, init));
   return fetchMarket(Promise.resolve(response));
+}
+const fetchPublicMarket = (init?: RequestInit): Promise<PublicMarket> => fetchSlimMarket(PUBLIC_MARKET_URL, init);
+
+// market.json without the desktop-only fields in
+// tests/fixtures/public-market/home.json, for the hosted homepage.
+const HOME_MARKET_URL = '/market-home.json';
+let homeCached: Market | null = null;
+
+export async function loadHomeMarket(): Promise<Market> {
+  if (homeCached) return homeCached;
+  homeCached = await fetchSlimMarket(HOME_MARKET_URL);
+  return homeCached;
+}
+
+/** As revalidateMarket, for the homepage's copy. */
+export async function revalidateHomeMarket(current: Market): Promise<Market | null> {
+  const next = await fetchSlimMarket(HOME_MARKET_URL, { cache: 'no-cache' });
+  if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;
+  homeCached = next;
+  return next;
 }
 
 /** The prerendered pages' refresh: only the fields they read. */

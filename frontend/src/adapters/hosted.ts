@@ -1,10 +1,8 @@
 import { isHistory, type History } from '../domain/history';
-import { loadMarket } from './market';
 import { parseAnnouncements } from '../domain/announcements';
 import limits from '../../../tests/fixtures/announcements/limits.json';
 
 export class HostedTransport {
-  loadMarket = loadMarket;
   async loadAnnouncements() {
     const response = await fetch('/announcements.json', { cache: 'no-cache', signal: AbortSignal.timeout(10_000) });
     if (!response.ok || !response.body) throw new Error('Announcements unavailable');

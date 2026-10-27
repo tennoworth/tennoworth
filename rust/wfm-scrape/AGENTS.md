@@ -92,7 +92,9 @@ contract, so it lives in [`../AGENTS.md`](../AGENTS.md) rather than here.
 `wfstat-catalog.json` and is the complete snapshot/catalog generator. It also
 writes `market-public.json` just before `market.json`: the fields listed in
 `tests/fixtures/public-market/fields.json`, which the site's prerendered pages
-refresh from (the frontend checks they give the same page data). With
+refresh from (the frontend checks they give the same page data), and
+`market-home.json`, the snapshot without the desktop-only fields in
+`tests/fixtures/public-market/home.json`, which the hosted homepage reads. With
 `--observations-dir`, `scrape` also streams a per-item observation log (one
 JSONL file per sweep, `src/observations.rs`) holding what each attempted item's
 statistics and book said; it is evidence for the statistics-refresh decision and

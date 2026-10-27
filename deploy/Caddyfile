@@ -94,8 +94,9 @@
 	# signed envelope (docs/wfm-access.md), so editing it in place still needs the
 	# offline signing key.
 	# history.json (relics.run-derived, box-only state) is live data too.
-	# market-public.json is the slim copy the prerendered pages refresh from.
-	@livedata path /market.json /market-public.json /wfstat-catalog.json /definitions.json /history.json
+	# market-public.json is the slim copy the prerendered pages refresh from, and
+	# market-home.json the homepage's copy without desktop-only fields.
+	@livedata path /market.json /market-public.json /market-home.json /wfstat-catalog.json /definitions.json /history.json
 	handle @livedata {
 		root * /srv/wfm/app/frontend/public
 		header Cache-Control "public, max-age=300, must-revalidate"

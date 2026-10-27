@@ -17,6 +17,30 @@ pub(super) fn public_snapshot(snapshot: &Snapshot, out: &Path) -> Result<(), Str
     write(out, &json_str)
 }
 
+/// `market-home.json`: the snapshot without the desktop-only fields listed in
+/// the fixture, which the hosted homepage never reads.
+pub(super) fn home_snapshot(snapshot: &Snapshot, out: &Path) -> Result<(), String> {
+    let full = serde_json::to_value(snapshot).map_err(|e| format!("serialize: {e}"))?;
+    let json_str =
+        serde_json::to_string(&home_projection(full)?).map_err(|e| format!("serialize: {e}"))?;
+    write(out, &json_str)
+}
+
+fn home_projection(mut market: Value) -> Result<Value, String> {
+    let home: Value =
+        serde_json::from_str(include_str!("../../../../tests/fixtures/public-market/home.json"))
+            .map_err(|e| format!("home-market fields: {e}"))?;
+    let omit = home
+        .get("omit")
+        .and_then(Value::as_array)
+        .ok_or("home-market fields: no omit list")?;
+    let fields = market.as_object_mut().ok_or("snapshot is not an object")?;
+    for key in omit.iter().filter_map(Value::as_str) {
+        fields.remove(key);
+    }
+    Ok(market)
+}
+
 fn public_projection(market: &Value) -> Result<Value, String> {
     let fields: Value = serde_json::from_str(include_str!(
         "../../../../tests/fixtures/public-market/fields.json"
@@ -79,6 +103,29 @@ fn write(json_out: &Path, json_str: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
+
+    #[test]
+    fn the_home_snapshot_drops_only_the_listed_fields() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../frontend/public/market.json"
+        );
+        let market: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let home = super::home_projection(market.clone()).unwrap();
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/public-market/home.json"
+        ))
+        .unwrap();
+        let omitted = fixture["omit"].as_array().unwrap();
+        assert!(!omitted.is_empty());
+        for (key, value) in market.as_object().unwrap() {
+            if omitted.iter().any(|name| name == key.as_str()) {
+                assert!(home.get(key).is_none(), "{key} kept");
+            } else {
+                assert_eq!(home.get(key), Some(value), "{key} changed");
+            }
+        }
+    }
 
     #[test]
     fn the_public_snapshot_keeps_exactly_the_listed_fields() {

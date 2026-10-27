@@ -91,6 +91,31 @@ describe('loadPublicMarket', () => {
   });
 });
 
+describe('loadHomeMarket', () => {
+  const snapshot = { updated_at: '2026-10-26T12:00:00Z', platform: 'pc', items: { a: { median_now: 5 } } };
+  beforeEach(() => { globalThis.fetch = vi.fn(); });
+
+  it('reads the homepage copy, and the full snapshot until that copy exists', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => snapshot });
+    let { loadHomeMarket } = await freshMarket();
+    await expect(loadHomeMarket()).resolves.toEqual(snapshot);
+    expect(globalThis.fetch.mock.calls.map(([url]) => url)).toEqual(['/market-home.json']);
+    globalThis.fetch = vi.fn(async url => url === '/market-home.json'
+      ? { ok: false, status: 404 }
+      : { ok: true, status: 200, json: async () => snapshot });
+    ({ loadHomeMarket } = await freshMarket());
+    await expect(loadHomeMarket()).resolves.toEqual(snapshot);
+    expect(globalThis.fetch.mock.calls.map(([url]) => url)).toEqual(['/market-home.json', '/market.json']);
+  });
+
+  it('revalidates the homepage copy with the server', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...snapshot, updated_at: '2026-10-26T14:00:00Z' }) });
+    const { revalidateHomeMarket } = await freshMarket();
+    await expect(revalidateHomeMarket(snapshot as never)).resolves.toMatchObject({ updated_at: '2026-10-26T14:00:00Z' });
+    expect(globalThis.fetch).toHaveBeenCalledWith('/market-home.json', { cache: 'no-cache' });
+  });
+});
+
 describe('lookup', () => {
   it('returns the stats entry for a known slug', async () => {
     const { lookup } = await freshMarket();

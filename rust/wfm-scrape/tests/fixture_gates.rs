@@ -110,6 +110,11 @@ fn build_produces_full_shape_market_json() {
         serde_json::from_slice(&std::fs::read(dir.join("market-public.json")).expect("market-public.json written"))
             .expect("market-public.json is valid JSON");
     assert_eq!(public["updated_at"], snap["updated_at"]);
+    let home: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market-home.json")).expect("market-home.json written"))
+            .expect("market-home.json is valid JSON");
+    assert_eq!(home["items"], snap["items"]);
+    assert!(home.get("path_to_info").is_none());
     assert_eq!(
         public["items"].as_object().unwrap().keys().collect::<Vec<_>>(),
         snap["items"].as_object().unwrap().keys().collect::<Vec<_>>()
