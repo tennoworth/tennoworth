@@ -111,7 +111,8 @@ New contributor ids cost nothing, so one person can pose as five and get an
 item published, or move its median. The floor makes this deliberate work, not
 an accident, but it is not proof. Until there is evidence of how much that
 happens, reported prices are shown beside warframe.market data and are not
-used in sell scores.
+used in sell scores; a desktop test fails if client code starts reading
+them.
 
 HTTPS terminates at Cloudflare and the request passes through Caddy, as it
 does for the usage counter; see [SECURITY.md](../SECURITY.md) for what the
