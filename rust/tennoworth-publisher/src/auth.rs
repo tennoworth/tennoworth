@@ -83,33 +83,48 @@ impl Access {
             .fetched
             .is_none_or(|at| at.elapsed() >= Duration::from_secs(3600));
         let missing = keys.set.as_ref().is_none_or(|set| set.find(&kid).is_none());
-        if stale || missing {
-            if keys
-                .attempted
-                .is_some_and(|at| at.elapsed() < Duration::from_secs(30))
-            {
-                return None;
-            }
+        let backing_off = keys
+            .attempted
+            .is_some_and(|at| at.elapsed() < Duration::from_secs(30));
+        if (stale || missing) && !backing_off {
             keys.attempted = Some(Instant::now());
-            let mut response = self
-                .client
-                .get(format!("{}/cdn-cgi/access/certs", self.issuer))
-                .send()
-                .await
-                .ok()?
-                .error_for_status()
-                .ok()?;
-            let mut bytes = Vec::new();
-            while let Some(chunk) = response.chunk().await.ok()? {
-                if bytes.len() + chunk.len() > 65536 {
-                    return None;
-                }
-                bytes.extend_from_slice(&chunk);
+            // A failed refresh keeps the previous set: Access rotates keys with
+            // an overlap, so an hour-old set still verifies current tokens, and
+            // refusing every sign-in during a certs-endpoint blip locks the
+            // operator out of the dashboard for no security gain.
+            if let Some(set) = self.fetch_keys().await {
+                keys.set = Some(set);
+                keys.fetched = Some(Instant::now());
             }
-            keys.set = Some(serde_json::from_slice(&bytes).ok()?);
-            keys.fetched = Some(Instant::now());
+        }
+        // ...but not forever: a key Access has revoked must stop verifying even
+        // while the refresh keeps failing.
+        if keys
+            .fetched
+            .is_none_or(|at| at.elapsed() >= Duration::from_secs(24 * 3600))
+        {
+            return None;
         }
         self.verify(token, keys.set.as_ref()?)
+    }
+
+    async fn fetch_keys(&self) -> Option<JwkSet> {
+        let mut response = self
+            .client
+            .get(format!("{}/cdn-cgi/access/certs", self.issuer))
+            .send()
+            .await
+            .ok()?
+            .error_for_status()
+            .ok()?;
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.ok()? {
+            if bytes.len() + chunk.len() > 65536 {
+                return None;
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&bytes).ok()
     }
 
     fn verify(&self, token: &str, keys: &JwkSet) -> Option<String> {
@@ -228,7 +243,15 @@ mod tests {
             access.principal(&headers).await,
             Some("publisher@example.invalid".into())
         );
+        // An hour-old set whose refresh is backing off (or failing) still verifies...
         access.keys.lock().await.fetched = Instant::now().checked_sub(Duration::from_secs(3601));
+        assert_eq!(
+            access.principal(&headers).await,
+            Some("publisher@example.invalid".into())
+        );
+        // ...a day-old one does not.
+        access.keys.lock().await.fetched =
+            Instant::now().checked_sub(Duration::from_secs(24 * 3600 + 1));
         assert!(access.principal(&headers).await.is_none());
         access.keys.lock().await.fetched = Some(Instant::now());
         let mut unknown = header.clone();
