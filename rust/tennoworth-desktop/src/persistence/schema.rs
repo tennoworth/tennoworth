@@ -153,4 +153,26 @@ CREATE UNIQUE INDEX listing_outcome_plan_item ON listing_outcome(plan_id, plan_i
 CREATE INDEX listing_outcome_order ON listing_outcome(order_id);
 CREATE INDEX listing_outcome_listed_at ON listing_outcome(listed_at);
 "#,
+    // Per-item keep counts predate the protection plan and nothing writes them.
+    // Fold each into the plan's reserve for that item, keeping the larger of the
+    // two, then drop the table so protection has one source. A plan reserve is
+    // added to leveled copies where the old keep included them, so the fold
+    // protects at least as much as before. An unreadable plan is left alone: its
+    // load already refuses to sell until protection is reviewed.
+    r#"
+INSERT INTO setting (key, value)
+  SELECT 'protected-selling-plan-v1', '{"reserves":{},"goal":null}'
+  WHERE EXISTS (SELECT 1 FROM reserve WHERE keep > 0)
+  ON CONFLICT(key) DO NOTHING;
+UPDATE setting SET value = json_set(value, '$.reserves', json_patch(
+    COALESCE(json_extract(value, '$.reserves'), '{}'),
+    (SELECT json_group_object(r.slug, MIN(1000000, MAX(r.keep,
+        COALESCE(json_extract(setting.value, '$.reserves.' || json_quote(r.slug)), 0))))
+     FROM reserve r WHERE r.keep > 0)))
+  WHERE key = 'protected-selling-plan-v1'
+    AND json_valid(value)
+    AND COALESCE(json_type(value, '$.reserves'), 'object') = 'object'
+    AND EXISTS (SELECT 1 FROM reserve WHERE keep > 0);
+DROP TABLE reserve;
+"#,
 ];

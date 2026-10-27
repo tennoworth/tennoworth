@@ -50,8 +50,7 @@ impl ProtectionPlan {
             || db
                 .get_setting("reserve-copies")
                 .map_err(|e| e.to_string())?
-                .is_some_and(|value| value.parse::<u32>().map_or(true, |n| n > 0))
-            || !db.get_reserves().map_err(|e| e.to_string())?.is_empty())
+                .is_some_and(|value| value.parse::<u32>().map_or(true, |n| n > 0)))
     }
     pub fn load(db: &Db) -> Result<Self, String> {
         match db.get_setting(KEY).map_err(|e| e.to_string())? {
@@ -63,6 +62,19 @@ impl ProtectionPlan {
     }
 
     pub fn save(&self, db: &Db, market: &MarketData) -> Result<(), String> {
+        // A stored reserve for an item that has since left the market protects
+        // nothing. Dropping it when it comes back unchanged keeps such an entry
+        // (including one folded from the old per-item keeps) from blocking every
+        // later save, while a newly chosen unknown item is still refused.
+        let stored = Self::load(db).unwrap_or_default();
+        let mut plan = self.clone();
+        plan.reserves.retain(|slug, count| {
+            market.has_item(slug) || stored.reserves.get(slug) != Some(count)
+        });
+        plan.validate_and_store(db, market)
+    }
+
+    fn validate_and_store(&self, db: &Db, market: &MarketData) -> Result<(), String> {
         if self.reserves.len() > 1000
             || self.reserves.iter().any(|(slug, count)| {
                 !valid_slug(slug) || *count > 1_000_000 || !market.has_item(slug)
@@ -212,12 +224,6 @@ pub fn state(
         })
         .transpose()?
         .unwrap_or(0);
-    let legacy: BTreeMap<_, _> = db
-        .get_reserves()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .map(|r| (r.slug, u32::try_from(r.keep).unwrap_or(u32::MAX)))
-        .collect();
     let mut items = BTreeMap::new();
     for (slug, (owned, unavailable)) in market.owned_quantities(db)? {
         let required_count = required
@@ -228,7 +234,7 @@ pub fn state(
         let mut row = allocate(
             owned,
             unavailable,
-            global.max(legacy.get(&slug).copied().unwrap_or(0)),
+            global,
             required_count,
             listed.as_ref().map(|l| l.get(&slug).copied().unwrap_or(0)),
         );
@@ -299,11 +305,9 @@ pub fn guidance_state(
     let global = db.get_setting("reserve-copies").map_err(|e| e.to_string())?
         .map(|raw| raw.parse::<u32>().map_err(|_| "The keep-copy setting is invalid.".to_string()))
         .transpose()?.unwrap_or(0);
-    let legacy: BTreeMap<_, _> = db.get_reserves().map_err(|e| e.to_string())?.into_iter()
-        .map(|row| (row.slug, u32::try_from(row.keep).unwrap_or(u32::MAX))).collect();
     let items = inventory.items.into_iter().map(|(slug, owned)| {
         let mut row = allocate(owned.count, owned.leveled,
-            global.max(legacy.get(&slug).copied().unwrap_or(0)),
+            global,
             requirements.as_ref().and_then(|required| required.get(&slug)).copied().unwrap_or(0), None);
         if requirements.is_none() || !market.has_item(&slug) { row.estimated = None; }
         (slug, row)
@@ -395,6 +399,14 @@ mod tests {
         }
         assert_eq!(result.items["unknown/codex_item"].estimated, None);
         assert!(ProtectionPlan { reserves: BTreeMap::from([("unknown/codex_item".into(), 1)]), goal: None }.save(&db, &market).is_err());
+        db.set_setting(KEY, r#"{"reserves":{"unknown/codex_item":2,"retired_part":1},"goal":null}"#).unwrap();
+        let mut carried = ProtectionPlan::load(&db).unwrap();
+        carried.reserves.insert(slugs[0].into(), 1);
+        carried.save(&db, &market).unwrap();
+        assert_eq!(ProtectionPlan::load(&db).unwrap().reserves, BTreeMap::from([(slugs[0].to_string(), 1)]));
+        db.set_setting(KEY, r#"{"reserves":{"unknown/codex_item":2},"goal":null}"#).unwrap();
+        let changed = ProtectionPlan { reserves: BTreeMap::from([("unknown/codex_item".into(), 3)]), goal: None };
+        assert!(changed.save(&db, &market).is_err());
         let invalid = GuidanceInventory { snapshot_id: None, items: BTreeMap::from([("part".into(), GuidanceOwned { count: 1, leveled: 2 })]) };
         assert!(guidance_state(&db, &market, Err("Disconnected".into()), invalid).is_err());
     }

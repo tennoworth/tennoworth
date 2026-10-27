@@ -1,4 +1,4 @@
-use super::{guard, Db, Reserve};
+use super::{guard, Db};
 use rusqlite::OptionalExtension;
 
 impl Db {
@@ -17,39 +17,6 @@ impl Db {
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )?;
-        Ok(())
-    }
-
-    pub fn get_reserves(&self) -> rusqlite::Result<Vec<Reserve>> {
-        let conn = guard(&self.conn);
-        let mut stmt = conn.prepare("SELECT slug, keep FROM reserve ORDER BY slug")?;
-        let rows = stmt.query_map([], |r| {
-            Ok(Reserve {
-                slug: r.get(0)?,
-                keep: r.get(1)?,
-            })
-        })?;
-        rows.collect()
-    }
-
-    /// Nothing in the app writes reserves any more - the protection plan replaced
-    /// them - but installs may still hold rows, which `get_reserves` reads as
-    /// legacy keep-counts. Tests seed those rows with this.
-    #[cfg(test)]
-    pub fn set_reserve(&self, slug: &str, keep: i64) -> rusqlite::Result<()> {
-        let conn = guard(&self.conn);
-        conn.execute(
-            "INSERT INTO reserve (slug, keep) VALUES (?1, ?2)
-             ON CONFLICT(slug) DO UPDATE SET keep = excluded.keep",
-            (slug, keep),
-        )?;
-        Ok(())
-    }
-
-    #[cfg(test)]
-    pub fn delete_reserve(&self, slug: &str) -> rusqlite::Result<()> {
-        let conn = guard(&self.conn);
-        conn.execute("DELETE FROM reserve WHERE slug = ?1", [slug])?;
         Ok(())
     }
 }
