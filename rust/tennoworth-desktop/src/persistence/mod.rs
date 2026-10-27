@@ -52,6 +52,12 @@ impl Db {
         // FK enforcement is per-connection (not persisted); turn it on so a
         // snapshot_item can never dangle without its snapshot.
         conn.pragma_update(None, "foreign_keys", "ON")?;
+        // Snapshots and trade-log events write in bursts. A write-ahead log with
+        // NORMAL sync commits without an fsync each time while staying durable
+        // across an app crash; only a power loss can drop the last commits.
+        // Only this process opens the file, so the log's side files are private.
+        conn.pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get::<_, String>(0))?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
         migrate(&conn)?;
         Ok(Db {
             conn: Mutex::new(conn),
@@ -249,6 +255,19 @@ mod tests {
             assert_eq!(db.user_version().unwrap(), latest);
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_file_store_uses_the_write_ahead_log() {
+        let path = temp_db_path();
+        let db = Db::open(&path).unwrap();
+        let conn = guard(&db.conn);
+        let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        let sync: i64 = conn.query_row("PRAGMA synchronous", [], |r| r.get(0)).unwrap();
+        assert_eq!((mode.as_str(), sync), ("wal", 1));
+        drop(conn);
+        drop(db);
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
