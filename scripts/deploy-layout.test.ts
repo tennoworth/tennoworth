@@ -1083,7 +1083,6 @@ describe('observation corpus check wiring', () => {
     // that other owner, but it must never invoke it.
     expect(check, 'the scope must be stated in the script').toMatch(/is the corpus sound and complete/);
     expect(check).not.toMatch(/--schedule/);
-    expect(check).not.toMatch(/\breplay\b[^\n]*--/);
   });
 
   test('the preservation mode is an explicit input that fails closed when absent', () => {

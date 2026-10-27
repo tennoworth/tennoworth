@@ -47,7 +47,7 @@ SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
 OBSERVATIONS="${OBSERVATIONS-/srv/wfm/observations}"
 [ -n "$OBSERVATIONS" ] && SCRAPE_ARGS+=(--observations-dir "$OBSERVATIONS")
 # Daily medians move once a day and the 48-hour figures drift slowly, while
-# the order book moves every sweep. The replay over the observation corpus
+# the order book moves every sweep. An offline replay of the observation corpus
 # (317 sweeps, 2026-09-16 to 2026-10-13) put six hours at 42% fewer requests
 # with under 1% of top-100 candidates hidden past one extra sweep. A missing
 # or unreadable cache only costs a full refresh.

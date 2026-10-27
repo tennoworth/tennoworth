@@ -54,8 +54,8 @@ of 2026-09-09, whose scraper restrictions are the compiled defaults above.
 | Sweep wall time | 60-89 minutes that day | `journalctl -u wfm-scrape.service` |
 | Floor if nothing else were spent | 54 minutes | 6,438 x 500 ms |
 | Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/wfm-scrape.timer` |
-| Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the replayed policy triggers; books every sweep | `deploy/run-scrape.sh`, `stats_cache.rs` |
-| Mean over a day | ~0.9 request starts per second before statistics reuse; the replay projects about 42% fewer requests with it | derived from the rows above; `wfm-scrape replay` |
+| Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the validated policy triggers; books every sweep | `deploy/run-scrape.sh`, `stats_cache.rs` |
+| Mean over a day | ~0.9 request starts per second before statistics reuse; the offline replay of the 2026-09/10 corpus projected about 42% fewer requests with it | derived from the rows above |
 
 The item loop runs one worker per request the policy allows in flight, rather
 than one at a time: the same 176-request sample took 111 s serially and 91 s with

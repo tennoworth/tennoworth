@@ -1,7 +1,6 @@
 //! The host market pipeline - the only implementation (Python retired
 //! 2026-08): `scrape` sweeps WFM to CSV and an observation log, `build`
-//! renders `market.json` and `wfstat-catalog.json`, and `replay` reads the
-//! observation logs back.
+//! renders `market.json` and `wfstat-catalog.json`.
 //!
 //! GROUND RULES:
 //! - The build is NOT a pure transform; its failure semantics are contract.
@@ -13,7 +12,7 @@
 //!   are only reproducible if no code path calls the system clock directly.
 //! - Heuristics live in `market-math`; this crate never re-implements them.
 //! - Fixture regression tests (tests/ dir) shell the real binary against the
-//!   frozen inputs in tests/fixtures/{scrape,convert,replay}/ - never
+//!   frozen inputs in tests/fixtures/{scrape,convert}/ - never
 //!   byte-diff, never live endpoints outside the one opt-in liveness test.
 
 pub mod clock;
@@ -29,7 +28,6 @@ pub mod orders;
 pub mod pipeline;
 pub mod reconcile;
 pub mod render;
-pub mod replay;
 pub mod scrape;
 pub mod stats;
 pub mod stats_cache;

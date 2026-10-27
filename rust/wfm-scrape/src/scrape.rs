@@ -425,7 +425,7 @@ struct Scanned {
 pub struct Analyzed {
     pub row: AnalyzedRow,
     /// Before clamping. The CSV keeps only the clamped lowest-five average, and
-    /// the clamp depends on the statistics baseline a replay varies.
+    /// the clamp depends on the statistics baseline.
     pub low5_avg_unclamped: f64,
 }
 
@@ -1398,7 +1398,7 @@ mod tests {
     }
 
     #[test]
-    fn the_observation_log_marks_reused_statistics_and_replay_refuses_that_sweep() {
+    fn the_observation_log_marks_reused_statistics() {
         let dir = std::env::temp_dir().join(format!("wfmscrape_cache_obs_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -1411,9 +1411,6 @@ mod tests {
         let second = std::fs::read_to_string(&files[1]).unwrap();
         assert!(second.contains("\"statistics_cached_at\":\"1970-01-01T00:00:00Z\""), "{second}");
         assert!(!std::fs::read_to_string(&files[0]).unwrap().contains("statistics_cached_at"));
-        let loaded = crate::replay::read_directory(&logs, None, None).unwrap();
-        assert_eq!(loaded.sweeps.len(), 1);
-        assert!(loaded.skipped_malformed[0].reason.contains("reused cached statistics"), "{:?}", loaded.skipped_malformed);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

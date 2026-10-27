@@ -2,7 +2,7 @@
 //! `/statistics` only when they are due, while its live book is read every
 //! sweep.
 //!
-//! The policy is the one `replay` validated against the observation corpus
+//! The policy is the one an offline replay validated against the observation corpus
 //! (2026-09-16 to 2026-10-13, 317 sweeps): refresh on first sight, on an
 //! unusable cached entry, when the item reappears after an absence, when the
 //! last book actually fetched was empty, and when the cached entry's age
@@ -194,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn each_trigger_matches_the_replayed_policy() {
+    fn each_trigger_matches_the_validated_policy() {
         let six = chrono::Duration::hours(6);
         let mut cache = Cache::empty();
         assert_eq!(cache.due("a", at(0), six), Some(Reason::Bootstrap));
