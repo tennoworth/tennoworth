@@ -5,7 +5,7 @@
   import { untrack, type Snippet } from 'svelte';
   import Sparkline from '../../ui/Sparkline.svelte';
   import { hasSparkline } from '../../ui/sparkline';
-  import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
+  import { plat, wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
   import { shimmer } from '../../ui/shimmer';
 
   import type { ProtectionState } from '../../contracts/protection';
@@ -460,7 +460,8 @@
     if (typeof v === 'number') {
       if (key === 'ratio') return v.toFixed(2);
       if (key === 'plat_per_100d') return v.toFixed(1);
-      if (key === 'avg_price' || key === 'potential_plat' || key === 'sell_score' || key === 'raw_value') return v.toFixed(0);
+      if (key === 'avg_price' || key === 'potential_plat' || key === 'raw_value') return plat(v);
+      if (key === 'sell_score') return v.toFixed(0);
       return v.toLocaleString();
     }
     return String(v);

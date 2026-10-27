@@ -191,3 +191,18 @@ describe('the name filter', () => {
     expect(names(container)).toEqual(['Beta']);
   });
 });
+
+describe('plat cells', () => {
+  it('group whole plat like every other price, while scores stay plain', () => {
+    const grouped = new Intl.NumberFormat().format(2500);
+    expect(grouped).not.toBe('2500');
+    const { container } = render(ResultsTable, {
+      results: [{ ...ROW, avg_price: 2500.4, potential_plat: 2500, raw_value: 2500, sell_score: 2500 }],
+      deltas: new Map(),
+      visibleColumns: ['name', 'avg_price', 'potential_plat', 'raw_value', 'sell_score'],
+    });
+    const cells = [...container.querySelectorAll('tbody td')].map(cell => cell.textContent?.trim() ?? '');
+    expect(cells.filter(text => text.startsWith(grouped)).length).toBeGreaterThanOrEqual(3);
+    expect(cells).toContain('2500');
+  });
+});
