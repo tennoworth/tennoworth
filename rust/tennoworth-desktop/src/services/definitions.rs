@@ -11,7 +11,7 @@
 //! timestamp to compare against what it already rendered, whereas this one
 //! either installs a pattern set or leaves the compiled-in defaults in place
 //! and reports nothing to the UI. The genuinely shared pieces (`write_atomic`,
-//! `TIMEOUT`) are imported rather than re-implemented.
+//! client, `read_bounded`) are imported rather than re-implemented.
 //!
 //! Fail-open at every step, which is the whole safety argument for letting a
 //! remote file steer the scanner: offline, 404, garbage JSON and an unparseable
@@ -29,12 +29,11 @@
 //! and memory without ever matching a credential. Only a scan-side budget
 //! contains that; "matches nothing" is not the worst a bad push can do.
 
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use wfm_core::acquisition::scan::{install_patterns, patterns_from_definitions, ScanDefinitions};
 
-use crate::services::market::{write_atomic, TIMEOUT};
+use crate::services::market::{artifact_client, read_bounded, write_atomic};
 
 #[derive(serde::Deserialize)]
 struct DesktopDefinitions {
@@ -161,11 +160,7 @@ fn fetch(dir: &Path, url: &str) -> Option<String> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let client = reqwest::blocking::Client::builder()
-        .user_agent(wfm_core::user_agent())
-        .timeout(TIMEOUT)
-        .build()
-        .ok()?;
+    let client = artifact_client()?;
 
     let mut req = client.get(url);
     if let Some(tag) = &prior_etag {
@@ -189,24 +184,12 @@ fn fetch(dir: &Path, url: &str) -> Option<String> {
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
 
-    // Read a bounded amount rather than whatever the response offers: this body
-    // decides how much memory the app allocates, and it comes from the network.
-    let mut raw = Vec::new();
-    let mut limited = resp.take((MAX_DEFINITION_BYTES + 1) as u64);
-    if limited.read_to_end(&mut raw).is_err() {
-        eprintln!("tennoworth: definitions body could not be read; keeping cache");
-        return None;
-    }
-    if raw.len() > MAX_DEFINITION_BYTES {
-        eprintln!(
-            "tennoworth: definitions body exceeds {MAX_DEFINITION_BYTES} bytes; keeping cache"
-        );
-        return None;
-    }
-    let body = match String::from_utf8(raw) {
+    // Bounded: this body decides how much memory the app allocates, and it
+    // comes from the network.
+    let body = match read_bounded(resp, MAX_DEFINITION_BYTES) {
         Ok(b) => b,
-        Err(_) => {
-            eprintln!("tennoworth: definitions body is not UTF-8; keeping cache");
+        Err(e) => {
+            eprintln!("tennoworth: definitions body refused ({e}); keeping cache");
             return None;
         }
     };
