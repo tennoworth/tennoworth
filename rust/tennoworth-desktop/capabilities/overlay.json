@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay",
+  "description": "The click-through reward overlay. It only reads the result it should show; updates arrive through the native bridge, so it needs no event or window permissions.",
+  "windows": [
+    "relic-overlay"
+  ],
+  "permissions": [
+    "allow-current-overlay-result"
+  ]
+}

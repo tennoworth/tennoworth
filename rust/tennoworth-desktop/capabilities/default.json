@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window, and the window controls the tray + close-to-tray lifecycle and the startup probe drive (close/hide/show). App-defined and Rust-fired commands (incl. the Rust-side notification, the updater plugin and the opener, all driven from Rust) need no ACL entry in Tauri v2; core:default covers the window basics, including is-visible, and the event listen the update-available banner uses.",
+  "description": "The main window, and the window controls the tray + close-to-tray lifecycle and the startup probe drive (close/hide/show). App commands are granted through the main-window set (permissions/main-window.toml); Rust-fired plugin calls (notification, updater, opener) need no ACL entry; core:default covers the window basics, including is-visible, and the event listen the update-available banner uses.",
   "windows": [
     "main"
   ],
@@ -9,6 +9,7 @@
     "core:default",
     "core:window:allow-close",
     "core:window:allow-hide",
-    "core:window:allow-show"
+    "core:window:allow-show",
+    "main-window"
   ]
 }
