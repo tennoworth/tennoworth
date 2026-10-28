@@ -64,27 +64,43 @@ test('a healthy ledger shows no pause notice', async ({ page }) => {
   await expect(page.locator('.ui-notice[role="status"]').filter({ hasText: PAUSED })).toHaveCount(0);
 });
 
-// The outcome table is wider than a narrow window. It scrolls in its own region;
-// the note and the record toggle beside it must not be widened with it, which
-// once clipped both at the panel edge.
+// The outcome meters, the note and the record toggle once sat beside a table
+// wider than the window and were clipped at the panel edge; each must now fit.
+// The weekly chart and top sellers stack below 760px and must fit as well.
 for (const theme of ['light', 'dark'] as const) {
-  test(`${theme} listing outcomes stay readable in a narrow, short window`, async ({ page }) => {
+  test(`${theme} listing outcomes and charts stay readable in a narrow, short window`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme });
     await page.setViewportSize({ width: 320, height: 480 });
     await page.goto('/?preview-desktop&sample');
     await expect(page.locator('.shell')).toBeVisible();
     await page.locator('.sidebar').getByRole('button', { name: /^Ledger/ }).click();
     const block = page.locator('[data-testid="listing-outcomes"]');
-    await block.locator('summary').click();
+    await expect(block.getByRole('meter').first()).toBeVisible();
     await expect(block.getByRole('checkbox', { name: /Keep a record of listings/ })).toBeVisible();
-    const fits = await block.evaluate((details) => {
-      const edge = details.getBoundingClientRect().right;
-      const inside = [...details.querySelectorAll<HTMLElement>('.note, .setting-line')]
-        .every((el) => el.getBoundingClientRect().right <= edge + 1 && el.scrollWidth <= el.clientWidth + 1);
-      const table = details.querySelector<HTMLElement>('.scroll');
-      return { inside, tableScrolls: !!table && table.scrollWidth > table.clientWidth };
+    const inside = await page.locator('.ledger').evaluate((ledger) => {
+      const edge = ledger.getBoundingClientRect().right;
+      return [...ledger.querySelectorAll<HTMLElement>('.note, .setting-line, .og, .weeks, .sellers li')]
+        .filter((el) => el.getBoundingClientRect().right > edge + 1 || el.scrollWidth > el.clientWidth + 1)
+        .map((el) => el.className);
     });
-    expect(fits).toEqual({ inside: true, tableScrolls: true });
+    expect(inside).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
   });
 }
+
+test('the weekly chart and its table agree, and the running week is marked', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample=long-history');
+  await page.locator('.sidebar').getByRole('button', { name: /^Ledger/ }).click();
+  const chart = page.getByRole('region', { name: 'Realised plat by week' });
+  const bars = chart.locator('.weeks .wbar');
+  await chart.getByText('Show as table', { exact: true }).click();
+  const rows = chart.locator('.week-table tbody tr');
+  await expect(rows).toHaveCount(await bars.count());
+  await expect(rows.last()).toContainText('(so far)');
+  await expect(bars.last()).toHaveClass(/partial/);
+  // Bars share one scale from zero: the tallest bar is the largest week.
+  const heights = await bars.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+  const plats = await rows.locator('td:nth-child(2)').allTextContents();
+  const values = plats.map((p) => Number(p.replace(/[^\d]/g, '')));
+  expect(heights.indexOf(Math.max(...heights))).toBe(values.indexOf(Math.max(...values)));
+});
