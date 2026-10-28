@@ -76,12 +76,71 @@ case "${scrape_state:-unknown}" in
     ;;
 esac
 
+# An up-to-date checkout still reconciles: a puller older than the commit it
+# fetched ran its own install list, so a newly added script lands on the next run.
+reconcile_deployed() {
+  # Pulling the checkout is NOT enough: the units execute COPIES under /srv/wfm
+  # that nothing else refreshes, so a pull that leaves the copies stale is
+  # cosmetic. Re-install anything that drifted.
+  #
+  # Scrape-owned files stay out of this list and out of the drift report below.
+  # scripts/deploy-scrape-host.sh is their only writer, and two writers is how the
+  # box once ran a weeks-old run-scrape.sh for two weeks while the repo's copy
+  # looked current.
+  #
+  # pull-app.sh reinstalls ITSELF as well, or a fix to this script is the one
+  # thing that still needs a human. That makes the install METHOD load-bearing:
+  # `install` truncates and rewrites in place, and bash reads a script
+  # incrementally - rewriting the file this process is still executing resumes it
+  # at a byte offset that is now different code (the same hazard the scrape guard
+  # above exists for). Stage beside the target and rename over it: rename swaps
+  # the inode, so the running shell keeps reading the copy it started with.
+  for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-collector.sh monitor-collector.sh log-players.sh; do
+    src="deploy/$f"
+    [ -f "$src" ] || continue
+    if ! cmp -s "$src" "$DEPLOY_ROOT/$f" 2>/dev/null; then
+      install -m 0755 "$src" "$DEPLOY_ROOT/$f.new" \
+        && mv -f "$DEPLOY_ROOT/$f.new" "$DEPLOY_ROOT/$f" \
+        && echo "  reinstalled $DEPLOY_ROOT/$f"
+    fi
+  done
+
+  # The Caddyfile is deployed the same way the units are - a copy under /etc that
+  # nothing reconciles. It went stale exactly once and it mattered: the C7
+  # @livedata entry for definitions.json sat unpublished, so /definitions.json
+  # was served from the BAKED dist/ copy instead of the live public/ one, and
+  # editing the file on the box changed nothing. That silently voids the whole
+  # point of a remote-fix file. Report it for the same reason as the units.
+  for f in Caddyfile Caddyfile-admin; do
+    [ -f "deploy/$f" ] && [ -f /etc/caddy/Caddyfile ] || continue
+    cmp -s "deploy/$f" "/etc/caddy/$f" \
+      || echo "  CADDY DRIFT: /etc/caddy/$f differs from deploy/$f - install it, 'caddy validate', then reload"
+  done
+
+  # Units need root plus a daemon-reload, so report rather than act - a puller
+  # that silently restarts systemd units is a different and larger promise.
+  for u in wfm-app-pull wfm-web-pull wfm-policy-pull wfm-players tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor tennoworth-publisher tennoworth-publisher-backup; do
+    for ext in service timer; do
+      src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
+      [ -f "$src" ] && [ -f "$dst" ] || continue
+      cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
+    done
+  done
+  for src in deploy/tennoworth-job-*.path; do
+    [ -f "$src" ] || continue
+    dst="/etc/systemd/system/${src#deploy/}"
+    [ -f "$dst" ] || continue
+    cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
+  done
+}
+
 before=$(git rev-parse --short HEAD)
 git fetch --quiet "$REMOTE" "$BRANCH"
 target=$(git rev-parse --short "$REMOTE/$BRANCH")
 
 if [ "$(git rev-parse HEAD)" = "$(git rev-parse "$REMOTE/$BRANCH")" ]; then
   echo "already at $before - nothing to pull"
+  reconcile_deployed
   exit 0
 fi
 
@@ -189,58 +248,6 @@ done
 git merge --ff-only "$REMOTE/$BRANCH"
 echo "pulled: $before -> $target"
 
-# Pulling the checkout is NOT enough: the units execute COPIES under /srv/wfm
-# that nothing else refreshes, so a pull that leaves the copies stale is
-# cosmetic. Re-install anything that drifted.
-#
-# Scrape-owned files stay out of this list and out of the drift report below.
-# scripts/deploy-scrape-host.sh is their only writer, and two writers is how the
-# box once ran a weeks-old run-scrape.sh for two weeks while the repo's copy
-# looked current.
-#
-# pull-app.sh reinstalls ITSELF as well, or a fix to this script is the one
-# thing that still needs a human. That makes the install METHOD load-bearing:
-# `install` truncates and rewrites in place, and bash reads a script
-# incrementally - rewriting the file this process is still executing resumes it
-# at a byte offset that is now different code (the same hazard the scrape guard
-# above exists for). Stage beside the target and rename over it: rename swaps
-# the inode, so the running shell keeps reading the copy it started with.
-for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-collector.sh monitor-collector.sh log-players.sh; do
-  src="deploy/$f"
-  [ -f "$src" ] || continue
-  if ! cmp -s "$src" "$DEPLOY_ROOT/$f" 2>/dev/null; then
-    install -m 0755 "$src" "$DEPLOY_ROOT/$f.new" \
-      && mv -f "$DEPLOY_ROOT/$f.new" "$DEPLOY_ROOT/$f" \
-      && echo "  reinstalled $DEPLOY_ROOT/$f"
-  fi
-done
-
-# The Caddyfile is deployed the same way the units are - a copy under /etc that
-# nothing reconciles. It went stale exactly once and it mattered: the C7
-# @livedata entry for definitions.json sat unpublished, so /definitions.json
-# was served from the BAKED dist/ copy instead of the live public/ one, and
-# editing the file on the box changed nothing. That silently voids the whole
-# point of a remote-fix file. Report it for the same reason as the units.
-for f in Caddyfile Caddyfile-admin; do
-  [ -f "deploy/$f" ] && [ -f /etc/caddy/Caddyfile ] || continue
-  cmp -s "deploy/$f" "/etc/caddy/$f" \
-    || echo "  CADDY DRIFT: /etc/caddy/$f differs from deploy/$f - install it, 'caddy validate', then reload"
-done
-
-# Units need root plus a daemon-reload, so report rather than act - a puller
-# that silently restarts systemd units is a different and larger promise.
-for u in wfm-app-pull wfm-web-pull wfm-policy-pull wfm-players tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor tennoworth-publisher tennoworth-publisher-backup; do
-  for ext in service timer; do
-    src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
-    [ -f "$src" ] && [ -f "$dst" ] || continue
-    cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
-  done
-done
-for src in deploy/tennoworth-job-*.path; do
-  [ -f "$src" ] || continue
-  dst="/etc/systemd/system/${src#deploy/}"
-  [ -f "$dst" ] || continue
-  cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
-done
+reconcile_deployed
 
 # restore() runs here via the trap, before anyone reads the result.
