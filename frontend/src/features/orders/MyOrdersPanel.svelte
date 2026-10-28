@@ -54,7 +54,7 @@
   <div class="vh-end">
     {#if controller.phase === 'done' && controller.orders.length > 0}
       <div class="ui-totals" role="group" aria-label="Orders summary">
-        <div class="cell"><span class="k">Listed</span><span class="v">{controller.orders.length}{#if controller.listedValue > 0} · {controller.listedValue.toLocaleString()}<span class="unit">p</span>{/if}</span></div>
+        <div class="cell"><span class="k">Listed</span><span class="v">{controller.orders.length}{#if controller.listedValue > 0}{' · '}{controller.listedValue.toLocaleString()}<span class="unit">p</span>{/if}</span></div>
         {#if controller.counts.issues > 0}<div class="cell attn"><span class="k">Needs fixing</span><span class="v">{controller.counts.issues}</span></div>{/if}
       </div>
     {/if}

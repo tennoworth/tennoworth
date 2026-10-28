@@ -35,6 +35,17 @@ export function humanWindow(ms: number | null | undefined): string {
   return `${m}m`;
 }
 
+/** A local date and time as "Oct 28, 12:17 PM", with the year only when it is
+ *  not the current one. The status strip and Ledger wrote this by hand while
+ *  Trade Session printed the bare `toLocaleString()` ("10/28/2026, 12:16:05
+ *  PM"), so one scan read two ways a view apart. */
+export function shortStamp(at: Date | number | string, now: Date = new Date()): string {
+  const d = at instanceof Date ? at : new Date(at);
+  if (Number.isNaN(d.getTime())) return '-';
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), hour: '2-digit', minute: '2-digit' });
+}
+
 /** Platinum, rounded and thousands-separated by default; callers add units.
  *
  *  Exists because the listing review modal rendered the same quantity as

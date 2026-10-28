@@ -377,7 +377,7 @@
                               {a.is_direct_sell ? 'buyout' : 'auction buyout'}
                               {#if a.top_bid != null} · top bid {a.top_bid}p{/if}
                             </span>
-                            <span class="comp-owner" title="WFM status">{a.owner ?? 'unknown'}{#if a.owner_status} · {a.owner_status}{/if}</span>
+                            <span class="comp-owner" title="WFM status">{a.owner ?? 'unknown'}{#if a.owner_status}{` · ${a.owner_status}`}{/if}</span>
                             {#if similarity != null}
                               <span class="similarity" title="Matching signed stat names only; roll strength is not compared">{similarity}% stat match</span>
                             {/if}

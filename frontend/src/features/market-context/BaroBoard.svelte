@@ -108,6 +108,10 @@
   function ratio(n: number | null): string {
     return n == null ? '-' : n.toFixed(2);
   }
+  function credits(n: number | null | undefined): string {
+    if (!n) return '-';
+    return n >= 999_500 ?`${Number((n / 1_000_000).toFixed(1))}M` : `${Math.round(n / 1000)}k`;
+  }
 </script>
 
 <section class="wrap tw board">
@@ -167,11 +171,13 @@
         {#each shown as row (row.unique ?? row.item)}
           <tr class:top={row.verdict === 'flip'}>
             <th scope="row" class="name">
-              <Glyph name={glyphFor(market?.path_to_info?.[row.unique ?? '']?.category)} />
-              {row.item}
+              <span class="name-in">
+                <Glyph name={glyphFor(market?.path_to_info?.[row.unique ?? '']?.category)} />
+                {row.item}
+              </span>
             </th>
             <td class="num ducat">{row.ducats?.toLocaleString() ?? '-'}</td>
-            <td class="num muted">{row.credits ? `${Math.round(row.credits / 1000)}k` : '-'}</td>
+            <td class="num muted">{credits(row.credits)}</td>
             <td class="num">{row.price == null ? '-' : `${plat(row.price, { useGrouping: false })}p`}</td>
             <td class="num muted">{row.baseline == null ? '-' : `${plat(row.baseline, { useGrouping: false })}p`}</td>
             <td class="num">{ratio(row.platPerDucat)}</td>
@@ -286,10 +292,17 @@
   tbody tr.top {
     background: color-mix(in srgb, var(--good) 8%, transparent);
   }
+  /* The row header stays a table cell: as a flex box it left the row's
+     divider and drew its own, offset from the other cells. Item names are
+     reading text, not labels, so they drop the header face and tracking. */
   .name {
+    font-family: var(--font-body);
     font-weight: 500;
+    letter-spacing: normal;
     color: var(--fg);
-    display: flex;
+  }
+  .name-in {
+    display: inline-flex;
     align-items: center;
     gap: 0.4rem;
   }

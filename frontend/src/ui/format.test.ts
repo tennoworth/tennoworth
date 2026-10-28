@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   wfmItemUrl, baroLocation, humanWindow, humanBuildTime, plat,
-  ownedBreakdown, keptNoteTitle, marketFreshness, notificationDate, ago,
+  ownedBreakdown, keptNoteTitle, marketFreshness, notificationDate, ago, shortStamp,
 } from './format.js';
 
 describe('wfmItemUrl', () => {
@@ -170,5 +170,30 @@ describe('ago', () => {
     expect(ago(now + 120 * 60000, now)).toBe('just now');
     expect(ago(null, now)).toBeNull();
     expect(ago('invalid', now)).toBeNull();
+  });
+});
+
+describe('shortStamp', () => {
+  const now = new Date(2026, 9, 28, 12, 0);
+
+  it('leaves out the year and the seconds for a time this year', () => {
+    const text = shortStamp(new Date(2026, 9, 28, 12, 16, 5), now);
+    expect(text).not.toMatch(/2026/);
+    expect(text).not.toMatch(/\d:\d\d:\d\d/);
+    expect(text).toMatch(/28/);
+  });
+
+  it('names the year for an older time', () => {
+    expect(shortStamp(new Date(2025, 11, 31, 23, 59), now)).toMatch(/2025/);
+  });
+
+  it('takes epoch milliseconds and ISO strings like a Date', () => {
+    const at = new Date(2026, 3, 2, 9, 30);
+    expect(shortStamp(at.getTime(), now)).toBe(shortStamp(at, now));
+    expect(shortStamp(at.toISOString(), now)).toBe(shortStamp(at, now));
+  });
+
+  it('admits an unreadable time instead of printing Invalid Date', () => {
+    expect(shortStamp('not a date', now)).toBe('-');
   });
 });

@@ -76,3 +76,14 @@ test('a completed journal left on disk stays visible and removable', async ({ pa
     }
   }
 });
+
+test('a finished batch reports its counts as one sentence', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await page.getByRole('button', { name: 'List on WFM', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: /^Send \d+ listings$/ }).click();
+  const lead = dialog.locator('p.lead').first();
+  await expect(lead).toContainText(/\d+ created · \d+ updated\./);
+  // Empty count blocks once left their whitespace in front of the full stop.
+  expect((await lead.textContent())!.replace(/\s+/g, ' ')).not.toMatch(/ \./);
+});
