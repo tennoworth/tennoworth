@@ -53,6 +53,7 @@ rust/
   tennoworth-publisher/      private publisher API, SQLite history and feed export
   tennoworth-usage/          opt-in installation-count service
   tennoworth-reports/        opt-in anonymous price-report service
+  collector-gate/            quota and serve loop shared by the two collectors
 scripts/                     release, CSP, probe and deployment checks
 tests/fixtures/             shared parity and pipeline inputs/expectations
 deploy/                      live-data refresh and deployment operations
@@ -112,16 +113,17 @@ The desktop app is the only interactive product. The standalone companion CLI
 (`wfm-fetch-inventory` with `fetch`/`login`/`serve`) was removed on 2026-08-02,
 and the dormant advisor command and implementation were removed after it. The
 hosted site is informational only - no accounts, no file access, no scan - and
-`market.json` plus `wfstat-catalog.json` are the artifacts it consumes; its
-prerendered pages refresh from `market-public.json`, a slim copy of the
-snapshot written beside it.
+its homepage reads `market-home.json`, the snapshot without desktop-only
+fields, and its prerendered pages refresh from `market-public.json`, a slimmer
+copy. Both are written beside `market.json` and fall back to it while absent.
 
 ## CI inventory
 
 `.github/workflows/` holds the release and verification workflows:
 `release-desktop` (manual dispatch bound to an approved commit; creates the
 immutable `desktop-v*` tag during publication), `build-web`,
-`build-usage`, `build-reports`, the manual `build-publisher`, `audit`, `ui-smoke`, the weekly
+`build-usage` and `build-reports` (thin callers of the shared
+`collector-build`), the manual `build-publisher`, `audit`, `ui-smoke`, the weekly
 `republish-rolling` (which re-dispatches `build-web`, `build-usage` and
 `build-reports`), and the on-demand
 `ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in

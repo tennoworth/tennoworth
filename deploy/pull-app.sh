@@ -95,7 +95,7 @@ fi
 
 # Keep logical artifact names separate from source paths: a fast-forward can
 # rename the source tree while the production snapshots are newer than Git.
-LIVE_ARTIFACTS=(wfstat-catalog.json history.json market-public.json market.json)
+LIVE_ARTIFACTS=(wfstat-catalog.json history.json market-public.json market-home.json market.json)
 if [[ "$source_layout" != "$target_layout" ]]; then
   # Keep the scan hotfix endpoint available under the old Caddy root until
   # reload, including any operator override. Ordinary source updates still
@@ -205,7 +205,7 @@ echo "pulled: $before -> $target"
 # at a byte offset that is now different code (the same hazard the scrape guard
 # above exists for). Stage beside the target and rename over it: rename swaps
 # the inode, so the running shell keeps reading the copy it started with.
-for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-usage.sh monitor-usage.sh pull-reports.sh monitor-reports.sh log-players.sh; do
+for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-collector.sh monitor-collector.sh log-players.sh; do
   src="deploy/$f"
   [ -f "$src" ] || continue
   if ! cmp -s "$src" "$DEPLOY_ROOT/$f" 2>/dev/null; then

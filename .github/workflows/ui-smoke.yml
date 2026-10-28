@@ -82,7 +82,6 @@ jobs:
               - 'frontend/public/theme-boot.js'
               - 'frontend/public/market.json'
               - 'frontend/public/wfstat-catalog.json'
-              - 'frontend/public/definitions.json'
               - 'scripts/probe-smoke-linux.sh'
               - 'scripts/check-probe-report.ts'
               - 'scripts/probe-readiness.test.ts'

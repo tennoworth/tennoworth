@@ -6,7 +6,7 @@
 # pruned to the last two. A copy of that archive is evidence only while it can
 # still be read - the transfer can truncate it, the compression stream can be
 # damaged, the tar listing can be unusable, or the corpus log inside it can be
-# something other than the run header a replay needs. A bad copy filed as good
+# something other than the run header a re-analysis needs. A bad copy filed as good
 # is worse than no copy, because the loss surfaces when the backup is needed.
 # Every run therefore verifies what it received - the zstd stream, the tar
 # listing, and the newest corpus log's own first record read back out of the
@@ -33,7 +33,7 @@
 #                 (default 'observations/sweep-[^/]*\.jsonl$')
 #
 # Requires python3 to parse the corpus run header as JSON. A record is only the
-# header a replay can use if it parses; a hand-rolled field match cannot tell a
+# header an analysis can use if it parses; a hand-rolled field match cannot tell a
 # complete record from a truncated one.
 #
 # Usage: check-lxc-backup.sh [--dry-run]
@@ -214,8 +214,8 @@ manifest_drop() { # <name>
 # ---- verification -----------------------------------------------------------
 
 # The archive is only evidence if its bytes decompress, its tar listing is
-# readable, and the newest corpus log inside it begins with the run header a
-# replay needs. Each failure says which of the three failed, because "the backup
+# readable, and the newest corpus log inside it begins with the run header an
+# analysis needs. Each failure says which of the three failed, because "the backup
 # is bad" without that is not actionable.
 #
 # The header fields are read with grep rather than a JSON parser on purpose:
@@ -226,7 +226,7 @@ manifest_drop() { # <name>
 # The first record has to be a complete run header: JSON that parses, with
 # kind "run", the supported format, and a positive integer items. Reading it with
 # a prefix test and a grep for `"items":` accepted a truncated line, a record
-# with trailing text, and a wrong format - all of them things a replay cannot
+# with trailing text, and a wrong format - all of them things an analysis cannot
 # use, reported as a verified backup. The parser reads one line from stdin and
 # prints the item count on success.
 parse_run_header() { # <member>; first record on stdin

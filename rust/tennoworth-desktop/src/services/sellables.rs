@@ -210,7 +210,6 @@ mod tests {
         inventory: Vec<CompositionInventoryRow>,
         market: serde_json::Value,
         protected: BTreeMap<String, u32>,
-        legacy_reserves: BTreeMap<String, i64>,
         traded_after_scan: String,
         expected: CompositionExpected,
     }
@@ -250,9 +249,6 @@ mod tests {
             .unwrap();
         db.set_setting("reserve-copies", &fixture.reserve_copies.to_string())
             .unwrap();
-        for (slug, keep) in fixture.legacy_reserves {
-            db.set_reserve(&slug, keep).unwrap();
-        }
         crate::services::protection::ProtectionPlan {
             reserves: fixture.protected,
             goal: None,

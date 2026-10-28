@@ -31,28 +31,40 @@ export async function loadMarket(): Promise<Market> {
   return cached;
 }
 
-/** Ask the server whether a newer snapshot exists. Resolves to it only when it
- *  is valid and replaces `current` under the shared ordering rule; null means
- *  keep what is shown.
- *  Rejects on a failed request, which also keeps what is shown. */
-export async function revalidateMarket(current: Market): Promise<Market | null> {
-  // `no-cache` revalidates with the server (a 304 is cheap) instead of
-  // trusting the browser's copy for its whole max-age.
-  const next = await fetchMarket(fetch(MARKET_URL, { cache: 'no-cache' }));
-  if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;
-  cached = next;
-  return next;
-}
-
 const PUBLIC_MARKET_URL = '/market-public.json';
 let publicCached: PublicMarket | null = null;
 
-// The slim copy is written by the next scrape after a deploy, and a dev
-// checkout has none: until it exists, read the full snapshot.
-async function fetchPublicMarket(init?: RequestInit): Promise<PublicMarket> {
-  const response = await fetch(PUBLIC_MARKET_URL, init);
-  if (response.status === 404) return fetchMarket(fetch(MARKET_URL, init));
+// The slim copies are written by the next scrape after a deploy, and a dev
+// checkout has none: until one exists, read the full snapshot. The Vite dev
+// server answers a missing file with its index.html and a 200, not a 404.
+async function fetchSlimMarket(url: string, init?: RequestInit): Promise<Market> {
+  const response = await fetch(url, init);
+  const page = response.ok && /text\/html/.test(response.headers?.get('content-type') ?? '');
+  if (response.status === 404 || page) return fetchMarket(fetch(MARKET_URL, init));
   return fetchMarket(Promise.resolve(response));
+}
+const fetchPublicMarket = (init?: RequestInit): Promise<PublicMarket> => fetchSlimMarket(PUBLIC_MARKET_URL, init);
+
+// market.json without the desktop-only fields in
+// tests/fixtures/public-market/home.json, for the hosted homepage.
+const HOME_MARKET_URL = '/market-home.json';
+let homeCached: Market | null = null;
+
+export async function loadHomeMarket(): Promise<Market> {
+  if (homeCached) return homeCached;
+  homeCached = await fetchSlimMarket(HOME_MARKET_URL);
+  return homeCached;
+}
+
+/** Ask the server whether a newer homepage snapshot exists. Resolves to it
+ *  only when it is valid and replaces `current` under the shared ordering
+ *  rule; null means keep what is shown.
+ *  Rejects on a failed request, which also keeps what is shown. */
+export async function revalidateHomeMarket(current: Market): Promise<Market | null> {
+  const next = await fetchSlimMarket(HOME_MARKET_URL, { cache: 'no-cache' });
+  if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;
+  homeCached = next;
+  return next;
 }
 
 /** The prerendered pages' refresh: only the fields they read. */
@@ -62,7 +74,7 @@ export async function loadPublicMarket(): Promise<PublicMarket> {
   return publicCached;
 }
 
-/** As revalidateMarket, for the prerendered pages' copy. */
+/** As revalidateHomeMarket, for the prerendered pages' copy. */
 export async function revalidatePublicMarket(current: PublicMarket): Promise<PublicMarket | null> {
   const next = await fetchPublicMarket({ cache: 'no-cache' });
   if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;

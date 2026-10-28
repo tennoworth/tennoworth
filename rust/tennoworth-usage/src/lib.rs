@@ -11,7 +11,6 @@ use sha2::{Digest, Sha256};
 use std::{
     path::Path,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
 };
 
 #[derive(Deserialize)]
@@ -177,10 +176,6 @@ impl Store {
     }
 }
 
-struct Limit {
-    started: Instant,
-    requests: u32,
-}
 /// Requests allowed per wall-clock second across the public usage routes.
 ///
 /// Deliberately small: this service is a counter, and the window exists to stop
@@ -189,9 +184,12 @@ pub const REQUESTS_PER_WINDOW: u32 = 20;
 
 pub struct Collector {
     store: Mutex<Store>,
-    limit: Mutex<Limit>,
-    slots: tokio::sync::Semaphore,
-    limit_per_window: u32,
+    gate: collector_gate::Gate,
+}
+impl collector_gate::Gated for Collector {
+    fn gate(&self) -> &collector_gate::Gate {
+        &self.gate
+    }
 }
 impl Collector {
     pub fn new(store: Store) -> Arc<Self> {
@@ -202,12 +200,7 @@ impl Collector {
     pub fn with_limit(store: Store, limit_per_window: u32) -> Arc<Self> {
         Arc::new(Self {
             store: Mutex::new(store),
-            slots: tokio::sync::Semaphore::new(32),
-            limit_per_window,
-            limit: Mutex::new(Limit {
-                started: Instant::now(),
-                requests: 0,
-            }),
+            gate: collector_gate::Gate::new(limit_per_window),
         })
     }
     pub fn tick(&self) -> anyhow::Result<()> {
@@ -229,7 +222,7 @@ pub fn router(state: Arc<Collector>) -> Router {
         .layer(DefaultBodyLimit::max(256))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            bound_request,
+            collector_gate::admit::<Collector>,
         ));
     let unmetered = Router::new().route("/health", get(health));
     public.merge(unmetered).with_state(state)
@@ -262,48 +255,6 @@ async fn daily(
         [(header::CACHE_CONTROL, "public, max-age=3600")],
         Json(data),
     ))
-}
-/// One wall-clock second. Named because it decides the burst a caller can reach:
-/// a fixed window admits a full allowance on each side of a boundary.
-const WINDOW: Duration = Duration::from_secs(1);
-
-/// Charge one request against the fixed window, returning `false` when the caller
-/// is over quota.
-///
-/// Separate from the middleware so the window can be exercised without real time
-/// passing: `Limit` is the entire state and the allowance is a parameter.
-fn charge_window(limit: &mut Limit, allowance: u32) -> bool {
-    if limit.started.elapsed() >= WINDOW {
-        limit.started = Instant::now();
-        limit.requests = 0;
-    }
-    if limit.requests >= allowance {
-        return false;
-    }
-    limit.requests += 1;
-    true
-}
-
-async fn bound_request(
-    State(state): State<Arc<Collector>>,
-    request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> axum::response::Response {
-    use axum::response::IntoResponse;
-    {
-        let Ok(mut limit) = state.limit.try_lock() else {
-            return StatusCode::TOO_MANY_REQUESTS.into_response();
-        };
-        if !charge_window(&mut limit, state.limit_per_window) {
-            return StatusCode::TOO_MANY_REQUESTS.into_response();
-        }
-    }
-    let Ok(_slot) = state.slots.try_acquire() else {
-        return StatusCode::SERVICE_UNAVAILABLE.into_response();
-    };
-    tokio::time::timeout(Duration::from_secs(5), next.run(request))
-        .await
-        .unwrap_or_else(|_| StatusCode::REQUEST_TIMEOUT.into_response())
 }
 async fn health(State(state): State<Arc<Collector>>) -> StatusCode {
     let Ok(store) = state.store.try_lock() else {
@@ -606,59 +557,6 @@ mod tests {
             "health must not share the public quota"
         );
         task.abort();
-    }
-
-    #[test]
-    fn the_quota_allows_the_allowance_then_refuses() {
-        let mut limit = Limit {
-            started: Instant::now(),
-            requests: 0,
-        };
-        for _ in 0..REQUESTS_PER_WINDOW {
-            assert!(charge_window(&mut limit, REQUESTS_PER_WINDOW));
-        }
-        assert!(
-            !charge_window(&mut limit, REQUESTS_PER_WINDOW),
-            "the request after the allowance is over quota"
-        );
-    }
-
-    #[test]
-    fn a_closed_window_starts_a_fresh_allowance() {
-        let mut limit = Limit {
-            started: Instant::now()
-                .checked_sub(Duration::from_secs(5))
-                .expect("monotonic clock has not run five seconds"),
-            requests: REQUESTS_PER_WINDOW,
-        };
-        assert!(charge_window(&mut limit, REQUESTS_PER_WINDOW));
-        assert_eq!(limit.requests, 1, "the window reset before charging");
-    }
-
-    #[test]
-    fn a_fixed_window_admits_two_allowances_across_a_boundary() {
-        // Documented behaviour, not a defect to be surprised by later: a fixed
-        // window has no memory of the previous one, so a caller can spend the
-        // full allowance on each side of the boundary - twice the nominal rate
-        // in any rolling second. Pinned so changing it is deliberate.
-        let mut limit = Limit {
-            started: Instant::now(),
-            requests: 0,
-        };
-        for _ in 0..REQUESTS_PER_WINDOW {
-            assert!(charge_window(&mut limit, REQUESTS_PER_WINDOW));
-        }
-        assert!(!charge_window(&mut limit, REQUESTS_PER_WINDOW));
-        limit.started = Instant::now()
-            .checked_sub(Duration::from_secs(2))
-            .expect("monotonic clock has not run two seconds");
-        for _ in 0..REQUESTS_PER_WINDOW {
-            assert!(
-                charge_window(&mut limit, REQUESTS_PER_WINDOW),
-                "the new window grants a full allowance again"
-            );
-        }
-        assert!(!charge_window(&mut limit, REQUESTS_PER_WINDOW));
     }
 
     #[test]

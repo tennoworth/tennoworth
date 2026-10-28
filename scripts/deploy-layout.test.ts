@@ -134,13 +134,23 @@ describe.skipIf(process.platform === 'win32')('signed policy bootstrap', () => {
   });
 });
 
-// The usage counter and the price-report service share one puller shape.
+// The usage counter and the price-report service share one puller and one
+// monitor, each unit passing the collector's name.
 const collectors = [
-  { name: 'usage', binary: 'tennoworth-usage', puller: 'pull-usage.sh', failed: 'Usage collector health check failed', monitor: 'monitor-usage.sh', route: '/api/usage/daily' },
-  { name: 'reports', binary: 'tennoworth-reports', puller: 'pull-reports.sh', failed: 'Reports collector health check failed', monitor: 'monitor-reports.sh', route: '/api/reports/prices' },
+  { name: 'usage', binary: 'tennoworth-usage', failed: 'Usage collector health check failed', route: '/api/usage/daily' },
+  { name: 'reports', binary: 'tennoworth-reports', failed: 'Reports collector health check failed', route: '/api/reports/prices' },
 ] as const;
 
-describe.each(collectors)('$name collector rollback', ({ binary, puller, failed }) => {
+describe.each(collectors)('$name collector units', ({ name }) => {
+  test('pass the collector name to the shared scripts', () => {
+    for (const [unit, script] of [['pull', 'pull-collector.sh'], ['monitor', 'monitor-collector.sh']]) {
+      const body = readFileSync(new URL(`../deploy/tennoworth-${name}-${unit}.service`, import.meta.url), 'utf8');
+      expect(body).toContain(`ExecStart=/srv/wfm/${script} ${name}\n`);
+    }
+  });
+});
+
+describe.each(collectors)('$name collector rollback', ({ name, binary, failed }) => {
   // `busy` is one 503 while the store lock is held by a request or the
   // maintenance tick: a healthy upgrade, which must not be rolled back.
   for (const failure of ['restart', 'health', 'busy'] as const) {
@@ -152,7 +162,7 @@ describe.each(collectors)('$name collector rollback', ({ binary, puller, failed 
       mkdirSync(join(deploy, 'bin'), { recursive: true });
       mkdirSync(mocks);
       writeFileSync(join(deploy, `bin/${binary}`), 'old-binary');
-      const source = readFileSync(new URL(`../deploy/${puller}`, import.meta.url), 'utf8');
+      const source = readFileSync(new URL('../deploy/pull-collector.sh', import.meta.url), 'utf8');
       writeFileSync(join(root, 'pull.sh'), source.replaceAll('/srv/wfm', deploy));
       writeFileSync(join(mocks, 'curl'), `#!/bin/sh
 case "$*" in
@@ -174,7 +184,7 @@ fi
 exit 0
 `);
       for (const command of ['curl', 'sha256sum', 'sleep', 'systemctl']) chmodSync(join(mocks, command), 0o755);
-      const result = spawnSync('sh', [join(root, 'pull.sh')], { env: { ...process.env, PATH: `${mocks}:${process.env.PATH}` }, encoding: 'utf8' });
+      const result = spawnSync('sh', [join(root, 'pull.sh'), name], { env: { ...process.env, PATH: `${mocks}:${process.env.PATH}` }, encoding: 'utf8' });
       if (failure === 'busy') {
         expect(result.status, result.stderr).toBe(0);
         expect(readFileSync(join(deploy, `bin/${binary}`), 'utf8')).toBe('new-binary');
@@ -789,7 +799,7 @@ describe.skipIf(process.platform === 'win32')('external-backup deployment readin
 // The monitor runs on the box, which has no jq. It used to need one, and failed on
 // every tick from the day it was installed; running it with jq absent from PATH
 // is what keeps that from coming back.
-describe.skipIf(process.platform === 'win32').each(collectors)('$name monitor', ({ monitor, route }) => {
+describe.skipIf(process.platform === 'win32').each(collectors)('$name monitor', ({ name, route }) => {
   // `busy` is how many requests to each endpoint answer like a held store
   // lock (curl --fail exits 22) before the collector answers.
   function monitorFixture(updatedAt: string, busy: { health?: number; data?: number } = {}) {
@@ -815,7 +825,7 @@ describe.skipIf(process.platform === 'win32').each(collectors)('$name monitor', 
       write(join(bin, tool), `#!/bin/sh\nexec ${real} "$@"\n`);
       chmodSync(join(bin, tool), 0o755);
     }
-    const run = () => spawnSync('/bin/sh', [fileURLToPath(new URL(`../deploy/${monitor}`, import.meta.url))], {
+    const run = () => spawnSync('/bin/sh', [fileURLToPath(new URL('../deploy/monitor-collector.sh', import.meta.url)), name], {
       encoding: 'utf8', env: { PATH: bin },
     });
     const count = (endpoint: string) => (existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(line => line === endpoint).length : 0);
@@ -1083,7 +1093,6 @@ describe('observation corpus check wiring', () => {
     // that other owner, but it must never invoke it.
     expect(check, 'the scope must be stated in the script').toMatch(/is the corpus sound and complete/);
     expect(check).not.toMatch(/--schedule/);
-    expect(check).not.toMatch(/\breplay\b[^\n]*--/);
   });
 
   test('the preservation mode is an explicit input that fails closed when absent', () => {

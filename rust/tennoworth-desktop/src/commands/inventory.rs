@@ -30,7 +30,7 @@ pub async fn scan_inventory(app: AppHandle) -> Result<ScannedInventory, String> 
 /// build can't reach it.
 #[tauri::command]
 pub fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64, String> {
-    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+    if !crate::shell::probe::enabled() {
         return Err("import_snapshot is probe-only".into());
     }
     record_snapshot(&db, "import", None, inventory_json.as_bytes())

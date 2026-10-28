@@ -64,6 +64,8 @@ The crates:
   publication state. No Tauri dependency or player account operations.
 - `tennoworth-reports/` - opt-in anonymous price-report service; contract and
   privacy rules in ../docs/price-reports.md.
+- `collector-gate/` - request quota and serve loop shared by the two opt-in
+  collectors, which stay separate processes with their own databases.
 
 Use ../CONTRIBUTING.md for builds and required checks, ../docs/architecture.md
 for module boundaries, and ../docs/wfm-access.md for WFM request policy.

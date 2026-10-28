@@ -1,5 +1,0 @@
-{
-  "_comment": "Desktop hotfix definitions. Pattern fields and reward_log_markers are optional; invalid values keep the compiled defaults. Capture groups: cred_pattern needs 2 (accountId, nonce), build_pattern and ct_pattern need 1. Reward markers are matched against local EE.log lines and may contain 1–8 strings of at most 120 bytes.",
-  "version": 2,
-  "reward_log_markers": ["Got rewards"]
-}

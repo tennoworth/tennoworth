@@ -134,7 +134,7 @@
       The <strong>{basket.count}</strong>
       {basket.count === 1 ? 'item' : 'items'} worth buying cost
       <strong>{basket.needed.toLocaleString()}</strong> ducats and resell for about
-      <strong>{basket.resale.toLocaleString()}p</strong> at 90-day medians.
+      <strong>{plat(basket.resale)}p</strong> at 90-day medians.
       {#if owned && !quantitiesUnavailable && !scrapLoading && !scrapError}
         Scrapping {unavailableItems ? 'the prime parts with known spare quantities' : 'every spare prime part you hold'} would yield
         <strong>{scrapPotential.toLocaleString()}</strong> ducats - enough for

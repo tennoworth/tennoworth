@@ -120,12 +120,6 @@ impl MarketData {
         let reserve = reserve_copies(db);
         let traded = db.traded_names_since_scan().map_err(|e| e.to_string())?;
         let traded_parts = self.traded_set_parts(&traded)?;
-        let reserves: BTreeMap<_, _> = db
-            .get_reserves()
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .map(|r| (r.slug, r.keep.max(0)))
-            .collect();
         let mut owned = BTreeMap::<String, (String, i64, i64)>::new();
         for item in db.latest_snapshot_items().map_err(|e| e.to_string())? {
             let Some((name, slug)) = self.resolve(&item.slug) else {
@@ -143,8 +137,7 @@ impl MarketData {
         Ok(owned
             .into_iter()
             .map(|(slug, (name, count, leveled))| {
-                let keep = reserve.max(reserves.get(&slug).copied().unwrap_or(0));
-                let keep = keep.max(
+                let keep = reserve.max(
                     leveled.saturating_add(i64::from(protected.get(&slug).copied().unwrap_or(0))),
                 );
                 let safe = sell_priority::sellable_qty(count, keep, leveled);

@@ -11,7 +11,7 @@ import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 import Faq from './Faq.svelte';
 import UsageChart from '../features/community/UsageChart.svelte';
 import CalendarView from '../features/calendar/CalendarView.svelte';
-import { loadMarket, revalidateMarket, startHostedMarketRevalidation } from '../adapters/market';
+import { loadHomeMarket, revalidateHomeMarket, startHostedMarketRevalidation } from '../adapters/market';
 import { HostedTransport } from '../adapters/hosted';
 import { baroLocation, humanWindow } from '../ui/format';
 import { baroPhase } from '../domain/baro-board';
@@ -33,7 +33,7 @@ $effect(() => {
   void marketAttempt;
   let active = true;
   marketError = false;
-  loadMarket().then(value => { if (active) market = value; }).catch((error) => { console.error(error); if (active) marketError = true; });
+  loadHomeMarket().then(value => { if (active) market = value; }).catch((error) => { console.error(error); if (active) marketError = true; });
   return () => { active = false; };
 });
 let snapshotStamp = $derived.by(() => {
@@ -63,7 +63,7 @@ $effect(() => {
 });
 onMount(() => startHostedMarketRevalidation(async () => {
   if (!market) return;
-  const next = await revalidateMarket(market);
+  const next = await revalidateHomeMarket(market);
   if (next) market = next;
 }));
 onMount(() => {

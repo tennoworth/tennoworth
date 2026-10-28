@@ -26,7 +26,7 @@ const MARKET_URL: &str = "https://tennoworth.app/market.json";
 const HISTORY_URL: &str = "https://tennoworth.app/history.json";
 /// Short - a slow refresh must never make the app feel stuck. The bundled/cached
 /// copy is already on screen; this is a background top-up.
-pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
+const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// One cached live-data artifact: where it comes from, what it's called on
 /// disk, and which top-level field proves a 200 body is a whole, valid file.
@@ -253,9 +253,30 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// The one client for TennoWorth's own artifacts (market, history,
+/// announcements, definitions). Built once: a blocking client owns a runtime
+/// thread, which every refresh used to spawn and tear down again. Redirects are
+/// refused because the site serves these files directly, and a followed
+/// redirect could leave its origin or drop to plain HTTP.
+pub(crate) fn artifact_client() -> Option<&'static reqwest::blocking::Client> {
+    static CLIENT: std::sync::OnceLock<Option<reqwest::blocking::Client>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::blocking::Client::builder()
+                .user_agent(wfm_core::user_agent())
+                .timeout(TIMEOUT)
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .map_err(|e| eprintln!("tennoworth: artifact client build failed: {e}"))
+                .ok()
+        })
+        .as_ref()
+}
+
 /// Read at most `max` bytes of UTF-8 body; anything longer is an error, not a
 /// truncated body that could still happen to parse.
-fn read_bounded(resp: reqwest::blocking::Response, max: usize) -> Result<String, String> {
+pub(crate) fn read_bounded(resp: reqwest::blocking::Response, max: usize) -> Result<String, String> {
     use std::io::Read;
     let mut raw = Vec::new();
     resp.take(max as u64 + 1)
@@ -309,19 +330,8 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    let client = match reqwest::blocking::Client::builder()
-        .user_agent(wfm_core::user_agent())
-        .timeout(TIMEOUT)
-        .build()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!(
-                "tennoworth: {} refresh client build failed: {e}",
-                spec.cache_file
-            );
-            return keep_cache(dir, spec, prior_etag);
-        }
+    let Some(client) = artifact_client() else {
+        return keep_cache(dir, spec, prior_etag);
     };
 
     let mut req = client.get(url);
@@ -643,6 +653,37 @@ mod tests {
             vec![false, true],
             "req1 unconditional, req2 If-None-Match"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_redirect_is_not_followed_and_the_cache_is_kept() {
+        // The redirect target serves a newer, valid snapshot; following it would
+        // replace the cache, so an unchanged cache proves the redirect stopped.
+        const NEWER: &str =
+            r#"{"updated_at":"2026-07-21T10:00:00Z","platform":"pc","items":{"a":{}}}"#;
+        let (target, _target_thread) = spawn_mock_serving(1, NEWER);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/market.json", listener.local_addr().unwrap());
+        let location = target.clone();
+        let redirector = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut tmp = [0u8; 1024];
+            let _ = stream.read(&mut tmp);
+            let resp = format!(
+                "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        });
+        let dir = temp_dir();
+        write_atomic(&cache_path(&dir, &MARKET), BODY.as_bytes()).unwrap();
+        let r = refresh_artifact(&dir, &MARKET, &url);
+        redirector.join().unwrap();
+        assert!(!r.updated);
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
+        // Release the unused target so its thread can finish.
+        let host = reqwest::Url::parse(&target).unwrap();
+        let _ = std::net::TcpStream::connect((host.host_str().unwrap(), host.port().unwrap()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

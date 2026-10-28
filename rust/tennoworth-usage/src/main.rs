@@ -1,5 +1,5 @@
 use chrono::Utc;
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 use tennoworth_usage::{Collector, Store};
 
 #[tokio::main]
@@ -28,23 +28,13 @@ async fn main() -> anyhow::Result<()> {
         None => {}
     }
     let state = Collector::new(store);
-    let maintenance = state.clone();
-    tokio::spawn(async move {
-        loop {
-            if maintenance.tick().is_err() {
-                eprintln!("usage maintenance unavailable");
-            }
-            tokio::time::sleep(Duration::from_secs(30)).await;
-        }
-    });
-    let port: u16 = std::env::var("TENNOWORTH_USAGE_PORT")
-        .unwrap_or_else(|_| "8082".into())
-        .parse()?;
-    let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).await?;
-    axum::serve(listener, tennoworth_usage::router(state))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
-    Ok(())
+    collector_gate::serve(
+        "usage",
+        state.clone(),
+        Collector::tick,
+        tennoworth_usage::router(state),
+        "TENNOWORTH_USAGE_PORT",
+        8082,
+    )
+    .await
 }

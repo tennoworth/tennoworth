@@ -111,7 +111,8 @@ New contributor ids cost nothing, so one person can pose as five and get an
 item published, or move its median. The floor makes this deliberate work, not
 an accident, but it is not proof. Until there is evidence of how much that
 happens, reported prices are shown beside warframe.market data and are not
-used in sell scores.
+used in sell scores; a desktop test fails if client code starts reading
+them.
 
 HTTPS terminates at Cloudflare and the request passes through Caddy, as it
 does for the usage counter; see [SECURITY.md](../SECURITY.md) for what the
@@ -120,9 +121,9 @@ delivery infrastructure can see.
 ## Running it
 
 `build-reports` publishes the binary to the `reports-latest` rolling release
-from `main`. On the host, `deploy/pull-reports.sh` installs a checksum-verified
+from `main`. On the host, `deploy/pull-collector.sh reports` installs a checksum-verified
 build and rolls back when `/health` does not answer after a restart, and
-`deploy/monitor-reports.sh` alerts when the published aggregates stop
+`deploy/monitor-collector.sh reports` alerts when the published aggregates stop
 updating. Caddy proxies `/api/reports/*` to the service with client headers
 stripped and access logging off for those routes.
 

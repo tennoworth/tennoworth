@@ -10,6 +10,24 @@
 # `:8081` with no `bind` listens on every interface, so the boundary has to be
 # stated rather than assumed.
 
+# Proxying shared by the opt-in collectors: client identity headers never reach
+# the loopback service, and a stalled service fails fast instead of holding the
+# connection. Imported inside each collector's reverse_proxy block.
+(collector_upstream) {
+	header_up -Forwarded
+	header_up -X-Forwarded-For
+	header_up -X-Real-IP
+	header_up -CF-*
+	header_up -Cookie
+	header_up -Authorization
+	header_up -User-Agent
+	header_up -Referer
+	transport http {
+		dial_timeout 2s
+		response_header_timeout 5s
+	}
+}
+
 # Security headers. This is the only place the site's real HTTP headers are set;
 # the site and its error routes both import it, because error routes do not
 # inherit the site's headers. The CSP line is kept in sync by
@@ -72,10 +90,13 @@
 	# definitions.json (C7) is here for the same reason and one more: its whole
 	# purpose is fixing a broken scan WITHOUT a release, so it must be editable
 	# in place on the box. Served from dist/ it would need a web rebuild+deploy,
-	# which is the exact latency it exists to avoid.
+	# which is the exact latency it exists to avoid. Clients install it only as a
+	# signed envelope (docs/wfm-access.md), so editing it in place still needs the
+	# offline signing key.
 	# history.json (relics.run-derived, box-only state) is live data too.
-	# market-public.json is the slim copy the prerendered pages refresh from.
-	@livedata path /market.json /market-public.json /wfstat-catalog.json /definitions.json /history.json
+	# market-public.json is the slim copy the prerendered pages refresh from, and
+	# market-home.json the homepage's copy without desktop-only fields.
+	@livedata path /market.json /market-public.json /market-home.json /wfstat-catalog.json /definitions.json /history.json
 	handle @livedata {
 		root * /srv/wfm/app/frontend/public
 		header Cache-Control "public, max-age=300, must-revalidate"
@@ -98,18 +119,7 @@
 	skip_log @usage
 	handle @usage {
 		reverse_proxy 127.0.0.1:8082 {
-			header_up -Forwarded
-			header_up -X-Forwarded-For
-			header_up -X-Real-IP
-			header_up -CF-*
-			header_up -Cookie
-			header_up -Authorization
-			header_up -User-Agent
-			header_up -Referer
-			transport http {
-				dial_timeout 2s
-				response_header_timeout 5s
-			}
+			import collector_upstream
 		}
 	}
 
@@ -119,18 +129,7 @@
 	skip_log @reports
 	handle @reports {
 		reverse_proxy 127.0.0.1:8083 {
-			header_up -Forwarded
-			header_up -X-Forwarded-For
-			header_up -X-Real-IP
-			header_up -CF-*
-			header_up -Cookie
-			header_up -Authorization
-			header_up -User-Agent
-			header_up -Referer
-			transport http {
-				dial_timeout 2s
-				response_header_timeout 5s
-			}
+			import collector_upstream
 		}
 	}
 

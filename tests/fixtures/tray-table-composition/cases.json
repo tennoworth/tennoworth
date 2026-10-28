@@ -22,8 +22,7 @@
       "beta": { "name": "Beta", "category": "Primary", "year": 2025, "share": 1.2, "peak_mr": 10, "by_mr": [1] }
     }
   },
-  "protected": { "beta": 1 },
-  "legacy_reserves": { "gamma": 2 },
+  "protected": { "beta": 1, "gamma": 2 },
   "traded_after_scan": "Delta",
   "expected": {
     "shared_order": ["beta", "alpha"],

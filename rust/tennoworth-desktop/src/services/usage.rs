@@ -1,7 +1,7 @@
 //! Consent and daily tokens stay in Rust; this client never shares WFM credentials.
 use crate::persistence::Db;
 use chrono::Utc;
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::SysRng, TryRng};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tauri::{Manager, State};
@@ -102,7 +102,7 @@ fn prepare(db: &Db, day: &str) -> Result<Option<DailyState>, ()> {
     }
     if state.day != day {
         let mut bytes = [0u8; 32];
-        OsRng.try_fill_bytes(&mut bytes).map_err(|_| ())?;
+        SysRng.try_fill_bytes(&mut bytes).map_err(|_| ())?;
         let random: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
         state = DailyState {
             day: day.into(),

@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { DomainResult } from '../selling/domain-result.svelte';
 import type { RelicPlanEntry } from '../../contracts/generated/domain';
-import { wfmItemUrl } from '../../ui/format';
+import { plat, wfmItemUrl } from '../../ui/format';
 import { REFINE_WORTH_IT } from '../../domain/relic-ev';
 import type { RelicDecision } from '../../contracts/generated/domain';
   let { relicShowAll = $bindable(false), relicResult, relicSurfaceAge, relicPlan, onretry }: {
@@ -36,7 +36,7 @@ function verdictWord(decision: RelicDecision | null | undefined): string {
 // per trace the rungs are nearly tied by construction, so ranking on that
 // alone would flip on rounding.
 function verdictText(decision: RelicDecision): string {
-  if (decision.verdict === 'refine' && decision.best) return `Refine to ${decision.best.refinement}: ${decision.best.gainOverIntact.toFixed(0)}p more for ${decision.best.traces} traces (${decision.best.platPerTrace?.toFixed(2)}p per trace).`;
+  if (decision.verdict === 'refine' && decision.best) return `Refine to ${decision.best.refinement}: ${plat(decision.best.gainOverIntact)}p more for ${decision.best.traces} traces (${decision.best.platPerTrace?.toFixed(2)}p per trace).`;
   if (decision.verdict === 'crack') return `Refining doesn't clear ${REFINE_WORTH_IT}p per trace here.`;
   if (decision.verdict === 'sell-intact') return 'The relic clears more intact than its contents.';
   if (decision.verdict === 'thin') return 'None of its rewards are trading - treat the EV as a guess.';
@@ -62,7 +62,7 @@ function verdictText(decision: RelicDecision): string {
           <div data-shell class="vh-end">
             <div data-shell class="ui-totals" role="group" aria-label="Relics summary">
               <div data-shell class="cell"><span data-shell class="k">Relics</span><span data-shell class="v">{relicPlan.length} · ×{ownedTotal}</span></div>
-              <div data-shell class="cell"><span data-shell class="k">Expected</span><span data-shell class="v" title="Expected value of cracking every relic you own; any single crack varies.">≈{expectedTotal.toFixed(0)}<span data-shell class="unit">p</span></span></div>
+              <div data-shell class="cell"><span data-shell class="k">Expected</span><span data-shell class="v" title="Expected value of cracking every relic you own; any single crack varies.">≈{plat(expectedTotal)}<span data-shell class="unit">p</span></span></div>
             </div>
           </div>
         {/if}
@@ -98,8 +98,8 @@ function verdictText(decision: RelicDecision): string {
                     {#if r}<span data-shell class="lv">{r.ev.toFixed(1)}</span><span data-shell class="lbar" aria-hidden="true"><i data-shell style="width:{Math.max(4, (r.ev / max) * 100)}%"></i></span>{:else}<span data-shell class="muted">-</span>{/if}
                   </td>
                 {/each}
-                <td data-shell class="price" title="Expected value of cracking every one you own; any single crack varies.">≈{p.epp_owned.toFixed(0)}<span data-shell class="unit">p</span></td>
-                <td data-shell class:bad-text={p.sell_now > p.epp} title="What this relic clears at sold intact on WFM, no cracking. When this beats the crack EV, selling wins.">{#if p.sell_now > 0}{p.sell_now.toFixed(0)}<span data-shell class="unit">p ea</span>{:else}<span data-shell class="muted">-</span>{/if}</td>
+                <td data-shell class="price" title="Expected value of cracking every one you own; any single crack varies.">≈{plat(p.epp_owned)}<span data-shell class="unit">p</span></td>
+                <td data-shell class:bad-text={p.sell_now > p.epp} title="What this relic clears at sold intact on WFM, no cracking. When this beats the crack EV, selling wins.">{#if p.sell_now > 0}{plat(p.sell_now)}<span data-shell class="unit">p ea</span>{:else}<span data-shell class="muted">-</span>{/if}</td>
                 <td data-shell class="l why">
                   {#if p.decision}{verdictText(p.decision)}{/if}
                   <span data-shell class:bad-text={p.moving_count < p.total_rewards / 2}>{p.moving_count}/{p.total_rewards} rewards moving.</span>

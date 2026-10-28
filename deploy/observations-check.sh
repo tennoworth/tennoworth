@@ -18,10 +18,9 @@
 # claim is not a satisfied one.
 #
 # Scope: this answers "is the corpus sound and complete, and is its preservation
-# declared honestly". Whether a proposed refresh schedule meets its acceptance
-# thresholds is a different question with a different owner (`wfm-scrape
-# replay`); nothing here may answer it, or a schedule could be declared good
-# because the collection ran.
+# declared honestly". Whether a refresh schedule meets its acceptance thresholds
+# is a different question, answered offline from the corpus; nothing here may
+# answer it, or a schedule could be declared good because the collection ran.
 #
 # Runs on the box from wfm-observations-check.timer, and locally against any
 # directory through --observations/--out.

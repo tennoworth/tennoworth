@@ -86,13 +86,6 @@ pub struct SnapshotItem {
     pub leveled: i64,
 }
 
-/// A per-slug reserve ("keep N copies of this item"). Serialized to the SPA.
-#[derive(serde::Serialize)]
-pub struct Reserve {
-    pub slug: String,
-    pub keep: i64,
-}
-
 /// A row for the snapshot-history list. `item_count` is the number of
 /// `snapshot_item` rows joined to this snapshot.
 #[derive(serde::Serialize)]

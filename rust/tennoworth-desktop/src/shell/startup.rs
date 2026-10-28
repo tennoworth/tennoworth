@@ -53,7 +53,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
     // release-desktop.yml. A WEBKIT_DISABLE_DMABUF_RENDERER=1 shim was tried
     // here first and measurably did NOT help (same abort with it set), so it
     // does not ship.
-    let probe = std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1");
+    let probe = crate::shell::probe::enabled();
     let ocr_boot_probe = std::env::var_os("TENNOWORTH_OCR_BOOT_PROBE").is_some();
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 

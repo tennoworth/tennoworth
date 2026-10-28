@@ -22,14 +22,14 @@
 
 use wfm_client::transport::GovernedRequest;
 use wfm_client::governor::Kind;
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
+use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
-use rand::RngCore;
+use rand::{rngs::SysRng, TryRng};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -38,6 +38,13 @@ use crate::time::chrono_now_iso;
 
 pub const JWT_FORMAT: &str = "wfminv-jwt-v1";
 pub const JWT_KDF_ITERATIONS: u32 = 600_000;
+/// The iteration count is read back from the file, so it is bounded: below the
+/// default it is a downgraded file, and an unbounded value stalls unlock for
+/// hours. The ceiling leaves room for a future raise of the default.
+const MAX_JWT_KDF_ITERATIONS: u32 = 10_000_000;
+/// AES-GCM's nonce size. `Nonce::from_slice` panics on any other length, and
+/// release builds abort on panic, so a damaged file must be refused first.
+const JWT_IV_BYTES: usize = 12;
 
 /// The on-disk encrypted-JWT envelope. Field names + shape are a compat
 /// contract - see the module docs. Mirrors the web app's encrypted-export
@@ -99,9 +106,11 @@ pub fn validate_passphrase(passphrase: &str) -> Result<()> {
 
 pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<EncryptedJwt> {
     let mut salt = [0u8; 16];
-    let mut iv = [0u8; 12];
-    OsRng.fill_bytes(&mut salt);
-    OsRng.fill_bytes(&mut iv);
+    let mut iv = [0u8; JWT_IV_BYTES];
+    SysRng
+        .try_fill_bytes(&mut salt)
+        .and_then(|()| SysRng.try_fill_bytes(&mut iv))
+        .map_err(|e| anyhow::anyhow!("system randomness unavailable: {e}"))?;
 
     let mut key_bytes = [0u8; 32];
     pbkdf2::<Hmac<Sha256>>(
@@ -141,6 +150,12 @@ pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<Encryp
 /// salt, so a stale key fails GCM auth) and useless without the .enc file,
 /// unlike the passphrase, which users may reuse elsewhere.
 pub fn derive_jwt_key(blob: &EncryptedJwt, passphrase: &str) -> Result<[u8; 32]> {
+    if blob.format != JWT_FORMAT {
+        bail!("Unknown JWT blob format: {}", blob.format);
+    }
+    if !(JWT_KDF_ITERATIONS..=MAX_JWT_KDF_ITERATIONS).contains(&blob.kdf.iterations) {
+        bail!("The saved WFM sign-in file is damaged (KDF iterations out of range).");
+    }
     let salt = B64.decode(&blob.kdf.salt).context("decoding salt")?;
     let mut key_bytes = [0u8; 32];
     pbkdf2::<Hmac<Sha256>>(
@@ -158,6 +173,9 @@ pub fn decrypt_jwt_with_key(blob: &EncryptedJwt, key_bytes: &[u8; 32]) -> Result
         bail!("Unknown JWT blob format: {}", blob.format);
     }
     let iv = B64.decode(&blob.cipher.iv).context("decoding IV")?;
+    if iv.len() != JWT_IV_BYTES {
+        bail!("The saved WFM sign-in file is damaged (IV length {}).", iv.len());
+    }
     let ciphertext = B64
         .decode(&blob.ciphertext)
         .context("decoding ciphertext")?;
@@ -236,6 +254,24 @@ fn username_from_me(status: reqwest::StatusCode, body: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_damaged_envelope_is_refused_instead_of_aborting() {
+        let good = encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
+        let key = derive_jwt_key(&good, "correct horse battery").unwrap();
+        for iv in ["", "AAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"] {
+            let mut blob = encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
+            blob.cipher.iv = iv.into();
+            let err = decrypt_jwt_with_key(&blob, &key).unwrap_err().to_string();
+            assert!(err.contains("damaged"), "{iv:?}: {err}");
+        }
+        for iterations in [0, 1, JWT_KDF_ITERATIONS - 1, MAX_JWT_KDF_ITERATIONS + 1, u32::MAX] {
+            let mut blob = encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
+            blob.kdf.iterations = iterations;
+            let err = derive_jwt_key(&blob, "correct horse battery").unwrap_err().to_string();
+            assert!(err.contains("damaged"), "{iterations}: {err}");
+        }
+    }
 
     #[test]
     fn a_me_error_page_reports_its_status_not_a_parse_failure() {

@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
-# Both endpoints answer 503 while a check-in or the maintenance tick holds the
+# Alert when one opt-in collector (usage or reports) is down or its published
+# aggregate has not been recomputed for two hours.
+case "${1:-}" in
+  usage) port=8082; route=/api/usage/daily ;;
+  reports) port=8083; route=/api/reports/prices ;;
+  *) echo 'usage: monitor-collector.sh usage|reports' >&2; exit 2 ;;
+esac
+# Both endpoints answer 503 while a request or the maintenance tick holds the
 # store lock. That is contention, not an outage, so retry briefly before the
 # unit fails and alerts; the pullers do the same.
 get() {
@@ -10,10 +17,10 @@ get() {
   done
   return 1
 }
-get http://127.0.0.1:8082/health >/dev/null
+get "http://127.0.0.1:$port/health" >/dev/null
 # Parsed with sed rather than jq: nothing provisions jq on the box, and without
 # it this monitor failed on every tick from the day it was installed.
-updated=$(get http://127.0.0.1:8082/api/usage/daily \
+updated=$(get "http://127.0.0.1:$port$route" \
   | sed -n 's/.*"updated_at"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 [ -n "$updated" ]
 last=$(date -d "$updated" +%s)

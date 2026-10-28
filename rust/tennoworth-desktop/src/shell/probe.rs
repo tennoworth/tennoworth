@@ -539,7 +539,7 @@ pub fn build_probe_script(runtag: &str) -> String {
 /// enough). Gated behind TENNOWORTH_PROBE so a normal build can't reach it.
 #[tauri::command]
 pub fn debug_post_scan(app: AppHandle) -> Result<Option<ScanNotification>, String> {
-    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+    if !enabled() {
         return Err("debug_post_scan is probe-only".into());
     }
     post_scan_surfaces(&app);
@@ -554,7 +554,7 @@ pub fn debug_write_login(
     session: State<'_, Arc<WfmSession>>,
     passphrase: String,
 ) -> Result<(), CmdError> {
-    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+    if !enabled() {
         return Err(CmdError::internal("debug_write_login is probe-only"));
     }
     // Without the path override this would write a synthetic envelope over the
@@ -573,7 +573,7 @@ pub fn debug_write_login(
 /// their offline validation paths; anything that would hit WFM fails per-item.
 #[tauri::command]
 pub fn debug_seed_unlocked(app: AppHandle, session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
-    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+    if !enabled() {
         return Err(CmdError::internal("debug_seed_unlocked is probe-only"));
     }
     session.debug_set_unlocked(Unlocked {
@@ -625,10 +625,19 @@ fn check_trade_contention(app: &AppHandle, session: &Arc<WfmSession>) -> Result<
     Ok(())
 }
 
+/// The probe's opt-in. Every probe-only command checks it, because a command is
+/// reachable from the webview whether or not the probe script was injected.
+pub(crate) fn enabled() -> bool {
+    std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1")
+}
+
 /// Probe-only: persist the evidence JSON to $TENNOWORTH_PROBE_OUT (and echo it
 /// to stdout between markers so it is captured even without file access).
 #[tauri::command]
 pub fn probe_report(payload: String) -> Result<String, String> {
+    if !enabled() {
+        return Err("probe_report is probe-only".into());
+    }
     // A literal "/tmp" default put the file at C:\tmp on Windows - a Unix path
     // silently resolving to the drive root. temp_dir() is %TEMP% there and /tmp
     // here.
@@ -661,7 +670,10 @@ pub fn probe_report(payload: String) -> Result<String, String> {
 /// Probe-only: close the app so the restart-persistence check can run two clean
 /// launches without a human closing the window.
 #[tauri::command]
-pub fn probe_exit() {
+pub fn probe_exit() -> Result<(), String> {
+    if !enabled() {
+        return Err("probe_exit is probe-only".into());
+    }
     let mut so = std::io::stdout();
     let _ = writeln!(so, "PROBE_EXIT");
     let _ = so.flush();
@@ -673,4 +685,5 @@ pub fn probe_exit() {
         )]
         std::process::exit(0);
     });
+    Ok(())
 }

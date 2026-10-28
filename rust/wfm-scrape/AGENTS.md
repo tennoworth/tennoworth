@@ -92,7 +92,9 @@ contract, so it lives in [`../AGENTS.md`](../AGENTS.md) rather than here.
 `wfstat-catalog.json` and is the complete snapshot/catalog generator. It also
 writes `market-public.json` just before `market.json`: the fields listed in
 `tests/fixtures/public-market/fields.json`, which the site's prerendered pages
-refresh from (the frontend checks they give the same page data). With
+refresh from (the frontend checks they give the same page data), and
+`market-home.json`, the snapshot without the desktop-only fields in
+`tests/fixtures/public-market/home.json`, which the hosted homepage reads. With
 `--observations-dir`, `scrape` also streams a per-item observation log (one
 JSONL file per sweep, `src/observations.rs`) holding what each attempted item's
 statistics and book said; it is evidence for the statistics-refresh decision and
@@ -101,27 +103,22 @@ the sweep. Retention is 56 days or 2 GiB, whichever binds first, sized so the
 four-week evaluation window closes before the corpus starts losing its earliest
 days; those two bounds are restated in shell by the host readiness check, and
 `tests/fixtures/observation-retention.json` is the shared gate that keeps the
-Rust constants and the shell defaults from drifting apart. `replay`
-(`src/replay.rs`) reads those logs back and simulates a
-statistics-refresh schedule without touching WFM: it must refresh only on
-evidence a production run could have had (cached state, catalog, a response
-already fetched), and a book result the policy could not observe is reported as
-UNKNOWN rather than zero. Its report is deterministic and pinned by
-`tests/fixtures/replay/`. The fixture regression gates in `tests/` shell the
+Rust constants and the shell defaults from drifting apart. The offline
+`replay` simulator that used these logs to choose the statistics schedule was
+removed once production reused statistics, because a sweep with reused rows
+cannot be scored. The fixture regression gates in `tests/` shell the
 freshly built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen
 fixtures in `tests/fixtures/{scrape,convert}` - cargo rebuilds the binary first,
 so a stale one cannot green them.
 
 `--stats-cache <FILE> --stats-interval <6h>` (`src/stats_cache.rs`) reuses an
 item's statistics between sweeps while its book is still read every sweep. It
-refreshes exactly when `replay`'s policy does: first sight, an unusable cached
+refreshes on the policy that replay validated: first sight, an unusable cached
 entry, a reappearance after an absence, an empty book last time, or age at the
 interval. It caches the derived figures (`StatsStage`), not the daily rows,
 writes the file only after a completed sweep, and treats a missing or foreign
 file as a full refresh, never a failure. Reused rows carry
-`statistics_cached_at` in the observation log; `replay` refuses such a sweep,
-because simulating a schedule against cached statistics would score a guess,
-and the readiness check expects statistics requests only for the rows without
+`statistics_cached_at` in the observation log, and the readiness check expects statistics requests only for the rows without
 it. Production runs with a six-hour interval (`deploy/run-scrape.sh`); an empty
 `STATS_INTERVAL` restores fetching everything every sweep.
 
@@ -132,7 +129,7 @@ and complete, and states how it is preserved. Preservation is the host-level
 Proxmox backup of the whole container, proven off the box by
 `scripts/check-lxc-backup.sh`; the check cannot see that backup, so it reports
 the declared mode and never claims preservation is verified. The check answers
-collection-readiness only; the schedule decision belongs to `replay`. It ties its
+collection-readiness only, never a schedule decision. It ties its
 journal evidence to one systemd invocation and one sweep, and a start that cannot
 be paired is an explicit failure rather than a skipped gate. A partial log that a
 later completed sweep has superseded is a dead sweep kept for post-mortem - a

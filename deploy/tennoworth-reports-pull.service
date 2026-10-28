@@ -6,4 +6,4 @@ OnFailure=wfm-alert@%n.service
 
 [Service]
 Type=oneshot
-ExecStart=/srv/wfm/pull-reports.sh
+ExecStart=/srv/wfm/pull-collector.sh reports

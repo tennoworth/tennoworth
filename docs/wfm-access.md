@@ -54,8 +54,8 @@ of 2026-09-09, whose scraper restrictions are the compiled defaults above.
 | Sweep wall time | 60-89 minutes that day | `journalctl -u wfm-scrape.service` |
 | Floor if nothing else were spent | 54 minutes | 6,438 x 500 ms |
 | Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/wfm-scrape.timer` |
-| Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the replayed policy triggers; books every sweep | `deploy/run-scrape.sh`, `stats_cache.rs` |
-| Mean over a day | ~0.9 request starts per second before statistics reuse; the replay projects about 42% fewer requests with it | derived from the rows above; `wfm-scrape replay` |
+| Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the validated policy triggers; books every sweep | `deploy/run-scrape.sh`, `stats_cache.rs` |
+| Mean over a day | ~0.9 request starts per second before statistics reuse; the offline replay of the 2026-09/10 corpus projected about 42% fewer requests with it | derived from the rows above |
 
 The item loop runs one worker per request the policy allows in flight, rather
 than one at a time: the same 176-request sample took 111 s serially and 91 s with
@@ -167,3 +167,23 @@ and outstanding work are local.
 The status command and `wfm-access-changed` event expose no credentials or private
 payloads. Updated clients cannot coordinate unrelated applications or computers
 sharing an IP, and cannot enforce restrictions in older or modified clients.
+
+## Scan definitions
+
+`https://tennoworth.app/definitions.json` lets a scan fix ship without a
+release. Its patterns run over the game's memory to find the session
+credentials, so the desktop installs it only as an envelope signed with the
+policy key above, in the same format and with the same rotation rule: a
+fetched file must verify with the current key, and a cached one may verify with
+a retired key. A build without the key, an unsigned or tampered file, and a
+missing file all leave the compiled patterns in place.
+
+The payload is JSON with `purpose: "scan-definitions"`, which keeps a signed
+policy from being served as definitions, plus any of `cred_pattern` (two
+capture groups: accountId, nonce), `build_pattern` and `ct_pattern` (one group
+each), `reward_log_markers` (1-8 strings of at most 120 bytes), and an
+informational `version`. A pattern that does not compile is reported and keeps
+its default; the body is limited to 64 KiB. Sign the exact payload bytes with
+`minisign -S -H`, wrap them as `{"payload": <base64>, "signature": <signature
+text>}`, and place the envelope at `frontend/public/definitions.json` on the
+host, which Caddy serves live. Clients read it at startup.

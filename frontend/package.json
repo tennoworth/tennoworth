@@ -29,16 +29,16 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
-    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@testing-library/svelte": "^5.4.2",
     "@types/node": "^25.9.1",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "knip": "^6.31.0",
-    "svelte": "^5.0.0",
+    "svelte": "^5.46.4",
     "svelte-check": "^4.4.8",
     "typescript": "^6.0.3",
-    "vite": "^6.4.5",
+    "vite": "^8.3.5",
     "vitest": "^5.0.5"
   }
 }

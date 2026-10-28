@@ -24,17 +24,11 @@ pub use store::Store;
 /// Requests allowed per wall-clock second across the public routes. The window
 /// bounds work, it is not fairness; see the usage service for the reasoning.
 pub const REQUESTS_PER_WINDOW: u32 = 20;
-const WINDOW: Duration = Duration::from_secs(1);
 /// A full sales batch is about 8 KiB; anything larger is not a client of ours.
 const MAX_BODY: usize = 16 * 1024;
 /// Published aggregates change slowly; recomputing them per GET would let
 /// unauthenticated reads buy a full aggregation each.
 const PUBLISHED_TTL: Duration = Duration::from_secs(300);
-
-struct Limit {
-    started: Instant,
-    requests: u32,
-}
 
 #[derive(Default)]
 struct Published {
@@ -44,10 +38,14 @@ struct Published {
 
 pub struct Collector {
     store: Mutex<Store>,
-    limit: Mutex<Limit>,
     published: Mutex<Published>,
-    slots: tokio::sync::Semaphore,
-    limit_per_window: u32,
+    gate: collector_gate::Gate,
+}
+
+impl collector_gate::Gated for Collector {
+    fn gate(&self) -> &collector_gate::Gate {
+        &self.gate
+    }
 }
 
 impl Collector {
@@ -57,13 +55,8 @@ impl Collector {
     pub fn with_limit(store: Store, limit_per_window: u32) -> Arc<Self> {
         Arc::new(Self {
             store: Mutex::new(store),
-            limit: Mutex::new(Limit {
-                started: Instant::now(),
-                requests: 0,
-            }),
             published: Mutex::new(Published::default()),
-            slots: tokio::sync::Semaphore::new(32),
-            limit_per_window,
+            gate: collector_gate::Gate::new(limit_per_window),
         })
     }
     pub fn tick(&self) -> anyhow::Result<()> {
@@ -86,7 +79,7 @@ pub fn router(state: Arc<Collector>) -> Router {
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            bound_request,
+            collector_gate::admit::<Collector>,
         ));
     let unmetered = Router::new().route("/health", get(health));
     public.merge(unmetered).with_state(state)
@@ -200,40 +193,6 @@ async fn riven_shapes(State(state): State<Arc<Collector>>) -> Response {
         |p| &mut p.shapes,
         |store| Ok(serde_json::to_string(&store.shapes(Utc::now())?)?),
     )
-}
-
-/// Charge one request against the fixed window; `false` when over quota.
-fn charge_window(limit: &mut Limit, allowance: u32) -> bool {
-    if limit.started.elapsed() >= WINDOW {
-        limit.started = Instant::now();
-        limit.requests = 0;
-    }
-    if limit.requests >= allowance {
-        return false;
-    }
-    limit.requests += 1;
-    true
-}
-
-async fn bound_request(
-    State(state): State<Arc<Collector>>,
-    request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> Response {
-    {
-        let Ok(mut limit) = state.limit.try_lock() else {
-            return StatusCode::TOO_MANY_REQUESTS.into_response();
-        };
-        if !charge_window(&mut limit, state.limit_per_window) {
-            return StatusCode::TOO_MANY_REQUESTS.into_response();
-        }
-    }
-    let Ok(_slot) = state.slots.try_acquire() else {
-        return StatusCode::SERVICE_UNAVAILABLE.into_response();
-    };
-    tokio::time::timeout(Duration::from_secs(5), next.run(request))
-        .await
-        .unwrap_or_else(|_| StatusCode::REQUEST_TIMEOUT.into_response())
 }
 
 async fn health(State(state): State<Arc<Collector>>) -> StatusCode {

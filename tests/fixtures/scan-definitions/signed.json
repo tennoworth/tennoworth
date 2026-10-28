@@ -1,0 +1,30 @@
+{
+  "_comment": "Scan definitions signed with throwaway test keys (secret keys discarded). Regenerate with minisign -G -W and minisign -S -H; never sign fixtures with a production key.",
+  "public_key": "RWRQayoyTtMBp54ox8YwddpFMEUbXoS1nw14yH0Y+mhKQfjk6icG7OjZ",
+  "previous_public_key": "RWTDjxkgmhw5a2lUxMMr14VQmmj9ybfY6EI85c/7F4mhN5Rbx6iTlC2v",
+  "good": {
+    "payload": "eyJwdXJwb3NlIjoic2Nhbi1kZWZpbml0aW9ucyIsInZlcnNpb24iOjEsImNyZWRfcGF0dGVybiI6ImFjY3Q9KFswLTlhLWZdezI0fSkmbj0oWzAtOV17Nix9KSJ9",
+    "signature": "untrusted comment: signature from minisign secret key\nRURQayoyTtMBp8jsalsFpUJBI1CZQWWid5k4TPayOVGTYtIO7lQahw9Q/wIoXbhCUU+Y1fmd8GM6vVzv85c1jBPJoCxtJ8pWTA8=\ntrusted comment: test fixture\nWkz61QSgJPd0MHEI1PYa4L52I3gE01UzS57DpkLE5wIBUuKN4fPCePGXDKb0SSHvjQag41yJqK/bF0XQOuSoDw==\n"
+  },
+  "bad_pattern": {
+    "payload": "eyJwdXJwb3NlIjoic2Nhbi1kZWZpbml0aW9ucyIsInZlcnNpb24iOjEsImNyZWRfcGF0dGVybiI6IihbdW5jbG9zZWQifQ==",
+    "signature": "untrusted comment: signature from minisign secret key\nRURQayoyTtMBp3Dnm6teOUvUpOzFYyTxRfp+GyJdxqEnENulkdzHI7s6ZcOPCFeS64p7N7Zay/l98weLqpOE4dMKEI5NwLJSEAs=\ntrusted comment: test fixture\nSqE9qJqFO18U+4U5+4Y1wLbN2Au6U4ojsXMeApqvtxLl/BWX5dkUocORgcICPdDRgDjuKAii+KHCaBU905/sDg==\n"
+  },
+  "wrong_purpose": {
+    "payload": "eyJwdXJwb3NlIjoid2ZtLXBvbGljeSIsInZlcnNpb24iOjEsImNyZWRfcGF0dGVybiI6ImFjY3Q9KFswLTlhLWZdezI0fSkmbj0oWzAtOV17Nix9KSJ9",
+    "signature": "untrusted comment: signature from minisign secret key\nRURQayoyTtMBp8jBzRZ/qkJDcsV5txQTuyX1SbGKL8fdBjjVrwY1gbGo9w+q8alPOd9cWGsRYKTEZmFzuZRCjlls0PMBRv8HtAw=\ntrusted comment: test fixture\npDqXykIz7WheQTV+yDQlYBmXmabYxKyUprqGzYpfP9S0imAXCM1CmpZ0ZoYZ1HT6shwmxiMUbpfD46gGTz0SCw==\n"
+  },
+  "missing_purpose": {
+    "payload": "eyJ2ZXJzaW9uIjoxLCJjcmVkX3BhdHRlcm4iOiJhY2N0PShbMC05YS1mXXsyNH0pJm49KFswLTldezYsfSkifQ==",
+    "signature": "untrusted comment: signature from minisign secret key\nRURQayoyTtMBp4k7U64PU4rEs51AnxVlF+Vai0u5HO8RNW0ZZrxV6Y7yZ9nSUF3JM3Wgsy+91MZbirwFpZlMrhyuYGZw39jCagM=\ntrusted comment: test fixture\nmgsMz4R0RAd2fqbbOyNyT7mfyEKKt0htwCpgVNKjf8jUDnW1IZlKOGdidHwCmoFiZjr8wOeN3OIxsO6AaFEGBA==\n"
+  },
+  "good_by_previous_key": {
+    "payload": "eyJwdXJwb3NlIjoic2Nhbi1kZWZpbml0aW9ucyIsInZlcnNpb24iOjEsImNyZWRfcGF0dGVybiI6ImFjY3Q9KFswLTlhLWZdezI0fSkmbj0oWzAtOV17Nix9KSJ9",
+    "signature": "untrusted comment: signature from minisign secret key\nRUTDjxkgmhw5aw88MXyoEsn7/vqRr3GmPKwBm/qBZK32cTNWXl4yQ3zW/eLjhtfmeLO/kIwoytBPa8OzTHd61mFJ46qjg+u7Sgo=\ntrusted comment: test fixture\nNz5i1ba/EgbyUeMKl3IlgpdpPjxpFmDyTgqAYre+6nAXDEoFFsWbjkICHm6LO9ql3XXcQGDwB79sGFzdfaBYDg==\n"
+  },
+  "unsigned": {
+    "purpose": "scan-definitions",
+    "version": 1,
+    "cred_pattern": "acct=([0-9a-f]{24})&n=([0-9]{6,})"
+  }
+}

@@ -9,7 +9,7 @@ pub(crate) mod snapshot;
 mod trades;
 mod watches;
 pub(crate) use records::{
-    ListedItem, ListingOrigin, NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow, Watch,
+    ListedItem, ListingOrigin, NewWatch, SnapshotItem, SnapshotSummary, TradeRow, Watch,
 };
 pub(crate) use outcomes::RETENTION_SECS as LISTING_RETENTION_SECS;
 use schema::MIGRATIONS;
@@ -23,7 +23,7 @@ use schema::MIGRATIONS;
 // Two distinct concerns share this file:
 //   - inventory HISTORY (`snapshot` / `snapshot_item`) -
 //     the profit-tracking substrate, appended from day one.
-//   - app STATE (`setting` kv, `reserve` per-slug) - the desktop backing for
+//   - app STATE (`setting` kv) - the desktop backing for
 //     the persistence the browser keeps in localStorage.
 
 use std::path::Path;
@@ -52,6 +52,12 @@ impl Db {
         // FK enforcement is per-connection (not persisted); turn it on so a
         // snapshot_item can never dangle without its snapshot.
         conn.pragma_update(None, "foreign_keys", "ON")?;
+        // Snapshots and trade-log events write in bursts. A write-ahead log with
+        // NORMAL sync commits without an fsync each time while staying durable
+        // across an app crash; only a power loss can drop the last commits.
+        // Only this process opens the file, so the log's side files are private.
+        conn.pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get::<_, String>(0))?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
         migrate(&conn)?;
         Ok(Db {
             conn: Mutex::new(conn),
@@ -171,7 +177,6 @@ mod tests {
                 "listing_outcome".to_string(),
                 "notification".to_string(),
                 "notification_checkpoint".to_string(),
-                "reserve".to_string(),
                 "setting".to_string(),
                 "snapshot".to_string(),
                 "snapshot_item".to_string(),
@@ -253,6 +258,19 @@ mod tests {
     }
 
     #[test]
+    fn a_file_store_uses_the_write_ahead_log() {
+        let path = temp_db_path();
+        let db = Db::open(&path).unwrap();
+        let conn = guard(&db.conn);
+        let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        let sync: i64 = conn.query_row("PRAGMA synchronous", [], |r| r.get(0)).unwrap();
+        assert_eq!((mode.as_str(), sync), ("wal", 1));
+        drop(conn);
+        drop(db);
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
     fn settings_upsert_and_read() {
         let db = Db::open_in_memory().unwrap();
         assert_eq!(db.get_setting("view").unwrap(), None);
@@ -262,29 +280,75 @@ mod tests {
         assert_eq!(db.get_setting("view").unwrap().as_deref(), Some("relics"));
     }
 
+    /// Opens a database whose schema stops just before the reserve fold, seeded
+    /// by `seed`, and returns it after the fold ran.
+    fn folded(seed: &str) -> Db {
+        let conn = Connection::open_in_memory().unwrap();
+        let previous = MIGRATIONS.len() - 1;
+        for sql in MIGRATIONS.iter().take(previous) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", previous as i64).unwrap();
+        conn.execute_batch(seed).unwrap();
+        Db::init(conn).unwrap()
+    }
+
+    fn table_exists(db: &Db, name: &str) -> bool {
+        let conn = guard(&db.conn);
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [name],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap()
+            > 0
+    }
+
+    fn set_plan_reserve(db: &Db, slug: &str, keep: u32) {
+        let plan = serde_json::json!({"reserves": {slug: keep}, "goal": null});
+        db.set_setting("protected-selling-plan-v1", &plan.to_string()).unwrap();
+    }
+
+    fn plan(db: &Db) -> serde_json::Value {
+        serde_json::from_str(&db.get_setting("protected-selling-plan-v1").unwrap().unwrap()).unwrap()
+    }
+
     #[test]
-    fn reserve_crud() {
-        let db = Db::open_in_memory().unwrap();
-        assert!(db.get_reserves().unwrap().is_empty());
-        db.set_reserve("vitality", 2).unwrap();
-        db.set_reserve("serration", 1).unwrap();
-        let got = db.get_reserves().unwrap();
-        assert_eq!(got.len(), 2);
-        // ORDER BY slug → serration before vitality.
-        assert_eq!(got[0].slug, "serration");
-        assert_eq!(got[0].keep, 1);
-        // Upsert overwrites keep, doesn't duplicate.
-        db.set_reserve("vitality", 5).unwrap();
-        let got = db.get_reserves().unwrap();
-        assert_eq!(got.len(), 2);
-        assert_eq!(got.iter().find(|r| r.slug == "vitality").unwrap().keep, 5);
-        db.delete_reserve("serration").unwrap();
-        let got = db.get_reserves().unwrap();
-        assert_eq!(got.len(), 1);
-        assert_eq!(got[0].slug, "vitality");
-        // Deleting a missing slug is a no-op, not an error.
-        db.delete_reserve("nonexistent").unwrap();
-        assert_eq!(db.get_reserves().unwrap().len(), 1);
+    fn old_keep_counts_fold_into_the_protection_plan() {
+        let db = folded(
+            r#"INSERT INTO reserve VALUES ('vitality', 2), ('serration', 5), ('blind "rage"', 9999999), ('zero', 0);
+               INSERT INTO setting VALUES ('protected-selling-plan-v1', '{"reserves":{"serration":3,"other":1},"goal":"x_set"}');"#,
+        );
+        assert!(!table_exists(&db, "reserve"));
+        assert_eq!(
+            plan(&db),
+            serde_json::json!({"reserves":{"other":1,"serration":5,"vitality":2,"blind \"rage\"":1000000},"goal":"x_set"})
+        );
+        // The larger of an existing plan reserve and the old keep wins.
+        let db = folded(
+            r#"INSERT INTO reserve VALUES ('serration', 2);
+               INSERT INTO setting VALUES ('protected-selling-plan-v1', '{"reserves":{"serration":4},"goal":null}');"#,
+        );
+        assert_eq!(plan(&db)["reserves"]["serration"], 4);
+    }
+
+    #[test]
+    fn the_fold_creates_a_plan_only_when_there_is_something_to_keep() {
+        let db = folded("INSERT INTO reserve VALUES ('vitality', 2);");
+        assert_eq!(plan(&db), serde_json::json!({"reserves":{"vitality":2},"goal":null}));
+        let db = folded("INSERT INTO reserve VALUES ('zero', 0);");
+        assert_eq!(db.get_setting("protected-selling-plan-v1").unwrap(), None);
+        assert!(!table_exists(&db, "reserve"));
+    }
+
+    #[test]
+    fn an_unreadable_plan_survives_the_fold_untouched() {
+        let db = folded(
+            "INSERT INTO reserve VALUES ('vitality', 2);
+             INSERT INTO setting VALUES ('protected-selling-plan-v1', 'not json');",
+        );
+        assert_eq!(db.get_setting("protected-selling-plan-v1").unwrap().as_deref(), Some("not json"));
+        assert!(!table_exists(&db, "reserve"));
     }
 
     #[test]
@@ -624,7 +688,8 @@ mod tests {
         ))
         .unwrap();
         db.set_setting("reserve-copies", "1").unwrap();
-        db.set_reserve("test_part", 3).unwrap();
+        // One leveled copy plus two protected: three of six held back.
+        set_plan_reserve(&db, "test_part", 2);
         let rows = crate::services::sellables::rank_sellables(&db, &market);
         assert_eq!(rows[0].sellable_qty, 3);
         assert_eq!(market.session_quantities(&db).unwrap()["test_part"], 3);
@@ -640,10 +705,10 @@ mod tests {
             crate::services::sellables::rank_sellables(&db, &market)[0].sellable_qty,
             2
         );
-        db.set_reserve("test_part", 6).unwrap();
+        set_plan_reserve(&db, "test_part", 6);
         assert!(crate::services::sellables::rank_sellables(&db, &market).is_empty());
         db.set_setting("reserve-copies", "1").unwrap();
-        db.set_reserve("test_part", 3).unwrap();
+        set_plan_reserve(&db, "test_part", 2);
         let trade = crate::services::eelog::TradeEvent {
             partner: "Buyer".into(),
             kind: "sale".into(),
