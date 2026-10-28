@@ -54,6 +54,31 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.111 - 2026-10-28
+
+# 🔒 TennoWorth Desktop 0.8.111
+
+TennoWorth Desktop 0.8.111 is ready.
+
+This release tightens what the app trusts and keeps your settings safer. A damaged sign-in file no longer closes the app, scan updates are only accepted when they are signed, and the in-game overlay can no longer reach anything beyond its own result. Old per-item keep amounts now live in your protection plan, and the local database writes faster.
+
+## Changelog (5)
+
+### Security
+
+- **Keep running when the saved sign-in is damaged** A corrupted or truncated sign-in file used to close the app. The app now reports the file as damaged and keeps running, and signing in again replaces it. <!-- app-note {"id":"damaged-sign-in-file","kind":"fixed"} -->
+- **Accept only signed scan updates** Inventory-scan definitions downloaded after release are installed only when their signature checks out, so a tampered file cannot change what the scanner reads. <!-- app-note {"id":"signed-scan-definitions","kind":"improved"} -->
+- **Limit the relic overlay to its own result** The in-game overlay window can now only read the relic result it shows, and none of the app's other actions. <!-- app-note {"id":"overlay-least-access","kind":"improved"} -->
+
+### Inventory
+
+- **Keep amounts from older versions move into your protection plan** Per-item keep amounts saved by older versions are carried into the protection plan, keeping the larger value when both exist, so nothing you set aside is listed by surprise. <!-- app-note {"id":"keeps-into-protection-plan","kind":"improved"} -->
+- **Prices read the same everywhere** The relic planner, Baro and the results table now show platinum with the same separators as the rest of the app, so large prices such as 12,500 are easy to read. <!-- app-note {"id":"consistent-plat-format","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.110 - 2026-10-26
 
 # ⚡ TennoWorth Desktop 0.8.110
