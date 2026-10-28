@@ -22,14 +22,14 @@
 
 use wfm_client::transport::GovernedRequest;
 use wfm_client::governor::Kind;
-use aes_gcm::aead::{Aead, KeyInit, OsRng};
+use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
-use rand::RngCore;
+use rand::{rngs::SysRng, TryRng};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -107,8 +107,10 @@ pub fn validate_passphrase(passphrase: &str) -> Result<()> {
 pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<EncryptedJwt> {
     let mut salt = [0u8; 16];
     let mut iv = [0u8; JWT_IV_BYTES];
-    OsRng.fill_bytes(&mut salt);
-    OsRng.fill_bytes(&mut iv);
+    SysRng
+        .try_fill_bytes(&mut salt)
+        .and_then(|()| SysRng.try_fill_bytes(&mut iv))
+        .map_err(|e| anyhow::anyhow!("system randomness unavailable: {e}"))?;
 
     let mut key_bytes = [0u8; 32];
     pbkdf2::<Hmac<Sha256>>(

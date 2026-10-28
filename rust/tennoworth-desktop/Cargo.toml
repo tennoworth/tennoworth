@@ -25,7 +25,7 @@ tauri-build = { version = "2", features = [] }
 tennoworth-announcements = { path = "../tennoworth-announcements" }
 tokio = { workspace = true }
 # Fallible OS randomness keeps counting failures off the app startup path.
-rand = "0.8"
+rand = "0.10"
 # Weekly price-report ids are derived from a local key, so the service never
 # sees anything that links one week to the next.
 hmac = { workspace = true }

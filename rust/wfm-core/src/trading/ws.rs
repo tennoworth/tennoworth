@@ -166,7 +166,7 @@ pub fn run_new_orders_stream(
         "payload": { "platform": platform, "crossplay": true }
     });
     socket
-        .send(Message::Text(sub.to_string()))
+        .send(Message::Text(sub.to_string().into()))
         .context("ws subscribe")?;
 
     let mut last_frame = std::time::Instant::now();

@@ -16,7 +16,7 @@ use crate::services::sellables::MarketData;
 use crate::services::usage;
 use chrono::{DateTime, Datelike, Days, NaiveDate, Utc};
 use hmac::{Hmac, Mac};
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::SysRng, TryRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::time::Duration;
@@ -245,7 +245,7 @@ fn load_key(db: &Db, create: bool) -> Result<Option<[u8; 32]>, ()> {
         return Ok(None);
     }
     let mut key = [0u8; 32];
-    OsRng.try_fill_bytes(&mut key).map_err(|_| ())?;
+    SysRng.try_fill_bytes(&mut key).map_err(|_| ())?;
     db.set_setting(KEY, &hex(&key)).map_err(|_| ())?;
     Ok(Some(key))
 }

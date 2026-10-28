@@ -224,7 +224,7 @@ impl PresenceSocket {
     }
 
     fn send_text(&mut self, text: String) -> Result<()> {
-        self.socket.send(Message::Text(text)).context("ws send")
+        self.socket.send(Message::Text(text.into())).context("ws send")
     }
 
     /// Send a status change; the outcome arrives from [`Self::poll`] as
