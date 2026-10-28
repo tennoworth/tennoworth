@@ -54,6 +54,40 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.112 - 2026-10-28
+
+# 🎨 TennoWorth Desktop 0.8.112
+
+TennoWorth Desktop 0.8.112 is ready.
+
+This release makes the app easier to read at a glance. The Ledger now charts what you earn each week, sell-now suggestions stop recommending items that are near their lowest price in 90 days, and riven price bands, the Baro budget and dates across the app are clearer.
+
+## Changelog (8)
+
+### Selling
+
+- **Sell-now suggestions skip items near their 90-day low** Top Picks, Fast Cash and Plat per Trade no longer suggest an item the table marks HOLD. Trade Session says why it was left out, and Clear Inventory and Max Value still include it. <!-- app-note {"id":"hold-out-of-sell-now","kind":"improved"} -->
+- **Clear results after sending listings** The result line after a batch reads "2 created · 1 updated." without stray spaces, and the Ledger, My orders and Sell tables keep a space on both sides of every separator. <!-- app-note {"id":"tidy-separators","kind":"fixed"} -->
+
+### Ledger
+
+- **See your earnings week by week** A chart shows the platinum you made from sales each week, with the current week marked as still running, a line at your typical week, and a table with the exact values. <!-- app-note {"id":"ledger-weekly-chart","kind":"improved"} -->
+- **Top sellers and listing outcomes at a glance** Your best-selling items are ranked as bars, and how your listings sold is shown as meters that are open by default. <!-- app-note {"id":"ledger-sellers-outcomes","kind":"improved"} -->
+
+### Market views
+
+- **Riven price bands drawn as a range** Each riven's weekly price band shows where the typical price sits between the lowest and highest, on the same scale for every riven, with the numbers still beside it. <!-- app-note {"id":"riven-band-range","kind":"improved"} -->
+- **Baro budget as a meter** Baro shows how many of the ducats you need your spare parts would cover, and item names are easier to read. A million credits now reads 1M. <!-- app-note {"id":"baro-budget-meter","kind":"improved"} -->
+
+### Everywhere
+
+- **One date format and a steady header** Dates read the same way everywhere, such as "Oct 28, 12:17 PM", Ledger totals use thousands separators, and the header no longer grows when you open My orders or Trade Session. <!-- app-note {"id":"dates-and-steady-header","kind":"improved"} -->
+- **Calendar reminders open the calendar** The Open calendar button on a calendar reminder used to open Routines. It now opens Calendar. <!-- app-note {"id":"calendar-reminder-target","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.111 - 2026-10-28
 
 # 🔒 TennoWorth Desktop 0.8.111

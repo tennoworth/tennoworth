@@ -1,5 +1,5 @@
 {
-  "version": "0.8.111",
+  "version": "0.8.112",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1547,6 +1547,100 @@
           "kind": "fixed",
           "title": "Prices read the same everywhere",
           "body": "The relic planner, Baro and the results table now show platinum with the same separators as the rest of the app, so large prices such as 12,500 are easy to read.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.112",
+      "date": "2026-10-28",
+      "changes": [
+        {
+          "id": "hold-out-of-sell-now",
+          "kind": "improved",
+          "title": "Sell-now suggestions skip items near their 90-day low",
+          "body": "Top Picks, Fast Cash and Plat per Trade no longer suggest an item the table marks HOLD. Trade Session says why it was left out, and Clear Inventory and Max Value still include it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "tidy-separators",
+          "kind": "fixed",
+          "title": "Clear results after sending listings",
+          "body": "The result line after a batch reads \"2 created · 1 updated.\" without stray spaces, and the Ledger, My orders and Sell tables keep a space on both sides of every separator.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "ledger-weekly-chart",
+          "kind": "improved",
+          "title": "See your earnings week by week",
+          "body": "A chart shows the platinum you made from sales each week, with the current week marked as still running, a line at your typical week, and a table with the exact values.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "ledger-sellers-outcomes",
+          "kind": "improved",
+          "title": "Top sellers and listing outcomes at a glance",
+          "body": "Your best-selling items are ranked as bars, and how your listings sold is shown as meters that are open by default.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "riven-band-range",
+          "kind": "improved",
+          "title": "Riven price bands drawn as a range",
+          "body": "Each riven's weekly price band shows where the typical price sits between the lowest and highest, on the same scale for every riven, with the numbers still beside it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "baro-budget-meter",
+          "kind": "improved",
+          "title": "Baro budget as a meter",
+          "body": "Baro shows how many of the ducats you need your spare parts would cover, and item names are easier to read. A million credits now reads 1M.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "dates-and-steady-header",
+          "kind": "improved",
+          "title": "One date format and a steady header",
+          "body": "Dates read the same way everywhere, such as \"Oct 28, 12:17 PM\", Ledger totals use thousands separators, and the header no longer grows when you open My orders or Trade Session.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "calendar-reminder-target",
+          "kind": "fixed",
+          "title": "Calendar reminders open the calendar",
+          "body": "The Open calendar button on a calendar reminder used to open Routines. It now opens Calendar.",
           "platforms": [
             "windows",
             "linux"
