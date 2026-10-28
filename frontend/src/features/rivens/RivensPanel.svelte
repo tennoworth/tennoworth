@@ -99,7 +99,12 @@
 
   // The DE weekly band for a riven, plus a note about which tier it is.
   // Falls back to the other tier when DE only published one.
-  function bandText(r: OwnedRiven): { price: string; range: string; note: string } | null {
+  // Every row shares one log scale, so the bars compare down the column.
+  // A band spans two or three orders of magnitude; linear would flatten
+  // the median against the left edge.
+  const BAND_SCALE_MAX = 10_000;
+  const bandPos = (p: number) => (Math.log10(Math.min(Math.max(p, 1), BAND_SCALE_MAX)) / Math.log10(BAND_SCALE_MAX)) * 100;
+  function bandText(r: OwnedRiven): { price: string; range: string; note: string; bar: { from: number; to: number; at: number } | null } | null {
     const band = bandForRiven(r, market?.riven_stats);
     if (!band || !(band.median > 0)) return null;
     const rerolled = r.rerolls > 0;
@@ -110,6 +115,7 @@
       price: band.median.toFixed(0) + 'p',
       range: band.min > 0 || band.max > 0 ? band.min.toFixed(0) + '–' + band.max.toFixed(0) + 'p' : '',
       note: (usedOther ? 'closest band · ' : '') + (rerolled ? 'rolled' : 'unrolled') + ' · popularity ' + band.pop + '/100',
+      bar: band.min > 0 && band.max >= band.min ? { from: bandPos(band.min), to: bandPos(band.max), at: bandPos(band.median) } : null,
     };
   }
 
@@ -240,7 +246,7 @@
         <thead>
           <tr>
             <th class="l">Weapon</th><th class="l"><span class="sr-only">Actions</span></th><th class="l">Stats</th><th>Rolls</th><th>Rank</th>
-            <th class="l">Dispo</th><th>DE weekly</th>
+            <th class="l">Dispo</th><th title="DE’s weekly trade band: median, then min–max. The bars share one 1p–10,000p log scale.">DE weekly</th>
           </tr>
         </thead>
         <tbody>
@@ -320,6 +326,14 @@
                   <div class="band" title={band.note}>
                     <span class="mono">{band.price}</span>
                     {#if band.range}<span class="muted small"> {band.range}</span>{/if}
+                    <!-- The text beside it carries the values; the bar only
+                         shows where the median sits in the spread. -->
+                    {#if band.bar}
+                      <span class="range" aria-hidden="true">
+                        <span class="span" style:left="{band.bar.from}%" style:width="{Math.max(band.bar.to - band.bar.from, 0.5)}%"></span>
+                        <span class="mid" style:left="{band.bar.at}%"></span>
+                      </span>
+                    {/if}
                     <span class="muted small note">{band.note}</span>
                   </div>
                   <!-- Still no "this riven is worth N": the offer comes from
@@ -441,6 +455,11 @@
   /* The tier and popularity note wraps under the price rather than being
      clipped by the fixed column. */
   .band .note { display: block; white-space: normal; }
+  /* min-max hairline and a median tick on a shared 1-10,000p log scale. */
+  .range { position: relative; display: block; width: 100%; max-width: 10rem; height: 10px; margin: 3px 0 2px auto; }
+  .range::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dotted var(--faint); }
+  .range .span { position: absolute; top: 50%; height: 0; border-top: 1px solid var(--muted); }
+  .range .mid { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--fg); }
   .offer-check { margin-top: 4px; white-space: normal; text-align: left; }
   .offer-check > summary { color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .band .note { font-family: var(--font-body); }
