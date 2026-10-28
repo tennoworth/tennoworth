@@ -171,6 +171,18 @@ test.describe('hosted responsive layout', () => {
     );
     expect(scrollable).toBe(true);
   });
+
+  test('movers show the price on a phone without scrolling the table', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto('/');
+    for (const name of ['Rising prices table', 'Falling prices table', 'Vaulted items table']) {
+      const region = page.getByRole('region', { name: new RegExp(`^${name};`) });
+      await region.scrollIntoViewIfNeeded();
+      const visible = (await region.boundingBox())!;
+      const avg = (await region.getByRole('columnheader', { name: 'Avg', exact: true }).boundingBox())!;
+      expect(avg.x + avg.width, `${name} Avg column`).toBeLessThanOrEqual(visible.x + visible.width);
+    }
+  });
 });
 
 test('open editors and disclosures survive resizing in both directions', async ({ page }) => {
@@ -367,6 +379,22 @@ test.describe('desktop responsive layout', () => {
 
   // The More menu beside it always closed on Escape; Refresh only on an
   // outside click, so a keyboard user had no way out of it.
+  test('the status strip keeps its height when a view adds the live-order count', async ({ page }) => {
+    // My orders adds "· N live" to the WFM cell, which narrows the scan cell;
+    // an unbounded scan name wrapped further and moved everything below.
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await page.goto('/?preview-desktop&sample');
+    const strip = page.locator('header.statusbar');
+    await expect(strip).toContainText('Sample inventory');
+    await expect(strip).not.toContainText('live');
+    const before = (await strip.boundingBox())!.height;
+    await page.locator('.sidebar').getByRole('button', { name: /^My orders/ }).click();
+    await expect(strip).toContainText('live');
+    expect((await strip.boundingBox())!.height).toBe(before);
+    await strip.getByRole('button', { name: /^Refresh/ }).click();
+    await expect(page.locator('.refresh-pop')).toContainText('Sample inventory with a deliberately long name');
+  });
+
   test('the Refresh menu closes on Escape and returns focus to its trigger', async ({ page }) => {
     const trigger = page.getByRole('button', { name: /^Refresh/ });
     await trigger.click();

@@ -149,7 +149,9 @@ does not hide its description in a hover-only info mark.
 
 In the workspace the status strip holds to one line on wide windows: the scan
 cell takes the slack and a long scan name or status note wraps inside its own
-box. When the cells still do not fit, a whole cell moves to a second line; a
+box. The scan name stops at two lines with an ellipsis, and the Refresh menu
+shows it in full; a name free to wrap further grew the strip from 48 to 64px
+when My orders added its live count. When the cells still do not fit, a whole cell moves to a second line; a
 cell never shrinks below its content and paints over its neighbour. Orders to
 fix and Baro's countdown are sidebar badges beside the views they open; the
 strip keeps them only on the first-run landing, which has no sidebar. The
@@ -190,6 +192,8 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |
 | Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted. A sortable header is a button inside its `th`, which carries `aria-sort`, and its column is wide enough for the label plus the sort arrow. Column explanations live in one Column guide dialog beside the Columns menu, not in per-header popovers. A table's action column sits beside the item, so Top Picks keeps List and hide in view while price and reason scroll. Select Sell table in the living styleguide's Data state control for the production pattern |
 | Sparklines | `Sparkline.svelte` draws recent medians in ink, a dotted `--faint` rule at the 90-day median, and an endpoint dot coloured by the move against that median. The baseline shares the line's scale, so its distance from the line is honest |
+| Meters | `Meter.svelte` shows a share of a whole: a short label, the value in words ("9 of 14"), and an `--ink-bar` fill on one square `--panel-2` track. The words carry the value; a share with nothing to judge yet keeps an empty track and says why ("too recent"). Used for Ledger listing outcomes and Baro's ducats from spares. Select Meters in the living styleguide's Data state control |
+| Range bars | A spread drawn on a shared scale: a `--muted` hairline from minimum to maximum over a dotted `--faint` track, and a 2px ink tick at the median. Every row in the column uses the same scale (Rivens' DE weekly band: 1p to 10,000p, logarithmic), so rows compare down the column. The values stay as text beside the bar, which is decorative to assistive technology |
 | Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide |
 | Dialogs and popovers | Stay within the viewport; provide reachable dismissal and actions, visible focus, and appropriate keyboard behavior |
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
@@ -673,6 +677,21 @@ panels; endpoint dates orient the chart without crowding it. Zero has no filled 
 value. Loading, unavailable, empty, and stale states never invent observations.
 Select Community usage in the living reference’s Data state control for the
 production chart with fictional daily counts.
+
+## Ledger weekly chart
+
+The Ledger charts plat from sales per local week, Monday to Sunday, for up to
+12 weeks. It follows the community chart's construction with three
+differences. Bars are `--ink-bar`, because this is the user's own record
+rather than a public count. The running week is a dimmed `--muted` bar
+labelled "this week so far", so a partial week does not read as a drop. A
+dotted `--faint` rule marks the median finished week, as Sparkline's 90-day
+median does. Weeks before the first recorded trade are not drawn: the ledger
+was not running then, so they are unknown rather than empty. A "Show as table"
+disclosure holds the exact values. Beside it, top sellers are ranked bars on
+the largest seller's scale, with everything past the eighth folded into an
+Other row. Below 760px the two panels stack. Select `sample=long-history` in
+the desktop preview and open Ledger to see the production chart.
 
 ## Trade presence
 

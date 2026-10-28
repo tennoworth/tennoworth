@@ -18,6 +18,7 @@
   import { plat } from '../../ui/format';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import Glyph from '../../ui/Glyph.svelte';
+  import Meter from '../../ui/Meter.svelte';
 
   let {
     market,
@@ -134,16 +135,21 @@
   {/if}
 
   {#if basket.needed > 0}
+    {@const scrapKnown = owned && !quantitiesUnavailable && !scrapLoading && !scrapError}
+    {#if scrapKnown}
+      <div class="budget">
+        <Meter
+          label={unavailableItems ? 'Ducats from known spares' : 'Ducats from your spares'}
+          value={scrapPotential}
+          max={basket.needed}
+          text={`${scrapPotential.toLocaleString()} of ${basket.needed.toLocaleString()}`}
+        />
+      </div>
+    {/if}
     <p class="gap">
-      The <strong>{basket.count}</strong>
-      {basket.count === 1 ? 'item' : 'items'} worth buying cost
-      <strong>{basket.needed.toLocaleString()}</strong> ducats and resell for about
-      <strong>{plat(basket.resale)}p</strong> at 90-day medians.
-      {#if owned && !quantitiesUnavailable && !scrapLoading && !scrapError}
-        Scrapping {unavailableItems ? 'the prime parts with known spare quantities' : 'every spare prime part you hold'} would yield
-        <strong>{scrapPotential.toLocaleString()}</strong> ducats - enough for
-        <strong>{basket.coveredByScrapping}</strong> of them.
-      {/if}
+      <strong>{basket.needed.toLocaleString()}</strong> ducats buys the <strong>{basket.count}</strong>
+      worth-buying {basket.count === 1 ? 'item' : 'items'}, about <strong>{plat(basket.resale)}p</strong> resale at 90-day medians.
+      {#if scrapKnown}Your spares cover <strong>{basket.coveredByScrapping}</strong> of {basket.count === 1 ? 'it' : 'them'}.{/if}
     </p>
     {#if owned}
       <p class="sub">
@@ -252,6 +258,9 @@
   }
   .gap strong {
     color: var(--fg);
+  }
+  .budget {
+    max-width: 32rem;
   }
   .short {
     color: var(--warn);

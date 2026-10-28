@@ -883,3 +883,30 @@ for (const sample of ['sample', 'first-run', 'sample=loading']) {
     }
   });
 }
+
+test('Baro shows what spares cover as a meter, keeping the balance caveat', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await page.locator('.sidebar').getByRole('button', { name: /^Baro/ }).click();
+  const meter = page.getByRole('meter', { name: 'Ducats from your spares' });
+  await expect(meter).toHaveAttribute('aria-valuetext', '60 of 750');
+  await expect(meter).toHaveAttribute('aria-valuemax', '750');
+  await expect(page.getByText('Your spares cover 0 of them.', { exact: false })).toBeVisible();
+  await expect(page.getByText("We can't see your ducat balance", { exact: false })).toBeVisible();
+});
+
+test('riven bands draw the median inside their min-max range on one shared scale', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
+  const bands = page.locator('.band');
+  await expect(bands.first()).toContainText('2–2700p');
+  for (const band of await bands.all()) {
+    const span = (await band.locator('.range .span').boundingBox())!;
+    const mid = (await band.locator('.range .mid').boundingBox())!;
+    const centre = mid.x + mid.width / 2;
+    expect(centre).toBeGreaterThanOrEqual(span.x - 1);
+    expect(centre).toBeLessThanOrEqual(span.x + span.width + 1);
+  }
+  // Medians of 140p and 100p: the higher one sits further right on the shared scale.
+  const mids = await bands.locator('.range .mid').evaluateAll(els => els.map(el => el.getBoundingClientRect().x));
+  expect(mids[0]).toBeGreaterThan(mids[1]);
+});

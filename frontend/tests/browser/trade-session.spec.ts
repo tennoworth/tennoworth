@@ -106,7 +106,7 @@ test('a smaller safe quantity blocks sending and retains the entered price', asy
 
 test('bulk review separates unit asks from existing and proposed lot totals', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=session');
-  await page.getByRole('button', { name: /^Plat per Trade/ }).click();
+  await page.getByRole('button', { name: /^Max Value/ }).click();
   await page.getByRole('button', { name: 'Review batch', exact: true }).click();
   const dialog = page.getByRole('dialog');
   const arcane = dialog.locator('tbody tr').filter({ hasText: 'Arcane Energize' });

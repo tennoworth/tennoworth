@@ -6,10 +6,11 @@
 import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
 import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeRow } from '../../contracts/desktop';
 
-  import { totals, since, soldByItem, describeItems, outcomeRows, outcomeHeadline } from '../../domain/ledger';
+  import { totals, since, soldByItem, describeItems, outcomeRows, outcomeHeadline, topSellers, weeklySales, medianWeek } from '../../domain/ledger';
   import { humanError } from '../../contracts/errors';
   import Toast from '../../ui/Toast.svelte';
   import Pager from '../../ui/Pager.svelte';
+  import Meter from '../../ui/Meter.svelte';
   import { pageWindow } from '../../ui/paging';
   import { plat, shortStamp } from '../../ui/format';
   import { createToastQueue } from '../../ui/toast-queue.svelte';
@@ -124,7 +125,14 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   const nowSecs = () => Math.floor(Date.now() / 1000);
   let all = $derived(totals(trades));
   let week = $derived(totals(since(trades, 7, nowSecs())));
-  let byItem = $derived(soldByItem(trades).slice(0, 10));
+  let weeks = $derived(weeklySales(trades, 12, Date.now()));
+  let weekMedian = $derived(medianWeek(weeks));
+  let weekMax = $derived(Math.max(1, ...weeks.map((w) => w.plat)));
+  let sellers = $derived(topSellers(soldByItem(trades), 8));
+  let sellerMax = $derived(Math.max(1, sellers.top[0]?.plat ?? 0));
+  const weekLabel = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const weekTitle = (w: (typeof weeks)[number]) =>
+    `Week of ${weekLabel(w.start)}${w.partial ? ' (so far)' : ''}: ${plat(w.plat)}p from ${w.sales} sale${w.sales === 1 ? '' : 's'}`;
   let page = $state(0);
   let historyEl = $state<HTMLElement>();
   let win = $derived(pageWindow(trades.length, page));
@@ -182,33 +190,82 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   {/if}
 
 
+  <!-- Answers "is selling working?" without opening anything. Bars start at
+       zero on one scale; the running week is dimmed so a partial week does
+       not read as a drop. The table view carries the exact values. -->
+  {#if !loadError && trades.length}
+    <div class="dash">
+      <section class="wrap tw" aria-labelledby="ledger-weeks-title">
+        <div class="rail"><h3 id="ledger-weeks-title">Realised plat by week</h3><span class="exp">{weeks.length === 1 ? 'this week' : `last ${weeks.length} weeks`} · sales only</span></div>
+        <div class="dash-body">
+          <div class="weeks" role="img" aria-label="Plat from sales in each of the last {weeks.length} weeks. Exact values are in the table view below.">
+            {#if weekMedian !== null && weekMedian > 0}<div class="median" style:bottom="{(weekMedian / weekMax) * 100}%"></div>{/if}
+            {#each weeks as w (w.start)}
+              <div class="slot" title={weekTitle(w)}><div class="wbar" class:partial={w.partial} style:height="{(w.plat / weekMax) * 100}%"></div></div>
+            {/each}
+          </div>
+          <div class="axis" aria-hidden="true">{#if weeks.length > 1}<span>{weekLabel(weeks[0]!.start)}</span>{/if}<span class="now">this week so far</span></div>
+          {#if weekMedian !== null && weekMedian > 0}<p class="caption">Dotted line: the median finished week, {plat(weekMedian)}p.</p>{/if}
+          <details class="table-view">
+            <summary>Show as table</summary>
+            <div class="scroll">
+              <table class="tw week-table">
+                <thead><tr><th class="l" scope="col">Week of</th><th class="r" scope="col">Realised</th><th class="r" scope="col">Sales</th></tr></thead>
+                <tbody>
+                  {#each weeks as w (w.start)}
+                    <tr><td class="l">{weekLabel(w.start)}{w.partial ? ' (so far)' : ''}</td><td class="mono r">{plat(w.plat)}p</td><td class="mono r">{w.sales}</td></tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </section>
+      <section class="wrap tw" aria-labelledby="ledger-sellers-title">
+        <div class="rail"><h3 id="ledger-sellers-title">Top sellers</h3><span class="exp">realised plat · multi-item sales split by quantity</span></div>
+        {#if sellers.top.length}
+          <ol class="sellers">
+            {#each sellers.top as r (r.name)}
+              <li>
+                <span class="sname">{r.name}</span>
+                <span class="sbar" aria-hidden="true"><span style:width="{(r.plat / sellerMax) * 100}%"></span></span>
+                <span class="mono sval">{plat(r.plat)}p</span>
+                <span class="mono muted sqty">×{r.qty}</span>
+              </li>
+            {/each}
+            {#if sellers.other}
+              <li class="other">
+                <span class="sname">Other · {sellers.other.items} {sellers.other.items === 1 ? 'item' : 'items'}</span>
+                <span class="sbar" aria-hidden="true"><span style:width="{Math.min(100, (sellers.other.plat / sellerMax) * 100)}%"></span></span>
+                <span class="mono sval">{plat(sellers.other.plat)}p</span>
+                <span class="sqty"></span>
+              </li>
+            {/if}
+          </ol>
+        {:else}
+          <p class="dash-body caption">No sales recorded yet.</p>
+        {/if}
+      </section>
+    </div>
+  {/if}
+
   <section class="wrap tw" aria-labelledby="ledger-history-title">
     <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}{#if trades.length}{` · ${all.sales} sold · ${all.purchases} bought`}{/if}</span></div>
-  <!-- Closed by default and never announced: it answers "did listing through
-       TennoWorth work?" for whoever opens it, and is silent otherwise. -->
+  <!-- Open, as meters: it answers "did listing through TennoWorth work?" at a
+       glance. Never announced; an empty or disabled record stays one line. -->
   {#if outcomes && !loadError}
-    <details class="byitem outcomes" data-testid="listing-outcomes">
+    <details class="byitem outcomes" data-testid="listing-outcomes" open={outcomes.enabled && outcomeTable.length > 0}>
       <summary>Listing outcomes <span class="muted">· {outcomeHeadline(outcomes)}</span></summary>
       {#if outcomes.enabled && outcomeTable.length}
         <p class="muted note">From listings TennoWorth sent on this device in the last {outcomes.window_days} days, and the sales the game logged while TennoWorth was running. Sales are matched by item name, so a rank or refinement is not told apart.</p>
-        <div class="scroll">
-          <table class="tw fixed outcome-table">
-            <colgroup><col style="width:9rem" /><col style="width:6rem" /><col style="width:8rem" /><col style="width:8rem" /><col style="width:8rem" /><col style="width:9rem" /><col style="width:9rem" /></colgroup>
-            <thead><tr><th class="l">Listed from</th><th class="r">Listings</th><th class="r">Copies sold</th><th class="r">Sold in a day</th><th class="r">Sold in a week</th><th class="r">Time to first sale</th><th class="r">Price vs listed</th></tr></thead>
-            <tbody>
-              {#each outcomeTable as row (row.label)}
-                <tr>
-                  <td class="l">{row.label}</td>
-                  <td class="mono r">{row.listings}</td>
-                  <td class="mono r">{row.sold}</td>
-                  <td class="mono r">{row.day}</td>
-                  <td class="mono r">{row.week}</td>
-                  <td class="mono r">{row.wait}</td>
-                  <td class="mono r" title={row.priceTitle}>{row.price}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+        <div class="outcome-groups">
+          {#each outcomeTable as row (row.label)}
+            <div class="og">
+              <h4>{row.label} <span class="muted">· {row.listings} {row.listings === '1' ? 'listing' : 'listings'}</span></h4>
+              {#each row.meters as m (m.label)}<Meter label={m.label} value={m.value} max={m.max} text={m.text} />{/each}
+              <p class="facts"><span>First sale <b class="mono">{row.wait}</b></span><span title={row.priceTitle}>Price vs listed <b class="mono">{row.price}</b></span></p>
+            </div>
+          {/each}
         </div>
       {/if}
       <div class="setting-line">
@@ -222,17 +279,6 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   {:else if trades.length === 0}
     <div class="ui-notice">No trades recorded yet. Complete a trade in-game with TennoWorth running and it appears here.</div>
   {:else}
-    {#if byItem.length}
-      <details class="byitem">
-        <summary>Top sellers by realised plat <span class="muted">· multi-item sales split by quantity</span></summary>
-        <ul>
-          {#each byItem as r (r.name)}
-            <li><span class="name">{r.name}</span><span class="mono">×{r.qty} · {r.plat}p · {r.trades} sale{r.trades === 1 ? '' : 's'}</span></li>
-          {/each}
-        </ul>
-      </details>
-    {/if}
-
     <div class="scroll" bind:this={historyEl}>
       <table class="tw fixed trade-history">
         <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:17rem" /><col style="width:7rem" /><col style="width:11rem" /></colgroup>
@@ -267,15 +313,41 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   .byitem { padding: var(--s3) var(--inset); }
   code { font-family: var(--font-mono); font-size: var(--text-caption); }
   .byitem summary { cursor: pointer; font-size: var(--text-control); }
-  .byitem ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-control); }
-  .byitem li { display: flex; justify-content: space-between; gap: var(--s3); }
   /* minmax(0, …): the wide table scrolls in its own region instead of widening
      the column, which clipped the note and the toggle in narrow windows. */
   .outcomes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
   .outcomes .note { margin: var(--s2) 0 0; font-size: var(--text-control); max-width: 70ch; }
   .outcomes .setting-line { border-block-end: 0; }
-  table.outcome-table { min-width: 57rem; }
-  table { min-width: 70rem; }
+  table.trade-history { min-width: 70rem; }
+  .outcome-groups { margin-top: var(--s2); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--s3) var(--s5); }
+  .og { display: grid; gap: var(--s2); align-content: start; min-width: 0; }
+  .og h4 { margin: 0; font-size: var(--text-control); font-weight: 600; color: var(--fg); }
+  .og .facts { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); margin: 0; font-size: var(--text-caption); color: var(--muted); }
+  .og .facts b { color: var(--fg); font-weight: 600; }
+  .dash { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s4); align-items: start; }
+  @media (max-width: 47.5rem) { .dash { grid-template-columns: minmax(0, 1fr); } }
+  .dash > section { margin: 0; }
+  .dash-body { padding: var(--s3) var(--inset); display: grid; gap: var(--s2); }
+  .weeks { position: relative; height: 9rem; display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--border); }
+  .weeks .slot { flex: 1; min-width: 0; display: flex; align-items: end; }
+  .weeks .wbar { width: 100%; background: var(--ink-bar); }
+  .weeks .wbar.partial { background: var(--muted); opacity: 0.55; }
+  /* Same dotted --faint rule as Sparkline's 90-day median. */
+  .weeks .median { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dotted var(--faint); pointer-events: none; z-index: 1; }
+  .axis .now { margin-left: auto; }
+  .axis { display: flex; justify-content: space-between; gap: var(--s2); font: var(--text-caption)/1rem var(--font-mono); color: var(--muted); }
+  .caption { margin: 0; font-size: var(--text-caption); color: var(--muted); }
+  .table-view summary { cursor: pointer; font-size: var(--text-control); }
+  .week-table { margin-top: var(--s2); }
+  .sellers { list-style: none; margin: 0; padding: var(--s3) var(--inset); display: grid; gap: 6px; font-size: var(--text-control); }
+  .sellers li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(3rem, 6rem) auto 2.5rem; align-items: center; gap: var(--s2); }
+  .sellers .sname { min-width: 0; overflow-wrap: anywhere; color: var(--fg); }
+  .sellers .sbar { height: 8px; background: var(--panel-2); }
+  .sellers .sbar > span { display: block; height: 100%; background: var(--ink-bar); }
+  .sellers .other .sname { color: var(--muted); }
+  .sellers .other .sbar > span { background: var(--muted); }
+  .sellers .sval { text-align: right; color: var(--fg); }
+  .sellers .sqty { text-align: right; }
   .r { text-align: right; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .kind { font-size: var(--text-caption); padding: 1px 7px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--muted); }
@@ -286,7 +358,4 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   .muted { color: var(--muted); font-family: var(--font-body); }
   .empty { padding: 10px 0; }
   .scroll { overflow: auto; }
-  @media (max-width: 35rem) {
-    .byitem li { align-items: flex-start; flex-direction: column; }
-  }
 </style>

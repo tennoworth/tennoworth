@@ -170,6 +170,14 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
             || price > maximum
         {
             Some("No credible price within the listing limits.")
+        } else if candidate.hold
+            && matches!(request.mode, SessionMode::Fast | SessionMode::PerTrade)
+        {
+            // Sell advice says this price sits near its 90-day low. The two
+            // modes that pick "best sells now" leave it out, as Top Picks
+            // does; Clear and Max keep it at the reduced weight below,
+            // because emptying the inventory or the plat total accepts that.
+            Some("Near its 90-day low, so this mode waits for a recovery. Clear Inventory and Max Value can still include it.")
         } else if matches!(request.mode, SessionMode::Fast | SessionMode::Clear)
             && volume < LIQUID_VOL
         {
@@ -527,6 +535,29 @@ mod tests {
         assert!(chosen.rows[0].reason.contains("Hold advice"));
         held.sellable = 0.0;
         assert!(plan(vec![held], SessionMode::Max, 8.0, None).rows.is_empty());
+    }
+    #[test]
+    fn best_sells_now_modes_leave_held_items_for_later() {
+        let (_, inventory) = mode_inventory();
+        let mut held = inventory[1].clone();
+        held.hold = true;
+        for mode in [SessionMode::Fast, SessionMode::PerTrade] {
+            let chosen = plan(vec![held.clone()], mode, 8.0, None);
+            assert!(chosen.rows.is_empty(), "{mode:?} lists a held item");
+            let says_why = chosen
+                .excluded
+                .iter()
+                .any(|e| e.reason.contains("90-day low"));
+            assert!(says_why, "{mode:?} does not say why");
+        }
+        for mode in [SessionMode::Clear, SessionMode::Max] {
+            let chosen = plan(vec![held.clone()], mode, 8.0, None);
+            let dropped = chosen
+                .excluded
+                .iter()
+                .any(|e| e.reason.contains("90-day low"));
+            assert!(!dropped, "{mode:?} drops a held item");
+        }
     }
     #[test]
     fn a_target_stops_selection_allows_a_bundle_overshoot_and_reports_shortfall() {

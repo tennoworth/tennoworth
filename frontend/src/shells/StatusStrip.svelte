@@ -141,6 +141,7 @@ import type { PresenceController } from '../features/presence/presence.svelte';
           >{inventory.pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
             <div data-shell id="refresh-pop" class="refresh-pop">
+              {#if inventory.inventoryName}<p data-shell class="rp-name">{inventory.inventoryName}</p>{/if}
               <p data-shell class="rp-lede">Scan the running game - no file needed.</p>
               <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={inventory.pullingInventory}>
                 {inventory.pullingInventory ? 'Scanning game…' : 'Scan game'}

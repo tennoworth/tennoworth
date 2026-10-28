@@ -139,11 +139,13 @@ describe('LedgerPanel listing outcomes', () => {
     return invoke;
   }
 
-  it('summarises listings in a closed disclosure, omitting a group with none', async () => {
+  it('shows listing outcomes open, as meters, omitting a group with none', async () => {
     installOutcomes(sample);
     render(LedgerPanel, { props: {} });
     const block = await screen.findByTestId('listing-outcomes');
-    expect((block as HTMLDetailsElement).open).toBe(false);
+    expect((block as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByRole('meter', { name: 'Copies sold' }).getAttribute('aria-valuetext')).toBe('6 of 10');
+    expect(screen.getByRole('meter', { name: 'Sold in a week' }).getAttribute('aria-valuetext')).toBe('3 of 3');
     expect(block.textContent).toContain('4 listings in 30 days · 3 of 3 sold within a week');
     expect(screen.getByText('Trade Session')).toBeTruthy();
     expect(screen.queryByText('Other listings')).toBeNull();

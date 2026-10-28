@@ -190,6 +190,8 @@ export interface PickCandidate {
   sellable: number;
   patience: boolean;
   sell_score: number;
+  /** A "hold" row sells near its 90-day low; a pick is "sell this now". */
+  timing?: TimingState;
 }
 
 export interface SelectPicksOptions {
@@ -207,6 +209,6 @@ export function selectPicks<T extends PickCandidate>(
   { cap = MAX_PICKS, minScore = MIN_PICK_SCORE }: SelectPicksOptions = {}
 ): T[] {
   return rows
-    .filter((r) => r.sellable > 0 && !r.patience && r.sell_score >= minScore)
+    .filter((r) => r.sellable > 0 && !r.patience && r.timing !== 'hold' && r.sell_score >= minScore)
     .slice(0, cap);
 }
