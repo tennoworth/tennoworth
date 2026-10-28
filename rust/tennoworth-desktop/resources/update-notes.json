@@ -1,5 +1,5 @@
 {
-  "version": "0.8.110",
+  "version": "0.8.111",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1486,6 +1486,67 @@
           "kind": "improved",
           "title": "Start faster with a large inventory",
           "body": "The app is ready about twice as fast after launch and uses less memory, because it no longer copies the whole price list for every calculation.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.111",
+      "date": "2026-10-28",
+      "changes": [
+        {
+          "id": "damaged-sign-in-file",
+          "kind": "fixed",
+          "title": "Keep running when the saved sign-in is damaged",
+          "body": "A corrupted or truncated sign-in file used to close the app. The app now reports the file as damaged and keeps running, and signing in again replaces it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "signed-scan-definitions",
+          "kind": "improved",
+          "title": "Accept only signed scan updates",
+          "body": "Inventory-scan definitions downloaded after release are installed only when their signature checks out, so a tampered file cannot change what the scanner reads.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "overlay-least-access",
+          "kind": "improved",
+          "title": "Limit the relic overlay to its own result",
+          "body": "The in-game overlay window can now only read the relic result it shows, and none of the app's other actions.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "keeps-into-protection-plan",
+          "kind": "improved",
+          "title": "Keep amounts from older versions move into your protection plan",
+          "body": "Per-item keep amounts saved by older versions are carried into the protection plan, keeping the larger value when both exist, so nothing you set aside is listed by surprise.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "consistent-plat-format",
+          "kind": "fixed",
+          "title": "Prices read the same everywhere",
+          "body": "The relic planner, Baro and the results table now show platinum with the same separators as the rest of the app, so large prices such as 12,500 are easy to read.",
           "platforms": [
             "windows",
             "linux"
