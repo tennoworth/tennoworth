@@ -182,8 +182,8 @@
   // already carries (timing / delta_90d_pct / clearing_price / volume_48h) -
   // no invented ETAs or destinations. Order of checks mirrors how confident
   // each signal is: a corroborated peak is the strongest "act now" case,
-  // hold is the strongest "don't" case, then whatever 90d trend exists,
-  // then the plain fallback for a flat/illiquid-trend row.
+  // then whatever 90d trend exists, then the plain fallback for a
+  // flat/illiquid-trend row. Hold rows never become picks.
   // The reason says only what the columns beside it cannot: where the price
   // sits against its 90-day baseline. Low ask and Vol 48h are already on the
   // row; the clearing price is named only when the troll-undercut clamp made it
@@ -191,7 +191,6 @@
   function pickReason(p: SellRow) {
     const price = Math.round(p.clearing_price ?? p.low_sell);
     const clamp = price !== Math.round(p.low_sell) ? ` · clears around ${price}p` : '';
-    if (p.timing === 'hold') return 'Near its 90-day low - selling now leaves plat on the table.';
     const d = p.delta_90d_pct;
     if (p.timing === 'peak') return (d != null && d > 0 ? `Near its 90-day high, up ${Math.round(d)}%` : 'Near its 90-day high') + ' - a good moment to list' + clamp;
     if (d != null && d >= 1) return `Up ${Math.round(d)}% vs its 90-day baseline` + clamp;

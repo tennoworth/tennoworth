@@ -216,7 +216,7 @@ describe('bandSignal', () => {
 
 describe('selectPicks', () => {
   // Minimal row shape - real callers pass the full `results` row (name,
-  // slug, timing, clearing_price, …); selectPicks only reads these three.
+  // slug, clearing_price, …); selectPicks only reads these and timing.
   function row(overrides = {}) {
     return { sellable: 5, patience: false, sell_score: 50, ...overrides };
   }
@@ -235,6 +235,11 @@ describe('selectPicks', () => {
   it('excludes patience rows even when the score is high', () => {
     const rows = [row({ sell_score: 500, patience: true })];
     expect(selectPicks(rows)).toEqual([]);
+  });
+
+  it('excludes hold rows, which would sell near their 90-day low', () => {
+    const rows = [row({ sell_score: 500, timing: 'hold' }), row({ sell_score: 400, timing: 'peak', key: 'peak' })];
+    expect(selectPicks(rows).map((r) => r.key)).toEqual(['peak']);
   });
 
   it('excludes rows with nothing sellable', () => {
