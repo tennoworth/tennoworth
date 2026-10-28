@@ -170,7 +170,8 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
             || price > maximum
         {
             Some("No credible price within the listing limits.")
-        } else if candidate.hold && matches!(request.mode, SessionMode::Fast | SessionMode::PerTrade)
+        } else if candidate.hold
+            && matches!(request.mode, SessionMode::Fast | SessionMode::PerTrade)
         {
             // Sell advice says this price sits near its 90-day low. The two
             // modes that pick "best sells now" leave it out, as Top Picks
@@ -543,11 +544,19 @@ mod tests {
         for mode in [SessionMode::Fast, SessionMode::PerTrade] {
             let chosen = plan(vec![held.clone()], mode, 8.0, None);
             assert!(chosen.rows.is_empty(), "{mode:?} lists a held item");
-            assert!(chosen.excluded.iter().any(|e| e.reason.contains("90-day low")), "{mode:?} does not say why");
+            let says_why = chosen
+                .excluded
+                .iter()
+                .any(|e| e.reason.contains("90-day low"));
+            assert!(says_why, "{mode:?} does not say why");
         }
         for mode in [SessionMode::Clear, SessionMode::Max] {
             let chosen = plan(vec![held.clone()], mode, 8.0, None);
-            assert!(!chosen.excluded.iter().any(|e| e.reason.contains("90-day low")), "{mode:?} drops a held item");
+            let dropped = chosen
+                .excluded
+                .iter()
+                .any(|e| e.reason.contains("90-day low"));
+            assert!(!dropped, "{mode:?} drops a held item");
         }
     }
     #[test]
