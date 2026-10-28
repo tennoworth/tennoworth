@@ -884,6 +884,16 @@ for (const sample of ['sample', 'first-run', 'sample=loading']) {
   });
 }
 
+test('Baro shows what spares cover as a meter, keeping the balance caveat', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await page.locator('.sidebar').getByRole('button', { name: /^Baro/ }).click();
+  const meter = page.getByRole('meter', { name: 'Ducats from your spares' });
+  await expect(meter).toHaveAttribute('aria-valuetext', '60 of 750');
+  await expect(meter).toHaveAttribute('aria-valuemax', '750');
+  await expect(page.getByText('Your spares cover 0 of them.', { exact: false })).toBeVisible();
+  await expect(page.getByText("We can't see your ducat balance", { exact: false })).toBeVisible();
+});
+
 test('riven bands draw the median inside their min-max range on one shared scale', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
