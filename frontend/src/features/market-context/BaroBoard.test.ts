@@ -18,7 +18,24 @@ it('does not present failed scrap planning as zero ducat potential', async () =>
   const owned = new Map([['a', { slug: 'a', name: 'A', count: 3 } as OwnedRecord]]);
   render(BaroBoard, { props: { market: null, baro: null, owned }, context: new Map([[DESKTOP_CONTEXT, { ducatPlan, baroValue }]]) });
   expect((await screen.findByRole('alert')).textContent).toContain('Scrap planning unavailable');
-  expect(screen.queryByText(/Scrapping every spare/)).toBeNull();
+  expect(screen.queryByText(/Your spares cover/)).toBeNull();
+  expect(screen.queryByRole('meter')).toBeNull();
+});
+
+it('meters spare ducats against what the worth-buying stock costs', async () => {
+  const baro = {
+    activation: '2026-10-02T00:00:00Z', expiry: '2026-10-04T00:00:00Z', location: 'Relay',
+    inventory: [{ item: 'Primed Flow', slug: 'primed_flow', ducats: 375 }, { item: 'Primed Cleanse', slug: 'primed_cleanse', ducats: 375 }],
+  };
+  const rows = baro.inventory.map((r) => ({ ...r, price: 60, baseline: 46, vol: 40, platPerDucat: 0.16, verdict: 'flip' }));
+  const ducatPlan = vi.fn().mockResolvedValue({ candidates: [{ slug: 'a', name: 'A', spare: 2, ducats: 30, totalDucats: 60 }], plan: { picks: [], heldBack: [], ducats: 0 } });
+  const owned = new Map([['a', { slug: 'a', name: 'A', count: 3 } as OwnedRecord]]);
+  render(BaroBoard, { props: { market: null, baro, owned }, context: new Map([[DESKTOP_CONTEXT, { ducatPlan, baroValue: vi.fn().mockResolvedValue({ ...emptyValue, rows }) }]]) });
+  const meter = await screen.findByRole('meter', { name: 'Ducats from your spares' });
+  expect(meter.getAttribute('aria-valuetext')).toBe('60 of 750');
+  expect(meter.getAttribute('aria-valuemax')).toBe('750');
+  expect(screen.getByText(/Your spares cover/).textContent).toContain('Your spares cover 0 of them.');
+  expect(screen.getByText(/We can't see your ducat balance/)).toBeTruthy();
 });
 
 it('keeps plain rounded prices with a p suffix and missing prices without a suffix', async () => {
