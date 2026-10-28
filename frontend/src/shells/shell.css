@@ -148,7 +148,10 @@
   .statusbar .cell.act.bad[data-shell] { color: var(--bad); }
   .statusbar .cell.act.bad .dot[data-shell] { background: var(--bad); }
   /* A long inventory filename must not push the WFM cell off the right rail. */
-  .statusbar .cell .file[data-shell] { max-width: 16rem; white-space: normal; overflow-wrap: anywhere; }
+  /* Two lines at most: the cell narrows when "· N live" appears, and a name
+     free to wrap to four lines grew the strip 48 to 64px between views. The
+     Refresh menu repeats the full name, so the clamp hides nothing. */
+  .statusbar .cell .file[data-shell] { max-width: 16rem; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .statusbar .cell .ducat[data-shell] { color: var(--ducat); }
   .statusbar .cell a[data-shell] { color: var(--accent); text-decoration: none; }
   .statusbar .cell a + a[data-shell] { margin-left: var(--s2); }
@@ -390,6 +393,7 @@
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow-pop);
   }
+  .refresh-pop .rp-name[data-shell] { margin: 0; font-weight: 600; color: var(--fg); white-space: normal; overflow-wrap: anywhere; }
   .refresh-pop .rp-lede[data-shell] { margin: 0; font-size: var(--text-caption); color: var(--fg); line-height: 1.45; }
   .refresh-pop .rp-primary[data-shell] {
     font-size: var(--text-caption);
