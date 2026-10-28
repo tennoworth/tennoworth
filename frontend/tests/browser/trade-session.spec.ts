@@ -36,10 +36,14 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
       const region = page.getByRole('region', { name: /^Suggested listings/ });
       await region.focus();
-      await region.evaluate(el => el.scrollIntoView({ block: 'start' }));
-      const header = await page.locator('.statusbar').boundingBox();
-      const table = await region.boundingBox();
-      expect(table!.y).toBeGreaterThanOrEqual(header!.y + header!.height - 1);
+      // The status bar's height reaches scroll-padding through a ResizeObserver,
+      // which can fire after this scroll on the first frame of a new size.
+      await expect.poll(async () => {
+        await region.evaluate(el => el.scrollIntoView({ block: 'start' }));
+        const header = await page.locator('.statusbar').boundingBox();
+        const table = await region.boundingBox();
+        return table!.y - (header!.y + header!.height);
+      }).toBeGreaterThanOrEqual(-1);
       await region.evaluate(el => { el.scrollLeft = el.scrollWidth; });
       await page.screenshot({ path: info.outputPath(`session-${theme}-${width}.png`) });
     }
