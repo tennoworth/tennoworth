@@ -31,19 +31,6 @@ export async function loadMarket(): Promise<Market> {
   return cached;
 }
 
-/** Ask the server whether a newer snapshot exists. Resolves to it only when it
- *  is valid and replaces `current` under the shared ordering rule; null means
- *  keep what is shown.
- *  Rejects on a failed request, which also keeps what is shown. */
-export async function revalidateMarket(current: Market): Promise<Market | null> {
-  // `no-cache` revalidates with the server (a 304 is cheap) instead of
-  // trusting the browser's copy for its whole max-age.
-  const next = await fetchMarket(fetch(MARKET_URL, { cache: 'no-cache' }));
-  if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;
-  cached = next;
-  return next;
-}
-
 const PUBLIC_MARKET_URL = '/market-public.json';
 let publicCached: PublicMarket | null = null;
 
@@ -69,7 +56,10 @@ export async function loadHomeMarket(): Promise<Market> {
   return homeCached;
 }
 
-/** As revalidateMarket, for the homepage's copy. */
+/** Ask the server whether a newer homepage snapshot exists. Resolves to it
+ *  only when it is valid and replaces `current` under the shared ordering
+ *  rule; null means keep what is shown.
+ *  Rejects on a failed request, which also keeps what is shown. */
 export async function revalidateHomeMarket(current: Market): Promise<Market | null> {
   const next = await fetchSlimMarket(HOME_MARKET_URL, { cache: 'no-cache' });
   if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;
@@ -84,7 +74,7 @@ export async function loadPublicMarket(): Promise<PublicMarket> {
   return publicCached;
 }
 
-/** As revalidateMarket, for the prerendered pages' copy. */
+/** As revalidateHomeMarket, for the prerendered pages' copy. */
 export async function revalidatePublicMarket(current: PublicMarket): Promise<PublicMarket | null> {
   const next = await fetchPublicMarket({ cache: 'no-cache' });
   if (!replacesMarket(current.updated_at, next.updated_at, Date.now())) return null;

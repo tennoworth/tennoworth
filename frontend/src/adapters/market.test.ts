@@ -299,43 +299,43 @@ describe('startMarketRefreshLoop', () => {
   });
 });
 
-describe('revalidateMarket', () => {
+describe('revalidateHomeMarket', () => {
   const snapshot = (updated_at, extra = {}) => ({ updated_at, items: { a: { avg: 1 } }, ...extra });
   beforeEach(() => {
     globalThis.fetch = vi.fn();
   });
 
   it('adopts only a valid, strictly newer snapshot and asks the server to revalidate', async () => {
-    const { loadMarket, revalidateMarket } = await freshMarket();
+    const { loadHomeMarket, revalidateHomeMarket } = await freshMarket();
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
-    const first = await loadMarket();
+    const first = await loadHomeMarket();
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
-    expect(await revalidateMarket(first)).toBeNull();
+    expect(await revalidateHomeMarket(first)).toBeNull();
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T09:00:00Z') });
-    expect(await revalidateMarket(first)).toBeNull();
+    expect(await revalidateHomeMarket(first)).toBeNull();
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T12:00:00Z', { marker: 'newer' }) });
-    const newer = await revalidateMarket(first);
+    const newer = await revalidateHomeMarket(first);
     expect(newer).toMatchObject({ marker: 'newer' });
-    expect(globalThis.fetch).toHaveBeenLastCalledWith('/market.json', { cache: 'no-cache' });
-    expect(await loadMarket()).toBe(newer);
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('/market-home.json', { cache: 'no-cache' });
+    expect(await loadHomeMarket()).toBe(newer);
   });
 
   it('replaces a shown snapshot stamped implausibly far in the future', async () => {
-    const { revalidateMarket } = await freshMarket();
+    const { revalidateHomeMarket } = await freshMarket();
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
-    expect(await revalidateMarket(snapshot('2099-01-01T00:00:00Z'))).toMatchObject({ updated_at: '2026-10-13T10:00:00Z' });
+    expect(await revalidateHomeMarket(snapshot('2099-01-01T00:00:00Z'))).toMatchObject({ updated_at: '2026-10-13T10:00:00Z' });
   });
 
   it.each([
     ['an HTTP failure', { ok: false, status: 503 }],
     ['a body that breaks the contract', { ok: true, json: async () => ({ updated_at: '2026-10-13T12:00:00Z', items: {} }) }],
   ])('keeps the current snapshot on %s', async (_case, response) => {
-    const { loadMarket, revalidateMarket } = await freshMarket();
+    const { loadHomeMarket, revalidateHomeMarket } = await freshMarket();
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => snapshot('2026-10-13T10:00:00Z') });
-    const first = await loadMarket();
+    const first = await loadHomeMarket();
     globalThis.fetch.mockResolvedValue(response);
-    await expect(revalidateMarket(first)).rejects.toThrow();
-    expect(await loadMarket()).toBe(first);
+    await expect(revalidateHomeMarket(first)).rejects.toThrow();
+    expect(await loadHomeMarket()).toBe(first);
   });
 });
 
