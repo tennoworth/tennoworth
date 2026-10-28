@@ -13,9 +13,8 @@ fn read(relative: &str) -> String {
 }
 
 fn between<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
-    let from = text.find(start).unwrap() + start.len();
-    let to = from + text[from..].find(end).unwrap();
-    &text[from..to]
+    let (_, rest) = text.split_once(start).unwrap();
+    rest.split_once(end).unwrap().0
 }
 
 fn registered() -> BTreeSet<String> {
