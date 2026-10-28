@@ -48,10 +48,12 @@ const PUBLIC_MARKET_URL = '/market-public.json';
 let publicCached: PublicMarket | null = null;
 
 // The slim copies are written by the next scrape after a deploy, and a dev
-// checkout has none: until one exists, read the full snapshot.
+// checkout has none: until one exists, read the full snapshot. The Vite dev
+// server answers a missing file with its index.html and a 200, not a 404.
 async function fetchSlimMarket(url: string, init?: RequestInit): Promise<Market> {
   const response = await fetch(url, init);
-  if (response.status === 404) return fetchMarket(fetch(MARKET_URL, init));
+  const page = response.ok && /text\/html/.test(response.headers?.get('content-type') ?? '');
+  if (response.status === 404 || page) return fetchMarket(fetch(MARKET_URL, init));
   return fetchMarket(Promise.resolve(response));
 }
 const fetchPublicMarket = (init?: RequestInit): Promise<PublicMarket> => fetchSlimMarket(PUBLIC_MARKET_URL, init);

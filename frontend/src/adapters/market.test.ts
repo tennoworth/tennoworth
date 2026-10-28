@@ -108,6 +108,14 @@ describe('loadHomeMarket', () => {
     expect(globalThis.fetch.mock.calls.map(([url]) => url)).toEqual(['/market-home.json', '/market.json']);
   });
 
+  it('reads the full snapshot when a dev server answers the missing copy with its page', async () => {
+    globalThis.fetch = vi.fn(async url => url === '/market-home.json'
+      ? { ok: true, status: 200, headers: new Headers({ 'content-type': 'text/html' }), json: async () => { throw new SyntaxError('<!DOCTYPE'); } }
+      : { ok: true, status: 200, json: async () => snapshot });
+    const { loadHomeMarket } = await freshMarket();
+    await expect(loadHomeMarket()).resolves.toEqual(snapshot);
+  });
+
   it('revalidates the homepage copy with the server', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ...snapshot, updated_at: '2026-10-26T14:00:00Z' }) });
     const { revalidateHomeMarket } = await freshMarket();
