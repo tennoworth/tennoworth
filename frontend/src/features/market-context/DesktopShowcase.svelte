@@ -175,7 +175,7 @@
     <div class="side">
       <table class="tw fixed cmp" aria-label="This site versus the desktop app">
         <colgroup><col /><col style="width:4.25rem" /><col style="width:6.25rem" /></colgroup>
-        <thead><tr><th class="l">&nbsp;</th><th>This site</th><th>Desktop app</th></tr></thead>
+        <thead><tr><th class="l">&nbsp;</th><th>Site</th><th>App</th></tr></thead>
         <tbody>
           {#each compare as c (c.what)}
             <tr><td class="l">{c.what}</td><td>{@render mark(c.site)}</td><td>{@render mark(c.app)}</td></tr>

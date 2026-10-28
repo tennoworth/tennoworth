@@ -622,7 +622,8 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
     {/if}
     {#if visited.has('notifications')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'notifications')}>
-      <NotificationInbox onopen={(target) => filters.setView(target)} onsettings={() => { settingsSection = 'notifications'; filters.setView('settings'); }} />
+      <!-- Calendar reminders carry the 'routines' target from before Calendar was its own view; their button says Open calendar. -->
+      <NotificationInbox onopen={(target) => filters.setView(target === 'routines' ? 'calendar' : target)} onsettings={() => { settingsSection = 'notifications'; filters.setView('settings'); }} />
     </div>
     {/if}
     {#if visited.has('ledger')}

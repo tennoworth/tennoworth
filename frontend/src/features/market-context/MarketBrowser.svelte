@@ -552,7 +552,9 @@
   .results { min-width: 59.25rem; }
   .mini-table { min-width: 27rem; }
   .mini-table.with-ducats { min-width: 31rem; }
-  .baro-stock { min-width: 27rem; }
+  /* Three columns with a wrapping name fit the Baro panel's third of a wide
+     page; at 27rem Avg now sat behind a sideways scroll at 1440px. */
+  .baro-stock { min-width: 20rem; }
   .dispo-table { min-width: 34rem; }
   .dispo-table strong { font-weight: 600; }
   .context { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }

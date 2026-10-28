@@ -233,10 +233,7 @@
           <p class="ui-notice" data-tone="bad" role="alert">{controller.durabilityError}</p>
         {/if}
         <p class="lead">
-          {controller.durabilityError ? 'Batch results need attention.' : controller.pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{controller.okCount} created</span>
-          {#if controller.updatedCount > 0}· <span class="ok">{controller.updatedCount} updated</span>{/if}
-          {#if controller.errCount > 0}· <span class="bad">{controller.errCount} failed</span>{/if}
-          {#if controller.pendingCount > 0}· <span class="warn">{controller.pendingCount} saved for resume</span>{/if}.
+          {controller.durabilityError ? 'Batch results need attention.' : controller.pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{controller.okCount} created</span>{#if controller.updatedCount > 0}{' · '}<span class="ok">{controller.updatedCount} updated</span>{/if}{#if controller.errCount > 0}{' · '}<span class="bad">{controller.errCount} failed</span>{/if}{#if controller.pendingCount > 0}{' · '}<span class="warn">{controller.pendingCount} saved for resume</span>{/if}.
           {#if controller.visibilityDone}
             Listings are <strong>visible</strong> - buyers can see them now.
           {:else}
@@ -266,8 +263,7 @@
         </div>
         {#if controller.visibilityResults.length > 0}
           <p class="lead">
-            Visibility toggled. <span class="ok">{controller.visibleOkCount} now visible</span>
-            {#if controller.visibleErrCount > 0}· <span class="bad">{controller.visibleErrCount} failed</span>{/if}.
+            Visibility toggled. <span class="ok">{controller.visibleOkCount} now visible</span>{#if controller.visibleErrCount > 0}{' · '}<span class="bad">{controller.visibleErrCount} failed</span>{/if}.
           </p>
         {/if}
 

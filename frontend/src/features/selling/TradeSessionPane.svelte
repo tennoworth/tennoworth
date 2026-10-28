@@ -12,6 +12,7 @@
 import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   
   import { humanError } from '../../contracts/errors';
+  import { shortStamp } from '../../ui/format';
   import { MAX_PLAN_ITEMS } from '../../domain/limits';
   import { cachedUnitMarket } from '../../domain/order-prices';
   import type { Market, MarketItemEntry, OwnedRecord, TradeSessionState } from '../../contracts/data';
@@ -231,7 +232,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       {#if error}<button class="btn ghost" onclick={refresh}>Retry</button>{/if}
     </div>
     {#if allowance?.observed_at}
-      <p class="muted">Last scan {new Date(allowance.observed_at * 1000).toLocaleString()} · {allowance.confidence}
+      <p class="muted">Last scan {shortStamp(allowance.observed_at * 1000)} · {allowance.confidence}
         {#if allowance.monitoring} · local trade tracking active{/if}</p>
     {/if}
     {#if allowance?.reason}<p class="muted">{allowance.reason}</p>{/if}
@@ -254,7 +255,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
         onclick={() => !listingBlockReason && sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>Review batch</button>
     </div>
     <p class="muted">Potential assumes sales at the listed unit asks, rounded up to whole platinum. Bids are per-unit comparisons, not instant proceeds.
-      Cached market: {market?.updated_at ? new Date(market.updated_at).toLocaleString() : 'unknown age'}.
+      Cached market: {market?.updated_at ? shortStamp(market.updated_at) : 'unknown age'}.
       </p>
     {#if planning}<p role="status">Updating suggested batch…</p>{/if}
     {#if planningError}<p class="ui-notice" data-tone="bad" role="alert">Could not update the suggested batch: {planningError} Change the intent or budget to retry.</p>{/if}
@@ -268,7 +269,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard focus is needed to scroll the wide table.) -->
       <div class="wrap tw" tabindex="0" role="region" aria-label="Suggested listings; scroll for all columns">
         <table class="tw fixed session-table">
-          <colgroup><col style="width:22%" /><col style="width:7%" /><col style="width:9%" /><col style="width:9%" /><col style="width:12%" /><col style="width:7%" /><col style="width:9%" /><col style="width:25%" /></colgroup>
+          <colgroup><col style="width:21%" /><col style="width:8%" /><col style="width:11%" /><col style="width:10%" /><col style="width:12%" /><col style="width:7%" /><col style="width:9%" /><col style="width:22%" /></colgroup>
           <thead><tr><th class="l">Item</th><th>Quantity</th><th>Units / trade</th><th>Est. trades</th><th>Unit ask</th><th>Unit bid</th><th>Potential</th><th class="l">Why this item</th></tr></thead>
           <tbody>
             {#each display.rows as row (row.key)}
@@ -293,7 +294,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       <p>No eligible batch yet. Scan the game, check protected quantities, or choose another intent.</p>
     {/if}
     {#if plan.excluded.length}
-      <details><summary>{plan.excluded.length} items not included in this mode</summary>
+      <details><summary>{plan.excluded.length} {plan.excluded.length === 1 ? 'item' : 'items'} not included in this mode</summary>
         <ul>{#each plan.excluded as row}<li>{row.name}: {row.reason}</li>{/each}</ul>
       </details>
     {/if}

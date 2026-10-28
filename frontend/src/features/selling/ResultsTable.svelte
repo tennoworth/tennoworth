@@ -520,10 +520,10 @@
       {@const sellText = quantity?.estimated == null ? null : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? null}
       {@const keepText = quantity?.protected == null ? 'keep unknown' : `keep ${quantity.protected}`}
       <!-- Short on the row, so a missing quantity does not wrap it to three lines; the full wording is the label. -->
-      <span class="quantity-note" aria-label="sell {sellText ?? 'unavailable'}, {keepText}" title="Sell {sellText ?? 'unavailable'} · {keepText}">/ sell {sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText}{#if quantity?.protected != null && quantity.protected > 0} · keep {quantity.protected}{/if}</span>
+      <span class="quantity-note" aria-label="sell {sellText ?? 'unavailable'}, {keepText}" title="Sell {sellText ?? 'unavailable'} · {keepText}">/ sell {sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText}{#if quantity?.protected != null && quantity.protected > 0}{` · keep ${quantity.protected}`}{/if}</span>
     {:else if r.sellable < r.owned}
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
-      <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
+      <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0}{' · '}{/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
     {/if}
     {#if listedFor?.(r)}<span class="quantity-note listed"> · listed {listedFor(r)}</span>{/if}
   {:else if col.key === 'delta'}

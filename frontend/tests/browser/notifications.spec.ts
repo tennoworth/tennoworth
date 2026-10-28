@@ -67,6 +67,13 @@ test('failed preference save retains the persisted selection', async ({ page }) 
   await expect(toggle).toBeChecked();
 });
 
+test('a calendar reminder opens the Calendar view its button names', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample=notifications');
+  await page.locator('.sidebar').getByRole('button', { name: /^Notifications/ }).click();
+  await page.getByRole('button', { name: 'Open calendar', exact: true }).click();
+  await expect(page.locator('.sidebar').getByRole('button', { name: 'Calendar', exact: true })).toHaveAttribute('aria-current', 'page');
+});
+
 test('notification row reference uses both themes and preserves its read toggle', async ({ page }, testInfo) => {
   await page.goto('/?styleguide');
   await page.getByRole('combobox', { name: 'Data state' }).selectOption('notifications');

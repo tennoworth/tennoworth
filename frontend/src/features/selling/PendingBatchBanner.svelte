@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { ListingController, WfmAccessController } from './controller.svelte';
 import { interruptedBatch } from '../../domain/listing-plan';
+import { shortStamp } from '../../ui/format';
   let { listing, marketAccess, onorders }: {
     listing: ListingController;
     marketAccess: WfmAccessController;
@@ -28,8 +29,7 @@ let resumeErr = $derived(listing.resumeResults.filter(r => r.status !== 'ok').le
             <span data-shell class="dot fresh" aria-hidden="true"></span>
             <strong data-shell>Resumed.</strong>
             <span data-shell class="muted">
-              <span data-shell class="ok-text">{resumeOk} created</span>
-              {#if resumeErr > 0}· <span data-shell class="bad">{resumeErr} failed</span>{/if}.
+              <span data-shell class="ok-text">{resumeOk} created</span>{#if resumeErr > 0}{' · '}<span data-shell class="bad">{resumeErr} failed</span>{/if}.
               New listings are still hidden - toggle from the orders panel.
             </span>
           </div>
@@ -53,7 +53,7 @@ let resumeErr = $derived(listing.resumeResults.filter(r => r.status !== 'ok').le
         <div data-shell class="row">
           <div data-shell class="src">
             <span data-shell class="dot aging" aria-hidden="true"></span>
-            <strong data-shell>Interrupted batch from {new Date(listing.pendingPlan.started_at).toLocaleString()}</strong>
+            <strong data-shell>Interrupted batch from {shortStamp(listing.pendingPlan.started_at)}</strong>
             {#if listing.durabilityError}<span data-shell class="bad" role="alert">{listing.durabilityError}</span>{/if}
             <span data-shell class="muted">{batch.detail}</span>
             {#if uncertainRemaining > 0}

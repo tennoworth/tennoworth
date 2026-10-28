@@ -11,6 +11,7 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   import Toast from '../../ui/Toast.svelte';
   import Pager from '../../ui/Pager.svelte';
   import { pageWindow } from '../../ui/paging';
+  import { plat, shortStamp } from '../../ui/format';
   import { createToastQueue } from '../../ui/toast-queue.svelte';
 
   interface Props {
@@ -129,18 +130,16 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   let win = $derived(pageWindow(trades.length, page));
   let shown = $derived(trades.slice(win.start, win.end));
 
-  function when(unixSecs: number): string {
-    const d = new Date(unixSecs * 1000);
-    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  }
+  const when = (unixSecs: number) => shortStamp(unixSecs * 1000);
   function kindLabel(k: TradeRow['kind']): string {
     return k === 'sale' ? 'Sold' : k === 'purchase' ? 'Bought' : 'Traded';
   }
   function platCell(t: TradeRow): string {
-    if (t.kind === 'sale') return `+${t.plat}p`;
-    if (t.kind === 'purchase') return `−${t.plat}p`;
+    if (t.kind === 'sale') return `+${plat(t.plat)}p`;
+    if (t.kind === 'purchase') return `−${plat(t.plat)}p`;
     return '-';
   }
+  const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${plat(Math.abs(n))}p`;
 </script>
 
 <section class="ui-stack ledger" data-testid="ledger">
@@ -152,9 +151,9 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
     <div class="vh-end">
       {#if !loadError && trades.length}
         <div class="ui-totals" role="group" aria-label="Ledger summary">
-          <div class="cell" title="{all.sales} sold · {all.purchases} bought"><span class="k">Net, all time</span><span class="v" class:good={all.net > 0} class:bad={all.net < 0}>{all.net > 0 ? '+' : ''}{all.net}p</span></div>
-          <div class="cell" title="{week.sales} sold · {week.purchases} bought"><span class="k">Last 7 days</span><span class="v" class:good={week.net > 0} class:bad={week.net < 0}>{week.net > 0 ? '+' : ''}{week.net}p</span></div>
-          <div class="cell" title="Sales / purchases"><span class="k">Plat in / out</span><span class="v">{all.platIn}p / {all.platOut}p</span></div>
+          <div class="cell" title="{all.sales} sold · {all.purchases} bought"><span class="k">Net, all time</span><span class="v" class:good={all.net > 0} class:bad={all.net < 0}>{signed(all.net)}</span></div>
+          <div class="cell" title="{week.sales} sold · {week.purchases} bought"><span class="k">Last 7 days</span><span class="v" class:good={week.net > 0} class:bad={week.net < 0}>{signed(week.net)}</span></div>
+          <div class="cell" title="Sales / purchases"><span class="k">Plat in / out</span><span class="v">{plat(all.platIn)}p / {plat(all.platOut)}p</span></div>
         </div>
       {/if}
       <button class="btn ghost" onclick={load}>Refresh</button>
@@ -184,7 +183,7 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
 
 
   <section class="wrap tw" aria-labelledby="ledger-history-title">
-    <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}{#if trades.length} · {all.sales} sold · {all.purchases} bought{/if}</span></div>
+    <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}{#if trades.length}{` · ${all.sales} sold · ${all.purchases} bought`}{/if}</span></div>
   <!-- Closed by default and never announced: it answers "did listing through
        TennoWorth work?" for whoever opens it, and is silent otherwise. -->
   {#if outcomes && !loadError}

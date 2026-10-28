@@ -4,7 +4,7 @@ import type { InventoryController } from '../features/inventory/controller.svelt
 import type { ListingController } from '../features/selling/controller.svelte';
 import type { FilterController } from '../features/selling/filters.svelte';
 import { baroPhase } from '../domain/baro-board';
-import { humanWindow } from '../ui/format';
+import { humanWindow, shortStamp } from '../ui/format';
 import PresenceMenu from '../features/presence/PresenceMenu.svelte';
 import type { ActivityLog } from '../ui/activity.svelte';
 import type { PresenceController } from '../features/presence/presence.svelte';
@@ -37,12 +37,6 @@ import type { PresenceController } from '../features/presence/presence.svelte';
     /** Desktop only: what the app is doing, or last finished. */
     activity?: ActivityLog;
   } = $props();
-  // The year only when it is not this one: the cell has to fit on one line.
-  function scanStamp(iso: string): string {
-    const at = new Date(iso);
-    const sameYear = at.getFullYear() === new Date().getFullYear();
-    return at.toLocaleString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), hour: '2-digit', minute: '2-digit' });
-  }
   function headerClearance(node: HTMLElement, inShell: boolean) {
     const root = document.documentElement;
     let enabled = inShell;
@@ -120,7 +114,7 @@ import type { PresenceController } from '../features/presence/presence.svelte';
           <span data-shell>{inventory.source === 'import' ? 'Imported' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Saved scan' : 'Inventory'}</span>
           <b data-shell class="file" title={inventory.inventoryName}>{inventory.inventoryName}</b>
           {#if inventoryTimestamp}
-            <time data-shell datetime={inventoryTimestamp} title={new Date(inventoryTimestamp).toLocaleString()}>{scanStamp(inventoryTimestamp)} · {inventoryStaleness}</time>
+            <time data-shell datetime={inventoryTimestamp} title={new Date(inventoryTimestamp).toLocaleString()}>{shortStamp(inventoryTimestamp)} · {inventoryStaleness}</time>
           {:else}<span data-shell>Timestamp unavailable</span>{/if}
           {#if inventory.refreshFailed}<span data-shell class="note bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell class="note">No tradeable items found; showing saved inventory</span>{/if}
         {:else}
