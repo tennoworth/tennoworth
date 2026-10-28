@@ -47,8 +47,16 @@ fn no_client_reads_the_published_report_prices() {
             text.contains("reports/prices")
                 || (text.contains("/api/reports") && text.contains("/prices"))
         })
-        .map(|path| path.strip_prefix(&repo).unwrap().to_string_lossy().replace('\\', "/"))
+        .map(|path| {
+            path.strip_prefix(&repo)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/")
+        })
         .filter(|path| !DISPLAY_ONLY.contains(&path.as_str()))
         .collect();
-    assert!(readers.is_empty(), "report prices must not feed advice: {readers:?}");
+    assert!(
+        readers.is_empty(),
+        "report prices must not feed advice: {readers:?}"
+    );
 }

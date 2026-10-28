@@ -26,7 +26,11 @@ fn registered() -> BTreeSet<String> {
 }
 
 fn quoted(list: &str) -> BTreeSet<String> {
-    list.split('"').skip(1).step_by(2).map(str::to_string).collect()
+    list.split('"')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect()
 }
 
 fn permission(command: &str) -> String {
@@ -36,12 +40,30 @@ fn permission(command: &str) -> String {
 #[test]
 fn every_registered_command_is_declared_and_granted_to_the_main_window() {
     let handler = registered();
-    assert!(handler.len() > 50, "the handler parse found {}", handler.len());
-    let declared = quoted(between(&read("build.rs"), "const COMMANDS: &[&str] = &[", "];"));
-    assert_eq!(declared, handler, "build.rs COMMANDS must match generate_handler!");
-    let main = quoted(between(&read("permissions/main-window.toml"), "permissions = [", "]"));
+    assert!(
+        handler.len() > 50,
+        "the handler parse found {}",
+        handler.len()
+    );
+    let declared = quoted(between(
+        &read("build.rs"),
+        "const COMMANDS: &[&str] = &[",
+        "];",
+    ));
+    assert_eq!(
+        declared, handler,
+        "build.rs COMMANDS must match generate_handler!"
+    );
+    let main = quoted(between(
+        &read("permissions/main-window.toml"),
+        "permissions = [",
+        "]",
+    ));
     let expected: BTreeSet<_> = handler.iter().map(|c| permission(c)).collect();
-    assert_eq!(main, expected, "permissions/main-window.toml must grant every command");
+    assert_eq!(
+        main, expected,
+        "permissions/main-window.toml must grant every command"
+    );
     let default: serde_json::Value =
         serde_json::from_str(&read("capabilities/default.json")).unwrap();
     assert!(default["permissions"]
@@ -60,7 +82,9 @@ fn the_overlay_can_only_read_its_result() {
         overlay["permissions"],
         serde_json::json!([permission("current_overlay_result")])
     );
-    for file in std::fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities")).unwrap() {
+    for file in
+        std::fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities")).unwrap()
+    {
         let capability: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(file.unwrap().path()).unwrap()).unwrap();
         if capability["identifier"] != "overlay" {

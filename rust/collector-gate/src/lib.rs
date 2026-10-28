@@ -105,7 +105,10 @@ pub async fn serve<S: Send + Sync + 'static>(
     tokio::spawn(async move {
         loop {
             let state = state.clone();
-            if !matches!(tokio::task::spawn_blocking(move || tick(&state)).await, Ok(Ok(()))) {
+            if !matches!(
+                tokio::task::spawn_blocking(move || tick(&state)).await,
+                Ok(Ok(()))
+            ) {
                 eprintln!("{name} maintenance unavailable");
             }
             tokio::time::sleep(MAINTENANCE_EVERY).await;
@@ -149,7 +152,10 @@ mod tests {
         for _ in 0..ALLOWANCE {
             assert!(window.charge(ALLOWANCE));
         }
-        assert!(!window.charge(ALLOWANCE), "the request after the allowance is over quota");
+        assert!(
+            !window.charge(ALLOWANCE),
+            "the request after the allowance is over quota"
+        );
     }
 
     #[test]
@@ -174,7 +180,10 @@ mod tests {
         assert!(!window.charge(ALLOWANCE));
         aged(&mut window, 2);
         for _ in 0..ALLOWANCE {
-            assert!(window.charge(ALLOWANCE), "the new window grants a full allowance again");
+            assert!(
+                window.charge(ALLOWANCE),
+                "the new window grants a full allowance again"
+            );
         }
         assert!(!window.charge(ALLOWANCE));
     }
