@@ -104,9 +104,9 @@
         <table class="tw fixed handoff-table">
           <colgroup>
             <col />
+            <col style="width:3.5rem" />
             <col style="width:3.75rem" />
             <col style="width:4.75rem" />
-            <col style="width:3.5rem" />
             <col style="width:4rem" />
             <col style="width:3.5rem" />
             <col style="width:5.5rem" />
@@ -115,9 +115,9 @@
           </colgroup>
           <thead><tr>
             <th class="l">Item</th>
+            <th>Avg</th>
             <th>Δ 90d</th>
             <th>Trend</th>
-            <th>Avg</th>
             <th>Vol 48h</th>
             <th class="you y1" title="How many you own - read from your inventory by the scan">Own</th>
             <th class="you" title="Priority from price × likely sell-through × bounded DE usage; not expected plat/day">Priority</th>
@@ -131,6 +131,7 @@
                   <a href={wfmItemUrl(r.slug)} target="_blank" rel="noopener noreferrer">{r.name}</a>
                   {#if r.vault === 'vaulted'}<span class="tag vaulted">vaulted</span>{:else if r.vault === 'vaulting-soon'}<span class="tag soon">soon</span>{/if}
                 </td>
+                <td class="price">{plat(r.avg)}{#if plat(r.avg) !== '-'}<span class="unit">p</span>{/if}</td>
                 <td>
                   {#if r.deltaPct != null && Math.abs(r.deltaPct) >= 1}
                     {#if r.deltaPct > 0}<span class="up">▲{r.deltaPct.toFixed(0)}%</span>{:else}<span class="down">▼{Math.abs(r.deltaPct).toFixed(0)}%</span>{/if}
@@ -141,7 +142,6 @@
                     <Sparkline series={r.medians_7d} baseline={r.median90} trend={r.deltaPct} />
                   {:else}<span class="faint">-</span>{/if}
                 </td>
-                <td class="price">{plat(r.avg)}{#if plat(r.avg) !== '-'}<span class="unit">p</span>{/if}</td>
                 <td>{r.vol.toLocaleString()}</td>
                 <td class="you y1">{r.owned}</td>
                 <td class="you score">{r.score.toLocaleString()}</td>

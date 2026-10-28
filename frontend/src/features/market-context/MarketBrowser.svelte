@@ -251,24 +251,26 @@
 <!-- A price cell's value; missing stays "-" without a unit. -->
 {#snippet price(v: number | null | undefined)}{plat(v)}{#if plat(v) !== '-'}<span class="unit">p</span>{/if}{/snippet}
 
-<!-- Mini table: Item · Δ 90d · Trend · Avg · Vol 48h (+ Ducats) - movers and vaulted. -->
+<!-- Mini table: Item · Avg · Δ 90d · Trend · Vol 48h (+ Ducats) - movers and vaulted.
+     The price sits beside the name so a phone, which scrolls this table
+     locally, shows it without scrolling; volume is the part that scrolls away. -->
 {#snippet miniTable(rows: BrowseRow[], sortedKey: 'delta' | 'avg', ducats: boolean, emptyText: string, label: string)}
   {#if rows.length}
     <div class="scroll" use:tableNavigation={label}>
     <table class="tw fixed mini-table" class:with-ducats={ducats}>
       <colgroup>
         <col />
+        <col style="width:3.5rem" />
         <col style="width:3.75rem" />
         <col style="width:4.5rem" />
-        <col style="width:3.5rem" />
         <col style="width:4rem" />
         {#if ducats}<col style="width:4rem" />{/if}
       </colgroup>
       <thead><tr>
         <th class="l">Item</th>
+        <th class:sorted={sortedKey === 'avg'} title="Average of recent WFM sales">Avg</th>
         <th class:sorted={sortedKey === 'delta'} title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
         <th title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
-        <th class:sorted={sortedKey === 'avg'} title="Average of recent WFM sales">Avg</th>
         <th title="Trades completed in the last 48 hours">Vol 48h</th>
         {#if ducats}<th title="Ducat value at Baro Ki’Teer">Ducats</th>{/if}
       </tr></thead>
@@ -276,9 +278,9 @@
         {#each rows as r (r.slug)}
           <tr>
             <td class="l">{@render itemCell(r)}</td>
+            <td class="price">{@render price(r.avg)}</td>
             <td>{@render deltaCell(r)}</td>
             <td>{@render trendCell(r, 56, 16)}</td>
-            <td class="price">{@render price(r.avg)}</td>
             <td>{r.vol.toLocaleString()}</td>
             {#if ducats}<td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>{/if}
           </tr>

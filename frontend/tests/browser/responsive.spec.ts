@@ -171,6 +171,18 @@ test.describe('hosted responsive layout', () => {
     );
     expect(scrollable).toBe(true);
   });
+
+  test('movers show the price on a phone without scrolling the table', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto('/');
+    for (const name of ['Rising prices table', 'Falling prices table', 'Vaulted items table']) {
+      const region = page.getByRole('region', { name: new RegExp(`^${name};`) });
+      await region.scrollIntoViewIfNeeded();
+      const visible = (await region.boundingBox())!;
+      const avg = (await region.getByRole('columnheader', { name: 'Avg', exact: true }).boundingBox())!;
+      expect(avg.x + avg.width, `${name} Avg column`).toBeLessThanOrEqual(visible.x + visible.width);
+    }
+  });
 });
 
 test('open editors and disclosures survive resizing in both directions', async ({ page }) => {
