@@ -84,6 +84,18 @@ describe.skipIf(process.platform === 'win32')('deployment layout transition', ()
     expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
     expect(readFileSync(join(f.app, 'prototype/public/definitions.json'), 'utf8')).toContain('bundled-new');
   });
+  test('installs a deployed script even when the checkout is already current', () => {
+    // An older puller fast-forwards with its own install list, so a script the
+    // new commit adds is left uninstalled until a run that has nothing to pull.
+    const f = fixture(false);
+    write(join(f.remote, 'deploy/pull-collector.sh'), '#!/bin/sh\necho collector\n');
+    git(f.remote, 'add', '-A'); git(f.remote, 'commit', '-m', 'Add a deployed script');
+    expect(f.run().status).toBe(0);
+    rmSync(join(f.root, 'installed/pull-collector.sh'));
+    const result = f.run();
+    expect(result.status).toBe(0); expect(result.stdout).toContain('nothing to pull');
+    expect(readFileSync(join(f.root, 'installed/pull-collector.sh'), 'utf8')).toContain('echo collector');
+  });
   test('does not change a checkout while the scrape service is activating', () => {
     const f = fixture(); const result = f.run(['--migrate-layout'], { FIXTURE_SERVICE_STATE: 'activating' });
     expect(result.status).toBe(75); expect(git(f.app, 'rev-parse', 'HEAD')).toBe(f.initial);
