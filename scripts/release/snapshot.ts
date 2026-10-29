@@ -36,6 +36,31 @@ export function validateSnapshotValues(
   resolverValue: unknown,
   options: { maxAgeHours?: number; nowMs?: number } = {},
 ): SnapshotSummary {
+  const summary = validateMarketValue(marketValue, options);
+  if (!Array.isArray(resolverValue) || resolverValue.length === 0) {
+    throw new Error("wfstat-catalog.json must be a non-empty array");
+  }
+  for (let i = 0; i < resolverValue.length; i++) {
+    const entry = resolverValue[i];
+    if (
+      !Array.isArray(entry) ||
+      entry.length !== 2 ||
+      typeof entry[0] !== "string" ||
+      entry[0].length === 0 ||
+      typeof entry[1] !== "object" ||
+      entry[1] === null ||
+      Array.isArray(entry[1])
+    ) {
+      throw new Error(`wfstat-catalog.json entry ${i} is not a [path, info] pair`);
+    }
+  }
+  return { ...summary, resolverCount: resolverValue.length };
+}
+
+function validateMarketValue(
+  marketValue: unknown,
+  options: { maxAgeHours?: number; nowMs?: number },
+): Omit<SnapshotSummary, "resolverCount"> {
   const market = object(marketValue, "market.json");
   const missing = REQUIRED_MARKET_KEYS.filter((key) => !(key in market));
   if (missing.length > 0) {
@@ -59,24 +84,6 @@ export function validateSnapshotValues(
     );
   }
 
-  if (!Array.isArray(resolverValue) || resolverValue.length === 0) {
-    throw new Error("wfstat-catalog.json must be a non-empty array");
-  }
-  for (let i = 0; i < resolverValue.length; i++) {
-    const entry = resolverValue[i];
-    if (
-      !Array.isArray(entry) ||
-      entry.length !== 2 ||
-      typeof entry[0] !== "string" ||
-      entry[0].length === 0 ||
-      typeof entry[1] !== "object" ||
-      entry[1] === null ||
-      Array.isArray(entry[1])
-    ) {
-      throw new Error(`wfstat-catalog.json entry ${i} is not a [path, info] pair`);
-    }
-  }
-
   if (typeof market.updated_at !== "string") {
     throw new Error("market.json updated_at must be an ISO timestamp");
   }
@@ -96,12 +103,34 @@ export function validateSnapshotValues(
     );
   }
 
-  return {
-    updatedAt: market.updated_at,
-    itemCount,
-    catalogCount,
-    resolverCount: resolverValue.length,
-  };
+  return { updatedAt: market.updated_at, itemCount, catalogCount };
+}
+
+export type LiveMarketDecision =
+  | { install: true; updatedAt: string }
+  | { install: false; reason: string };
+
+/** Whether a live market.json should replace the committed copy for a website
+ *  build. It must pass the release shape checks, without the release age limit,
+ *  and be strictly newer than the committed copy, so a lagging or rolled-back
+ *  box never makes the prerendered pages older. Throws when the live body is
+ *  unusable. */
+export function liveMarketDecision(
+  committedValue: unknown,
+  liveValue: unknown,
+  nowMs = Date.now(),
+): LiveMarketDecision {
+  const live = validateMarketValue(liveValue, { nowMs });
+  let committedAt = Number.NaN;
+  try {
+    committedAt = Date.parse(validateMarketValue(committedValue, { nowMs }).updatedAt);
+  } catch {
+    // An unusable committed copy is replaced by any valid live one.
+  }
+  if (Number.isFinite(committedAt) && Date.parse(live.updatedAt) <= committedAt) {
+    return { install: false, reason: `live snapshot ${live.updatedAt} is not newer than the committed copy` };
+  }
+  return { install: true, updatedAt: live.updatedAt };
 }
 
 function parseJson(path: string): unknown {
@@ -277,4 +306,47 @@ export function cmdSnapshot(argv: string[]) {
   }
   console.log(`copied ${MARKET_SNAPSHOT} and ${WFSTAT_CATALOG} from ${host}`);
   console.log("include both files in the desktop release-preparation commit");
+}
+
+const LIVE_MARKET_URL = "https://tennoworth.app/market.json";
+
+// The website build prerenders prices into HTML. Without this, those prices
+// were only as new as the market.json committed at the last desktop release,
+// days behind what the box serves.
+export async function cmdSnapshotLive(argv: string[]) {
+  let url = LIVE_MARKET_URL;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--url") {
+      url = argv[++i] ?? fail("--url needs a URL");
+    } else {
+      fail(`unknown snapshot-live flag: ${argv[i]}`);
+    }
+  }
+  if (!url.startsWith("https://")) fail(`snapshot-live needs an https URL: ${url}`);
+
+  let body: Buffer;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const declared = Number(response.headers.get("content-length") ?? 0);
+    if (declared > MAX_SNAPSHOT_FILE_BYTES) throw new Error(`body is ${declared} bytes`);
+    body = Buffer.from(await response.arrayBuffer());
+    if (body.length > MAX_SNAPSHOT_FILE_BYTES) throw new Error(`body is ${body.length} bytes`);
+  } catch (error) {
+    fail(`could not fetch ${url}: ${(error as Error).message}`);
+  }
+
+  const marketPath = join(ROOT, MARKET_SNAPSHOT);
+  let decision: LiveMarketDecision;
+  try {
+    decision = liveMarketDecision(parseJson(marketPath), JSON.parse(body.toString("utf8")));
+  } catch (error) {
+    fail(`live snapshot rejected: ${(error as Error).message}`);
+  }
+  if (!decision.install) {
+    console.log(`kept ${MARKET_SNAPSHOT}: ${decision.reason}`);
+    return;
+  }
+  atomicReplace(marketPath, body);
+  console.log(`installed live snapshot ${decision.updatedAt} into ${MARKET_SNAPSHOT}`);
 }

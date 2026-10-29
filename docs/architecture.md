@@ -125,7 +125,9 @@ immutable `desktop-v*` tag during publication), `build-web`,
 `build-usage` and `build-reports` (thin callers of the shared
 `collector-build`), the manual `build-publisher`, `audit`, `ui-smoke`, the weekly
 `republish-rolling` (which re-dispatches `build-web`, `build-usage` and
-`build-reports`), and the on-demand
+`build-reports`), the hourly `refresh-web` (which dispatches `build-web` on
+`main` when the box serves a newer market snapshot than the published pages
+were prerendered from), and the on-demand
 `ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
 `.github/actions/`: `setup-rust`, `setup-windows-ocr`, `stage-tessdata` and
 `publish-rolling-release`, which the workflows above call into. The host-only scrape pipeline has no workflow: it is

@@ -55,6 +55,9 @@ jobs:
               - '.node-version'
               - '.github/workflows/build-web.yml'
               - '.github/actions/publish-rolling-release/**'
+              - 'scripts/release.ts'
+              - 'scripts/release/snapshot.ts'
+              - 'scripts/release/files.ts'
 
       # `build` covers the application inputs to the bundle, not a fail-closed
       # net: an unrelated change - a Rust-only promotion - must not republish the
@@ -126,12 +129,33 @@ jobs:
       # across 95 runs this copy never failed, while adding ~5 minutes and the
       # suite's flake to every deploy. The unit tests stay: they take seconds,
       # and they are the last check on a commit pushed through the admin bypass.
-      - name: Install, test, build
+      - name: Install and test
         working-directory: frontend
         run: |
           bun install --frozen-lockfile
           bun run test
-          bun run build
+
+      # The prerendered pages carry dated prices in their HTML, titles and
+      # previews. The committed market.json only advances at desktop releases,
+      # so build from the snapshot the box is serving whenever it is newer.
+      # After the unit tests, which pin the committed fixture. A failed fetch
+      # or a rejected body keeps the committed copy: a code deploy must not
+      # depend on the box being up.
+      - name: Use the live market snapshot
+        id: snapshot
+        run: |
+          set -euo pipefail
+          bun scripts/release.ts snapshot-live \
+            || echo "::warning title=Live snapshot unavailable::Prerendering from the committed market.json; page prices will be older than the site's live data."
+          stamp=$(jq -r .updated_at frontend/public/market.json)
+          # It lands in GITHUB_OUTPUT and the release body: allow a timestamp only.
+          [[ "$stamp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$ ]] \
+            || { echo "::error title=Bad snapshot stamp::updated_at is not a UTC timestamp"; exit 1; }
+          echo "updated_at=$stamp" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        working-directory: frontend
+        run: bun run build
 
       - name: Package
         run: tar -C frontend/dist -czf dist.tgz .
@@ -142,4 +166,9 @@ jobs:
           tag_name: web-latest
           release_name: web-latest (auto-built)
           files: dist.tgz
-          body: Rolling build of frontend/dist from the latest main. Not a version release - see the desktop-v* tags for the desktop app.
+          # refresh-web.yml reads the Snapshot line to decide whether a newer
+          # scrape needs a rebuild; keep its format.
+          body: |
+            Rolling build of frontend/dist from the latest main. Not a version release - see the desktop-v* tags for the desktop app.
+
+            Snapshot: ${{ steps.snapshot.outputs.updated_at }}

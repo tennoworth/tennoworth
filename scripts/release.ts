@@ -21,6 +21,7 @@
 // Usage:
 //   bun scripts/release.ts snapshot [--host wfm]
 //   bun scripts/release.ts snapshot-check [--release] [--dir <path>]
+//   bun scripts/release.ts snapshot-live [--url <https url>]
 //   bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
 //   bun scripts/release.ts check [--release X.Y.Z]
 //   bun scripts/release.ts notes [--release] [X.Y.Z]
@@ -28,11 +29,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, CARGO_TOML, CHANGELOG, SEMVER, read, write, fail } from "./release/files";
-import { cmdSnapshot, cmdSnapshotCheck, validateSnapshotDirectory, printSnapshotSummary } from "./release/snapshot";
+import { cmdSnapshot, cmdSnapshotCheck, cmdSnapshotLive, validateSnapshotDirectory, printSnapshotSummary } from "./release/snapshot";
 import { allPins, cargoTomlVersion, publishedVersions, compareVersions, nextVersion, releaseVersionProblem } from "./release/versions";
 import { APP_NOTES_SINCE, appNotesCatalog, syncAppNotes, releaseNotesBody, releaseNotesTemplate, validateReleaseNotes, type ReleaseNotesSummary } from "./release/notes";
 
-export { splitSnapshotFrame, validateSnapshotValues, type SnapshotSummary } from "./release/snapshot";
+export { liveMarketDecision, splitSnapshotFrame, validateSnapshotValues, type SnapshotSummary } from "./release/snapshot";
 export { nextVersion, releaseVersionProblem } from "./release/versions";
 export { appNotesCatalog, releaseNotesBody, releaseNotesTemplate, validateReleaseNotes, type ReleaseNotesSummary } from "./release/notes";
 
@@ -279,6 +280,9 @@ if (import.meta.main) {
     case "snapshot-check":
       cmdSnapshotCheck(rest);
       break;
+    case "snapshot-live":
+      await cmdSnapshotLive(rest);
+      break;
     case "prepare":
       cmdPrepare(rest);
       break;
@@ -296,6 +300,7 @@ if (import.meta.main) {
         "usage:\n" +
           "  bun scripts/release.ts snapshot [--host wfm]\n" +
           "  bun scripts/release.ts snapshot-check [--release] [--dir <path>]\n" +
+          "  bun scripts/release.ts snapshot-live [--url <https url>]\n" +
           "  bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>\n" +
           "  bun scripts/release.ts check [--release X.Y.Z]\n" +
           "  bun scripts/release.ts notes [--release] [X.Y.Z]\n" +
