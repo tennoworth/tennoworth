@@ -141,7 +141,12 @@ jobs:
               - 'frontend/index.html'
               - 'scripts/*.sh'
               - 'scripts/deploy-layout.test.ts'
+              - 'scripts/cloudflare-web.test.ts'
               - 'scripts/sync-csp.ts'
+              # Cloudflare's copy of the site headers and upload exclusions,
+              # compared with deploy/Caddyfile by cloudflare-web.test.ts.
+              - 'frontend/public/_headers'
+              - 'frontend/public/.assetsignore'
               # Generated desktop CSP copy, checked by sync-csp.ts --check.
               - 'rust/tennoworth-desktop/tauri.conf.json'
               # deploy-layout.test.ts pins the observation retention on both
@@ -311,6 +316,12 @@ jobs:
       # packages are devDependencies, so --prod would audit an empty graph.
       - name: Audit all frontend dependencies (moderate+)
         run: bun audit --audit-level=moderate
+      # The website deploy tool, installed only by build-web's deploy step.
+      - name: Audit the website deploy tool (moderate+)
+        working-directory: deploy/cloudflare-web
+        run: |
+          bun install --frozen-lockfile
+          bun audit --audit-level=moderate
 
   cargo-audit:
     needs: changes
@@ -506,6 +517,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zstd
       - name: Deployment layout regression tests
         run: bun test scripts/deploy-layout.test.ts
+      - name: Cloudflare site matches the box
+        run: bun test scripts/cloudflare-web.test.ts
       - name: Shell syntax
         # Parse each script with the shell its shebang names: bash -n accepts
         # bashisms that the box's /bin/sh (dash) rejects at run time.

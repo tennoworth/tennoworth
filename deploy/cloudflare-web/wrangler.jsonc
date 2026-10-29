@@ -1,0 +1,22 @@
+// The public website as an assets-only Worker. There is no Worker script, so
+// every request it receives is a static asset or the built 404 page, and the
+// headers in frontend/public/_headers apply to all of them.
+//
+// No `routes` key on purpose: Wrangler rewrites the routes it manages on every
+// deploy. Routing lives in routes.json and is changed through the API, so a
+// deploy only uploads a version and cannot move traffic. Box-served paths
+// (live data, collectors) are routes with no Worker and reach the tunnel.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tennoworth-web",
+  "account_id": "ad4c9a6bdd92d3f441cd041f2912a569",
+  "compatibility_date": "2026-10-29",
+  // No second public copy of the site: canonicals point at tennoworth.app.
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "../../frontend/dist",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}

@@ -94,6 +94,12 @@ const TARGETS = [
     replacement: `$1${full}$2`,
   },
   {
+    // Cloudflare serves the hosted site's static files with these headers.
+    path: 'frontend/public/_headers',
+    re: /^(\s*Content-Security-Policy: ).*$/m,
+    replacement: `$1${full}`,
+  },
+  {
     path: 'frontend/index.html',
     re: META_RE,
     replacement: metaReplacement(metaDirectives),

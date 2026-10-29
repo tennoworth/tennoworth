@@ -1,0 +1,19 @@
+{
+  "zone": "tennoworth.app",
+  "worker": "tennoworth-web",
+  "site": "tennoworth.app/*",
+  "box": [
+    "tennoworth.app/market.json*",
+    "tennoworth.app/market-public.json*",
+    "tennoworth.app/market-home.json*",
+    "tennoworth.app/wfstat-catalog.json*",
+    "tennoworth.app/definitions.json*",
+    "tennoworth.app/history.json*",
+    "tennoworth.app/wfm-policy.json*",
+    "tennoworth.app/announcements.json*",
+    "tennoworth.app/api/*",
+    "tennoworth.app/apt*",
+    "tennoworth.app/rpm*",
+    "tennoworth.app/tennoworth-archive-keyring.asc*"
+  ]
+}
