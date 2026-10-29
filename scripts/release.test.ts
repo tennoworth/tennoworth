@@ -174,6 +174,9 @@ test("the website refresh reads the snapshot line the website build writes", () 
   const refresh = read("refresh-web.yml").jobs.refresh.steps[0].run as string;
   expect(refresh).toContain("sed -n 's/^Snapshot: //p'");
   expect(refresh).toContain("gh workflow run build-web.yml --ref main");
+  // Without a recorded snapshot, dispatching would repeat every hour.
+  expect(refresh.indexOf('if [ -z "$published" ]')).toBeGreaterThan(-1);
+  expect(refresh.indexOf('if [ -z "$published" ]')).toBeLessThan(refresh.indexOf("gh workflow run"));
 });
 
 describe("production snapshot framing", () => {

@@ -38,7 +38,15 @@ jobs:
           fi
           published=$(gh release view web-latest --json body -q .body | sed -n 's/^Snapshot: //p' | tr -d '\r' | head -1)
           echo "live snapshot: $live; published pages: ${published:-unknown}"
-          if [ -n "$published" ] && [ "$(date -ud "$live" +%s)" -le "$(date -ud "$published" +%s)" ]; then
+          # This schedule runs from the default branch, which can be ahead of
+          # main. A build without the line comes from a main whose build-web
+          # does not prerender live data yet; rebuilding it would not help and
+          # would repeat every hour. The push that promotes it writes the line.
+          if [ -z "$published" ]; then
+            echo "::warning title=No snapshot recorded::web-latest has no Snapshot line; main's build-web predates live prerendering."
+            exit 0
+          fi
+          if [ "$(date -ud "$live" +%s)" -le "$(date -ud "$published" +%s)" ]; then
             echo "Pages already carry this snapshot."
             exit 0
           fi
