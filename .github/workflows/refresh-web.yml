@@ -1,0 +1,52 @@
+name: refresh-web
+
+# Republish the website when the box serves a newer market snapshot than the
+# one the live pages were prerendered from. The box scrapes every two hours;
+# build-web.yml records the snapshot it used on the web-latest release. This
+# workflow only decides and dispatches: build-web.yml stays the one publisher,
+# and it builds main whichever branch this schedule runs from.
+
+on:
+  schedule:
+    - cron: '25 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: refresh-web
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Rebuild when the live snapshot is newer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # market.json, not a slimmer copy: it is exactly what build-web
+          # prerenders from, so the two stamps cannot disagree.
+          if ! live=$(curl -fsS --max-time 60 https://tennoworth.app/market.json | jq -er .updated_at); then
+            echo "::warning title=Live snapshot unavailable::Could not read the live market.json; leaving the website as it is."
+            exit 0
+          fi
+          published=$(gh release view web-latest --json body -q .body | sed -n 's/^Snapshot: //p' | tr -d '\r' | head -1)
+          echo "live snapshot: $live; published pages: ${published:-unknown}"
+          if [ -n "$published" ] && [ "$(date -ud "$live" +%s)" -le "$(date -ud "$published" +%s)" ]; then
+            echo "Pages already carry this snapshot."
+            exit 0
+          fi
+          # A queued or running build will pick up the newest snapshot itself.
+          pending=$(gh run list --workflow build-web.yml --limit 10 --json status -q '[.[] | select(.status != "completed")] | length')
+          if [ "$pending" -gt 0 ]; then
+            echo "A build-web run is already pending."
+            exit 0
+          fi
+          gh workflow run build-web.yml --ref main
+          echo "Dispatched build-web on main."

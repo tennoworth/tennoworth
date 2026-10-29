@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   appNotesCatalog,
+  liveMarketDecision,
   nextVersion,
   releaseNotesBody,
   releaseVersionProblem,
@@ -127,6 +128,52 @@ describe("release snapshot validation", () => {
       "updated_at is in the future",
     );
   });
+});
+
+describe("live snapshot for the website build", () => {
+  const at = (updated_at: string) => ({ ...validMarket(), updated_at });
+
+  test("installs only a strictly newer live snapshot", () => {
+    expect(liveMarketDecision(at("2026-09-01T10:00:00Z"), at("2026-09-02T10:00:00Z"), NOW)).toEqual({
+      install: true,
+      updatedAt: "2026-09-02T10:00:00Z",
+    });
+    expect(liveMarketDecision(at("2026-09-02T10:00:00Z"), at("2026-09-02T10:00:00Z"), NOW).install).toBe(false);
+    expect(liveMarketDecision(at("2026-09-02T11:00:00Z"), at("2026-09-02T10:00:00Z"), NOW).install).toBe(false);
+  });
+
+  test("has no age limit, so a stalled scrape still beats an older committed copy", () => {
+    expect(liveMarketDecision(at("2026-08-01T10:00:00Z"), at("2026-08-20T10:00:00Z"), NOW).install).toBe(true);
+  });
+
+  test("replaces an unusable committed copy with any valid live one", () => {
+    expect(liveMarketDecision({}, at("2026-09-02T10:00:00Z"), NOW).install).toBe(true);
+  });
+
+  test("rejects a live body that would not pass the release shape checks", () => {
+    const drifted = validMarket();
+    drifted.item_count = 2;
+    expect(() => liveMarketDecision(at("2026-09-01T10:00:00Z"), drifted, NOW)).toThrow("items contains 1");
+    expect(() => liveMarketDecision(at("2026-09-01T10:00:00Z"), at("2026-09-02T12:11:00Z"), NOW)).toThrow(
+      "in the future",
+    );
+    expect(() => liveMarketDecision(at("2026-09-01T10:00:00Z"), "<html>", NOW)).toThrow("must be an object");
+  });
+});
+
+test("the website refresh reads the snapshot line the website build writes", () => {
+  const read = (name: string) =>
+    Bun.YAML.parse(readFileSync(fileURLToPath(new URL(`../.github/workflows/${name}`, import.meta.url)), "utf8")) as any;
+  const steps = read("build-web.yml").jobs.build.steps as any[];
+  const live = steps.findIndex((step) => step.id === "snapshot");
+  expect(steps[live].run).toContain("bun scripts/release.ts snapshot-live");
+  expect(live).toBeLessThan(steps.findIndex((step) => step.name === "Build"));
+  const body: string = steps.find((step) => step.uses === "./.github/actions/publish-rolling-release").with.body;
+  expect(body.split("\n")).toContain("Snapshot: ${{ steps.snapshot.outputs.updated_at }}");
+
+  const refresh = read("refresh-web.yml").jobs.refresh.steps[0].run as string;
+  expect(refresh).toContain("sed -n 's/^Snapshot: //p'");
+  expect(refresh).toContain("gh workflow run build-web.yml --ref main");
 });
 
 describe("production snapshot framing", () => {

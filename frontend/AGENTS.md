@@ -13,7 +13,9 @@ it is expensive, and each copy is read where UI work starts.
 
 Shared frontend for the desktop app, overlay, and static informational site.
 Hosted builds also prerender physical public pages through `scripts/prerender.ts`;
-the route manifest owns their sitemap and pilot item links. Keep generated
+the route manifest owns their sitemap and pilot item links. In CI the prerender
+reads the box's live `market.json` when it is newer than the committed copy
+(`bun scripts/release.ts snapshot-live`), so local builds show older prices. Keep generated
 examples timestamped and preserve unknown-path 404s.
 
 The private announcement dashboard has its own `admin.html` entry and
