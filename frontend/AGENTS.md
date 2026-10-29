@@ -216,10 +216,12 @@ Follow ../SECURITY.md for trust boundaries.
 
 ## CSP & headers
 
-Production serves through **Caddy on the self-host box**, which applies
-the full header set (HSTS, `frame-ancestors` / X-Frame-Options, the
-CSP) from `deploy/Caddyfile` - kept in sync with the meta copy by
-`scripts/sync-csp.ts`. The `<meta http-equiv="Content-Security-Policy">`
+Production serves the site's static files from **Cloudflare**
+(`deploy/cloudflare-web`), which applies the full header set (HSTS,
+`frame-ancestors` / X-Frame-Options, the CSP) from `public/_headers`; the
+box's **Caddy** serves the live data and collector paths with the same set
+from `deploy/Caddyfile`. `scripts/cloudflare-web.test.ts` keeps the two header
+sets equal, and `scripts/sync-csp.ts` keeps every CSP copy in step. The `<meta http-equiv="Content-Security-Policy">`
 in `index.html` still ships script/connect/style protection as a
 belt-and-suspenders fallback.
 

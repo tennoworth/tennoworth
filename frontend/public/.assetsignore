@@ -1,0 +1,10 @@
+# Box-served paths: routes.json sends them to the tunnel, so a copy uploaded
+# here would only ever be stale.
+/market.json
+/market-public.json
+/market-home.json
+/wfstat-catalog.json
+/definitions.json
+/history.json
+/wfm-policy.json
+/announcements.json

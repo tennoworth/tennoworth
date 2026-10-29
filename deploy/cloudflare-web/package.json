@@ -1,0 +1,15 @@
+{
+  "name": "tennoworth-web-deploy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.0"
+  },
+  "overrides": {
+    "undici": "^7.30.1"
+  }
+}

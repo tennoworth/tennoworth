@@ -117,6 +117,16 @@ its homepage reads `market-home.json`, the snapshot without desktop-only
 fields, and its prerendered pages refresh from `market-public.json`, a slimmer
 copy. Both are written beside `market.json` and fall back to it while absent.
 
+The site's pages and assets are an assets-only Cloudflare Worker
+(`deploy/cloudflare-web`, deployed by `build-web`). Every path the box answers
+itself - the live data files, `wfm-policy.json`, `announcements.json`, the
+`/api/*` collectors and the removed package tombstones - is a Cloudflare route
+with no Worker, so it reaches the box through its tunnel unchanged.
+`deploy/cloudflare-web/routes.json` records that routing; it is changed
+through the Cloudflare API, never by a deploy. The box also keeps pulling the
+`web-latest` bundle, so removing the site route serves the site from the box
+again.
+
 ## CI inventory
 
 `.github/workflows/` holds the release and verification workflows:

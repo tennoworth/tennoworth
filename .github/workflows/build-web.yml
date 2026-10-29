@@ -58,6 +58,7 @@ jobs:
               - 'scripts/release.ts'
               - 'scripts/release/snapshot.ts'
               - 'scripts/release/files.ts'
+              - 'deploy/cloudflare-web/**'
 
       # `build` covers the application inputs to the bundle, not a fail-closed
       # net: an unrelated change - a Rust-only promotion - must not republish the
@@ -113,6 +114,8 @@ jobs:
         (needs.changes.result == 'success' && needs.changes.outputs.build == 'true')
       )
     runs-on: ubuntu-latest
+    # Holds CLOUDFLARE_API_TOKEN and allows only main to deploy with it.
+    environment: web-production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -172,3 +175,16 @@ jobs:
             Rolling build of frontend/dist from the latest main. Not a version release - see the desktop-v* tags for the desktop app.
 
             Snapshot: ${{ steps.snapshot.outputs.updated_at }}
+
+      # The site is served from Cloudflare (deploy/cloudflare-web). This only
+      # uploads a new version of the Worker: routing is managed separately, so
+      # it cannot move traffic. web-latest above stays the box's copy and the
+      # rollback path.
+      - name: Deploy to Cloudflare
+        working-directory: deploy/cloudflare-web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WRANGLER_SEND_METRICS: 'false'
+        run: |
+          bun install --frozen-lockfile
+          bun run deploy

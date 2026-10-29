@@ -154,10 +154,12 @@ release. Inspect any existing release and updater state before retrying the
 failed workflow job. A new candidate needs its own authorization.
 
 For website delivery, retain the currently deployed bundle and its commit and
-checksum before replacing the rolling artifact. Verify the new deployed commit,
-the main page and its assets, and market-data loading. Allow up to 15 minutes
-after publication for the host pull; on timeout report promotion as complete
-and deployment as unverified. Recovery must identify a retained known-good
+checksum before replacing the rolling artifact. `build-web` deploys the site to
+Cloudflare in the same run that publishes `web-latest`; the box pulls
+`web-latest` within 15 minutes and serves it only if the site route is
+removed. Verify the new deployed commit, the main page and its assets, and
+market-data loading. On a failed or timed-out deployment, report promotion as
+complete and deployment as unverified. Recovery must identify a retained known-good
 bundle or a reviewed revert/hotfix through the normal promotion path. Do not
 reset `main`, assume the rolling asset retains history, or restore an old bundle
 without deployment authorization.
