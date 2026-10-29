@@ -119,14 +119,13 @@ fi
 # The scrape units come with the binary they execute, from
 # scripts/deploy-scrape-host.sh; provisioning the box never creates half that
 # set on its own.
-echo "==> App-pull + web-pull timers"
+echo "==> App-pull timer, on-demand web pull"
 install -m 0644 "$DEPLOY/wfm-alert@.service"      /etc/systemd/system/wfm-alert@.service
 install -m 0644 "$DEPLOY/wfm-app-pull.service"    /etc/systemd/system/wfm-app-pull.service
 install -m 0644 "$DEPLOY/wfm-app-pull.timer"      /etc/systemd/system/wfm-app-pull.timer
 install -m 0644 "$DEPLOY/wfm-web-pull.service"    /etc/systemd/system/wfm-web-pull.service
-install -m 0644 "$DEPLOY/wfm-web-pull.timer"      /etc/systemd/system/wfm-web-pull.timer
 systemctl daemon-reload
-systemctl enable --now wfm-app-pull.timer wfm-web-pull.timer
+systemctl enable --now wfm-app-pull.timer
 
 echo "==> Unattended security upgrades"
 apt-get install -y unattended-upgrades
@@ -146,9 +145,11 @@ cat <<'NEXT'
      cloudflared service install <YOUR_TUNNEL_TOKEN>
      systemctl status cloudflared
 
-2. The built site arrives without a build here (keep node/bun off the exposed
-   box): wfm-web-pull.timer, enabled above, fetches the web-latest release
-   asset into $REPO/frontend/dist. Start it once to populate it now:
+2. The site's pages are served from Cloudflare (deploy/cloudflare-web). The box
+   keeps a rollback copy without building anything here (keep node/bun off the
+   exposed box): wfm-web-pull.service fetches the web-latest release asset into
+   $REPO/frontend/dist. It has no timer; populate the copy once now, and again
+   before any rollback:
      systemctl start wfm-web-pull.service
 
 3. Deploy the scrape pipeline from the maintainer checkout

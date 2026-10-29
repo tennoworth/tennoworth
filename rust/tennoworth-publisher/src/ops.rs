@@ -55,7 +55,7 @@ pub const JOBS: &[Job] = &[
     Job {
         id: "web-pull",
         label: "Pull website",
-        description: "Installs the latest website build from main, if it changed.",
+        description: "Refreshes the box's rollback copy of the website from main, if it changed. The live site is served from Cloudflare.",
         unit: "wfm-web-pull.service",
         cooldown: 120,
     },
@@ -96,12 +96,6 @@ const SERVICES: &[Service] = &[
         label: "App checkout pull",
         unit: "wfm-app-pull.service",
         timer: Some("wfm-app-pull.timer"),
-        health_port: None,
-    },
-    Service {
-        label: "Website pull",
-        unit: "wfm-web-pull.service",
-        timer: Some("wfm-web-pull.timer"),
         health_port: None,
     },
     Service {
