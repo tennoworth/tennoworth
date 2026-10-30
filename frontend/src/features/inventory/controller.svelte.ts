@@ -1,5 +1,5 @@
 import { extractRivens, type OwnedRiven } from '../../domain/rivens';
-import { type Catalogs } from '../../domain/resolver';
+import { type Catalogs } from '../../contracts/catalogs';
 import { diffOwned, type SaveSnapshotInput } from '../../domain/snapshot';
 import { replacesMarket } from '../../domain/market';
 import { humanError } from '../../contracts/errors';

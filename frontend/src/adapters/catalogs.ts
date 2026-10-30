@@ -1,5 +1,5 @@
 import { readCached, writeCached, purgeRetiredCaches, type SlimCatalog } from './catalog-cache';
-import type { Catalogs } from '../domain/resolver';
+import type { Catalogs } from '../contracts/catalogs';
 
 const WFSTAT_CATALOG_URL = '/wfstat-catalog.json';
 
