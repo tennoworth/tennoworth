@@ -164,7 +164,7 @@ fn export_failure_keeps_the_previous_file_and_recovers_the_latest_revision() {
     drop(store);
     let store = Store::open(&db, export.clone(), SEED).unwrap();
     assert!(
-        tennoworth_announcements::parse(&fs::read_to_string(export).unwrap())
+        announcement_feed::parse(&fs::read_to_string(export).unwrap())
             .unwrap()
             .messages
             .is_empty()
@@ -416,7 +416,7 @@ fn official_events_publish_correct_and_remove_through_the_public_feed() {
     // An empty note is not published as one.
     assert!(events[0].note.is_none());
     assert_eq!(live.feed_revision, live.exported_revision);
-    let disk = tennoworth_announcements::parse(&fs::read_to_string(&export).unwrap()).unwrap();
+    let disk = announcement_feed::parse(&fs::read_to_string(&export).unwrap()).unwrap();
     assert_eq!(disk.events.unwrap()[0].title, "Devstream 200");
     assert_eq!(live.history[0].operation, "event-publish");
     assert_eq!(live.history[0].event.as_ref().unwrap().kind, "devstream");

@@ -19,12 +19,15 @@
 //! - Nothing is resolved by guessing. An unresolvable `/Lotus/...` path is
 //!   reported, not silently mapped - a wrong price is worse than no price.
 
+pub mod extract;
+
+
 use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;
 
 use crate::ingest::Http;
-use crate::reconcile::Observation;
+use crate::pipeline::reconcile::Observation;
 
 // ---------------------------------------------------------------------------
 // Endpoints

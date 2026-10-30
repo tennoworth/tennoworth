@@ -10,7 +10,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use tennoworth_announcements::{parse, stamp, AnnouncementFeed};
+use announcement_feed::{parse, stamp, AnnouncementFeed};
 
 #[derive(Debug)]
 pub enum Error {

@@ -57,8 +57,8 @@ fn main() -> std::process::ExitCode {
         };
         eprintln!(
             "{}",
-            wfm_scrape::http::metrics()
-                .line(wfm_scrape::http::snapshot_age_s(std::path::Path::new(&published)))
+            wfm_scrape::scrape::http::metrics()
+                .line(wfm_scrape::scrape::http::snapshot_age_s(std::path::Path::new(&published)))
         );
     }
     match result {
@@ -93,7 +93,7 @@ fn extract_flag(args: &[String], flag: &str) -> Option<String> {
 /// offline and instantly. `--now` is accepted for symmetry with `build` but is
 /// inert here - the scrape CSV carries no timestamp.
 fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
-    use wfm_scrape::http::{
+    use wfm_scrape::scrape::http::{
         FixtureScrapeHttp, LiveScrapeHttp, NoopSleeper, RealSleeper, ScrapeHttp, Sleeper,
     };
     use wfm_scrape::scrape::{run_scrape, ScrapeConfig, StatsCacheConfig};
@@ -132,7 +132,7 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
         stats_cache: match (extract_flag(args, "--stats-cache"), extract_flag(args, "--stats-interval")) {
             (Some(path), Some(interval)) => Some(StatsCacheConfig {
                 path: PathBuf::from(path),
-                interval: wfm_scrape::stats_cache::parse_interval(&interval)?,
+                interval: wfm_scrape::scrape::stats_cache::parse_interval(&interval)?,
             }),
             (None, None) => None,
             _ => return Err("--stats-cache and --stats-interval go together".into()),
@@ -189,7 +189,7 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
 /// state: only the days after the last stored one are fetched. See
 /// `history.rs` for the shape and the reasoning.
 fn run_history_cmd(args: &[String]) -> Result<(), String> {
-    use wfm_scrape::history::{read_prior, update_history, DEFAULT_DAYS};
+    use wfm_scrape::pipeline::history::{read_prior, update_history, DEFAULT_DAYS};
 
     let now = extract_flag(args, "--now")
         .map(|s| clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))

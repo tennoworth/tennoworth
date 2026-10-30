@@ -45,7 +45,7 @@ test('live DE availability fails the audit independently of the Rust suite', () 
   const { workflow } = load('audit.yml');
   const live = workflow.jobs['de-endpoints'];
   expect(live.if).toBe("github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'");
-  const command = 'cargo test -p wfm-scrape --test fixture_gates -- --ignored de_endpoints_are_still_alive';
+  const command = 'cargo test -p wfm-scrape --test surfaces_gate -- --ignored de_endpoints_are_still_alive';
   expect(live.steps.some((step: any) => step.run === command)).toBe(true);
   expect(live['continue-on-error']).not.toBe(true);
   expect(workflow.jobs['cargo-test'].steps.some((step: any) => step.run === command)).toBe(false);

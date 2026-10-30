@@ -38,7 +38,7 @@ limits or backoff.
 - Every WFM HTTP attempt goes through this crate's transport, which owns the
   per-request retries (reads three attempts, a short `429` once for a mutation).
   The only retry layered above it is the bulk reader's sweep recovery in
-  `wfm-scrape/src/http.rs` - long, budgeted waits that belong to an unattended
+  `wfm-scrape/src/scrape/http.rs` - long, budgeted waits that belong to an unattended
   sweep and must never reach an interactive caller - and it sends every attempt
   back through the transport. Do not add a third.
 - **Mutation reconciliation is not transport**: it stays in

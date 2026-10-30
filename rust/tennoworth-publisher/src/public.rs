@@ -76,7 +76,7 @@ impl PublicFeed {
     pub async fn check(&self, expected: &str, now: i64) -> PublicFeedCheck {
         let (state, served_updated_at, error) = match self.served().await {
             Err(error) => (PublicFeedState::Unreachable, None, Some(error)),
-            Ok(raw) => match tennoworth_announcements::parse(&raw) {
+            Ok(raw) => match announcement_feed::parse(&raw) {
                 None => (
                     PublicFeedState::Unreachable,
                     None,
@@ -102,8 +102,8 @@ impl PublicFeed {
 
 fn compare(served: &str, expected: &str) -> PublicFeedState {
     match (
-        tennoworth_announcements::stamp(served),
-        tennoworth_announcements::stamp(expected),
+        announcement_feed::stamp(served),
+        announcement_feed::stamp(expected),
     ) {
         (Some(served), Some(expected)) if served == expected => PublicFeedState::Live,
         (Some(served), Some(expected)) if served < expected => PublicFeedState::Behind,

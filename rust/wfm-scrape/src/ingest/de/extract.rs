@@ -1,6 +1,6 @@
 //! Turning DE's manifests and worldState into market.json surfaces.
 //!
-//! [`crate::de`] is transport and parsing; this module is the join. It exists
+//! [`crate::ingest::de`] is transport and parsing; this module is the join. It exists
 //! separately because the join is where the risk lives: DE speaks
 //! `/Lotus/...` uniqueNames and warframe.market speaks slugs, and a silent
 //! mismatch shows a user the wrong price - worse than showing none. Every
@@ -10,8 +10,8 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use crate::de::{de_millis, manifest_rows_for, relay_name};
-use crate::render::CatalogItemMeta;
+use crate::ingest::de::{de_millis, manifest_rows_for, relay_name};
+use crate::pipeline::render::CatalogItemMeta;
 
 // ---------------------------------------------------------------------------
 // Path resolution

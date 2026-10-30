@@ -146,7 +146,7 @@ pub fn parse_day_file(
             // relics.run mirrors WFM's rows, so it takes the scraper's reading
             // of the tri-state: a local copy turned a float rank into the
             // rank-0 tier, mixing maxed-mod prices into the rank-0 series.
-            let mod_rank = crate::stats::parse_mod_rank(r.get("mod_rank"));
+            let mod_rank = crate::scrape::stats::parse_mod_rank(r.get("mod_rank"));
             day.rows.push(StatsDay {
                 median: num("median"),
                 max_price: num("max_price"),

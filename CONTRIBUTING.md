@@ -224,7 +224,7 @@ has no unauthenticated mode. `bun run test:admin` starts both local services and
 exercises draft, publication and withdrawal against real SQLite state. Saved
 local state lives under ignored `target/`; never use production data for it.
 
-Run `cargo test -p tennoworth-announcements -p tennoworth-publisher` from `rust/`
+Run `cargo test -p announcement-feed -p tennoworth-publisher` from `rust/`
 for shared feed, persistence, authentication and HTTP checks. Linux auth tests
 use OpenSSL to generate ephemeral test signing keys; no key fixture is committed.
 Regenerate private API declarations with

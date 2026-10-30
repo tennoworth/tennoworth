@@ -73,7 +73,7 @@ jobs:
               - 'frontend/playwright.admin.config.ts'
               - 'frontend/tests/admin/**'
               - 'rust/tennoworth-publisher/**'
-              - 'rust/tennoworth-announcements/**'
+              - 'rust/announcement-feed/**'
               - 'frontend/knip.jsonc'
               - 'frontend/svelte.config.ts'
               - 'frontend/tsconfig.json'
@@ -430,7 +430,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
       - name: DE endpoints still answer
-        run: cargo test -p wfm-scrape --test fixture_gates -- --ignored de_endpoints_are_still_alive
+        run: cargo test -p wfm-scrape --test surfaces_gate -- --ignored de_endpoints_are_still_alive
 
   # The desktop version is pinned in two places (Cargo.toml and Cargo.lock's
   # own entry). Until this job existed the only thing that checked

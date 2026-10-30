@@ -19,10 +19,10 @@
 #                         Drives both over IPC - the only player adapter.
 #   tennoworth-collectors - the opt-in host collectors (installation counts,
 #                         price reports): two binaries, one shared quota gate.
-#   tennoworth-announcements - pure feed contract shared by readers and publishers.
+#   announcement-feed   - pure feed contract shared by readers and publishers.
 #   tennoworth-publisher - private host-only announcement publication service.
 [workspace]
-members = ["game-acquisition", "wfm-trading", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-collectors", "tennoworth-announcements", "tennoworth-publisher"]
+members = ["game-acquisition", "wfm-trading", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-collectors", "announcement-feed", "tennoworth-publisher"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping
