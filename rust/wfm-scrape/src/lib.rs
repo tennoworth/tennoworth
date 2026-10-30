@@ -1,4 +1,4 @@
-//! The host market pipeline - the only implementation: `scrape` sweeps WFM to CSV and an observation log, `build`
+//! The host market pipeline - the only implementation: `scrape` sweeps WFM to CSV, `build`
 //! renders `market.json` and `wfstat-catalog.json`.
 //!
 //! GROUND RULES:
@@ -17,6 +17,5 @@
 pub mod clock;
 pub mod coerce;
 pub mod ingest;
-pub mod observations;
 pub mod pipeline;
 pub mod scrape;

@@ -180,17 +180,16 @@ pub struct ServiceStatus {
     pub health: Option<Health>,
 }
 
-/// The parts of the daily readiness report the dashboard shows. A field the
+/// The parts of the hourly host-check report the dashboard shows. A field the
 /// report did not carry stays absent rather than reading as zero.
 #[derive(Debug, Serialize, TS)]
-pub struct Readiness {
+pub struct HostCheck {
     pub ready: bool,
     pub checked_at: String,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
     pub csv_rows: Option<i64>,
-    pub newest_sweep_age_seconds: Option<i64>,
-    pub sweep_wall_seconds: Option<i64>,
+    pub snapshot_age_seconds: Option<i64>,
     pub deploy_revision: Option<String>,
     pub checkout_head: Option<String>,
     pub deploy_lag: Option<String>,
@@ -237,7 +236,7 @@ pub struct BoxStatus {
     pub collected_at: String,
     /// Sources the publisher could not read; the rest of the page still loads.
     pub problems: Vec<String>,
-    pub readiness: Option<Readiness>,
+    pub host_check: Option<HostCheck>,
     pub services: Vec<ServiceStatus>,
     pub failed_units: Vec<String>,
     pub alerts: Vec<AlertEntry>,

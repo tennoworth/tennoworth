@@ -400,9 +400,9 @@ directory as the public site. A suggestion only fills the editor; saving,
 review and publication are unchanged.
 
 The dashboard opens on a read-only box status page. The publisher assembles it
-on request from `systemctl show`, the loopback health probes, the readiness
+on request from `systemctl show`, the loopback health probes, the host-check
 report, the alert log and the snapshot directory; a source it cannot read is
-listed as a problem instead of failing the page. The readiness report directory
+listed as a problem instead of failing the page. The host-check report directory
 belongs to group `tennoworth-publisher`; the scraper deploy, which recreates
 that directory, sets it (tmpfiles cannot manage it below the `wfm`-owned
 `/srv/wfm/data`). The same page can start a

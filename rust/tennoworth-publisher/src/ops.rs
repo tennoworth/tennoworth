@@ -7,7 +7,7 @@
 //! line, so the dashboard cannot be made to run anything else.
 
 use crate::contracts::{
-    AlertEntry, BackupStatus, BoxStatus, Health, JobRequest, JobStatus, Readiness, ServiceStatus,
+    AlertEntry, BackupStatus, BoxStatus, Health, HostCheck, JobRequest, JobStatus, ServiceStatus,
     UnitStatus,
 };
 use chrono::{DateTime, NaiveDateTime, SecondsFormat};
@@ -39,10 +39,10 @@ pub const JOBS: &[Job] = &[
         cooldown: 15 * 60,
     },
     Job {
-        id: "readiness",
-        label: "Check readiness",
-        description: "Runs the readiness check again and rewrites its report.",
-        unit: "wfm-observations-check.service",
+        id: "host-check",
+        label: "Check the host",
+        description: "Runs the host check again and rewrites its report.",
+        unit: "tennoworth-host-check.service",
         cooldown: 60,
     },
     Job {
@@ -87,9 +87,9 @@ const SERVICES: &[Service] = &[
         health_port: None,
     },
     Service {
-        label: "Readiness check",
-        unit: "wfm-observations-check.service",
-        timer: Some("wfm-observations-check.timer"),
+        label: "Host check",
+        unit: "tennoworth-host-check.service",
+        timer: Some("tennoworth-host-check.timer"),
         health_port: None,
     },
     Service {
@@ -151,7 +151,7 @@ pub struct Ops {
     pub units: Units,
     /// Holds one directory per job id; created by the deployment, never by us.
     pub jobs_dir: PathBuf,
-    pub readiness_report: PathBuf,
+    pub host_check_report: PathBuf,
     pub alerts_log: PathBuf,
     pub backups_dir: PathBuf,
     pub web_stamp: PathBuf,
@@ -164,7 +164,7 @@ impl Ops {
         Self {
             units: Units::Systemctl("systemctl".into()),
             jobs_dir: "/srv/wfm/jobs".into(),
-            readiness_report: "/srv/wfm/data/observations-check/report.json".into(),
+            host_check_report: "/srv/wfm/data/host-check/report.json".into(),
             alerts_log: "/srv/wfm/alerts.log".into(),
             backups_dir: "/var/lib/tennoworth-publisher-backups".into(),
             web_stamp: "/srv/wfm/web-latest.stamp".into(),
@@ -177,7 +177,7 @@ impl Ops {
         Self {
             units: Units::Simulated,
             jobs_dir: root.join("jobs"),
-            readiness_report: root.join("readiness.json"),
+            host_check_report: root.join("host-check.json"),
             alerts_log: root.join("alerts.log"),
             backups_dir: root.join("backups"),
             web_stamp: root.join("web-latest.stamp"),
@@ -334,20 +334,20 @@ impl Ops {
                 health,
             });
         }
-        let readiness = match fs::read_to_string(&self.readiness_report) {
-            Ok(raw) => match readiness(&raw) {
+        let host_check = match fs::read_to_string(&self.host_check_report) {
+            Ok(raw) => match host_check(&raw) {
                 Some(report) => Some(report),
                 None => {
-                    problems.push("The readiness report is not in the expected format.".into());
+                    problems.push("The host-check report is not in the expected format.".into());
                     None
                 }
             },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                problems.push("The readiness check has not written a report yet.".into());
+                problems.push("The host check has not written a report yet.".into());
                 None
             }
             Err(_) => {
-                problems.push("The readiness report could not be read.".into());
+                problems.push("The host-check report could not be read.".into());
                 None
             }
         };
@@ -406,7 +406,7 @@ impl Ops {
         BoxStatus {
             collected_at: rfc3339(now).unwrap_or_default(),
             problems,
-            readiness,
+            host_check,
             services,
             failed_units,
             alerts,
@@ -567,19 +567,18 @@ fn strings(value: &serde_json::Value, pointer: &str) -> Option<Vec<String>> {
     })
 }
 
-/// Reads the report `deploy/observations-check.sh` writes. The verdict and its
-/// reasons are required; every measurement is optional, because the check
-/// itself writes null where it has no evidence.
-pub fn readiness(raw: &str) -> Option<Readiness> {
+/// Reads the report `deploy/host-check.sh` writes. The verdict and its reasons
+/// are required; every measurement is optional, because the check itself
+/// writes null where it has no evidence.
+pub fn host_check(raw: &str) -> Option<HostCheck> {
     let value: serde_json::Value = serde_json::from_str(raw).ok()?;
-    Some(Readiness {
+    Some(HostCheck {
         ready: value.get("ready")?.as_bool()?,
         checked_at: text(&value, "/checked_at")?,
         errors: strings(&value, "/errors")?,
         warnings: strings(&value, "/warnings")?,
-        csv_rows: int(&value, "/csv/rows"),
-        newest_sweep_age_seconds: int(&value, "/sweeps/newest_age_seconds"),
-        sweep_wall_seconds: int(&value, "/service/wall_seconds"),
+        csv_rows: int(&value, "/sweep/csv_rows"),
+        snapshot_age_seconds: int(&value, "/sweep/snapshot_age_seconds"),
         deploy_revision: text(&value, "/deployment/revision"),
         checkout_head: text(&value, "/deployment/checkout_head"),
         deploy_lag: text(&value, "/deployment/lag"),
@@ -683,33 +682,31 @@ mod tests {
     }
 
     #[test]
-    fn readiness_requires_the_verdict_but_not_every_measurement() {
-        let report = r#"{"ready":false,"checked_at":"2026-10-12T03:30:00Z","errors":["no sweep in 3h"],"warnings":[],"csv":{"rows":null},"deployment":{"lag":"behind","pending_scraper_commits":2}}"#;
-        let parsed = readiness(report).unwrap();
+    fn host_check_requires_the_verdict_but_not_every_measurement() {
+        let report = r#"{"ready":false,"checked_at":"2026-10-12T03:30:00Z","errors":["no sweep in 3h"],"warnings":[],"sweep":{"csv_rows":null},"deployment":{"lag":"behind","pending_scraper_commits":2}}"#;
+        let parsed = host_check(report).unwrap();
         assert!(!parsed.ready);
         assert_eq!(parsed.errors, ["no sweep in 3h"]);
         assert_eq!(parsed.csv_rows, None);
         assert_eq!(parsed.deploy_lag.as_deref(), Some("behind"));
         assert_eq!(parsed.pending_scraper_commits, Some(2));
         assert!(
-            readiness(r#"{"checked_at":"2026-10-12T03:30:00Z","errors":[],"warnings":[]}"#)
+            host_check(r#"{"checked_at":"2026-10-12T03:30:00Z","errors":[],"warnings":[]}"#)
                 .is_none()
         );
-        assert!(readiness("not json").is_none());
+        assert!(host_check("not json").is_none());
     }
 
     /// The report is written by a shell script; parse what the current script
     /// actually emits, not a hand-copied sample of it.
     #[cfg(unix)]
     #[test]
-    fn readiness_parses_the_current_check_script_output() {
+    fn host_check_parses_the_current_check_script_output() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("report.json");
         let status = std::process::Command::new("bash")
-            .arg(root.join("deploy/observations-check.sh"))
-            .args(["--observations"])
-            .arg(dir.path().join("observations"))
+            .arg(root.join("deploy/host-check.sh"))
             .args(["--csv"])
             .arg(dir.path().join("results.csv"))
             .args(["--snapshot"])
@@ -720,13 +717,9 @@ mod tests {
             .arg(dir.path().join("wfm-scrape"))
             .args(["--app"])
             .arg(dir.path().join("app"))
-            .args([
-                "--preservation",
-                "external-backup",
-                "--now",
-                "2026-10-12T03:30:00Z",
-                "--out",
-            ])
+            .args(["--disk-path"])
+            .arg(dir.path())
+            .args(["--now", "2026-10-12T03:30:00Z", "--out"])
             .arg(&out)
             .env(
                 "PATH",
@@ -744,8 +737,8 @@ mod tests {
             String::from_utf8_lossy(&status.stderr)
         );
         let parsed =
-            readiness(&fs::read_to_string(out).unwrap()).expect("current report shape parses");
-        assert!(!parsed.ready, "an empty corpus must not read as ready");
+            host_check(&fs::read_to_string(out).unwrap()).expect("current report shape parses");
+        assert!(!parsed.ready, "a host with no sweep output must not read as healthy");
         assert!(!parsed.errors.is_empty());
         assert_eq!(parsed.checked_at, "2026-10-12T03:30:00Z");
         assert!(parsed.disk_floor_bytes.is_some());

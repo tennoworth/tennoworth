@@ -25,12 +25,6 @@ for release preparation.
   lines and assistant links in a pull request's commit messages and body
   (`attribution-check` in audit.yml). Locally:
   `bun scripts/check-attribution.ts github/develop..HEAD`.
-- `check-lxc-backup.sh` - the workstation-side preservation job for the
-  observation corpus. It copies the newest `vzdump-lxc-<vmid>-*.tar.zst` and its
-  `.log` off the Proxmox node, verifies the copy (`zstd -t`, a `tar --zstd`
-  listing, the newest corpus log read back), records a manifest, rotates older
-  archives beyond `KEEP`, and refuses to record or delete anything when
-  verification fails. Read-only on the node.
 
 ## Maintaining the instruction files
 

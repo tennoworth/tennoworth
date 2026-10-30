@@ -350,12 +350,12 @@ describe('host-direct scrape deploy script', () => {
 // states can be replayed. The point is that the script's own control flow is
 // what the assertions observe, not a copy of it.
 //
-// With `runCheck` the same harness proves the deployed readiness path end to
-// end: a real corpus lives under the remapped box, the deploy stages and
-// installs the real check script and its real unit, and `systemctl start
-// wfm-observations-check.service` runs the unit's own ExecStart with the
-// EnvironmentFile the deploy wrote. HOST_ROOT becomes the production /srv/wfm
-// so the unit's paths and the deploy's reads resolve to the same files.
+// With `runCheck` the same harness proves the deployed host check end to end:
+// sweep output lives under the remapped box, the deploy stages and installs the
+// real check script and its real unit, and `systemctl start
+// tennoworth-host-check.service` runs the unit's own ExecStart. HOST_ROOT
+// becomes the production /srv/wfm so the unit's paths and the deploy's reads
+// resolve to the same files.
 function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, string>; runCheck?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scrape-deploy-')); directories.push(root);
   const bin = join(root, 'bin'); mkdirSync(bin);
@@ -373,54 +373,38 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   writeFileSync(join(live, 'srv/wfm/bin/wfm-scrape'), 'old-live-binary');
   writeFileSync(join(live, 'srv/wfm/run-scrape.sh'), 'old-live-run-scrape');
   mkdirSync(join(live, 'etc/systemd/system'), { recursive: true });
-  // And it still carries the retired on-box archive receipt path, as the
-  // production box did: the pull units, their script, and the drop-in that was
-  // meant to detach the check from them.
-  for (const unit of ['wfm-archive-receipt-pull.service', 'wfm-archive-receipt-pull.timer']) {
+  // And it still carries the retired on-box archive receipt path and the
+  // retired observation corpus check, as the production box did, plus the
+  // dashboard's job units.
+  for (const unit of ['wfm-archive-receipt-pull.service', 'wfm-archive-receipt-pull.timer',
+    'wfm-observations-check.service', 'wfm-observations-check.timer', 'tennoworth-job-readiness.path', 'tennoworth-job-scrape.path']) {
     writeFileSync(join(live, 'etc/systemd/system', unit), `# ${unit}\n`);
   }
   write(join(live, 'etc/systemd/system/wfm-observations-check.service.d/preservation.conf'), '[Unit]\nWants=\nAfter=\n');
+  writeFileSync(join(live, 'etc/wfm-observations-check.env'), 'OBSERVATIONS_PRESERVATION=external-backup\n');
   writeFileSync(join(live, 'srv/wfm/pull-archive-receipt.sh'), '# retired\n');
+  writeFileSync(join(live, 'srv/wfm/observations-check.sh'), '# retired\n');
   mkdirSync(join(root, 'rust'), { recursive: true });
   // The script stages these from the checkout with relative paths, as it does
   // from the repository root.
   for (const unit of ['run-scrape.sh', 'wfm-scrape.service', 'wfm-scrape.timer',
-    'observations-check.sh', 'wfm-observations-check.service', 'wfm-observations-check.timer']) {
+    'host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer', 'tennoworth-job-host-check.path']) {
     write(join(root, 'deploy', unit), `# ${unit}\n`);
   }
   if (options.runCheck) {
     // The real script and its unit travel to the box, so the stubbed systemd
     // runs what the deploy actually installed rather than a stand-in.
-    for (const name of ['observations-check.sh', 'wfm-observations-check.service']) {
+    for (const name of ['host-check.sh', 'tennoworth-host-check.service']) {
       write(join(root, 'deploy', name), readFileSync(new URL(`../deploy/${name}`, import.meta.url), 'utf8'));
     }
     write(join(box, 'policy/wfm-policy.json'), '{}');
-    // A sound corpus under the box paths the unit names. The check's own
-    // defaults for the paths the unit does not pass are supplied by the
-    // systemctl stub below.
-    const newestStart = FIXTURE_NOW - 6000;
-    for (let i = 0; i < 3; i++) {
-      const start = newestStart - (2 - i) * 7200;
-      const stamp = new Date(start * 1000).toISOString().replace('.000Z', 'Z');
-      const path = join(box, 'observations', `sweep-${stamp.replaceAll(':', '-')}.jsonl`);
-      write(path, sweepLog(start, 4, 2));
-      utimesSync(path, start + 4200, start + 4200);
-    }
+    // The sweep output a healthy box holds, under the paths the check reads.
     write(join(box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\n');
-    const snapshot = join(box, 'app/frontend/public/market.json');
-    write(snapshot, '{"catalog":{}}');
-    utimesSync(snapshot, FIXTURE_NOW - 100, FIXTURE_NOW - 100);
-    writeFileSync(join(root, 'journal'), journalText([
-      { at: newestStart, message: 'Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...' },
-      { at: newestStart, message: 'scraper: /srv/wfm/bin/wfm-scrape scrape', invocation: FIXTURE_INVOCATION },
-      { at: newestStart + 4200, message: sweepMetrics(), invocation: FIXTURE_INVOCATION },
-      { at: newestStart + 4200, message: 'wfm-scrape.service: Deactivated successfully.' },
-    ]));
-    write(join(bin, 'journalctl'), '#!/bin/sh\ncat "$FIXTURE_JOURNAL"\n');
+    write(join(box, 'app/frontend/public/market.json'), '{"catalog":{}}');
   } else {
     write(join(wfm, 'policy/wfm-policy.json'), '{}');
-    // The readiness check runs once as part of a deploy, and its verdict gates the
-    // deploy; this is the report a sound box would produce. The systemctl stub
+    // The host check runs once as part of a deploy, and its verdict gates the
+    // deploy; this is the report a healthy box would produce. The systemctl stub
     // writes it when the check is started, to HOST_ROOT - the fixture's /srv/wfm,
     // which the check's --out also points at in production.
     writeFileSync(join(root, 'check-report.json'), '{"ready": true, "errors": []}');
@@ -531,11 +515,11 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     'fi',
   ];
   if (options.runCheck) {
-    // The queries the readiness check makes of systemd, and the one action that
-    // matters: `start wfm-observations-check.service` runs the installed unit's
-    // own ExecStart with the EnvironmentFile the deploy wrote. The unit passes
-    // only the paths it names; the check's remaining defaults are supplied here
-    // under the remapped root, which is the same value they have in production.
+    // The queries the host check makes of systemd, and the one action that
+    // matters: `start tennoworth-host-check.service` runs the installed unit's
+    // own ExecStart. The unit passes only the paths it names; the check's
+    // remaining defaults are supplied here under the remapped root, which is the
+    // same value they have in production.
     systemctl.push(
       'if [ "$1" = "is-enabled" ]; then',
       '  case "$2" in',
@@ -560,14 +544,11 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   systemctl.push('printf "%s\\n" "$*" >> "$FIXTURE_SYSTEMCTL"');
   if (options.runCheck) {
     systemctl.push(
-      'if [ "$1" = "start" ] && [ "$2" = "wfm-observations-check.service" ]; then',
-      '  unit="$FIXTURE_LIVE/etc/systemd/system/wfm-observations-check.service"',
+      'if [ "$1" = "start" ] && [ "$2" = "tennoworth-host-check.service" ]; then',
+      '  unit="$FIXTURE_LIVE/etc/systemd/system/tennoworth-host-check.service"',
       '  exec_line="$(sed -n \'s/^ExecStart=//p\' "$unit" | head -1)"',
       '  exec_line="$(printf "%s" "$exec_line" | sed "s#/srv/#$FIXTURE_LIVE/srv/#g; s#/etc/#$FIXTURE_LIVE/etc/#g")"',
-      '  env_file="$(sed -n \'s/^EnvironmentFile=-*//p\' "$unit" | head -1)"',
-      '  env_file="$(printf "%s" "$env_file" | sed "s#/etc/#$FIXTURE_LIVE/etc/#g")"',
-      '  if [ -n "$env_file" ] && [ -f "$env_file" ]; then set -a; . "$env_file"; set +a; fi',
-      '  eval "$exec_line --csv $FIXTURE_LIVE/srv/wfm/app/wfm_results.csv --snapshot $FIXTURE_LIVE/srv/wfm/app/frontend/public/market.json --deployed $FIXTURE_LIVE/srv/wfm/deployed.json --binary $FIXTURE_LIVE/srv/wfm/bin/wfm-scrape"',
+      '  eval "$exec_line --csv $FIXTURE_LIVE/srv/wfm/app/wfm_results.csv --snapshot $FIXTURE_LIVE/srv/wfm/app/frontend/public/market.json --deployed $FIXTURE_LIVE/srv/wfm/deployed.json --binary $FIXTURE_LIVE/srv/wfm/bin/wfm-scrape --app $FIXTURE_LIVE/srv/wfm/app --disk-path $FIXTURE_LIVE/srv/wfm --disk-floor-bytes 1"',
       '  exit $?',
       'fi',
     );
@@ -576,7 +557,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     // Stands in for the check itself: it writes the report the test prepared,
     // or none at all when the test removed it.
     systemctl.push(
-      'if [ "$1" = "start" ] && [ "$2" = "wfm-observations-check.service" ] && [ -f "$FIXTURE_ROOT/check-report.json" ]; then',
+      'if [ "$1" = "start" ] && [ "$2" = "tennoworth-host-check.service" ] && [ -f "$FIXTURE_ROOT/check-report.json" ]; then',
       '  mkdir -p "$FIXTURE_REPORT_DIR"',
       '  cp "$FIXTURE_ROOT/check-report.json" "$FIXTURE_REPORT_DIR/report.json"',
       'fi',
@@ -588,7 +569,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     '',
   );
   write(join(bin, 'systemctl'), systemctl.join('\n'));
-  for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl', 'curl', ...(options.runCheck ? ['journalctl'] : [])]) chmodSync(join(bin, command), 0o755);
+  for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl', 'curl']) chmodSync(join(bin, command), 0o755);
 
   const run = (env: Record<string, string | undefined> = {}) => spawnSync('bash', [fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url))], {
     cwd: root,
@@ -597,19 +578,15 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
       ...process.env, PATH: `${bin}:${process.env.PATH}`,
       HOST: 'fixture', HOST_ROOT: hostRoot, REVISION: revision, CARGO_TARGET_DIR: target,
       TENNOWORTH_WFM_POLICY_PUBLIC_KEY: 'fixture-key',
-      // The declaration the operator must make. The deploy itself has no default;
-      // a test that exercises an undeclared mode removes this entry.
-      PRESERVATION_MODE: 'external-backup',
       FIXTURE_ROOT: root, FIXTURE_LIVE: live, FIXTURE_ORDER: order, FIXTURE_STATES: states,
-      ...(options.runCheck ? { FIXTURE_JOURNAL: join(root, 'journal') } : {}),
       FIXTURE_SYSTEMCTL: join(root, 'systemctl.log'),
-      FIXTURE_REPORT_DIR: join(wfm, 'data/observations-check'),
+      FIXTURE_REPORT_DIR: join(wfm, 'data/host-check'),
       ...options.env, ...env,
     }),
   });
   return {
     root, wfm, live, box, order, revision, run, systemctlLog: join(root, 'systemctl.log'),
-    reportPath: join(box, 'data/observations-check/report.json'),
+    reportPath: join(box, 'data/host-check/report.json'),
   };
 }
 
@@ -703,33 +680,47 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     expect(result.stdout).toContain('restore the timer by hand');
     const calls = readFileSync(f.systemctlLog, 'utf8');
     expect(calls, 'the monitor must not be armed without a running schedule')
-      .not.toContain('enable --now wfm-observations-check.timer');
+      .not.toContain('enable --now tennoworth-host-check.timer');
   });
 
-  test('the deploy retires the receipt pull a previous deployment left behind', () => {
-    // The drop-in that was meant to detach the check from the pull never did:
-    // an empty Wants= in a drop-in does not reset a dependency the base unit
-    // declares, so the retired pull kept running and alerting every hour. The
-    // deploy has to remove the units themselves, and arm only the check.
+  test('the deploy retires what a previous deployment left behind', () => {
+    // An empty Wants= in a drop-in does not reset a dependency the base unit
+    // declares, so a retired pull kept running and alerting every hour. The
+    // deploy removes retired units themselves, and arms only the host check.
     const f = scrapeDeployFixture();
     expect(f.run().status).toBe(0);
     const calls = readFileSync(f.systemctlLog, 'utf8');
     expect(calls).toContain('disable --now wfm-archive-receipt-pull.timer');
     expect(calls).not.toContain('start wfm-archive-receipt-pull.service');
-    expect(calls).toContain('enable --now wfm-observations-check.timer');
-    expect(calls).toContain('start wfm-observations-check.service');
+    expect(calls).toContain('disable --now wfm-observations-check.timer tennoworth-job-readiness.path');
+    expect(calls).toContain('enable --now tennoworth-host-check.timer');
+    expect(calls).toContain('enable --now tennoworth-job-host-check.path');
+    expect(calls).toContain('start tennoworth-host-check.service');
     const etc = join(f.live, 'etc/systemd/system');
-    expect(existsSync(join(etc, 'wfm-archive-receipt-pull.service'))).toBe(false);
-    expect(existsSync(join(etc, 'wfm-archive-receipt-pull.timer'))).toBe(false);
-    expect(existsSync(join(etc, 'wfm-observations-check.service.d'))).toBe(false);
+    for (const retired of ['wfm-archive-receipt-pull.service', 'wfm-archive-receipt-pull.timer', 'wfm-observations-check.service',
+      'wfm-observations-check.timer', 'wfm-observations-check.service.d', 'tennoworth-job-readiness.path']) {
+      expect(existsSync(join(etc, retired)), retired).toBe(false);
+    }
+    expect(existsSync(join(f.live, 'etc/wfm-observations-check.env'))).toBe(false);
     expect(existsSync(join(f.live, 'srv/wfm/pull-archive-receipt.sh'))).toBe(false);
+    expect(existsSync(join(f.live, 'srv/wfm/observations-check.sh'))).toBe(false);
+    // The dashboard's job unit for the check replaces the retired one.
+    expect(existsSync(join(etc, 'tennoworth-job-host-check.path'))).toBe(true);
   });
 
-  test('a first check that is not ready fails the deploy', () => {
-    // The installer is where the readiness gate is enforced, so it cannot be
+  test('a box without the dashboard gets no job unit', () => {
+    const f = scrapeDeployFixture();
+    rmSync(join(f.live, 'etc/systemd/system/tennoworth-job-scrape.path'));
+    expect(f.run().status).toBe(0);
+    expect(existsSync(join(f.live, 'etc/systemd/system/tennoworth-job-host-check.path'))).toBe(false);
+    expect(readFileSync(f.systemctlLog, 'utf8')).not.toContain('tennoworth-job-host-check.path');
+  });
+
+  test('a first check that is not healthy fails the deploy', () => {
+    // The installer is where the host check is enforced, so it cannot be
     // passed by ignoring it.
     const f = scrapeDeployFixture();
-    writeFileSync(join(f.root, 'check-report.json'), '{"ready": false, "errors": ["a partial observation log is 300 minutes old"]}');
+    writeFileSync(join(f.root, 'check-report.json'), '{"ready": false, "errors": ["wfm-scrape.timer is disabled, not enabled"]}');
     const result = f.run();
     expect(result.status, result.stderr).not.toBe(0);
     expect(result.stderr).toContain('does not pass on the box');
@@ -743,68 +734,36 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     expect(result.stderr).toContain('produced no report');
   });
 
-  test('a ready report left by an earlier deploy does not pass a check that wrote none', () => {
-    // The check exits non-zero when not ready, so its start failure is ignored
+  test('a healthy report left by an earlier deploy does not pass a check that wrote none', () => {
+    // The check exits non-zero when not healthy, so its start failure is ignored
     // and the report is the verdict. A report from before this deploy must not
     // stand in for one this check never wrote.
     const f = scrapeDeployFixture();
-    write(join(f.wfm, 'data/observations-check/report.json'), '{"ready": true, "errors": []}');
+    write(join(f.wfm, 'data/host-check/report.json'), '{"ready": true, "errors": []}');
     rmSync(join(f.root, 'check-report.json'));
     const result = f.run();
     expect(result.status, result.stderr).not.toBe(0);
     expect(result.stderr).toContain('produced no report');
   });
-
-  for (const [label, mode] of [['omitted', undefined], ['empty', '']] as const) {
-    test(`refuses an ${label} preservation mode before touching the box`, () => {
-      // A deploy that never says how the corpus is preserved must not fall back
-      // to a mode and produce a ready report claiming preservation it never
-      // declared. The refusal happens before any ssh, scp or systemctl call.
-      const f = scrapeDeployFixture();
-      const result = f.run({ PRESERVATION_MODE: mode });
-      expect(result.status, result.stderr).not.toBe(0);
-      // The refusal must name the missing declaration, not read as an unknown
-      // value: an omitted mode is undeclared, not a typo to correct.
-      expect(result.stderr).toContain('PRESERVATION_MODE is not declared');
-      expect(existsSync(f.systemctlLog), 'nothing may be armed or started').toBe(false);
-      expect(liveBinary(f), 'the running release must be untouched').toBe('old-live-binary');
-      expect(existsSync(join(f.live, 'srv/wfm/releases')), 'nothing may be installed').toBe(false);
-    });
-  }
-
-  test('refuses the retired on-box-archive mode before touching the box', () => {
-    const f = scrapeDeployFixture();
-    const result = f.run({ PRESERVATION_MODE: 'on-box-archive' });
-    expect(result.status, result.stderr).not.toBe(0);
-    expect(result.stderr).toContain("must be external-backup (got 'on-box-archive')");
-    expect(existsSync(f.systemctlLog), 'nothing may be armed or started').toBe(false);
-    expect(liveBinary(f)).toBe('old-live-binary');
-  });
 });
 
 // The whole deployment path, not a wiring assertion: the real deploy script runs
 // with the real check script and unit installed, the stubbed systemd executes
-// the unit's own ExecStart, and the assertions read the readiness report the
-// check actually produced.
-describe.skipIf(process.platform === 'win32')('external-backup deployment readiness', () => {
-  test('a deploy comes out ready and declares preservation external', () => {
+// the unit's own ExecStart, and the assertions read the report the check
+// actually produced.
+describe.skipIf(process.platform === 'win32')('deployed host check', () => {
+  test('a deploy comes out healthy', () => {
     const f = scrapeDeployFixture({ runCheck: true });
-    const result = f.run({ PRESERVATION_MODE: 'external-backup' });
+    const result = f.run();
     expect(result.status, result.stderr).toBe(0);
-    expect(readFileSync(f.systemctlLog, 'utf8')).toContain('start wfm-observations-check.service');
-
-    // The check ran with the deployment's own declaration.
-    expect(readFileSync(join(f.live, 'etc/wfm-observations-check.env'), 'utf8'))
-      .toContain('OBSERVATIONS_PRESERVATION=external-backup');
-
-    // And the report it produced is ready, honest about what was not verified.
+    expect(readFileSync(f.systemctlLog, 'utf8')).toContain('start tennoworth-host-check.service');
     const report = JSON.parse(readFileSync(f.reportPath, 'utf8'));
-    expect(report.ready).toBe(true);
+    expect(report.ready, report.errors.join('\n')).toBe(true);
     expect(report.errors).toEqual([]);
-    expect(report.preservation.mode).toBe('external-backup');
-    expect(report.preservation.status).toBe('declared-external');
-    expect(report.preservation.independently_verified_from_this_host).toBe(false);
-    expect(report.archive, 'the retired archive section must be gone').toBeUndefined();
+    expect(report.sweep.csv_rows).toBe(2);
+    expect(report.deployment.revision).toBe(f.revision);
+    expect(report.deployment.recorded_sha256).toBe(report.deployment.installed_sha256);
+    expect(report.preservation, 'the retired corpus sections must be gone').toBeUndefined();
   });
 });
 
@@ -897,19 +856,12 @@ describe('deployment ownership boundary', () => {
     expect(setup).toMatch(/chown\s+-R\s+root:root[^\n]*\/srv\/wfm\/bin/);
   });
 
-  test('gives the observation log directory to the service user alone', () => {
+  test('the sweep can write only its checkout', () => {
     // The unit runs with ProtectSystem=strict, so the sweep can only write the
-    // paths it is granted. Nothing but the pipeline needs to read these rows.
-    expect(setup).toMatch(/mkdir\s+-p\s+\/srv\/wfm\/observations/);
-    expect(setup).toMatch(/^\s*chown\s+wfm:wfm\s+\/srv\/wfm\/observations\s*$/m);
-    expect(setup).toMatch(/^\s*chmod\s+750\s+\/srv\/wfm\/observations\s*$/m);
-    const unit = readFileSync(
-      fileURLToPath(new URL('../deploy/wfm-scrape.service', import.meta.url)),
-      'utf8',
-    );
-    expect(unit, 'the unit must be allowed to write it').toMatch(
-      /^\s*ReadWritePaths=.*\/srv\/wfm\/observations/m,
-    );
+    // paths it is granted; the retired corpus directory is no longer one.
+    const unit = readFileSync(fileURLToPath(new URL('../deploy/wfm-scrape.service', import.meta.url)), 'utf8');
+    expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/app$/m);
+    expect(setup).not.toContain('/srv/wfm/observations');
   });
 
   test('leaves the scrape pipeline for the deploy script to install', () => {
@@ -987,272 +939,103 @@ describe('run-scrape publication guard', () => {
   });
 });
 
-// ---- observation corpus: readiness check -----------------------------------
+// ---- host check ------------------------------------------------------------
 
-const checkScript = fileURLToPath(new URL('../deploy/observations-check.sh', import.meta.url));
-const backupScript = fileURLToPath(new URL('./check-lxc-backup.sh', import.meta.url));
-const retentionFixture = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../tests/fixtures/observation-retention.json', import.meta.url)), 'utf8'),
-) as { max_bytes: number; max_age_days: number };
+const checkScript = fileURLToPath(new URL('../deploy/host-check.sh', import.meta.url));
 
-describe('observation corpus check wiring', () => {
+describe('host check wiring', () => {
   const deploy = readFileSync(fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url)), 'utf8');
   const setup = readFileSync(fileURLToPath(new URL('../deploy/setup-container.sh', import.meta.url)), 'utf8');
   const pullApp = readFileSync(fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url)), 'utf8');
-  const check = readFileSync(checkScript, 'utf8');
-  const unit = readFileSync(fileURLToPath(new URL('../deploy/wfm-observations-check.service', import.meta.url)), 'utf8');
-  const timer = readFileSync(fileURLToPath(new URL('../deploy/wfm-observations-check.timer', import.meta.url)), 'utf8');
-  const rust = readFileSync(fileURLToPath(new URL('../rust/wfm-scrape/src/observations.rs', import.meta.url)), 'utf8');
+  const unit = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-host-check.service', import.meta.url)), 'utf8');
+  const timer = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-host-check.timer', import.meta.url)), 'utf8');
+  const job = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-job-host-check.path', import.meta.url)), 'utf8');
 
   test('the deploy script is the only installer of the check and its units', () => {
-    // The check reads scrape-owned state and is host-only infrastructure, so it
-    // travels with the pipeline that writes that state. A second installer is
-    // the regression this pins: it could advance the check on its own, judging a
-    // corpus by a ruleset the deployed pipeline does not have.
-    const owned = ['observations-check.sh', 'wfm-observations-check.service', 'wfm-observations-check.timer'];
+    // The check judges the pipeline the deploy installs, so it travels with it.
+    // A second installer could advance the check on its own.
+    const owned = ['host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer', 'tennoworth-job-host-check.path'];
     for (const file of owned) {
       expect(deploy, `${file} must be staged`).toContain(`$STAGING/${file}`);
       expect(deploy, `${file} must land in the release`).toContain(`$RELEASES/$REVISION/${file}`);
-    }
-    expect(deploy).toMatch(/install -m 0755 "\$RELEASES\/\$REVISION\/observations-check\.sh" "\/srv\/wfm\/observations-check\.sh"/);
-    expect(deploy).toMatch(/install -m 0644 "\$RELEASES\/\$REVISION\/wfm-observations-check\.service" \/etc\/systemd\/system\/wfm-observations-check\.service/);
-    expect(deploy).toMatch(/install -m 0644 "\$RELEASES\/\$REVISION\/wfm-observations-check\.timer" \/etc\/systemd\/system\/wfm-observations-check\.timer/);
-    // ProtectSystem=strict grants write access to exactly this path, and systemd
-    // refuses to start a unit whose ReadWritePaths is missing.
-    // Recreating it as root:root on every deploy hid the report from the dashboard's publisher.
-    expect(deploy).toMatch(/install -d -m 0750 -o root -g "\\\$\(getent group tennoworth-publisher >\/dev\/null && echo tennoworth-publisher \|\| echo root\)" "\$HOST_ROOT\/data\/observations-check"/);
-    expect(deploy).toMatch(/systemctl enable --now wfm-observations-check\.timer/);
-    for (const file of owned) {
       expect(setup, `${file} must not be installed by provisioning`).not.toContain(file);
       expect(pullApp, `${file} must not be installed by the checkout puller`).not.toContain(file);
     }
-    // The retired receipt pull must never be staged or installed again.
-    expect(deploy).not.toMatch(/\$STAGING\/[^\s"]*archive-receipt/);
-    expect(deploy).not.toMatch(/install [^\n]*archive-receipt/);
+    expect(deploy).toMatch(/install -m 0755 "\$RELEASES\/\$REVISION\/host-check\.sh" "\/srv\/wfm\/host-check\.sh"/);
+    // ProtectSystem=strict grants write access to exactly this path, and systemd
+    // refuses to start a unit whose ReadWritePaths is missing. Recreating it as
+    // root:root on every deploy hid the report from the dashboard's publisher.
+    expect(deploy).toMatch(/install -d -m 0750 -o root -g "\\\$\(getent group tennoworth-publisher >\/dev\/null && echo tennoworth-publisher \|\| echo root\)" "\$HOST_ROOT\/data\/host-check"/);
+    // The retired receipt pull and corpus check must never be staged or installed again.
+    expect(deploy).not.toMatch(/\$STAGING\/[^\s"]*(archive-receipt|observations)/);
+    expect(deploy).not.toMatch(/install [^\n]*(archive-receipt|observations-check)/);
   });
 
-  test('the monitor is armed only after the record and the schedule settle', () => {
-    // The monitor reads deployed.json and the sweep schedule. A persistent timer
+  test('the check is armed only after the record and the schedule settle', () => {
+    // The check reads deployed.json and the sweep schedule. A persistent timer
     // armed before those settle can fire into the intermediate state and report
     // on a deployment that is still in progress.
     const record = deploy.indexOf("cat > '$HOST_ROOT/deployed.json'");
     const restore = deploy.search(/^restore_timer$/m);
-    const monitor = deploy.indexOf('systemctl enable --now wfm-observations-check.timer');
+    const monitor = deploy.indexOf('systemctl enable --now tennoworth-host-check.timer');
     expect(record, 'the deployment record must be written').toBeGreaterThan(-1);
     expect(restore, 'the schedule must be restored by the explicit call, not only the trap').toBeGreaterThan(record);
-    expect(monitor, 'the monitor must be armed last').toBeGreaterThan(restore);
-    expect(deploy.slice(0, record), 'nothing may arm the monitor before the record exists')
-      .not.toMatch(/enable --now wfm-observations-check\.timer/);
-  });
-
-  test('the check runs hourly in UTC and depends on no retired unit', () => {
-    expect(timer).toMatch(/^OnCalendar=\*-\*-\* \*:30:00 UTC$/m);
-    // A dependency declared here cannot be undone by a drop-in's empty Wants=;
-    // that is how the retired receipt pull stayed alive on the box.
-    expect(unit).not.toMatch(/^(Wants|After|Requires)=.*archive-receipt/m);
-    expect(unit).not.toMatch(/archive-receipt/);
+    expect(monitor, 'the check must be armed last').toBeGreaterThan(restore);
+    expect(deploy.slice(0, record), 'nothing may arm the check before the record exists')
+      .not.toMatch(/enable --now tennoworth-host-check\.timer/);
   });
 
   test('the deploy gate cannot be skipped', () => {
-    // The deploy refuses to report success on a box the check says is not ready.
-    expect(deploy).toMatch(/systemctl start wfm-observations-check\.service/);
-    expect(deploy).toMatch(/test -s '\$HOST_ROOT\/data\/observations-check\/report\.json'/);
-    expect(deploy).toMatch(/the readiness check does not pass on the box/);
+    expect(deploy).toMatch(/systemctl start tennoworth-host-check\.service/);
+    expect(deploy).toMatch(/test -s '\$HOST_ROOT\/data\/host-check\/report\.json'/);
+    expect(deploy).toMatch(/the host check does not pass on the box/);
   });
 
   test('the check unit fails closed and can write only its report', () => {
     expect(unit).toMatch(/^Type=oneshot$/m);
     expect(unit).toMatch(/^OnFailure=wfm-alert@%n\.service$/m);
     expect(unit).toMatch(/^ProtectSystem=strict$/m);
-    expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/observations-check$/m);
-    expect(unit).toMatch(/^ExecStart=\/srv\/wfm\/observations-check\.sh --observations \/srv\/wfm\/observations --out \/srv\/wfm\/data\/observations-check\/report\.json$/m);
+    expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/host-check$/m);
+    expect(unit).toMatch(/^ExecStart=\/srv\/wfm\/host-check\.sh --out \/srv\/wfm\/data\/host-check\/report\.json$/m);
     // The check's verdict must not depend on a remote host.
     expect(unit).toMatch(/^RestrictAddressFamilies=AF_UNIX$/m);
+    // A dependency declared here cannot be undone by a drop-in's empty Wants=;
+    // that is how the retired receipt pull stayed alive on the box.
+    expect(unit).not.toMatch(/archive-receipt/);
     expect(timer).toMatch(/^OnCalendar=\*-\*-\* \*:30:00 UTC$/m);
     expect(timer).toMatch(/^WantedBy=timers\.target$/m);
+    expect(job).toMatch(/^PathChanged=\/srv\/wfm\/jobs\/host-check$/m);
+    expect(job).toMatch(/^Unit=tennoworth-host-check\.service$/m);
   });
 
-  test('the log contract is pinned by a shared fixture on both sides', () => {
-    // The writer stamps the format and prunes with Rust constants, the box check
-    // reads the format and judges the corpus against shell defaults. The fixture
-    // is the only place the two can disagree loudly; the Rust side reads it in
-    // observations::tests::log_contract_matches_the_shared_fixture.
-    expect(rust, 'the writer must keep its side of the fixture gate').toContain('observation-retention.json');
-    expect(Number(check.match(/FORMAT_SUPPORTED=(\d+)/)![1])).toBe(retentionFixture.format);
-    // The backup job reads the archived logs by the same format rule, so it has
-    // to agree with the writer and the box check as well.
-    const backup = readFileSync(backupScript, 'utf8');
-    expect(Number(backup.match(/FORMAT_SUPPORTED=(\d+)/)![1])).toBe(retentionFixture.format);
-    expect(Number(check.match(/RETENTION_BYTES=(\d+)/)![1])).toBe(retentionFixture.max_bytes);
-    expect(Number(check.match(/RETENTION_AGE_DAYS=(\d+)/)![1])).toBe(retentionFixture.max_age_days);
-    expect(retentionFixture.format).toBe(1);
-    expect(retentionFixture.max_bytes).toBe(2 * 1024 * 1024 * 1024);
-    expect(retentionFixture.max_age_days).toBe(56);
-  });
-
-  test('the readiness check reads the catalog count instead of hard-coding it', () => {
-    // 3,840 is today's catalog. Written into the check it would silently stop
-    // matching the log it is verifying the first time the catalog moves.
-    expect(check).not.toContain('3840');
-    expect(check).toMatch(/record_field "\$header" items/);
-    expect(check).toMatch(/baseline_items=/);
-  });
-
-  test('collection readiness stays separate from the schedule decision', () => {
-    // "The corpus is sound" and "the proposed refresh schedule meets its
-    // thresholds" are different questions; folding the second into the first
-    // would let a good collection pass for a good schedule. The check may name
-    // that other owner, but it must never invoke it.
-    expect(check, 'the scope must be stated in the script').toMatch(/is the corpus sound and complete/);
-    expect(check).not.toMatch(/--schedule/);
-  });
-
-  test('the preservation mode is an explicit input that fails closed when absent', () => {
-    // The check can only see this box. A mode it was never told must not read as
-    // "no news is good news": undeclared preservation is a not-ready verdict,
-    // and the report has to say which claim it is making.
-    expect(check).toMatch(/PRESERVATION="\$\{OBSERVATIONS_PRESERVATION:-\}"/);
-    expect(check).toMatch(/--preservation\) PRESERVATION="\$2"/);
-    expect(check).toContain('external-backup');
-    expect(check, 'the retired mode must not be accepted').not.toContain('on-box-archive');
-    expect(check).toContain('preservation mode not declared');
-    expect(check).toMatch(/independently_verified_from_this_host/);
-    // The unit gets the mode from a file the deploy writes, so the declaration
-    // travels with the deployment rather than living in a shell default.
-    expect(unit).toMatch(/^EnvironmentFile=-\/etc\/wfm-observations-check\.env$/m);
-  });
-
-  test('the deploy declares the preservation mode', () => {
-    expect(deploy).toMatch(/PRESERVATION_MODE="\$\{PRESERVATION_MODE:-\}"/);
-    // No default: a deploy that does not declare the mode must refuse, because
-    // a fallback would let a report claim preservation nobody declared.
-    expect(deploy, 'an omitted or empty mode must be refused').toMatch(/\[ -n "\$PRESERVATION_MODE" \]/);
-    expect(deploy).toContain('PRESERVATION_MODE is not declared');
-    expect(deploy, 'there must be no default mode').not.toContain('PRESERVATION_MODE:-external-backup');
-    expect(deploy).toContain('/etc/wfm-observations-check.env');
-    expect(deploy, 'the declaration must actually be written').toMatch(/^OBSERVATIONS_PRESERVATION=\$PRESERVATION_MODE$/m);
-    // A drop-in cannot undo a dependency the base unit declares, so none may be
-    // written; the retired one is removed instead.
-    expect(deploy).not.toMatch(/^Wants=$/m);
-    expect(deploy).toMatch(/rm -f [^\n]*wfm-observations-check\.service\.d\/preservation\.conf/);
-  });
-
-  test('the backup pull-and-verify script hard-codes no node, vmid or local path', () => {
-    const backup = readFileSync(backupScript, 'utf8');
-    expect(backup).toMatch(/HOST="\$\{HOST:-\}"/);
-    expect(backup).toMatch(/VMID="\$\{VMID:-\}"/);
-    expect(backup).toMatch(/DUMP_DIR="\$\{DUMP_DIR:-\/var\/lib\/vz\/dump\}"/);
-    expect(backup).toMatch(/DEST="\$\{DEST:-\$HOME\/backups\/tennoworth\}"/);
-    expect(backup).toMatch(/KEEP="\$\{KEEP:-30\}"/);
-    // A sandboxed session cannot read the system ssh config, so SSH and SCP have
-    // to carry their own options and stay unquoted at the call sites.
-    expect(backup).toMatch(/SSH="\$\{SSH:-ssh\}"/);
-    expect(backup).toMatch(/SCP="\$\{SCP:-scp\}"/);
-    expect(backup).toMatch(/\$SSH \$SSH_OPTS "\$HOST"/);
-    expect(backup).toMatch(/\$SCP \$SCP_OPTS/);
-    // The whole point is receipt-side verification, not a trusted copy.
-    expect(backup).toMatch(/zstd -t/);
-    expect(backup).toMatch(/tar --zstd -tf/);
-    // The run header is parsed as JSON, not pattern-matched: a prefix test and a
-    // grep for `"items":` accepted a truncated record, trailing text after the
-    // object, and a wrong format as a verified backup.
-    expect(backup).toMatch(/json\.loads/);
-    expect(backup).toMatch(/command -v python3/);
-    expect(backup, 'the prefix test must be gone').not.toContain("'{\"kind\":\"run\"'*)");
-    expect(backup).toMatch(/--dry-run/);
+  test('a change to the check itself counts as pipeline lag', () => {
+    // The check is installed by the pipeline deploy, so an undeployed change to
+    // it is exactly the lag it exists to report.
+    const check = readFileSync(checkScript, 'utf8');
+    for (const source of ['rust/wfm-scrape', 'rust/wfm-client', 'rust/market-domain', 'deploy/host-check.sh', 'deploy/tennoworth-host-check.service']) {
+      expect(check).toContain(source);
+    }
+    expect(check, 'the retired crate must not be a lag source').not.toContain('market-math');
   });
 });
 
-/** One sweep's JSONL in the shape `src/observations.rs` writes. */
-function sweepLog(startSeconds: number, items: number, kept: number, format = 1, cached = 0): string {
-  const stamp = new Date(startSeconds * 1000).toISOString().replace('.000Z', 'Z');
-  // The first `cached` items took their statistics from the scraper's cache.
-  let reused = 0;
-  const cache = () => (reused++ < cached ? { statistics_cached_at: '2026-09-16T10:00:00Z' } : {});
-  const lines = [JSON.stringify({
-    kind: 'run', format, version: '0.1.0', platform: 'pc', filter: '', exclude: '',
-    min_volume: 1, items, workers: 2, started_at: stamp,
-  })];
-  for (let i = 0; i < items - kept; i++) {
-    lines.push(JSON.stringify({
-      kind: 'item', slug: `thin_${startSeconds}_${i}`, name: 'Thin', tags: [], ducats: null,
-      outcome: 'below_volume', subtype: null, volume_48h: 1, median_now: 1, median_90d: 1,
-      medians_7d: [1], avg_price_48h: 1, donch_top_90d: 1, donch_bot_90d: 1, ...cache(),
-    }));
-  }
-  for (let i = 0; i < kept; i++) {
-    lines.push(JSON.stringify({
-      kind: 'item', slug: `kept_${startSeconds}_${i}`, name: 'Kept', tags: [], ducats: null,
-      outcome: 'kept', subtype: null, volume_48h: 9, median_now: 9, median_90d: 9,
-      medians_7d: [9], avg_price_48h: 9, donch_top_90d: 9, donch_bot_90d: 9, ...cache(),
-      book: { live_buys: 1, live_sells: 1, buy_sell_ratio: 1, top_buy_price: 1, low_sell_price: 1, low5_avg_unclamped: 1, score: 1 },
-    }));
-  }
-  lines.push(JSON.stringify({ kind: 'summary', scanned: items, kept, coercions: 0 }));
-  return lines.join('\n') + '\n';
-}
-
-// The evaluation instant every fixture is built around, and the invocation id
-// its journal carries. systemd stamps `_SYSTEMD_INVOCATION_ID` on the unit's own
-// messages but not on its own Starting/Finished lines, which is why the journal
-// is JSON and the pairing below is explicit about the start line.
+// A box fixture: a healthy sweep schedule, the sweep output it implies and the
+// deployment record. `systemctl` is a stub on PATH, as in the host-direct
+// deploy tests - the script's own control flow is what is observed.
 const FIXTURE_NOW = 1789580078;
-const FIXTURE_INVOCATION = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-function sweepMetrics(statistics: number | string = 4, orders: number | string = 2, throttles = 0): string {
-  return `sweep metrics: attempts[catalog=1 statistics=${statistics} orders=${orders} riven=0 other=0] ok[catalog=1 statistics=${statistics} orders=${orders} riven=0 other=0] failed[catalog=0 statistics=0 orders=0 riven=0 other=0] retries=0 wire_requests=7 throttles=${throttles} cooldown_waits=0 cooldown_wait_ms=0 decoded_bytes=1 elapsed_ms=1000 snapshot_age_s=0`;
-}
-
-function journalText(entries: Array<{ at: number; message: string; invocation?: string }>): string {
-  return entries.map(entry => JSON.stringify({
-    __REALTIME_TIMESTAMP: String(entry.at * 1_000_000),
-    ...(entry.invocation ? { _SYSTEMD_INVOCATION_ID: entry.invocation } : {}),
-    MESSAGE: entry.message,
-  })).join('\n') + '\n';
-}
-
-// A box fixture: three completed sweeps two hours apart, the newest an hour
-// before the evaluation instant, with the snapshot, CSV and deployment record
-// they imply. `journalctl` and `systemctl` are stubs on PATH, as
-// in the host-direct deploy tests - the script's own control flow is what is
-// observed.
-function corpusFixture() {
-  const root = mkdtempSync(join(tmpdir(), 'obs-check-')); directories.push(root);
+function hostFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'host-check-')); directories.push(root);
   const box = join(root, 'box'), bin = join(root, 'bin');
-  for (const path of [join(box, 'observations'), join(box, 'app/frontend/public'), join(box, 'bin'), bin]) {
-    mkdirSync(path, { recursive: true });
-  }
-  const now = FIXTURE_NOW;
-  const newestStart = now - 6000;
-  const firstStart = newestStart - 2 * 7200;
-  const names: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    const start = firstStart + i * 7200;
-    const stamp = new Date(start * 1000).toISOString().replace('.000Z', 'Z');
-    const name = `sweep-${stamp.replaceAll(':', '-')}.jsonl`;
-    const path = join(box, 'observations', name);
-    writeFileSync(path, sweepLog(start, 4, 2));
-    utimesSync(path, start + 4200, start + 4200);
-    names.push(name);
-  }
+  for (const path of [join(box, 'app/frontend/public'), join(box, 'bin'), bin]) mkdirSync(path, { recursive: true });
   writeFileSync(join(box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\n');
   const snapshot = join(box, 'app/frontend/public/market.json');
   writeFileSync(snapshot, '{"catalog":{}}');
-  utimesSync(snapshot, now - 1700, now - 1700);
+  utimesSync(snapshot, FIXTURE_NOW - 1700, FIXTURE_NOW - 1700);
   const binary = join(box, 'bin/wfm-scrape');
   writeFileSync(binary, '#!/bin/sh\necho wfm-scrape\n');
   const sha256 = createHash('sha256').update(readFileSync(binary)).digest('hex');
   writeFileSync(join(box, 'deployed.json'), `{\n  "revision": "fixture-rev",\n  "sha256": "${sha256}"\n}\n`);
-
-  const journal = join(root, 'journal');
-  const writeJournal = (entries: Array<{ at: number; message: string; invocation?: string }>) =>
-    writeFileSync(journal, journalText(entries));
-  writeJournal([
-    { at: newestStart, message: 'Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...' },
-    { at: newestStart, message: 'scraper: /srv/wfm/bin/wfm-scrape scrape', invocation: FIXTURE_INVOCATION },
-    { at: newestStart + 4200, message: sweepMetrics(), invocation: FIXTURE_INVOCATION },
-    { at: newestStart + 4200, message: 'wfm-scrape.service: Deactivated successfully.' },
-  ]);
 
   write(join(bin, 'systemctl'), [
     '#!/bin/sh',
@@ -1261,199 +1044,82 @@ function corpusFixture() {
     'case "$unit:$prop" in',
     '  wfm-scrape.service:ActiveState) printf "%s\\n" "${FIXTURE_SERVICE_STATE:-inactive}";;',
     '  wfm-scrape.service:Result) printf "%s\\n" "${FIXTURE_SERVICE_RESULT:-success}";;',
-    '  wfm-scrape.timer:UnitFileState) printf "enabled\\n";;',
+    '  wfm-scrape.timer:UnitFileState) printf "%s\\n" "${FIXTURE_TIMER_ENABLED:-enabled}";;',
     '  wfm-scrape.timer:ActiveState) printf "active\\n";;',
-    '  wfm-scrape.timer:NextElapseUSecRealtime) printf "%s\\n" "${FIXTURE_NEXT_ELAPSE-Fri 2026-09-18 06:30:00 UTC}";;',
+    '  wfm-scrape.timer:NextElapseUSecRealtime) printf "%s\\n" "${FIXTURE_NEXT_ELAPSE-Wed 2026-09-16 18:30:00 UTC}";;',
     'esac',
     'exit 0',
     '',
   ].join('\n'));
-  write(join(bin, 'journalctl'), '#!/bin/sh\ncat "${FIXTURE_JOURNAL:?}"\n');
   chmodSync(join(bin, 'systemctl'), 0o755);
-  chmodSync(join(bin, 'journalctl'), 0o755);
 
   const reportPath = join(root, 'report.json');
   const run = (env: Record<string, string | undefined> = {}, extraArgs: string[] = []) => spawnSync('bash', [
     checkScript,
-    '--observations', join(box, 'observations'),
     '--out', reportPath,
     '--csv', join(box, 'app/wfm_results.csv'),
     '--snapshot', snapshot,
     '--deployed', join(box, 'deployed.json'),
     '--binary', binary,
     '--app', join(box, 'app'),
+    '--disk-path', box,
+    '--disk-floor-bytes', '1',
     '--now', '2026-09-16T17:34:38Z',
     ...extraArgs,
   ], {
     encoding: 'utf8',
-    // The unit gets the mode from EnvironmentFile=/etc/wfm-observations-check.env,
-    // which the deploy writes; a test overrides it the same way a redeploy would,
-    // and an undefined value removes it to simulate the file being absent.
-    env: withoutUndefined({
-      ...process.env, PATH: `${bin}:${process.env.PATH}`,
-      OBSERVATIONS_PRESERVATION: 'external-backup', FIXTURE_JOURNAL: journal, ...env,
-    }),
+    env: withoutUndefined({ ...process.env, PATH: `${bin}:${process.env.PATH}`, ...env }),
   });
   const report = () => JSON.parse(readFileSync(reportPath, 'utf8'));
-  const observationPath = (name: string) => join(box, 'observations', name);
-  return {
-    root, box, names, newestStart, journal, run, report,
-    observationPath, writeJournal,
-  };
+  return { root, box, run, report };
 }
 
-describe.skipIf(process.platform === 'win32')('observation corpus readiness', () => {
-  test('a sound corpus is ready and reports the window it holds', () => {
-    const f = corpusFixture();
+describe.skipIf(process.platform === 'win32')('host check', () => {
+  test('a healthy host passes and reports what it read', () => {
+    const f = hostFixture();
     const result = f.run();
     expect(result.status, result.stderr).toBe(0);
     const report = f.report();
     expect(report.ready).toBe(true);
-    expect(report.sweeps.valid).toBe(3);
-    expect(report.sweeps.expected).toBe(3);
-    expect(report.sweeps.missing).toBe(0);
-    expect(report.anomalies).toEqual({ partial: 0, malformed: 0, missing_summary: 0, unsupported_format: 0, abandoned_partial: [] });
-    expect(report.completeness.failed).toEqual([]);
-    expect(report.retention.bytes).toBeGreaterThan(0);
-    expect(report.retention.max_age_seconds).toBe(retentionFixture.max_age_days * 86400);
-    expect(report.retention.cap_bytes).toBe(retentionFixture.max_bytes);
-    expect(report.csv.rows).toBe(2);
+    expect(report.sweep).toEqual({ csv_rows: 2, snapshot_age_seconds: 1700 });
     expect(report.timers.sweep_enabled).toBe('enabled');
-    // The service evidence is tied to one invocation and one sweep, so a green
-    // service section means this sweep's own numbers were checked.
-    expect(report.service.invocation).toBe(FIXTURE_INVOCATION);
-    expect(report.service.sweep_log).toBe(f.names[2]!);
-    expect(report.service.wall_seconds).toBe(4200);
-    expect(report.service.drift_checked).toBe(true);
-    expect(report.service.statistics_attempts).toBe(4);
-    expect(report.service.orders_attempts).toBe(2);
-    expect(report.preservation.mode).toBe('external-backup');
+    expect(report.disk.free_bytes).toBeGreaterThan(0);
+    expect(report.deployment.revision).toBe('fixture-rev');
   });
 
-  test('a completed sweep with no log is not ready', () => {
-    const f = corpusFixture();
-    rmSync(f.observationPath(f.names[1]!));
-    const result = f.run();
-    expect(result.status).not.toBe(0);
+  test('a disabled sweep timer is not healthy', () => {
+    const f = hostFixture();
+    expect(f.run({ FIXTURE_TIMER_ENABLED: 'disabled' }).status).not.toBe(0);
+    expect(f.report().errors.join('\n')).toContain('wfm-scrape.timer is disabled, not enabled');
+  });
+
+  test('a timer past its boundary is not healthy', () => {
+    const f = hostFixture();
+    expect(f.run({ FIXTURE_NEXT_ELAPSE: 'Wed 2026-09-16 16:30:00 UTC' }).status).not.toBe(0);
+    expect(f.report().errors.join('\n')).toContain('missed its');
+  });
+
+  test('missing sweep output is not healthy, and still writes a report', () => {
+    const f = hostFixture();
+    rmSync(join(f.box, 'app/wfm_results.csv'));
+    rmSync(join(f.box, 'app/frontend/public/market.json'));
+    expect(f.run().status).not.toBe(0);
     const report = f.report();
-    expect(report.ready).toBe(false);
-    expect(report.sweeps.expected).toBe(3);
-    expect(report.sweeps.valid).toBe(2);
-    expect(report.errors.join('\n')).toContain('have no log');
+    expect(report.sweep).toEqual({ csv_rows: null, snapshot_age_seconds: null });
+    expect(report.errors.join('\n')).toContain('wfm_results.csv is missing');
+    expect(report.errors.join('\n')).toContain('market.json is missing');
   });
 
-  test('a malformed log is not ready', () => {
-    const f = corpusFixture();
-    writeFileSync(f.observationPath(f.names[2]!), 'not a record at all\n', { flag: 'a' });
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().anomalies.malformed).toBe(1);
-    expect(f.report().errors.join('\n')).toContain('malformed');
-  });
-
-  test('a log without a summary is not ready', () => {
-    const f = corpusFixture();
-    const path = f.observationPath(f.names[2]!);
-    const lines = readFileSync(path, 'utf8').trimEnd().split('\n');
-    writeFileSync(path, lines.slice(0, -1).join('\n') + '\n');
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().anomalies.missing_summary).toBe(1);
-    expect(f.report().errors.join('\n')).toContain('no summary');
-  });
-
-  test('an unsupported observation format is not ready', () => {
-    const f = corpusFixture();
-    const path = f.observationPath(f.names[2]!);
-    writeFileSync(path, readFileSync(path, 'utf8').replace('"format":1', '"format":2'));
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().anomalies.unsupported_format).toBe(1);
-    expect(f.report().errors.join('\n')).toContain('unsupported observation format');
-  });
-
-  test('a partial log old enough to be a stuck sweep is not ready', () => {
-    const f = corpusFixture();
-    const partial = f.observationPath('sweep-2026-09-16T19-04-38Z.jsonl.partial');
-    writeFileSync(partial, '');
-    utimesSync(partial, 1789580078 - 4 * 3600, 1789580078 - 4 * 3600);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().anomalies.partial).toBe(1);
-    expect(f.report().errors.join('\n')).toContain('stuck');
-  });
-
-  test('a partial left by a sweep a later one superseded is reported, not failed', () => {
-    // A sweep that dies keeps its partial for post-mortem until retention prunes
-    // it. Once a later sweep has completed it is not a stuck sweep, and failing
-    // on it held the box not ready for the whole retention window.
-    const f = corpusFixture();
-    const name = `sweep-${new Date((f.newestStart - 3600) * 1000).toISOString().replace('.000Z', 'Z').replaceAll(':', '-')}.jsonl.partial`;
-    const partial = f.observationPath(name);
-    writeFileSync(partial, '');
-    utimesSync(partial, FIXTURE_NOW - 4 * 3600, FIXTURE_NOW - 4 * 3600);
-    const result = f.run();
-    expect(result.status, result.stderr).toBe(0);
-    const report = f.report();
-    expect(report.ready).toBe(true);
-    expect(report.anomalies.partial).toBe(1);
-    expect(report.anomalies.abandoned_partial).toEqual([name]);
-    expect(report.warnings.join('\n')).toContain('kept for post-mortem');
-  });
-
-  test('a partial whose start cannot be read is judged by its age, not excused', () => {
-    const f = corpusFixture();
-    const partial = f.observationPath('sweep-unreadable.jsonl.partial');
-    writeFileSync(partial, '');
-    utimesSync(partial, FIXTURE_NOW - 4 * 3600, FIXTURE_NOW - 4 * 3600);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().anomalies.abandoned_partial).toEqual([]);
-    expect(f.report().errors.join('\n')).toContain('stuck');
-  });
-
-  test('a sweep that started and failed is reported as aborted, not as a missing sweep', () => {
-    // Its unit already paged when it failed, and its partial stays for the whole
-    // retention window: counting it as missing kept the box not ready, alerting
-    // hourly, for 56 days after every aborted sweep.
-    const f = corpusFixture();
-    rmSync(f.observationPath(f.names[1]!));
-    const start = f.newestStart - 7200;
-    const name = `sweep-${new Date(start * 1000).toISOString().replace('.000Z', 'Z').replaceAll(':', '-')}.jsonl.partial`;
-    writeFileSync(f.observationPath(name), '');
-    utimesSync(f.observationPath(name), start + 1800, start + 1800);
-    const result = f.run();
-    expect(result.status, result.stderr).toBe(0);
-    const report = f.report();
-    expect(report.ready).toBe(true);
-    expect(report.sweeps).toMatchObject({ expected: 3, valid: 2, missing: 0, aborted: 1 });
-    expect(report.anomalies.abandoned_partial).toEqual([name]);
-    expect(report.warnings.join('\n')).toContain('started but did not complete');
-  });
-
-  test('an aborted sweep does not excuse a second slot in the same gap that never ran', () => {
-    const f = corpusFixture();
-    rmSync(f.observationPath(f.names[1]!));
-    rmSync(f.observationPath(f.names[0]!));
-    const start = f.newestStart - 7200;
-    const name = `sweep-${new Date(start * 1000).toISOString().replace('.000Z', 'Z').replaceAll(':', '-')}.jsonl.partial`;
-    writeFileSync(f.observationPath(name), '');
-    utimesSync(f.observationPath(name), start + 1800, start + 1800);
-    // A valid log three slots before the newest, so the gap spans two lost slots.
-    const early = f.newestStart - 3 * 7200;
-    const earlyName = `sweep-${new Date(early * 1000).toISOString().replace('.000Z', 'Z').replaceAll(':', '-')}.jsonl`;
-    writeFileSync(f.observationPath(earlyName), sweepLog(early, 4, 2));
-    utimesSync(f.observationPath(earlyName), early + 4200, early + 4200);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().sweeps).toMatchObject({ missing: 1, aborted: 1 });
-    expect(f.report().errors.join('\n')).toContain('1 scheduled sweep(s) have no log');
+  test('free space under the floor is not healthy', () => {
+    const f = hostFixture();
+    expect(f.run({}, ['--disk-floor-bytes', String(Number.MAX_SAFE_INTEGER)]).status).not.toBe(0);
+    expect(f.report().errors.join('\n')).toContain('under the');
   });
 
   test('a sweep in progress, which leaves the timer no next elapse, is not a broken timer', () => {
     // systemd schedules the next elapse when the run ends, so a check that lands
     // mid-sweep sees none; reading that as an error alerted every other hour.
-    const f = corpusFixture();
+    const f = hostFixture();
     const running = f.run({ FIXTURE_SERVICE_STATE: 'activating', FIXTURE_NEXT_ELAPSE: '' });
     expect(running.status, running.stderr).toBe(0);
     const stopped = f.run({ FIXTURE_SERVICE_STATE: 'inactive', FIXTURE_NEXT_ELAPSE: '' });
@@ -1465,7 +1131,7 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     // The box's checkout as pull-app.sh leaves it, with the deployed revision in
     // its history and the given commits on top, each `hoursAgo` before the
     // evaluation instant.
-    function withCheckout(f: ReturnType<typeof corpusFixture>, after: Array<{ path: string; hoursAgo: number }>, deployed?: string) {
+    function withCheckout(f: ReturnType<typeof hostFixture>, after: Array<{ path: string; hoursAgo: number }>, deployed?: string) {
       const app = join(f.box, 'app');
       git(app, 'init', '-q', '-b', 'main');
       git(app, 'config', 'user.email', 'test@example.invalid'); git(app, 'config', 'user.name', 'Fixture');
@@ -1483,14 +1149,14 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     }
 
     test('a deploy that matches the checkout is current', () => {
-      const f = corpusFixture();
+      const f = hostFixture();
       withCheckout(f, [{ path: 'frontend/src/app.ts', hoursAgo: 100 }]);
       expect(f.run().status).toBe(0);
       expect(f.report().deployment).toMatchObject({ lag: 'current', pending_scraper_commits: 0 });
     });
 
-    test('scraper changes the deploy has waited on past the grace are not ready', () => {
-      const f = corpusFixture();
+    test('scraper changes the deploy has waited on past the grace are not healthy', () => {
+      const f = hostFixture();
       withCheckout(f, [{ path: 'rust/wfm-client/src/lib.rs', hoursAgo: 30 }, { path: 'rust/wfm-scrape/src/http.rs', hoursAgo: 2 }]);
       const result = f.run();
       expect(result.status).not.toBe(0);
@@ -1499,7 +1165,7 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     });
 
     test('a scraper change inside the grace is a warning', () => {
-      const f = corpusFixture();
+      const f = hostFixture();
       withCheckout(f, [{ path: 'deploy/run-scrape.sh', hoursAgo: 3 }]);
       const result = f.run();
       expect(result.status, result.stderr).toBe(0);
@@ -1508,7 +1174,7 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     });
 
     test('the lock counts only where the scraper\'s own dependencies changed', () => {
-      const f = corpusFixture();
+      const f = hostFixture();
       const app = join(f.box, 'app');
       // A desktop that may gain a dependency of its own, and a scraper with one.
       // desktopOnly adds xcap and a second csv the scraper does not use. With two
@@ -1547,82 +1213,38 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     });
 
     test('a revision deployed ahead of the checkout is not lag', () => {
-      const f = corpusFixture();
+      const f = hostFixture();
       withCheckout(f, [], '0123456789abcdef0123456789abcdef01234567');
       expect(f.run().status).toBe(0);
       expect(f.report().deployment.lag).toBe('ahead');
     });
 
     test('no checkout to compare against is a warning, never a pass', () => {
-      const f = corpusFixture();
+      const f = hostFixture();
       expect(f.run().status).toBe(0);
       expect(f.report().deployment.lag).toBe('unknown');
       expect(f.report().warnings.join('\n')).toContain('no git checkout');
     });
   });
 
-  test('a sweep that missed its own CSV row count is not ready', () => {
-    const f = corpusFixture();
-    writeFileSync(join(f.box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\nkept_c,1\n');
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().errors.join('\n')).toContain('holds 3');
-  });
-
-  test('a metrics line with no elapsed_ms is a failure, not a missing report', () => {
-    const f = corpusFixture();
-    f.writeJournal([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 4200, message: sweepMetrics().replace('elapsed_ms=1000 ', ''), invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(existsSync(join(f.root, 'report.json')), 'the report must still be written').toBe(true);
-    expect(result.status, result.stderr).not.toBe(0);
-    expect(f.report().service.metrics_elapsed_ms).toBeNull();
-    expect(f.report().errors.join('\n')).toContain('no elapsed_ms');
-  });
-
-  test('a metrics line with no throttles count is a failure, not a missing report', () => {
-    const f = corpusFixture();
-    f.writeJournal([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 4200, message: sweepMetrics().replace('throttles=0 ', ''), invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(existsSync(join(f.root, 'report.json')), 'the report must still be written').toBe(true);
-    expect(result.status, result.stderr).not.toBe(0);
-    expect(f.report().service.throttles).toBeNull();
-    expect(f.report().errors.join('\n')).toContain('no throttles count');
-  });
-
-  test('a missing corpus is not ready', () => {
-    const f = corpusFixture();
-    rmSync(join(f.box, 'observations'), { recursive: true });
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().errors.join('\n')).toContain('does not exist');
-  });
-
-  test('a timed-out sweep unit is not ready', () => {
-    const f = corpusFixture();
+  test('a timed-out sweep unit is not healthy', () => {
+    const f = hostFixture();
     const result = f.run({ FIXTURE_SERVICE_RESULT: 'timeout' });
     expect(result.status).not.toBe(0);
     expect(f.report().service.result).toBe('timeout');
     expect(f.report().errors.join('\n')).toContain('timed out');
   });
 
-  test('an enabled retired pull timer is not ready', () => {
-    const f = corpusFixture();
+  test('an enabled retired pull timer is not healthy', () => {
+    const f = hostFixture();
     const result = f.run({ FIXTURE_RETIRED: 'enabled' });
     expect(result.status).not.toBe(0);
     expect(f.report().timers.retired_pull).toBe('enabled');
     expect(f.report().errors.join('\n')).toContain('retired wfm-scrape-pull.timer');
   });
 
-  test('a binary that is not the recorded revision is not ready', () => {
-    const f = corpusFixture();
+  test('a binary that is not the recorded revision is not healthy', () => {
+    const f = hostFixture();
     writeFileSync(join(f.box, 'bin/wfm-scrape'), '#!/bin/sh\necho tampered\n');
     const result = f.run();
     expect(result.status).not.toBe(0);
@@ -1631,499 +1253,8 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     expect(report.errors.join('\n')).toContain('not the recorded revision');
   });
 
-  test('a sweep approaching the unit timeout is urgent, and one merely slow warns', () => {
-    const f = corpusFixture();
-    // elapsed_ms is deliberately absurd: the thresholds must gate the wall clock
-    // of the invocation, because that field is a sum of per-request latencies.
-    const journal = (minutes: number) => journalText([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...' },
-      { at: f.newestStart, message: 'scraper: /srv/wfm/bin/wfm-scrape scrape', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + minutes * 60, message: sweepMetrics(), invocation: FIXTURE_INVOCATION },
-    ]);
-    const urgentJournal = join(f.root, 'urgent-journal');
-    writeFileSync(urgentJournal, journal(106));
-    const urgent = f.run({ FIXTURE_JOURNAL: urgentJournal });
-    expect(urgent.status).not.toBe(0);
-    expect(f.report().service.wall_seconds).toBe(106 * 60);
-    expect(f.report().errors.join('\n')).toContain('close to the unit');
-
-    const slowJournal = join(f.root, 'slow-journal');
-    writeFileSync(slowJournal, journal(95));
-    const slow = f.run({ FIXTURE_JOURNAL: slowJournal });
-    expect(slow.status, slow.stderr).toBe(0);
-    expect(f.report().ready).toBe(true);
-    expect(f.report().warnings.join('\n')).toContain('took 95 minutes');
-  });
-
-  test('a throttled sweep is flagged', () => {
-    const f = corpusFixture();
-    const journal = join(f.root, 'throttled-journal');
-    writeFileSync(journal, journalText([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 4200, message: sweepMetrics(4, 2, 100), invocation: FIXTURE_INVOCATION },
-    ]));
-    const result = f.run({ FIXTURE_JOURNAL: journal });
-    expect(result.status).not.toBe(0);
-    expect(f.report().service.throttles).toBe(100);
-    expect(f.report().errors.join('\n')).toContain('throttle');
-  });
-
-  test('a sweep that recorded no statistics requests is not ready', () => {
-    // Zero is a missing measurement, not agreement: the drift check cannot pass
-    // what it never saw.
-    const f = corpusFixture();
-    f.writeJournal([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 4200, message: sweepMetrics(0, 2), invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().errors.join('\n')).toContain('no statistics requests against 4 items due for statistics');
-  });
-
-  test('statistics reused from the cache are not counted as missing requests', () => {
-    const f = corpusFixture();
-    const newest = f.observationPath(f.names[2]);
-    const sweep = (statistics: number, cached: number) => {
-      writeFileSync(newest, sweepLog(f.newestStart, 4, 2, 1, cached));
-      utimesSync(newest, f.newestStart + 4200, f.newestStart + 4200);
-      f.writeJournal([
-        { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
-        { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-        { at: f.newestStart + 4200, message: sweepMetrics(statistics, 2), invocation: FIXTURE_INVOCATION },
-      ]);
-      const result = f.run();
-      return { result, errors: f.report().errors.join('\n') };
-    };
-    let outcome = sweep(1, 3);
-    expect(outcome.result.status, outcome.errors).toBe(0);
-    outcome = sweep(0, 4);
-    expect(outcome.result.status, outcome.errors).toBe(0);
-    // Every item reused its statistics, yet requests were made: drift.
-    outcome = sweep(4, 4);
-    expect(outcome.result.status).not.toBe(0);
-    expect(outcome.errors).toContain('4 statistics requests although every item reused cached statistics');
-    // Fetched items still need their requests.
-    outcome = sweep(0, 1);
-    expect(outcome.errors).toContain('no statistics requests against 3 items due for statistics');
-  });
-
-  test('a metrics line with no statistics count at all is not ready', () => {
-    const f = corpusFixture();
-    const noStatistics = sweepMetrics().replace('statistics=4 orders=2 riven=0 other=0] ok[catalog=1 statistics=4 orders=2',
-      'orders=2 riven=0 other=0] ok[catalog=1 orders=2');
-    f.writeJournal([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 4200, message: noStatistics, invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().service.statistics_attempts).toBeNull();
-    expect(f.report().errors.join('\n')).toContain('no statistics requests');
-  });
-
-  test('orders requests are checked against the sweep that ran them', () => {
-    const f = corpusFixture();
-    f.writeJournal([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 4200, message: sweepMetrics(4, 9), invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().service.orders_attempts).toBe(9);
-    expect(f.report().errors.join('\n')).toContain('9 orders requests against 2 kept rows');
-  });
-
-  test('an invocation whose start cannot be established is not ready', () => {
-    // Without the invocation's own start line there is no wall clock to gate on,
-    // and a silently skipped gate is how a hung sweep passes.
-    const f = corpusFixture();
-    f.writeJournal([
-      { at: f.newestStart - 9000, message: 'wfm-scrape.service: Deactivated successfully.' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 4200, message: sweepMetrics(), invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().service.wall_seconds).toBeNull();
-    expect(f.report().errors.join('\n')).toContain('no start timestamp');
-  });
-
-  test('an invocation interleaved with another sweep is not ready', () => {
-    const f = corpusFixture();
-    f.writeJournal([
-      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
-      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart + 10, message: 'scraper: other', invocation: 'b'.repeat(32) },
-      { at: f.newestStart + 4200, message: sweepMetrics(), invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().service.wall_seconds).toBeNull();
-    expect(f.report().errors.join('\n')).toContain('interleaves invocation');
-  });
-
-  test('an invocation that pairs with no observation log is not ready', () => {
-    const f = corpusFixture();
-    f.writeJournal([
-      { at: f.newestStart - 3600, message: 'Starting wfm-scrape.service - x' },
-      { at: f.newestStart - 3600, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
-      { at: f.newestStart - 3500, message: sweepMetrics(), invocation: FIXTURE_INVOCATION },
-    ]);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.report().service.sweep_log).toBeNull();
-    expect(f.report().errors.join('\n')).toContain('does not pair with any observation log');
-  });
-
-  test('external-backup is ready and says preservation is not verified here', () => {
-    // The corpus is protected by host-level backups of the whole container,
-    // which this check cannot see. Claiming the backup is verified would report
-    // an unverified one as safe; the report has to say which claim it makes.
-    const f = corpusFixture();
-    const result = f.run({ OBSERVATIONS_PRESERVATION: 'external-backup' });
-    expect(result.status, result.stderr).toBe(0);
-    const report = f.report();
-    expect(report.ready).toBe(true);
-    expect(report.preservation.mode).toBe('external-backup');
-    expect(report.preservation.status).toBe('declared-external');
-    expect(report.preservation.independently_verified_from_this_host).toBe(false);
-    expect(report.errors).toEqual([]);
-    expect(report.errors.join('\n')).not.toMatch(/preserv/i);
-  });
-
-  test('the --preservation flag overrides the mode the unit declared', () => {
-    const f = corpusFixture();
-    const result = f.run({ OBSERVATIONS_PRESERVATION: 'tape-drive' }, ['--preservation', 'external-backup']);
-    expect(result.status, result.stderr).toBe(0);
-    expect(f.report().preservation.mode).toBe('external-backup');
-  });
-
-  test('the retired on-box-archive mode is not ready', () => {
-    const f = corpusFixture();
-    const result = f.run({ OBSERVATIONS_PRESERVATION: 'on-box-archive' });
-    expect(result.status).not.toBe(0);
-    expect(f.report().errors.join('\n')).toContain("unrecognised preservation mode 'on-box-archive'");
-  });
-
-  for (const [label, value] of [['unset', undefined], ['empty', '']] as const) {
-    test(`an ${label} preservation mode is not ready`, () => {
-      // No mode is not the same as the friendly mode, and an empty assignment is
-      // not a declaration either. The unit's EnvironmentFile is optional, so a
-      // missing file reaches this path with the variable absent; the report has
-      // to say the declaration is missing instead of leaving preservation
-      // unmentioned or defaulting to something green.
-      const f = corpusFixture();
-      const result = f.run({ OBSERVATIONS_PRESERVATION: value });
-      expect(result.status, result.stderr).not.toBe(0);
-      const report = f.report();
-      expect(report.ready).toBe(false);
-      expect(report.preservation.mode).toBeNull();
-      expect(report.preservation.status).toBe('undeclared');
-      expect(report.errors.join('\n')).toContain('preservation mode not declared');
-    });
-  }
-
-  test('an unrecognised preservation mode is not ready', () => {
-    const f = corpusFixture();
-    const result = f.run({ OBSERVATIONS_PRESERVATION: 'tape-drive' });
-    expect(result.status, result.stderr).not.toBe(0);
-    expect(f.report().preservation.status).toBe('undeclared');
-    expect(f.report().errors.join('\n')).toContain("unrecognised preservation mode 'tape-drive'");
-  });
 });
 
-// ---- LXC backup pull-and-verify --------------------------------------------
-//
-// The real tar and zstd run here. The point of the script is that it proves the
-// archive it stored is listable and its corpus readable; a stub would only prove
-// that it called a stub. ssh and scp run locally against a fixture dump
-// directory, in the same shape as the archive tests above.
-
-function tarZstd(staging: string, outDir: string, name: string, members: Array<{ path: string; body: string }>): string {
-  const stage = join(staging, name);
-  for (const member of members) write(join(stage, member.path), member.body);
-  const out = join(outDir, name);
-  const built = spawnSync('tar', ['--zstd', '-cf', out, '-C', stage, '.'], { encoding: 'utf8' });
-  expect(built.status, built.stderr).toBe(0);
-  return out;
-}
-
-const CORPUS_HEADER = '{"kind":"run","format":1,"items":3800,"workers":2}\n';
-
-describe.skipIf(process.platform === 'win32')('lxc backup pull and verify', () => {
-  function fixture() {
-    const root = mkdtempSync(join(tmpdir(), 'lxc-backup-')); directories.push(root);
-    const dump = join(root, 'dump'), dest = join(root, 'dest'), bin = join(root, 'bin'), staging = join(root, 'staging');
-    for (const path of [dump, dest, bin, staging]) mkdirSync(path);
-    // ssh runs the remote command locally, so the script's own listing and
-    // stat calls run unmodified against the fixture. scp copies locally and
-    // records that it ran, which is how the dry run proves it fetched nothing.
-    write(join(bin, 'fake-ssh'), [
-      '#!/bin/sh',
-      'while [ $# -gt 0 ]; do',
-      '  case "$1" in',
-      '    -o) shift 2;;',
-      '    -*) shift;;',
-      '    *) break;;',
-      '  esac',
-      'done',
-      'host="$1"; shift',
-      'exec sh -c "$*"',
-      '',
-    ].join('\n'));
-    write(join(bin, 'fake-scp'), [
-      '#!/bin/sh',
-      'printf "%s\\n" "$*" >> "$FIXTURE_SCP_CALLS"',
-      'while [ $# -gt 0 ]; do',
-      '  case "$1" in',
-      '    -o) shift 2;;',
-      '    -*) shift;;',
-      '    *) break;;',
-      '  esac',
-      'done',
-      'src="$1"; dest="$2"',
-      'cp "${src#*:}" "$dest"',
-      '',
-    ].join('\n'));
-    chmodSync(join(bin, 'fake-ssh'), 0o755);
-    chmodSync(join(bin, 'fake-scp'), 0o755);
-    const scpCalls = join(root, 'scp.calls');
-    writeFileSync(scpCalls, '');
-
-    // One sweep's JSONL in the shape the writer emits, inside the container
-    // path a vzdump archive stores it under.
-    const sweep = (name: string, header = CORPUS_HEADER) => ({
-      path: `srv/wfm/observations/${name}`,
-      body: header + '{"kind":"item","slug":"x","outcome":"kept"}\n{"kind":"summary","scanned":1,"kept":1}\n',
-    });
-    const archive = (name: string, options: { logs?: string[]; header?: string; mtime?: number } = {}) => {
-      const logs = options.logs ?? ['sweep-2026-09-17T01-04-38Z.jsonl'];
-      const path = tarZstd(staging, dump, name, logs.map(log => sweep(log, options.header)));
-      utimesSync(path, options.mtime ?? 1000, options.mtime ?? 1000);
-      return path;
-    };
-    const sidecar = (name: string) => writeFileSync(join(dump, name.replace(/\.tar\.zst$/, '.log')), 'INFO: Backup finished\n');
-    const manifestPath = join(dest, 'manifest.jsonl');
-    const run = (args: string[] = [], env: Record<string, string> = {}) => spawnSync('bash', [backupScript, ...args], {
-      encoding: 'utf8',
-      env: {
-        ...process.env, HOST: 'fixture-node', VMID: '110', DUMP_DIR: dump, DEST: dest,
-        SSH: join(bin, 'fake-ssh'), SCP: join(bin, 'fake-scp'),
-        FIXTURE_SCP_CALLS: scpCalls, ...env,
-      },
-    });
-    return {
-      root, dump, dest, staging, sidecar, archive, run, manifestPath,
-      manifest: () => readFileSync(manifestPath, 'utf8'),
-    };
-  }
-
-  test('a nightly archive is copied and proven restorable, and the receipt records it', () => {
-    const f = fixture();
-    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
-    const logs = [
-      'sweep-2026-09-15T01-04-38Z.jsonl',
-      'sweep-2026-09-16T01-04-38Z.jsonl',
-      'sweep-2026-09-17T01-04-38Z.jsonl',
-    ];
-    f.archive(name, { mtime: 1000, logs });
-    f.sidecar(name);
-    const result = f.run();
-    expect(result.status, result.stderr).toBe(0);
-    const local = join(f.dest, name);
-    expect(existsSync(local), 'the archive must be copied').toBe(true);
-    expect(existsSync(join(f.dest, name.replace(/\.tar\.zst$/, '.log'))), 'and its log').toBe(true);
-    const rows = f.manifest().trimEnd().split('\n').map(line => JSON.parse(line));
-    expect(rows).toHaveLength(1);
-    expect(rows[0].name).toBe(name);
-    expect(rows[0].bytes).toBe(readFileSync(local).length);
-    expect(rows[0].sha256).toBe(createHash('sha256').update(readFileSync(local)).digest('hex'));
-    expect(rows[0].verified_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-    expect(rows[0].corpus_logs).toBe(3);
-    expect(rows[0].newest_corpus_log).toBe('srv/wfm/observations/sweep-2026-09-17T01-04-38Z.jsonl');
-  });
-
-  test('re-running with the same newest archive downloads nothing and repeats nothing', () => {
-    const f = fixture();
-    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
-    f.archive(name, { mtime: 1000 });
-    expect(f.run().status).toBe(0);
-    const before = f.manifest();
-    writeFileSync(join(f.root, 'scp.calls'), '');
-    const second = f.run();
-    expect(second.status, second.stderr).toBe(0);
-    expect(second.stdout).toContain('already verified');
-    expect(readFileSync(join(f.root, 'scp.calls'), 'utf8'), 'nothing may be re-fetched').toBe('');
-    expect(f.manifest()).toBe(before);
-  });
-
-  test('--dry-run reports the archive without fetching it', () => {
-    const f = fixture();
-    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
-    f.archive(name, { mtime: 1000 });
-    const result = f.run(['--dry-run']);
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stdout).toContain(name);
-    expect(readFileSync(join(f.root, 'scp.calls'), 'utf8')).toBe('');
-    expect(readdirSync(f.dest)).toEqual([]);
-    expect(existsSync(f.manifestPath)).toBe(false);
-  });
-
-  // A corrupt archive must fail loudly and must not touch what was already
-  // proven: the .part download is verified before it can replace a good copy.
-  const corruptions: Array<{ label: string; message: RegExp; make: (f: ReturnType<typeof fixture>, name: string) => void }> = [
-    {
-      label: 'a body that is not a zstd stream',
-      message: /zstd/,
-      make: (f, name) => {
-        const path = join(f.dump, name);
-        writeFileSync(path, 'this is not a zstd stream');
-        utimesSync(path, 2000, 2000);
-      },
-    },
-    {
-      label: 'a zstd stream that is not a tar archive',
-      message: /tar/,
-      make: (f, name) => {
-        const path = join(f.dump, name);
-        spawnSync('zstd', ['-q', '-f', '-o', path], { input: Buffer.from('this is not a tar archive') });
-        utimesSync(path, 2000, 2000);
-      },
-    },
-    {
-      label: 'a corpus log whose first record has a kind other than run',
-      message: /kind/,
-      make: (f, name) => f.archive(name, { header: '{"kind":"item","format":1,"items":3}\n', mtime: 2000 }),
-    },
-    {
-      label: 'a run header that reports no items',
-      message: /positive integer/,
-      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":0}\n', mtime: 2000 }),
-    },
-    {
-      // A prefix test accepted this: the line starts with `{"kind":"run"` and a
-      // greedy grep finds `"items":3`. A truncated record is not a run header,
-      // and a replay cannot read the fields out of a line that is not JSON.
-      label: 'a truncated run header',
-      message: /valid JSON/,
-      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":3', mtime: 2000 }),
-    },
-    {
-      label: 'a run header followed by text that is not part of the object',
-      message: /valid JSON/,
-      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":3} trailing\n', mtime: 2000 }),
-    },
-    {
-      label: 'a run header for an unsupported format',
-      message: /format/,
-      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":2,"items":3}\n', mtime: 2000 }),
-    },
-    {
-      label: 'a run header whose items is a string rather than a number',
-      message: /positive integer/,
-      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":"3"}\n', mtime: 2000 }),
-    },
-  ];
-
-  for (const corruption of corruptions) {
-    test(`a new archive with ${corruption.label} is not recorded as good`, () => {
-      const f = fixture();
-      const good = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
-      f.archive(good, { mtime: 1000 });
-      expect(f.run().status).toBe(0);
-      const before = f.manifest();
-      const corrupt = 'vzdump-lxc-110-2026_09_18-03_00_02.tar.zst';
-      corruption.make(f, corrupt);
-      const result = f.run();
-      expect(result.status, 'a corrupt archive must not pass').not.toBe(0);
-      expect(result.stderr).toMatch(corruption.message);
-      expect(f.manifest(), 'the previous receipt must survive').toBe(before);
-      expect(existsSync(join(f.dest, good)), 'the proven archive must survive').toBe(true);
-      expect(existsSync(join(f.dest, corrupt)), 'the failed copy must not land').toBe(false);
-    });
-  }
-
-  test('a transfer that cannot reach the node records nothing', () => {
-    const f = fixture();
-    f.archive('vzdump-lxc-110-2026_09_17-03_00_02.tar.zst', { mtime: 1000 });
-    const result = f.run([], { SCP: join(f.root, 'no-such-scp') });
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('could not fetch');
-    expect(existsSync(f.manifestPath)).toBe(false);
-    expect(readdirSync(f.dest)).toEqual([]);
-  });
-
-  test('a corrupted re-fetch of the same name leaves the proven copy and receipt in place', () => {
-    // The transfer verifies before it replaces anything: a bad copy of an
-    // archive already held must not overwrite the bytes that were proven.
-    const f = fixture();
-    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
-    f.archive(name, { mtime: 1000 });
-    expect(f.run().status).toBe(0);
-    const before = f.manifest();
-    const original = readFileSync(join(f.dest, name));
-    writeFileSync(join(f.dump, name), 'truncated');
-    utimesSync(join(f.dump, name), 3000, 3000);
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(f.manifest()).toBe(before);
-    expect(readFileSync(join(f.dest, name)).equals(original), 'the proven archive must be byte-for-byte intact').toBe(true);
-  });
-
-  test('a dump directory with no matching archive is a refusal, not an empty success', () => {
-    const f = fixture();
-    const result = f.run();
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('no vzdump');
-    expect(existsSync(f.dest)).toBe(true);
-    expect(readdirSync(f.dest)).toEqual([]);
-  });
-
-  test('rotation keeps the newest KEEP archives and drops their receipts with them', () => {
-    const f = fixture();
-    const names = ['2026_09_14', '2026_09_15', '2026_09_16', '2026_09_17']
-      .map(stamp => `vzdump-lxc-110-${stamp}-03_00_02.tar.zst`);
-    for (const [index, name] of names.entries()) {
-      f.archive(name, { mtime: 1000 + index });
-      f.sidecar(name);
-      expect(f.run([], { KEEP: '2' }).status).toBe(0);
-    }
-    expect(readdirSync(f.dest).filter(entry => entry.endsWith('.tar.zst')).sort()).toEqual([names[2]!, names[3]!]);
-    expect(readdirSync(f.dest).filter(entry => entry.endsWith('.log')).sort())
-      .toEqual([names[2]!.replace(/\.tar\.zst$/, '.log'), names[3]!.replace(/\.tar\.zst$/, '.log')]);
-    const rows = f.manifest().trimEnd().split('\n').map(line => JSON.parse(line));
-    expect(rows.map(row => row.name).sort()).toEqual([names[2]!, names[3]!]);
-  });
-
-  test('a KEEP below one is refused rather than deleting what was just proven', () => {
-    const f = fixture();
-    f.archive('vzdump-lxc-110-2026_09_17-03_00_02.tar.zst', { mtime: 1000 });
-    const result = f.run([], { KEEP: '0' });
-    expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain('KEEP');
-    expect(readdirSync(f.dest)).toEqual([]);
-  });
-
-  test('a missing HOST or VMID aborts before anything is fetched', () => {
-    const f = fixture();
-    f.archive('vzdump-lxc-110-2026_09_17-03_00_02.tar.zst', { mtime: 1000 });
-    for (const env of [{ HOST: '' }, { VMID: '' }]) {
-      const result = f.run([], env);
-      expect(result.status).not.toBe(0);
-      expect(readFileSync(join(f.root, 'scp.calls'), 'utf8')).toBe('');
-    }
-  });
-});
-
-// ---- Steam player-count logger ----------------------------------------------
-
-// The series is only useful if a gap stays a gap: a failed call or an
-// unexpected body that wrote `0` would read as nobody playing.
 describe.skipIf(process.platform === 'win32')('player-count logger', () => {
   const script = fileURLToPath(new URL('../deploy/log-players.sh', import.meta.url));
 
