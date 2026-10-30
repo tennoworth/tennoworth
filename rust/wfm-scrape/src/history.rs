@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 use chrono::{Duration, NaiveDate};
-use market_math::{canonical_subtype, drop_poisoned_rows, rank0_rows, subtype_rows, StatsDay};
+use market_domain::math::{canonical_subtype, drop_poisoned_rows, rank0_rows, subtype_rows, StatsDay};
 use serde::{Deserialize, Serialize};
 
 use crate::ingest::Http;

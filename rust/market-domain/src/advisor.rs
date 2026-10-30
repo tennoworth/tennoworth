@@ -1,4 +1,4 @@
-use market_math::stat_median as median;
+use crate::math::stat_median as median;
 use chrono::{DateTime, NaiveDate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

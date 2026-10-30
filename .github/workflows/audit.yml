@@ -92,7 +92,6 @@ jobs:
               # to wasm32 by scripts/build-domain-wasm.ts.
               - 'rust/market-domain/**'
               - 'rust/market-domain-wasm/**'
-              - 'rust/market-math/**'
               - 'rust/Cargo.lock'
               - 'scripts/build-domain-wasm.ts'
               - 'scripts/sync-csp.ts'

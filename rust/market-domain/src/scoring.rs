@@ -1,5 +1,5 @@
 use crate::inventory::OwnedItem;
-use market_math::sell_priority::{self, PricedEntry};
+use crate::math::sell_priority::{self, PricedEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;

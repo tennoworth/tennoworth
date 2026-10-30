@@ -6,7 +6,7 @@ description = "Host-only market pipeline: `build` renders market.json + wfstat-c
 license = "MIT"
 
 [dependencies]
-market-math = { path = "../market-math" }
+market-domain = { path = "../market-domain" }
 wfm-client = { path = "../wfm-client" }
 csv = "1"
 serde = { workspace = true }

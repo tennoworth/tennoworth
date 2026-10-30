@@ -3,9 +3,6 @@
 #                         encrypted-JWT storage, listing/order service, pending-plan
 #                         store. No terminal I/O - the
 #                         desktop shell drives it over IPC.
-#   market-math         - pure market-data heuristics (ported from the retired
-#                         wfm_demand.py). No I/O, no deps. Keep it pure - that's
-#                         what makes it testable against the shared fixtures.
 #   wfm-scrape          - host-only pipeline crate: `build` renders market.json
 #                         + wfstat-catalog.json, `scrape` runs the WFM scrape.
 #                         The ONLY pipeline; fixture
@@ -15,7 +12,8 @@
 #                         retry backoff). Primitives only: do not grow it into
 #                         one abstraction spanning anonymous scraping and authed
 #                         order mutation.
-#   market-domain       - native decision contracts: inventory normalization,
+#   market-domain       - pure market heuristics (`math`, no I/O or clock) and
+#                         native decision contracts: inventory normalization,
 #                         scoring, planners, generated IPC types.
 #   tennoworth-desktop  - Tauri v2 shell, the app users actually install.
 #                         Drives wfm-core over IPC - the only player adapter.
@@ -24,7 +22,7 @@
 #   tennoworth-announcements - pure feed contract shared by readers and publishers.
 #   tennoworth-publisher - private host-only announcement publication service.
 [workspace]
-members = ["wfm-core", "market-math", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "collector-gate", "tennoworth-announcements", "tennoworth-publisher"]
+members = ["wfm-core", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "collector-gate", "tennoworth-announcements", "tennoworth-publisher"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping

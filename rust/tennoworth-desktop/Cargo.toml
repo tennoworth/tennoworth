@@ -73,7 +73,6 @@ wfm-core = { path = "../wfm-core" }
 wfm-client = { path = "../wfm-client" }
 # The sell-priority scoring (single source of truth, mirrored in sell-priority.ts)
 # used to rank the tray + notification sellables. Pure, no-dep crate.
-market-math = { path = "../market-math" }
 # `bundled` compiles SQLite from source - no system libsqlite3 dependency, so the
 # canonical desktop store works on a clean Windows/Linux box with nothing
 # pre-installed (matches the "download → works" goal).

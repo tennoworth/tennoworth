@@ -1,4 +1,4 @@
-use market_math::sell_priority::{clearing_price, PricedEntry};
+use crate::math::sell_priority::{clearing_price, PricedEntry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;

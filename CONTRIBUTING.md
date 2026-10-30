@@ -326,7 +326,7 @@ sufficient space; a small memory-backed `/tmp` can fill during linking.
 
 ## Domain and pipeline work without the desktop toolchain
 
-From `rust/`, `cargo test -p market-math -p wfm-client -p wfm-scrape` exercises
+From `rust/`, `cargo test -p market-domain -p wfm-client -p wfm-scrape` exercises
 these crates without the desktop's GTK/Tesseract dependencies. Pipeline
 integration tests build and run the current binary against frozen fixtures.
 
