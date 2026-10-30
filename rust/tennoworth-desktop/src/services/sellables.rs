@@ -697,6 +697,42 @@ mod tests {
     }
 
     #[test]
+    fn tray_ranks_a_component_suffixed_path_like_the_table_does() {
+        let market = MarketData::bundled();
+        let db = Db::open_in_memory().unwrap();
+        let snapshot = [crate::persistence::SnapshotItem {
+            slug: "/Lotus/Upgrades/Mods/Shotgun/DualStat/AcceleratedBlastModComponent".into(),
+            count: 2,
+            leveled: 0,
+        }];
+        db.insert_snapshot("memory", Some("1970-01-01T00:01:40Z"), None, &snapshot)
+            .unwrap();
+        let ranked = rank_sellables(&db, &market);
+        assert!(
+            ranked.iter().any(|row| row.slug == "accelerated_blast"),
+            "the catalog's suffix fallback must reach the tray: {:?}",
+            ranked.iter().map(|row| &row.slug).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn refined_relics_stay_out_of_slug_only_counts() {
+        let market = MarketData::bundled();
+        let relic = bundled_catalog_path_named(" Intact");
+        assert!(market.resolve(&relic).is_none(), "{relic} merged into a refinement-less slug");
+    }
+
+    fn bundled_catalog_path_named(suffix: &str) -> String {
+        let pairs: Vec<(String, market_domain::inventory::CatalogItem)> =
+            serde_json::from_str(BUNDLED_CATALOG).unwrap();
+        pairs
+            .into_iter()
+            .find(|(_, info)| info.name.ends_with(suffix) && info.name.starts_with("Lith "))
+            .map(|(path, _)| path)
+            .expect("bundled catalog lists a refined Lith relic")
+    }
+
+    #[test]
     fn unresolvable_and_untradeable_paths_are_none_or_slugless() {
         let m = MarketData::bundled();
         // Pure garbage path → None.
