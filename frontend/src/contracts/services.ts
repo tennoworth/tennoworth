@@ -2,7 +2,7 @@ import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFi
 import type { UpdateNotesServices, UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
 import type { BaroStock, Inventory, Market, OwnedRecord } from './data';
-import type { Catalogs } from '../domain/resolver';
+import type { Catalogs } from './catalogs';
 import type { SessionCandidate, SessionPlan } from '../domain/trade-session';
 import type { BuildPath, BuildPlan, DucatPlan, RecipeEntry, RelicPlanEntry, ScrapCandidate, SetPart, SetReco, Verdict } from './generated/domain';
 import type { AdvisorRequest, SessionRequest, ScoredInventoryFact } from './generated/domain';
