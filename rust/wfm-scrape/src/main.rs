@@ -14,19 +14,29 @@
 use chrono::Utc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use wfm_scrape::pipeline::{build, find_root};
+use wfm_scrape::pipeline::{build, find_root, Dirs};
 use wfm_scrape::{clock, ingest::LiveHttp};
 
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let Some(command) = args.get(1) else {
-        eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--now <ISO>]");
+        eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--data-dir <DIR>] [--publish-dir <DIR>] [--now <ISO>]");
         return std::process::ExitCode::FAILURE;
     };
-    let _output_lock = if extract_flag(&args, "--fixtures-dir").is_none() && matches!(command.as_str(), "scrape" | "build") {
-        let directory = if command == "scrape" {
-            PathBuf::from(extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())).parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new(".")).to_path_buf()
-        } else { find_root().unwrap_or_else(|_| PathBuf::from(".")) };
+    let live = extract_flag(&args, "--fixtures-dir").is_none();
+    let dirs = if live && command == "build" {
+        match Dirs::resolve(extract_flag(&args, "--data-dir").map(PathBuf::from), extract_flag(&args, "--publish-dir").map(PathBuf::from)) {
+            Ok(dirs) => Some(dirs),
+            Err(error) => { eprintln!("error: {error}"); return std::process::ExitCode::FAILURE; }
+        }
+    } else { None };
+    // The lock directory also holds the WFM cooldown and policy state, so
+    // `scrape` and `build` must name the same one: the CSV's directory.
+    let _output_lock = if live && matches!(command.as_str(), "scrape" | "build") {
+        let directory = match &dirs {
+            Some(dirs) => dirs.data.clone(),
+            None => PathBuf::from(extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())).parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new(".")).to_path_buf(),
+        };
         match acquire_output(&directory) {
             Ok(file) => Some(file),
             Err(error) => { eprintln!("{error}"); return std::process::ExitCode::FAILURE; }
@@ -38,7 +48,7 @@ fn main() -> std::process::ExitCode {
             let fixtures_dir = extract_flag(&args, "--fixtures-dir");
             let now_arg = extract_flag(&args, "--now");
             let fixtures_path = fixtures_dir.as_deref().map(std::path::Path::new);
-            build(fixtures_path, now_arg.as_deref())
+            build(fixtures_path, now_arg.as_deref(), dirs.as_ref())
         }
         "scrape" => run_scrape_cmd(&args),
         _ => {
@@ -53,7 +63,7 @@ fn main() -> std::process::ExitCode {
         let published = if command == "scrape" {
             extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())
         } else {
-            "frontend/public/market.json".to_string()
+            dirs.as_ref().map_or_else(|| "frontend/public/market.json".to_string(), |dirs| dirs.publish.join("market.json").display().to_string())
         };
         eprintln!(
             "{}",
@@ -180,8 +190,9 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// `wfm-scrape history [--out <history.json>] [--market <market.json>]
-///                    [--days N] [--bootstrap-days N] [--now <ISO>]`
+/// `wfm-scrape history [--publish-dir <DIR>] [--out <history.json>]
+///                    [--market <market.json>] [--days N] [--bootstrap-days N]
+///                    [--now <ISO>]`
 ///
 /// Box-only, run AFTER `build` (it joins relics.run's display names through
 /// the freshly written market.json catalog). The output file is also the
@@ -193,8 +204,10 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
     let now = extract_flag(args, "--now")
         .map(|s| clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
         .unwrap_or_else(|| Ok(Utc::now()))?;
-    let root = find_root().ok();
-    let public = root.as_ref().map(|r| r.join("frontend").join("public"));
+    let public = match extract_flag(args, "--publish-dir") {
+        Some(dir) => Some(PathBuf::from(dir)),
+        None => find_root().ok().map(|root| root.join("frontend").join("public")),
+    };
     let out = extract_flag(args, "--out")
         .map(PathBuf::from)
         .or_else(|| public.as_ref().map(|p| p.join("history.json")))

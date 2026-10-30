@@ -1,4 +1,4 @@
-use super::find_root;
+use super::Dirs;
 use crate::ingest::{FixtureHttp, Http, LiveHttp};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -11,7 +11,7 @@ pub(super) struct BuildInputs {
     pub(super) prior: serde_json::Value,
 }
 
-pub(super) fn prepare(fixtures_dir: Option<&Path>) -> Result<BuildInputs, String> {
+pub(super) fn prepare(fixtures_dir: Option<&Path>, dirs: Option<&Dirs>) -> Result<BuildInputs, String> {
     let (http, csv_path, json_out, catalog_out, prior): (
         Box<dyn Http>,
         PathBuf,
@@ -41,13 +41,13 @@ pub(super) fn prepare(fixtures_dir: Option<&Path>) -> Result<BuildInputs, String
         }
         (Box::new(http), csv, out, cat, prior)
     } else {
-        let root = find_root()?;
-        let csv = root.join("wfm_results.csv");
-        let out = root.join("frontend").join("public").join("market.json");
-        let cat = root
-            .join("frontend")
-            .join("public")
-            .join("wfstat-catalog.json");
+        let dirs = match dirs {
+            Some(dirs) => dirs.clone(),
+            None => Dirs::resolve(None, None)?,
+        };
+        let csv = dirs.data.join("wfm_results.csv");
+        let out = dirs.publish.join("market.json");
+        let cat = dirs.publish.join("wfstat-catalog.json");
 
         let client = reqwest::blocking::Client::builder()
             .retry(reqwest::retry::never())

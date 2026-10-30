@@ -177,8 +177,8 @@ export function cmdSnapshotCheck(argv: string[]) {
 }
 
 const REMOTE_SNAPSHOT_SCRIPT = `set -euo pipefail
-APP=/srv/wfm/app
-exec 9<"$APP"
+PUBLISH=/srv/wfm/data/public
+exec 9<"$PUBLISH"
 if ! flock -n 9; then
   echo "ABORT: wfm-scrape currently owns the snapshot lock; retry after it finishes." >&2
   exit 75
@@ -188,7 +188,7 @@ case "\${state:-unknown}" in
   inactive|failed) ;;
   *) echo "ABORT: wfm-scrape.service is \${state:-unknown}; retry after it finishes." >&2; exit 75 ;;
 esac
-cd "$APP/frontend/public"
+cd "$PUBLISH"
 market_size=$(stat -c %s market.json)
 resolver_size=$(stat -c %s wfstat-catalog.json)
 printf '%s\\n%s\\n' "$market_size" "$resolver_size"

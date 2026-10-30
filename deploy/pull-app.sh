@@ -9,72 +9,17 @@
 # The scrape pipeline is not one of them: scripts/deploy-scrape-host.sh is the
 # only installer of run-scrape.sh, the binary and the units.
 #
-# This is not `git pull`, and the difference matters:
-#
-#   Caddy serves /market.json and /wfstat-catalog.json from frontend/public/
-#   (the @livedata matcher), NOT from dist/. Those two files are the LIVE
-#   production snapshot and the box's copies are normally newer than the repo's
-#   release-time bootstrap pair. A plain pull either refuses because they're
-#   modified, or discards them and serves users an old snapshot until the next
-#   scrape.
-#
-# So: stash the live artifacts, fast-forward, put them back.
-#
-# Refuses to run while a scrape is in flight: the fast-forward rewrites the
-# checkout and restores the live artifacts the sweep reads and writes, and this
-# script does not take run-scrape.sh's output lock.
+# The checkout holds no live data: the pipeline writes under /srv/wfm/data. So
+# this is a plain fast-forward, safe while a sweep runs, and a checkout that
+# cannot fast-forward is left exactly as it was.
 set -euo pipefail
 
 APP="${APP:-/srv/wfm/app}"
 REMOTE="${REMOTE:-github}"
 BRANCH="${BRANCH:-main}"
-
 DEPLOY_ROOT="${DEPLOY_ROOT:-/srv/wfm}"
-MIGRATE_LAYOUT=false
-case "${1:-}" in
-  '') ;;
-  --migrate-layout) MIGRATE_LAYOUT=true ;;
-  *) echo "usage: pull-app.sh [--migrate-layout]" >&2; exit 2 ;;
-esac
-
-layout_at() {
-  if git cat-file -e "$1:frontend/package.json" 2>/dev/null; then
-    echo frontend
-  elif git cat-file -e "$1:prototype/package.json" 2>/dev/null; then
-    echo prototype
-  else
-    echo "ABORT: $1 has no recognized frontend layout." >&2
-    return 1
-  fi
-}
 
 cd "$APP"
-
-# NOT `is-active --quiet`. A Type=oneshot service reports `activating` for the
-# WHOLE of its ExecStart and only reaches `active` on completion (and only with
-# RemainAfterExit, which wfm-scrape.service does not set) - so `is-active`
-# returns non-zero for the entire hour the scrape is actually running, and the
-# guard sailed through in precisely the window it exists to block. Observed on
-# the box 2026-08-11: `is-active` printed `activating` while a scrape was
-# mid-run and the pull proceeded anyway.
-#
-# Test the settled states instead, so any not-settled state counts as busy.
-scrape_state=$(systemctl show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)
-case "${scrape_state:-unknown}" in
-  # `unknown`/empty means systemd could not be queried at all (running this off
-  # the box, no such unit) - nothing to collide with, so proceed.
-  inactive|failed|unknown) ;;
-  *)
-    echo "ABORT: wfm-scrape.service is $scrape_state. Re-run when it finishes:" >&2
-    echo "  systemctl list-timers wfm-scrape.timer" >&2
-    # EX_TEMPFAIL, not 1: a scrape occupies ~60 of every 120 minutes, so
-    # wfm-app-pull.timer hits this on about half its ticks. A distinct code lets
-    # the unit whitelist "busy, try later" (SuccessExitStatus=75) while every
-    # real failure still goes red - and a human running this by hand still sees
-    # a non-zero exit.
-    exit 75
-    ;;
-esac
 
 # An up-to-date checkout still reconciles: a puller older than the commit it
 # fetched ran its own install list, so a newly added script lands on the next run.
@@ -92,8 +37,8 @@ reconcile_deployed() {
   # thing that still needs a human. That makes the install METHOD load-bearing:
   # `install` truncates and rewrites in place, and bash reads a script
   # incrementally - rewriting the file this process is still executing resumes it
-  # at a byte offset that is now different code (the same hazard the scrape guard
-  # above exists for). Stage beside the target and rename over it: rename swaps
+  # at a byte offset that is now different code. Stage beside the target and
+  # rename over it: rename swaps
   # the inode, so the running shell keeps reading the copy it started with.
   for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-collector.sh monitor-collector.sh log-players.sh; do
     src="deploy/$f"
@@ -144,94 +89,10 @@ if [ "$(git rev-parse HEAD)" = "$(git rev-parse "$REMOTE/$BRANCH")" ]; then
   exit 0
 fi
 
-source_layout=$(layout_at HEAD)
-target_layout=$(layout_at "$REMOTE/$BRANCH")
-if [[ "$source_layout" != "$target_layout" && "$MIGRATE_LAYOUT" != true ]]; then
-  echo "ABORT: repository layout changes from $source_layout to $target_layout." >&2
-  echo "Stop deployment timers and follow docs/repository-layout-transition.md before using --migrate-layout." >&2
-  exit 1
-fi
-
-# Keep logical artifact names separate from source paths: a fast-forward can
-# rename the source tree while the production snapshots are newer than Git.
-LIVE_ARTIFACTS=(wfstat-catalog.json history.json market-public.json market-home.json market.json)
-if [[ "$source_layout" != "$target_layout" ]]; then
-  # Keep the scan hotfix endpoint available under the old Caddy root until
-  # reload, including any operator override. Ordinary source updates still
-  # apply tracked definition changes through Git.
-  LIVE_ARTIFACTS=(definitions.json "${LIVE_ARTIFACTS[@]}")
-fi
-stash=$(mktemp -d)
-for name in "${LIVE_ARTIFACTS[@]}"; do
-  source="$source_layout/public/$name"
-  if [[ -f "$source" ]]; then cp -p "$source" "$stash/$name"; fi
-done
-if [[ -f wfm_results.csv ]]; then cp -p wfm_results.csv "$stash/wfm_results.csv"; fi
-if [[ "$source_layout" != "$target_layout" && -d "$source_layout/dist" ]]; then
-  cp -a "$source_layout/dist" "$stash/dist"
-fi
-
-restore_file() {
-  local source=$1 destination=$2
-  cp -p "$source" "$destination.restore" && mv -f "$destination.restore" "$destination"
-}
-
-restore_failed() {
-  echo "Recovery data retained at $stash; restore failed." >&2
-  exit 1
-}
-
-restore() {
-  local exit_status=$?
-  trap - EXIT
-  local restore_layout
-  restore_layout=$(layout_at HEAD) || {
-    echo "Recovery data retained at $stash; cannot determine the checkout layout." >&2
-    exit 1
-  }
-  mkdir -p "$restore_layout/public" || restore_failed
-  for name in "${LIVE_ARTIFACTS[@]}"; do
-    if [[ -f "$stash/$name" ]]; then
-      restore_file "$stash/$name" "$restore_layout/public/$name" || {
-        echo "Recovery data retained at $stash; restoring $name failed." >&2
-        exit 1
-      }
-    fi
-  done
-  if [[ -f "$stash/wfm_results.csv" ]]; then
-    restore_file "$stash/wfm_results.csv" wfm_results.csv || restore_failed
-  fi
-  if [[ -d "$stash/dist" && "$restore_layout" != "$source_layout" ]]; then
-    # Preserve the previously served bundle until the matching new bundle is
-    # installed. The old directory remains available for the Caddy transition.
-    mkdir -p "$restore_layout/dist" || restore_failed
-    cp -a "$stash/dist/." "$restore_layout/dist/" || restore_failed
-  fi
-  if [[ "$restore_layout" != "$source_layout" ]]; then
-    # Caddy still serves the old public path until its separately validated
-    # configuration is reloaded. Retire this copy only after that switch.
-    mkdir -p "$source_layout/public" || restore_failed
-    for name in "${LIVE_ARTIFACTS[@]}"; do
-      if [[ -f "$stash/$name" ]]; then
-        restore_file "$stash/$name" "$source_layout/public/$name" || restore_failed
-      fi
-    done
-  fi
-  rm -rf "$stash"
-  exit "$exit_status"
-}
-trap restore EXIT
-
-for name in "${LIVE_ARTIFACTS[@]}"; do
-  source="$source_layout/public/$name"
-  if git ls-files --error-unmatch "$source" >/dev/null 2>&1; then git checkout -- "$source"; fi
-done
-
 # Untracked files that the incoming commits add as TRACKED abort the merge.
 # Happens whenever something is hand-placed on the box before it lands in git.
-# If the box's copy is byte-identical, drop it and
-# let the merge bring it in; if it differs, that is a human decision, not
-# something a puller should overwrite.
+# If the box's copy is byte-identical, drop it and let the merge bring it in; if
+# it differs, that is a human decision, not something a puller should overwrite.
 incoming_untracked=$(git diff --name-only --diff-filter=A HEAD "$REMOTE/$BRANCH" 2>/dev/null || true)
 for f in $incoming_untracked; do
   [ -f "$f" ] || continue
@@ -249,5 +110,3 @@ git merge --ff-only "$REMOTE/$BRANCH"
 echo "pulled: $before -> $target"
 
 reconcile_deployed
-
-# restore() runs here via the trap, before anyone reads the result.

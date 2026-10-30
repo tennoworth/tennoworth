@@ -7,8 +7,9 @@ for release preparation.
 
 - `release.ts` (+ `release/`) - release preparation, snapshot validation and
   bundled app notes; keep its contracts covered by `release.test.ts`.
-- Deployment/layout helpers and their tests must preserve live data and follow
-  ../docs/repository-layout-transition.md.
+- Deployment helpers and their tests must preserve live data. On the host it
+  lives under `/srv/wfm/data`, never in the checkout (../docs/architecture.md,
+  "Data and failure boundaries").
 - `sync-csp.ts` - generates every Content-Security-Policy copy. The copies, the
   directives and the desktop variant are documented once, in
   ../frontend/AGENTS.md; read that before changing anything here.

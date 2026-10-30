@@ -148,7 +148,7 @@ its own migration for data already on users' machines or the host.
 | `app.tennoworth.desktop` | Tauri identifier, which names the app data directory holding the SQLite database |
 | IPC command and event names | `tauri::generate_handler!` registrations and the generated event constants |
 | `desktop-v*`, `*-latest` | release tags and rolling artifacts the updater and host pullers fetch |
-| `/srv/wfm`, user `wfm` | host layout and service account |
+| `/srv/wfm`, user `wfm` | host layout and service account; live data under `/srv/wfm/data/{scrape,public}` |
 
 ## Dependency direction
 
@@ -263,7 +263,12 @@ identity and never invent a quantity.
 
 The pipeline ingests upstream data, validates and builds the snapshot, then
 publishes the resolver catalog before the market file. CSV is intermediate
-input; `market.json` and `wfstat-catalog.json` are the consumer artifacts.
+input; `market.json` and `wfstat-catalog.json` are the consumer artifacts. On
+the host none of it lives in the checkout: the sweep's own state (CSV,
+statistics cache, WFM cooldown and policy copy) is in `/srv/wfm/data/scrape`,
+what the site serves is in `/srv/wfm/data/public`, and the checkout is
+root-owned and only fast-forwards. The tracked `frontend/public/market.json` is
+the bootstrap copy local runs and releases start from.
 Freshness is attached to the evidence actually fetched. Unavailable, malformed,
 unchanged, and authoritative-empty inputs are distinct outcomes.
 
@@ -307,11 +312,6 @@ A folder split alone cannot prevent coordination bugs. Preserve tests for
 concurrent scans, failed authentication, interrupted listing recovery, stale
 results, and error states whenever ownership changes. Browser previews cannot
 certify native capture; Windows and Linux runtime checks remain separate.
-
-The root rename affects deployment paths as well as imports. The installed
-puller refuses an unattended layout transition and retains live data during an
-explicit migration. Follow [repository-layout-transition.md](repository-layout-transition.md)
-for promotion and rollback; a source merge is not permission to migrate a host.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution tiers and executable
 setup/check commands.

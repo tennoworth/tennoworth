@@ -68,30 +68,21 @@ chown root:root /srv/wfm
 chown -R root:root /srv/wfm/bin
 chown root:root /srv/wfm/*.sh
 chown wfm:wfm /srv/wfm/data
+# The sweep's own state, and what the site serves (Caddy reads it).
+install -d -m 0750 -o wfm -g wfm /srv/wfm/data/scrape
+install -d -m 0755 -o wfm -g wfm /srv/wfm/data/public
 # The policy puller runs as wfm (wfm-policy-pull.service) and publishes here.
 chown -R wfm:wfm /srv/wfm/policy
-# The scraper writes its outputs into the checkout and the git pullers move it,
-# so that subtree stays writable by wfm. This is a KNOWN REMAINING ESCALATION
-# PATH, not an oversight: root installs the executed copies from this tree, so
-# until those installs are verified (SEC-3.4) or the pipeline writes to a
-# dedicated data directory (SEC-3.6), a wfm-writable checkout is still a route
-# to code root will run.
-chown -R wfm:wfm "$REPO"
+# Root installs the executed copies from the checkout, so a wfm-writable
+# checkout was a route to code root would run. The pipeline now writes only
+# under /srv/wfm/data, so the checkout is root's. The web bundle under
+# frontend/dist is replaced by root (pull-web.sh) as well.
+chown -R root:root "$REPO"
 
-# The pullers run as root against a wfm-owned checkout, which git rejects as
-# "dubious ownership" unless the path is vouched for. This exception is a
-# symptom, not a fix: root should not be running git against a repository a
-# lower-privileged account can rewrite (SEC-3.3). It stays only because the
-# scraper still writes its outputs into the checkout; it can be removed once
-# the pipeline writes to /srv/wfm/data and the checkout becomes root-owned.
-# It must be --system: --global writes /root/.gitconfig, which git only finds
-# via HOME, and systemd starts these units with no HOME set - so a --global
-# exception works when you run the script by hand over ssh and fails the moment
-# the timer fires it. safe.directory is also deliberately ignored from a repo's
-# own local config. --add unconditionally would stack a duplicate line on every
-# re-run; this script is meant to be safe to re-run.
-git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" \
-  || git config --system --add safe.directory "$REPO"
+# The checkout used to be wfm-owned, which made git reject root's pullers as
+# "dubious ownership" unless the path was vouched for. Root owns it now, so the
+# exception that box once needed is removed rather than kept as a standing hole.
+git config --system --unset-all safe.directory "$REPO" 2>/dev/null || true
 
 echo "==> Caddy config"
 if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'frontend/dist' /etc/caddy/Caddyfile; then

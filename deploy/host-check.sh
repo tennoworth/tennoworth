@@ -29,8 +29,8 @@ usage: host-check.sh [options]
                               pipeline is compared against (default /srv/wfm/app)
   --deploy-grace-hours <n>    how long pipeline changes in the checkout may wait
                               for a deploy before the host is not healthy (default 24)
-  --csv <path>                the sweep's CSV (default /srv/wfm/app/wfm_results.csv)
-  --snapshot <path>           published snapshot (default /srv/wfm/app/frontend/public/market.json)
+  --csv <path>                the sweep's CSV (default /srv/wfm/data/scrape/wfm_results.csv)
+  --snapshot <path>           published snapshot (default /srv/wfm/data/public/market.json)
   --disk-path <dir>           filesystem whose free space is checked (default /srv/wfm)
   --disk-floor-bytes <n>      free-space floor (default 1073741824)
   --now <iso>                 evaluation instant, for reproducing a report
@@ -42,8 +42,8 @@ DEPLOYED="/srv/wfm/deployed.json"
 BINARY="/srv/wfm/bin/wfm-scrape"
 APP="/srv/wfm/app"
 DEPLOY_GRACE_HOURS=24
-CSV="/srv/wfm/app/wfm_results.csv"
-SNAPSHOT="/srv/wfm/app/frontend/public/market.json"
+CSV="/srv/wfm/data/scrape/wfm_results.csv"
+SNAPSHOT="/srv/wfm/data/public/market.json"
 DISK_PATH="/srv/wfm"
 DISK_FLOOR_BYTES=1073741824
 BOUNDARY_GRACE_SECONDS=900

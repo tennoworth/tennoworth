@@ -19,75 +19,53 @@ function withoutUndefined(env: Record<string, string | undefined>): Record<strin
   return out;
 }
 
-function fixture(rename = true) {
-  const root = mkdtempSync(join(tmpdir(), 'deployment-layout-')); directories.push(root);
-  const remote = join(root, 'remote'), app = join(root, 'app'), installed = join(root, 'installed'), bin = join(root, 'bin');
-  for (const p of [remote, installed, bin]) mkdirSync(p);
+function fixture() {
+  const root = mkdtempSync(join(tmpdir(), 'checkout-pull-')); directories.push(root);
+  const remote = join(root, 'remote'), app = join(root, 'app'), installed = join(root, 'installed');
+  for (const p of [remote, installed]) mkdirSync(p);
   git(remote, 'init', '-b', 'main'); git(remote, 'config', 'user.email', 'test@example.invalid'); git(remote, 'config', 'user.name', 'Fixture');
-  write(join(remote, 'prototype/package.json'), '{}');
-  write(join(remote, 'prototype/public/market.json'), '{"revision":"bundled-old"}');
-  write(join(remote, 'prototype/public/wfstat-catalog.json'), '["bundled-old"]');
-  write(join(remote, 'prototype/public/definitions.json'), '{"revision":"bundled-old"}');
+  write(join(remote, 'frontend/public/market.json'), '{"revision":"bootstrap"}');
+  write(join(remote, 'frontend/public/definitions.json'), '{"revision":"bundled-old"}');
   write(join(remote, 'source.txt'), 'before');
-  write(join(remote, '.gitignore'), '**/dist/\n**/history.json\nwfm_results.csv\n');
   git(remote, 'add', '.'); git(remote, 'commit', '-m', 'Initial fixture');
   git(root, 'clone', '-o', 'github', remote, app);
-  write(join(app, 'prototype/public/market.json'), '{"revision":"live-newer"}');
-  write(join(app, 'prototype/public/wfstat-catalog.json'), '["live-newer"]');
-  write(join(app, 'prototype/public/history.json'), '{"history":"retain"}');
-  if (rename) write(join(app, 'prototype/public/definitions.json'), '{"revision":"live-hotfix"}');
-  write(join(app, 'prototype/dist/index.html'), '<p>Previously served site</p>');
-  write(join(app, 'prototype/dist/assets/site.js'), 'old-bundle');
-  write(join(app, 'wfm_results.csv'), 'preserve,csv\n');
   const initial = git(app, 'rev-parse', 'HEAD');
-  if (rename) renameSync(join(remote, 'prototype'), join(remote, 'frontend'));
-  else write(join(remote, 'prototype/public/definitions.json'), '{"revision":"bundled-new"}');
+  write(join(remote, 'frontend/public/definitions.json'), '{"revision":"bundled-new"}');
   write(join(remote, 'source.txt'), 'after');
-  git(remote, 'add', '-A'); git(remote, 'commit', '-m', 'Next layout');
-  write(join(bin, 'systemctl'), '#!/bin/sh\nprintf "%s\\n" "${FIXTURE_SERVICE_STATE:-inactive}"\n'); chmodSync(join(bin, 'systemctl'), 0o755);
-  const run = (args: string[] = [], env: Record<string, string> = {}) => spawnSync('bash', [puller, ...args], {
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, APP: app, DEPLOY_ROOT: installed, ...env }, encoding: 'utf8',
+  git(remote, 'add', '-A'); git(remote, 'commit', '-m', 'Next');
+  const run = (env: Record<string, string> = {}) => spawnSync('bash', [puller], {
+    env: { ...process.env, APP: app, DEPLOY_ROOT: installed, ...env }, encoding: 'utf8',
   });
   return { root, app, remote, initial, run };
 }
 
-describe.skipIf(process.platform === 'win32')('deployment layout transition', () => {
-  test('refuses an unattended root rename before touching live artifacts', () => {
-    const f = fixture(); const result = f.run();
-    expect(result.status).toBe(1); expect(result.stderr).toContain('--migrate-layout');
-    expect(git(f.app, 'rev-parse', 'HEAD')).toBe(f.initial);
-    expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
-  });
-  test('moves newer live data and the served bundle into the new layout', () => {
-    const f = fixture(); const result = f.run(['--migrate-layout']);
-    expect(result.status).toBe(0);
+describe.skipIf(process.platform === 'win32')('checkout puller', () => {
+  test('fast-forwards, so a tracked hotfix reaches the served checkout', () => {
+    const f = fixture();
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
     expect(git(f.app, 'rev-parse', 'HEAD')).toBe(git(f.remote, 'rev-parse', 'HEAD'));
-    expect(readFileSync(join(f.app, 'frontend/public/market.json'), 'utf8')).toContain('live-newer');
-    expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
-    expect(readFileSync(join(f.app, 'frontend/public/wfstat-catalog.json'), 'utf8')).toContain('live-newer');
-    expect(readFileSync(join(f.app, 'frontend/public/history.json'), 'utf8')).toContain('retain');
-    expect(readFileSync(join(f.app, 'frontend/public/definitions.json'), 'utf8')).toContain('live-hotfix');
-    expect(readFileSync(join(f.app, 'prototype/public/definitions.json'), 'utf8')).toContain('live-hotfix');
-    expect(readFileSync(join(f.app, 'frontend/dist/assets/site.js'), 'utf8')).toBe('old-bundle');
-    expect(readFileSync(join(f.app, 'wfm_results.csv'), 'utf8')).toBe('preserve,csv\n');
+    expect(readFileSync(join(f.app, 'frontend/public/definitions.json'), 'utf8')).toContain('bundled-new');
   });
-  test('restores live data to the old layout when the fast-forward fails', () => {
+  test('leaves a checkout that cannot fast-forward exactly as it was', () => {
     const f = fixture(); write(join(f.app, 'source.txt'), 'unfinished local work');
-    const result = f.run(['--migrate-layout']); expect(result.status).not.toBe(0);
+    expect(f.run().status).not.toBe(0);
     expect(git(f.app, 'rev-parse', 'HEAD')).toBe(f.initial);
-    expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
     expect(readFileSync(join(f.app, 'source.txt'), 'utf8')).toBe('unfinished local work');
-    expect(readFileSync(join(f.app, 'prototype/public/definitions.json'), 'utf8')).toContain('live-hotfix');
   });
-  test('keeps ordinary updates working without migration mode', () => {
-    const f = fixture(false); expect(f.run().status).toBe(0);
-    expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
-    expect(readFileSync(join(f.app, 'prototype/public/definitions.json'), 'utf8')).toContain('bundled-new');
+  test('refuses to overwrite an untracked file the update would add', () => {
+    const f = fixture();
+    write(join(f.remote, 'deploy/new.sh'), 'incoming'); git(f.remote, 'add', '-A'); git(f.remote, 'commit', '-m', 'Add');
+    write(join(f.app, 'deploy/new.sh'), 'hand-placed');
+    const result = f.run();
+    expect(result.status).toBe(1); expect(result.stderr).toContain('differs from the incoming version');
+    expect(git(f.app, 'rev-parse', 'HEAD')).toBe(f.initial);
+    expect(readFileSync(join(f.app, 'deploy/new.sh'), 'utf8')).toBe('hand-placed');
   });
   test('installs a deployed script even when the checkout is already current', () => {
     // An older puller fast-forwards with its own install list, so a script the
     // new commit adds is left uninstalled until a run that has nothing to pull.
-    const f = fixture(false);
+    const f = fixture();
     write(join(f.remote, 'deploy/pull-collector.sh'), '#!/bin/sh\necho collector\n');
     git(f.remote, 'add', '-A'); git(f.remote, 'commit', '-m', 'Add a deployed script');
     expect(f.run().status).toBe(0);
@@ -95,11 +73,6 @@ describe.skipIf(process.platform === 'win32')('deployment layout transition', ()
     const result = f.run();
     expect(result.status).toBe(0); expect(result.stdout).toContain('nothing to pull');
     expect(readFileSync(join(f.root, 'installed/pull-collector.sh'), 'utf8')).toContain('echo collector');
-  });
-  test('does not change a checkout while the scrape service is activating', () => {
-    const f = fixture(); const result = f.run(['--migrate-layout'], { FIXTURE_SERVICE_STATE: 'activating' });
-    expect(result.status).toBe(75); expect(git(f.app, 'rev-parse', 'HEAD')).toBe(f.initial);
-    expect(existsSync(join(f.app, 'frontend'))).toBe(false);
   });
 });
 
@@ -207,6 +180,27 @@ exit 0
       expect(readFileSync(join(deploy, `bin/${binary}`), 'utf8')).toBe('old-binary');
     });
   }
+});
+
+describe('live data roots', () => {
+  const caddy = readFileSync(fileURLToPath(new URL('../deploy/Caddyfile', import.meta.url)), 'utf8');
+  const admin = readFileSync(fileURLToPath(new URL('../deploy/Caddyfile-admin', import.meta.url)), 'utf8');
+  const snapshot = readFileSync(fileURLToPath(new URL('./release/snapshot.ts', import.meta.url)), 'utf8');
+  const handle = (source: string, matcher: string) => source.slice(source.indexOf(`handle ${matcher} {`), source.indexOf('}', source.indexOf(`handle ${matcher} {`)));
+
+  test('pipeline output is served from the data directory, the tracked hotfix from the checkout', () => {
+    expect(caddy).toMatch(/@livedata path \/market\.json \/market-public\.json \/market-home\.json \/wfstat-catalog\.json \/history\.json\n/);
+    expect(handle(caddy, '@livedata')).toContain('root * /srv/wfm/data/public');
+    expect(handle(caddy, '/definitions.json')).toContain('root * /srv/wfm/app/frontend/public');
+    expect(handle(admin, '/market.json')).toContain('root * /srv/wfm/data/public');
+  });
+
+  test('release preparation reads the live pair under the sweep\'s lock', () => {
+    // run-scrape.sh holds a flock on the publish directory for the whole sweep.
+    expect(snapshot).toContain('PUBLISH=/srv/wfm/data/public\nexec 9<"$PUBLISH"');
+    expect(snapshot).toContain('cd "$PUBLISH"');
+    expect(readFileSync(fileURLToPath(new URL('../deploy/run-scrape.sh', import.meta.url)), 'utf8')).toContain('exec 9<"$PUBLISH"');
+  });
 });
 
 describe('caddy listener boundary', () => {
@@ -399,10 +393,12 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     }
     write(join(box, 'policy/wfm-policy.json'), '{}');
     // The sweep output a healthy box holds, under the paths the check reads.
-    write(join(box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\n');
-    write(join(box, 'app/frontend/public/market.json'), '{"catalog":{}}');
+    write(join(box, 'data/scrape/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\n');
+    write(join(box, 'data/public/market.json'), '{"catalog":{}}');
   } else {
     write(join(wfm, 'policy/wfm-policy.json'), '{}');
+    write(join(wfm, 'data/public/market.json'), '{}');
+    mkdirSync(join(wfm, 'data/scrape'), { recursive: true });
     // The host check runs once as part of a deploy, and its verdict gates the
     // deploy; this is the report a healthy box would produce. The systemctl stub
     // writes it when the check is started, to HOST_ROOT - the fixture's /srv/wfm,
@@ -548,7 +544,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
       '  unit="$FIXTURE_LIVE/etc/systemd/system/tennoworth-host-check.service"',
       '  exec_line="$(sed -n \'s/^ExecStart=//p\' "$unit" | head -1)"',
       '  exec_line="$(printf "%s" "$exec_line" | sed "s#/srv/#$FIXTURE_LIVE/srv/#g; s#/etc/#$FIXTURE_LIVE/etc/#g")"',
-      '  eval "$exec_line --csv $FIXTURE_LIVE/srv/wfm/app/wfm_results.csv --snapshot $FIXTURE_LIVE/srv/wfm/app/frontend/public/market.json --deployed $FIXTURE_LIVE/srv/wfm/deployed.json --binary $FIXTURE_LIVE/srv/wfm/bin/wfm-scrape --app $FIXTURE_LIVE/srv/wfm/app --disk-path $FIXTURE_LIVE/srv/wfm --disk-floor-bytes 1"',
+      '  eval "$exec_line --csv $FIXTURE_LIVE/srv/wfm/data/scrape/wfm_results.csv --snapshot $FIXTURE_LIVE/srv/wfm/data/public/market.json --deployed $FIXTURE_LIVE/srv/wfm/deployed.json --binary $FIXTURE_LIVE/srv/wfm/bin/wfm-scrape --app $FIXTURE_LIVE/srv/wfm/app --disk-path $FIXTURE_LIVE/srv/wfm --disk-floor-bytes 1"',
       '  exit $?',
       'fi',
     );
@@ -656,6 +652,16 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
       expect(refused.stderr).toContain('rejects the live policy');
       expect(liveBinary(f)).toBe('old-live-binary');
     }
+  });
+
+  test('refuses a box whose live data is still in the checkout', () => {
+    const f = scrapeDeployFixture();
+    rmSync(join(f.wfm, 'data/public/market.json'));
+    const result = f.run();
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('move the live data out of the checkout first');
+    expect(liveBinary(f)).toBe('old-live-binary');
+    expect(existsSync(f.systemctlLog), 'the schedule must not be touched').toBe(false);
   });
 
   test('replaces the live paths once the release and its policy proof pass', () => {
@@ -856,11 +862,18 @@ describe('deployment ownership boundary', () => {
     expect(setup).toMatch(/chown\s+-R\s+root:root[^\n]*\/srv\/wfm\/bin/);
   });
 
-  test('the sweep can write only its checkout', () => {
+  test('the sweep writes only its data directories, never the checkout', () => {
     // The unit runs with ProtectSystem=strict, so the sweep can only write the
-    // paths it is granted; the retired corpus directory is no longer one.
+    // paths it is granted. A wfm-writable checkout was a route to code root
+    // installs, so the checkout is root's and absent from the grant.
     const unit = readFileSync(fileURLToPath(new URL('../deploy/wfm-scrape.service', import.meta.url)), 'utf8');
-    expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/app$/m);
+    expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/scrape \/srv\/wfm\/data\/public$/m);
+    expect(unit).toMatch(/^WorkingDirectory=\/srv\/wfm\/data\/scrape$/m);
+    expect(unit).not.toContain('/srv/wfm/app');
+    expect(setup).toMatch(/^chown -R root:root "\$REPO"$/m);
+    expect(setup).not.toMatch(/chown -R wfm:wfm "\$REPO"/);
+    expect(setup).toMatch(/install -d -m 0750 -o wfm -g wfm \/srv\/wfm\/data\/scrape/);
+    expect(setup).toMatch(/install -d -m 0755 -o wfm -g wfm \/srv\/wfm\/data\/public/);
     expect(setup).not.toContain('/srv/wfm/observations');
   });
 
@@ -903,20 +916,21 @@ describe('scrape pipeline delivery boundary', () => {
 function runScrapeFixture(scrape: string) {
   const app = mkdtempSync(join(tmpdir(), 'run-scrape-'));
   directories.push(app);
+  const publish = join(app, 'public'); mkdirSync(publish);
   // A previous generation that clears the row-count floor, so the floor alone
   // cannot catch a scrape that exits 0 without replacing the file.
   writeFileSync(join(app, 'wfm_results.csv'), `url_name,median_90d\n${'prior,1\n'.repeat(1000)}`);
   const bin = join(app, 'scrape-stub');
   writeFileSync(
     bin,
-    ['#!/bin/sh', 'case "$1" in', `  scrape) ${scrape} ;;`, '  build) exit 0 ;;', '  history) exit 0 ;;', 'esac', 'exit 0', ''].join('\n'),
+    ['#!/bin/sh', 'case "$1" in', `  scrape) ${scrape} ;;`, `  build) printf "%s\\n" "$*" > '${app}/build-args' ;;`, '  history) exit 0 ;;', 'esac', 'exit 0', ''].join('\n'),
   );
   chmodSync(bin, 0o755);
   const run = () => spawnSync('bash', [fileURLToPath(new URL('../deploy/run-scrape.sh', import.meta.url))], {
-    env: { ...process.env, APP: app, SCRAPE_BIN: bin, HISTORY: '0' },
+    env: { ...process.env, DATA: app, PUBLISH: publish, SCRAPE_BIN: bin, HISTORY: '0' },
     encoding: 'utf8',
   });
-  return { app, run };
+  return { app, publish, run };
 }
 
 const REPLACE_CSV =
@@ -931,11 +945,13 @@ describe('run-scrape publication guard', () => {
   });
 
   test('a scrape that replaces the CSV still publishes', () => {
-    const { app, run } = runScrapeFixture(REPLACE_CSV);
+    const { app, publish, run } = runScrapeFixture(REPLACE_CSV);
     const result = run();
     expect(result.stderr, result.stderr).not.toContain('without replacing');
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(join(app, 'wfm_results.csv'), 'utf8')).toContain('row999');
+    // The build is told both directories; it never falls back to a checkout.
+    expect(readFileSync(join(app, 'build-args'), 'utf8').trim()).toBe(`build --data-dir ${app} --publish-dir ${publish}`);
   });
 });
 
