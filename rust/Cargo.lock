@@ -5670,7 +5670,7 @@ dependencies = [
 
 [[package]]
 name = "tennoworth-desktop"
-version = "0.8.112"
+version = "0.8.113"
 dependencies = [
  "announcement-feed",
  "anyhow",

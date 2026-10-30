@@ -54,6 +54,29 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.113 - 2026-10-30
+
+# ⚡ TennoWorth Desktop 0.8.113
+
+TennoWorth Desktop 0.8.113 is ready.
+
+This release is for everyone who keeps the app open while playing. It does far less in the background, so it uses much less memory and stops checking your warframe.market listings every 30 seconds while you are in game, and the tray and overlay now count your items the same way the inventory table does.
+
+## Changelog (3)
+
+### Performance
+
+- **Lighter while you play** The app no longer re-reads the whole market snapshot every few seconds or scans every running program to find the game. Memory use stays flat instead of climbing toward 800 MB, and it uses almost no processor time in the background. <!-- app-note {"id":"lighter-background-work","kind":"improved"} -->
+- **Fewer warframe.market requests while minimised** Listed and protected quantities refresh when something changes them: a trade, a scan, signing in, or showing the window again. They still refresh every 30 seconds while a listing review or Trade Session is open, and otherwise every five minutes while the window is visible. <!-- app-note {"id":"fewer-order-checks","kind":"improved"} -->
+
+### Inventory
+
+- **Tray and overlay counts match the inventory table** The tray, Trade Session and relic overlay now recognise items with the same rules as the inventory table, so refined relics are no longer counted as intact ones. <!-- app-note {"id":"one-item-resolver","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.112 - 2026-10-28
 
 # 🎨 TennoWorth Desktop 0.8.112
