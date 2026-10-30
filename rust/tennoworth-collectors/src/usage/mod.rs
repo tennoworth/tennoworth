@@ -512,6 +512,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_read_flood_does_not_block_check_ins() {
+        // The daily counts are public and anonymous; desktops depend on the
+        // check-in. Spending the read allowance must leave submissions open.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let state = Collector::with_limit(
+            Store::new(Connection::open_in_memory().unwrap()).unwrap(),
+            1,
+        );
+        state.tick().unwrap();
+        let task = tokio::spawn(axum::serve(listener, router(state)).into_future());
+        let client = reqwest::Client::new();
+        for _ in 0..3 {
+            let _ = client
+                .get(format!("{url}/api/usage/daily"))
+                .send()
+                .await
+                .unwrap();
+        }
+        let limited = client
+            .get(format!("{url}/api/usage/daily"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(limited.status(), 429, "the read lane is saturated");
+        let token = format!("{}.{}", Utc::now().date_naive(), "e".repeat(64));
+        let check_in = client
+            .post(format!("{url}/api/usage/check-in"))
+            .json(&serde_json::json!({"token":token}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(check_in.status(), 204);
+        task.abort();
+    }
+
+    #[tokio::test]
     async fn a_saturated_quota_does_not_take_health_down() {
         // /health is loopback-only and is exactly what the monitor and the
         // puller's post-restart rollback check read. If it shares the public
