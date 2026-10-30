@@ -206,20 +206,11 @@ details, and explicit non-promises live in [`SECURITY.md`](SECURITY.md).
 
 ## How the repository is organized
 
-| Path | Purpose |
-|---|---|
-| [`frontend/`](frontend/) | Svelte 5 + Vite frontend with separate hosted, desktop, and reward-overlay shells. |
-| [`rust/`](rust/) | Rust workspace containing the Tauri desktop app, inventory/WFM core, shared market math and client code, and the market pipeline. |
-| [`frontend/public/market.json`](frontend/public/market.json) | Production-generated snapshot consumed live by the site and refreshed in Git during desktop release preparation as its bundled fallback. |
-| [`scripts/`](scripts/) | TypeScript maintenance gates plus the Linux desktop smoke script. |
-| [`tests/fixtures/`](tests/fixtures/) | Cross-language parity and pipeline regression fixtures. |
-| [`deploy/`](deploy/) | Self-host deployment kit for the site and scheduled market refresh. |
-| [`.github/workflows/`](.github/workflows/) | Web, scraper, desktop release, smoke, and audit automation. |
-
-The Rust workspace holds the desktop app, its inventory and warframe.market
-core, the shared market calculations, the market pipeline and the host
-services. The [architecture guide's repository map](docs/architecture.md#repository-map)
-lists every crate and what it owns.
+`frontend/` is the Svelte app behind the website, the desktop app's window and
+its overlay; `rust/` holds the desktop app, the market pipeline and the host
+services; `tests/fixtures/` holds the cases both languages are checked against.
+The [architecture guide](docs/architecture.md#repository-map) maps every folder
+and crate.
 
 ## Contributing
 
@@ -243,7 +234,7 @@ See [`CHANGELOG.md`](CHANGELOG.md) for desktop release history and
 [`docs/releasing.md`](docs/releasing.md) for the release policy and procedure.
 
 Feature-branch Windows OCR installers are tested with the
-[`docs/ocr-windows-test-runbook.md`](docs/ocr-windows-test-runbook.md); they
+[`docs/windows-native-testing.md`](docs/windows-native-testing.md); they
 use a separate app identity and do not replace production TennoWorth.
 
 ## License

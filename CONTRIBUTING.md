@@ -111,7 +111,7 @@ set. If you add a file type with its own checks, give it a filter rather than
 relying on that fallback. `audit` and `ui-smoke` also run on pushes to `develop`
 for the files that rotate a CI cache key, which is what keeps pull-request
 builds warm; see
-[rust-toolkit-2026-lessons.md](docs/rust-toolkit-2026-lessons.md).
+[ci.md](docs/ci.md).
 
 Read [architecture.md](docs/architecture.md) before crossing module boundaries
 and [design-system.md](docs/design-system.md) before changing UI. Keep feature
@@ -257,7 +257,7 @@ Windows SDK, LLVM/libclang, WebView2, and vcpkg. In your build environment set
 `x64-windows-static-md`, and `LIBCLANG_PATH` to LLVM's `bin` directory. Install
 `vcpkg install tesseract:x64-windows-static-md`. If PowerShell selects a blocked
 Bun script shim, use `bun.cmd`. The
-[Windows OCR runbook](docs/ocr-windows-test-runbook.md) describes the native
+[Windows native testing guide](docs/windows-native-testing.md) describes the native
 capture baseline and isolated test installer.
 
 For OCR, download `eng.traineddata` from
@@ -330,8 +330,8 @@ From `rust/`, `cargo test -p market-math -p wfm-client -p wfm-scrape` exercises
 these crates without the desktop's GTK/Tesseract dependencies. Pipeline
 integration tests build and run the current binary against frozen fixtures.
 
-Keep shared cases in `tests/fixtures/` and have both languages read the same
-expected results. Comments saying “keep in sync” do not prevent drift. Test
+Logic shared by Rust and TypeScript is gated by a shared fixture (the rule is in
+[AGENTS.md](AGENTS.md)). Test
 unknown values, unavailable sources, malformed siblings, and interrupted
 publication as well as usable data. A failed fetch must not turn old data into
 fresh data or missing data into zero.
@@ -400,12 +400,10 @@ automatically loads them; follow the explicit read contract in `AGENTS.md`.
 
 ### WFM request budgets
 
-Classify each new WFM endpoint as a read, contract search, authentication request,
-or mutation, and identify foreground/background work. Route every HTTP attempt
-through `wfm-client::transport`, including retries. Keep mutation reconciliation in
-the trading services; never retry an ambiguous create. Cover mixed request traffic,
-cancellation, throttling and pending-plan recovery with request-budget tests. See
-[WFM access controls](docs/wfm-access.md) for the policy and rollout contract.
+Classify each new WFM endpoint (read, contract search, authentication or
+mutation; foreground or background) and cover it with request-budget tests. The
+policy is [WFM access controls](docs/wfm-access.md); the transport invariant is
+in [rust/AGENTS.md](rust/AGENTS.md).
 
 ## Finish integration and follow the release
 

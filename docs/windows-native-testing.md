@@ -1,62 +1,13 @@
-# Relic OCR Windows test runbook
+# Windows native testing
 
 Use a physical, locally viewed Windows 11 desktop. RDP, virtual machines, and
 streaming sessions are outside this baseline because they can change capture
 behavior.
 
-## Building locally over SSH
-
-The physical Windows host can compile and test through its standard-user
-SSH account. It does not run GitHub Actions jobs. Local results do not remove
-required GitHub checks or replace testing capture in the gaming desktop. Host
-address, key and profile layout are maintainer-local; host access and incident
-history are recorded under `.planning/ops/`.
-
-Verified on 2026-09-04: Windows 11 Pro 25H2, MSVC 14.44.35207, Windows SDK
-10.0.26100.0, Rust/Cargo 1.98.1, Bun 1.4.1, Tauri CLI 2.11.4, and Tesseract
-5.5.2. vcpkg revision was `04a9d8e5212d01ee1dd9478eadd9caade4f8b0d4`.
-Recheck versions and disk space when resuming; these are observations, not
-project version pins.
-
-- Persist `VCPKG_ROOT`, `VCPKG_DEFAULT_TRIPLET=x64-windows-static-md`, and
-  `LIBCLANG_PATH` in the build user's environment. The verified libclang
-  directory is `C:\Program Files\LLVM\bin`.
-- Windows PowerShell may select a blocked `bun.ps1` or `npm.ps1` shim. Use
-  `bun.cmd` and `npm.cmd` without changing execution policy.
-- Suppress PowerShell download progress with
-  `$ProgressPreference = 'SilentlyContinue'` for readable SSH output. Use
-  `[System.IO.DriveInfo]::new('C').AvailableFreeSpace` to check disk space;
-  `Get-PSDrive` reported an incorrect zero in the SSH session.
-- Download `eng.traineddata` from the URL and verify the SHA-256 recorded in
-  the Windows workflow before building.
-- For the unsigned isolated installer, set
-  `$env:TENNOWORTH_OCR_TEST_BUILD = '1'` and run
-  `cargo tauri build --config tauri.ocr-test.conf.json --bundles nsis` from
-  `rust/tennoworth-desktop`. This flag disables ordinary updater support.
-
-Build the desktop app in this order, because the Rust build embeds the frontend
-bundle at compile time:
-
-```
-cd frontend
-bun.cmd install --frozen-lockfile
-bun.cmd run build:desktop
-cd ../rust
-cargo build --release -p tennoworth-desktop
-```
-
-The artifact is `rust/target/release/tennoworth-desktop.exe`; a cold release
-build took 3m48s. **Long builds do not survive SSH detach on that host.** A
-child process is killed when the SSH session closes, and a Scheduled Task
-created by the standard account with `/sc once` never runs because it needs an
-interactive logon. Keep the SSH session open for the duration, or run it from
-the console.
-
-The transferred reward-regression snapshot passed 121 desktop Rust tests,
-four overlay component tests, Svelte checking, and the release build on
-Windows. Its real three-reward OCR regression passed native 1440p, scaled
-1080p/720p, ultrawide, and 16:10 variants. Fixture recognition does not prove
-live capture, trigger timing, or overlay presentation.
+Prerequisites and environment variables are in
+[CONTRIBUTING.md](../CONTRIBUTING.md#native-desktop-development). Local builds
+never replace the required GitHub checks or capture testing on the gaming
+desktop.
 
 ## Probe isolation and evidence
 

@@ -9,299 +9,154 @@ quiet, read-only in-game helper: it observes game events and suggests, and
 never injects input.
 
 Detailed rules live in per-domain files. Read the one for the area you are about
-to edit **before** you edit it:
+to edit **before** you edit it, and update it in the same change that
+invalidates it:
 
-- [`rust/AGENTS.md`](rust/AGENTS.md) - Rust workspace: crate map, cross-crate
-  invariants, Rust hygiene.
+- [`rust/AGENTS.md`](rust/AGENTS.md) - Rust workspace: crate boundaries,
+  cross-crate invariants, Rust hygiene.
 - [`rust/wfm-scrape/AGENTS.md`](rust/wfm-scrape/AGENTS.md) - DE ingest and the
   host market pipeline.
 - [`rust/wfm-core/AGENTS.md`](rust/wfm-core/AGENTS.md) - authentication, order
-  semantics, pending-plan recovery, memory scan.
+  semantics, pending-plan files, memory scan.
 - [`rust/wfm-client/AGENTS.md`](rust/wfm-client/AGENTS.md) - WFM transport:
   headers, user agent, request budgets, retry and backoff.
 - [`frontend/AGENTS.md`](frontend/AGENTS.md) - Svelte 5 + Vite frontend
   (desktop, overlay, and informational site).
-- [`scripts/AGENTS.md`](scripts/AGENTS.md) - release, CSP, probe, and
-  deployment tools and shared fixtures.
+- [`scripts/AGENTS.md`](scripts/AGENTS.md) - release, CSP, probe and
+  deployment tools, and how these instruction files are maintained.
 
-`AGENTS.local.md` is a gitignored, machine-local overlay. Explicitly read it
-after the applicable instruction files if it exists; do not assume a tool
-loaded it automatically. It carries host, path and
-environment details that do not belong in the repository.
+`AGENTS.local.md` is a gitignored, machine-local overlay (host names, paths,
+environment quirks). Read it explicitly after the applicable instruction files
+when it exists; a worktree reads the main checkout's copy. Never put that kind
+of detail in a tracked file.
 
 Maintainer material - knowledge, procedures, plans - lives in the **maintainer
 home**: the `.planning/` directory of the main checkout, a local Git repository
-of its own that this repository ignores. Every worktree of a checkout shares it;
-locate it with
-`"$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.planning"`.
-When it exists, read `knowledge/INDEX.md` there before maintainer work. A fresh
-clone or a contributor checkout has none, and nothing here depends on it.
+of its own that this repository ignores. Locate it from any worktree with
+`"$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.planning"`
+and read `knowledge/INDEX.md` there before maintainer work. Procedures are
+`skills/<task>/SKILL.md`; if a requested skill is missing, say so rather than
+substituting another. A contributor checkout has no maintainer home, and
+nothing here depends on it.
 
 ## Required design reference for UI work
 
 Before changing UI markup, styles, layout, or interaction states, read
 [`docs/design-system.md`](docs/design-system.md) completely. It governs the
-desktop app, hosted site, shared components, and in-game overlay variant.
-Reuse the established tokens and patterns; project-specific visual rules take
-precedence over generic design suggestions. Preserve feature behavior and
-unfinished edits, document intentional exceptions, and verify affected surfaces
-in both themes at narrow, short, and wide sizes. Update the reference and living
-styleguide together when extending a pattern.
-
-This gate is repeated in `rust/AGENTS.md` and `frontend/AGENTS.md` on purpose:
-missing it is expensive, and each copy is read where UI work starts. Concise
-shared invariants are the permitted kind of repetition - what these files must
-not do is restate a *specification* that already has an owner, or let a copy
-drift from it.
-
-### Local instruction setup
-
-The instruction files are tracked project policy. Read the applicable file
-before editing in its area, and update it in the same change that invalidates
-it.
-
-Machine-specific detail - host names, local paths, environment quirks - belongs
-in the gitignored `AGENTS.local.md` overlay, never in a tracked file. Copy
-[`AGENTS.local.md.example`](AGENTS.local.md.example) and fill in what applies to
-that checkout; each clone, including the Windows build host, keeps its own.
-
-A fresh clone does not receive `AGENTS.local.md`: it is ignored, so Git does
-not copy it. A worktree reads the main checkout's copy, beside the maintainer
-home. Create it from the example when the work needs host-specific detail. Each
-tool must follow this explicit read contract, whether or not its own loader
-supports local overlays.
-
-Reusable maintainer procedures live in the maintainer home under
-`skills/<task>/SKILL.md`. Inspect their names and descriptions when selecting a
-procedure, then read the matching skill and its required references. If a
-requested skill is missing, report it; do not silently substitute a provider's
-unrelated skill. Never copy credentials as part of skill setup.
-
-Keep provider configuration as a thin adapter to these instructions. Plugin,
-permission and runtime settings stay in the tool's required configuration file;
-project rules have one owner here, and maintainer knowledge and procedures one
-owner in the maintainer home. Do not keep project knowledge in a tool's private
-memory, add unused provider directories, or depend on automatic discovery for
-correctness. Run `bun scripts/check-agent-instructions.ts --local` after skill
-or adapter changes. It checks the files on disk; the default command continues
-to check only tracked instructions from the index.
-
-`docs/design-system.md` is public source documentation and must exist in the
-revision you are working in. If it, or an applicable instruction file, is
-missing, resolve that before UI edits rather than inventing replacement rules.
-
----
+desktop app, hosted site, shared components, and in-game overlay variant; its
+rules take precedence over generic design suggestions. Verify affected surfaces
+in both themes at narrow, short, and wide sizes, and update the reference and
+living styleguide together when extending a pattern. This gate is repeated in
+`rust/AGENTS.md` and `frontend/AGENTS.md` on purpose, because each is read where
+UI work starts; it is the only rule these files repeat.
 
 ## Repository is the public surface
 
 The GitHub repo carries source, user documentation, packaging recipes and CI -
-nothing else. Research notes, findings, investigations, audits, spike
-write-ups, plans, and maintainer or host operations runbooks are
-**maintainer-local**: their single home is the maintainer home, `.planning/`,
-which `.gitignore` keeps out of this repository. Its skills use portable
-Markdown and scripts, with no provider-specific metadata. Write maintainer
-material there, never into `docs/` or any other tracked path. A procedure
-CONTRIBUTING tells a contributor to follow is contributor documentation and
-belongs here; a note only the maintainer needs does not.
-
-`bun scripts/check-public-surface.ts` is the gate. It fails when anything under
-an ignored internal home is tracked, and when a tracked document under `docs/`
-is referenced from nowhere outside `docs/`, so a new public document has to be
-linked from README, AGENTS.md or CONTRIBUTING.md - and if it cannot be, it is
-not public documentation.
-
-If maintainer material does reach a commit, remove the commits and rebuild the
-branch. A removal commit leaves the text in the merged history, so it is not a
-remedy.
+nothing else. Research, audits, plans, and maintainer or host operations
+runbooks live in the maintainer home, never in `docs/` or another tracked path.
+A procedure CONTRIBUTING tells a contributor to follow belongs here; a note only
+the maintainer needs does not. `bun scripts/check-public-surface.ts` is the
+gate: it fails when ignored internal material is tracked, and when a `docs/`
+document is linked from nowhere outside `docs/`. If maintainer material reaches
+a commit, remove the commits and rebuild the branch - a removal commit leaves
+the text in history.
 
 ## Where things live
 
-[`docs/architecture.md`](docs/architecture.md) owns this: the repository map,
-runtime shape, dependency direction, native responsibilities, and the CI
-inventory. Read it there rather than maintaining a second copy here.
+[`docs/architecture.md`](docs/architecture.md) owns the repository map, runtime
+shape, dependency direction, native responsibilities, and stored identifiers.
+[`docs/ci.md`](docs/ci.md) owns the workflow inventory and cache policy.
 
-## Delivery, integration and CI
+## Delivery and integration
 
-[CONTRIBUTING.md](CONTRIBUTING.md) owns the implementation workflow,
-contribution risk tiers, required evidence, and executable check commands. Use
-focused checks during editing and the complete applicable set before pushing.
-Documentation-only changes do not require application builds. Do not duplicate
-the check matrix here.
+[CONTRIBUTING.md](CONTRIBUTING.md) owns the workflow, contribution tiers,
+required evidence and check commands. Use focused checks while editing and the
+complete applicable set before pushing.
 
 `develop` is the integration branch; `github` is the authoritative remote for
 maintainer checkouts and the only one to push from them. Branch off `develop`,
-open the PR against `develop`, and fetch before branching or pushing. Fork
-contributors work from their own remote and upstream as described in
-CONTRIBUTING.md. `main` is production and auto-deploys: promotion requires
-explicit authorization and the checked, approved path in
-[docs/releasing.md](docs/releasing.md). Live ruleset IDs and bypass scope are
-in [docs/github-rulesets/](docs/github-rulesets/) - check live
-settings when a task depends on them rather than trusting a dated snapshot.
-
-Hotfixes are the one exception to branching off `develop`: branch them from
-`main`, merge to `main`, then merge `main` back into `develop` immediately.
-Fetching is not verification - after a fetch, confirm divergence with
-`git rev-list --left-right --count develop...github/develop` instead of assuming
-the branches are level.
-
-CI caches are branch-scoped and pull requests are restore-only: a cache only
-counts for a PR when it lives on the default branch, so a cold PR is fixed by
-seeding `develop`, never by letting PRs save again. Measurements, trigger paths
-and the rationale are in
-[docs/rust-toolkit-2026-lessons.md](docs/rust-toolkit-2026-lessons.md).
+open the PR against `develop`, and fetch before branching or pushing. `main` is
+production and auto-deploys: promotion requires explicit authorization and the
+path in [docs/releasing.md](docs/releasing.md). Hotfixes branch from `main`,
+merge to `main`, then `main` merges back into `develop` immediately. Fetching is
+not verification: confirm divergence with
+`git rev-list --left-right --count develop...github/develop`. Live ruleset IDs
+are in [docs/github-rulesets/](docs/github-rulesets/); check live settings when
+a task depends on them.
 
 ## Multi-agent / delegation rules
 
 These exist because each has already gone wrong once:
 
-- **Repo-mutating agents run in isolated worktrees.** If an agent dies
-  mid-task, launch a FRESH agent with worktree isolation - resuming the dead
-  one can silently drop it into the primary checkout. Every agent verifies
-  `git rev-parse --show-toplevel` before its first git write. Scratch belongs in
-  the worktree too - analysis output, downloaded CI logs, helper binaries, tool
-  caches. Untracked scratch left in the primary checkout shows up in
-  `git status` and competes with whichever session is using it.
-- **Never background a git merge/push that assumes HEAD.** A concurrent
-  agent can move the checkout. Guard with
+- **Repo-mutating agents run in isolated worktrees** under `.worktrees/`. If an
+  agent dies mid-task, launch a FRESH agent with worktree isolation - resuming
+  the dead one can silently drop it into the primary checkout. Verify
+  `git rev-parse --show-toplevel` before the first git write. Scratch (analysis
+  output, CI logs, helper binaries, tool caches) belongs in the worktree too.
+- **Never background a git merge/push that assumes HEAD.** Guard with
   `[ "$(git branch --show-current)" = "develop" ] && …` or use explicit refs.
-- **Merging into develop from a checkout you don't control:** don't
-  `git checkout develop` in place if another session might be using the
-  primary checkout. Use a throwaway `git worktree add <tmp-path> develop`,
-  merge there, verify (`git diff <feature-tip> <merge-commit>` should be
-  empty), `git worktree remove` - leave the shared checkout's branch alone.
-- **`git branch -d` checks ancestry against current HEAD, not `develop`** -
-  on a shared checkout sitting on an unrelated branch it will falsely
-  refuse a fully-merged branch. Confirm with
+- **Merging into develop from a checkout you don't control:** use a throwaway
+  `git worktree add <tmp-path> develop`, merge there, verify
+  (`git diff <feature-tip> <merge-commit>` is empty), then remove it.
+- **`git branch -d` checks ancestry against HEAD, not `develop`.** Confirm with
   `git merge-base --is-ancestor <branch> develop` first.
-- **Clean up as you go.** After a feature branch merges: delete it locally
-  and on GitHub when authorized, remove its worktree, and prune. Preserve
-  uncommitted work and any checkout still in use. Follow the integration cleanup
-  procedure in CONTRIBUTING.md; no branch name is a permanent cleanup exemption.
-- **Verify integrated changes in isolation.** For large changes, use an isolated
-  worktree and run the complete applicable checks from CONTRIBUTING.md before
-  integration. Verify the combined result, not only its independent patches.
-  Carry the verified commits through Git rather than copying files into another
-  active checkout.
-- **Keep large Rust gates off small temporary filesystems.** A workspace Cargo
-  target can consume 4-9 GiB, and `cargo test` also creates SQLite files through
-  `tempfile`; once the temporary filesystem fills, failures range from honest
-  ENOSPC to linker SIGBUS. For a final gate, set both `CARGO_TARGET_DIR` and
-  `TMPDIR` to unique task-specific directories on a large local filesystem.
-  Reuse that target across checks and revisions within the same task, never
-  across concurrent tasks. `probe-smoke-linux.sh` honors `CARGO_TARGET_DIR`
-  directly; no target symlink is needed. Afterwards, clean the exact Cargo
-  target, remove the task temp dir, and verify with `du`, `df`, and
-  `git status` - an earlier "cleaned" target was silently recreated by a later
-  Cargo command.
-- **Classify sandbox failures before changing code.** The desktop test suite's
-  mock HTTP servers need localhost binds, which the filesystem/network sandbox
-  rejects with `PermissionDenied`. Rerun the same command with loopback
-  permission and the task-specific `TMPDIR`; do not weaken the tests or treat
-  EPERM/ENOSPC as product failures.
+- **Clean up as you go**, following CONTRIBUTING's integration cleanup:
+  delete merged branches when authorized, remove their worktrees, prune.
+  Preserve uncommitted work and any checkout still in use.
+- **Verify the combined result in isolation** before integrating a large change,
+  and carry verified commits through Git rather than copying files.
+- **Keep large Rust gates off small temporary filesystems.** A workspace target
+  takes 4-9 GiB and `cargo test` writes SQLite files through `tempfile`; a full
+  tmpfs fails anywhere from ENOSPC to linker SIGBUS. Set `CARGO_TARGET_DIR` and
+  `TMPDIR` to task-specific directories on a large disk, reuse them within the
+  task only, and remove them afterwards (check with `du` and `df` - a later
+  Cargo command once recreated a "cleaned" target).
+- **Classify sandbox failures before changing code.** Mock HTTP servers need
+  localhost binds, which a sandbox rejects with `PermissionDenied`. Rerun with
+  loopback permission; do not weaken tests or treat EPERM/ENOSPC as product
+  failures.
 
 ## Cross-cutting hygiene rules (apply everywhere)
 
-- **Cross-language logic duplication needs a parity fixture, not just a
-  comment.** This repo is Rust + TypeScript by necessity (companion, browser
-  app) - the same heuristic sometimes has to exist in both (name/slug
-  resolution, scoring, shared constants like a KDF iteration count or a
-  category list). A `// keep these in sync` comment is not a gate;
-  it silently rots. Instead: put the shared cases + expected output in
-  `tests/fixtures/<name>/`, and add a test on **each** side that reads the
-  same fixture and asserts against it (`sell-priority/cases.json` is the
-  reference example - grep its consuming tests for the pattern). If the same
-  value only needs to match, not compute anything, the fixture can be a single
-  JSON file both sides parse directly (see `jwt-kdf.json`, `pacing.json`,
-  `limits.json`, `vault-soon.json`). Prefer one implementation over two: the
-  desktop preview runs the native planners compiled to WebAssembly rather than
-  keeping TypeScript copies of them.
-- **A parity gate must test CURRENT code, or it is worse than no gate.** A
-  runner that only checks that a built artifact exists will report green
-  against a stale one. When you add a gate that shells a built artifact, the
-  build is part of the gate. Ask what the gate does when the artifact is stale,
-  not just when it's missing. (The Rust fixture gates in
-  `rust/wfm-scrape/tests/` shell `env!("CARGO_BIN_EXE_wfm-scrape")`, which cargo
-  rebuilds - the same guarantee, without the retired Python harness.)
-- **Ask what a value's gate can actually SEE.** `REQUEST_DELAY` sat duplicated
-  in Python and Rust while both parity suites stubbed the sleeper, so nothing
-  on either side could observe it - the `pacing.json` fixture is now the only
-  thing that catches a one-sided bump. A constant inside the mocked-out part
-  of a test is unguarded no matter how thorough the suite around it looks.
-- **Use the actual dead-code gates.** Frontend exports are checked by knip;
-  unused Rust dependencies by cargo shear. Type checking does not replace them.
-  Do not introduce `@ts-nocheck` to suppress production component diagnostics.
+- **Cross-language logic duplication needs a parity fixture, not a comment.**
+  When the same heuristic or constant must exist in Rust and TypeScript, put
+  the cases and expected output in `tests/fixtures/` and have a test on **each**
+  side read them (`sell-priority/cases.json` is the reference; a value that only
+  has to match can be one JSON file, like `pacing.json`). Prefer one
+  implementation: the desktop preview runs the native planners as WebAssembly.
+- **A gate must test CURRENT code.** A runner that only checks a built artifact
+  exists reports green against a stale one, so a gate that shells an artifact
+  includes its build (the pipeline gates shell `env!("CARGO_BIN_EXE_…")`).
+- **Ask what a value's gate can actually SEE.** A constant inside the stubbed
+  part of a test is unguarded however thorough the suite looks; the
+  `pacing.json` fixture exists because both sides stubbed the sleeper.
+- **A test you have never watched fail is not a gate.** Remove the behaviour it
+  protects and confirm it fails, then restore.
+- **Walk the failure paths**: empty input, network error, malformed JSON,
+  missing key, permission denied. Test the public contract, not the internals.
+- **Check the current tree before ranking work.** Logs and audits show
+  symptoms; read the source to see whether the cause is still there.
+- **Use the actual dead-code gates**: knip for frontend exports, cargo shear for
+  Rust dependencies. Never add `@ts-nocheck` to production components.
 - **Confirm a pinned action SHA declares every input you pass.** An undeclared
-  input is not an error: the runner warns and ignores it, so the step silently
-  does not do what it says. Read the action's own `action.yml`
-  at the pinned commit, not from its default branch.
-- **When measuring CI, drop skipped jobs.** A job that was never applicable
-  reports a near-zero duration, and including those pulls the median toward
-  zero and hides real cost. Compare the best run against the median as well: a
-  wide spread is the signature of a cache hit versus a cache miss, and that
-  spread is usually the finding.
-- **No comments that restate the code.** Comments explain *why* - the
-  non-obvious constraint, the past bug they prevent. If removing a
-  comment wouldn't confuse a reader, delete it.
-- **No backwards-compat shims** for code that hasn't shipped yet.
-  Renaming a state field? Bump the storage-key version and move on.
-- **Edit existing files** in preference to creating new ones.
-- **Match the scope of the request.** Don't refactor surrounding code
-  while fixing a bug. Don't add features the task didn't ask for.
-- **Verify in the actual runtime.** Browser changes → drive the dev
-  server or Playwright. Companion changes → run it. Type-checks and
-  test suites verify code correctness, not feature correctness.
+  input is silently ignored; read `action.yml` at the pinned commit.
+- **When measuring CI, drop skipped jobs** and compare the best run with the
+  median: a wide spread is usually a cache hit versus a miss.
+- **No comments that restate the code.** Comments explain *why*.
+- **No backwards-compat shims** for code that hasn't shipped. Shipped stored
+  data is different: see "Stored and host identifiers" in architecture.md.
+- **Edit existing files** in preference to creating new ones, and **match the
+  scope of the request.**
+- **Verify in the actual runtime.** Browser changes → the dev server or
+  Playwright; native changes → run the app. Type checks and test suites verify
+  code, not features.
 - **Automated assistance is invisible in project artifacts.** Never mention
   an LLM, coding agent, assistant, model, vendor, or automated generation in
   commit messages, authorship or co-author trailers, pull requests, issues,
   reviews, changelogs, release notes, code comments, generated files, or any
   other repository or collaboration artifact. Write every artifact solely in
   terms of the change and its rationale, with ordinary human authorship. This
-  forbids provenance and self-attribution: it is about how a change is
-  attributed, not about hiding that these tools are used. It does not forbid
-  product or security documentation from discussing AI when AI is itself the
-  subject, nor these governance and instruction files, which define the rule.
-  `scripts/check-attribution.ts` gates commit messages and pull request bodies.
-
-## AI-written code - failure modes to catch in your own output
-
-1. **Architectural misalignment** - does the new code follow patterns
-   already in the repo, or invent a parallel approach?
-2. **Happy-path bias** - error paths are ~2× less likely to be
-   correct in AI-written code. Walk the failure modes explicitly:
-   empty input, network error, malformed JSON, missing key,
-   permission denied.
-3. **Tests that pin implementation** - do they exercise the public
-   contract or hard-code the current internals? The second is
-   worthless.
-4. **Quietly broken edge cases** - Maps with no entries, dates near
-   year boundaries, sudo vs. non-sudo, empty filter strings.
-5. **Verification before claiming done.** For UI changes, drive the
-   browser and look at the result. "Build succeeded" ≠ "feature works."
-6. **Named-vs-default imports in `@ts-nocheck` files.** A `import X from`
-   on a named-only export compiles (the file is untyped) and binds
-   `undefined`, silently no-op'ing the feature. Production files can no
-   longer carry `@ts-nocheck` (`frontend/src/dev/architecture.test.ts`
-   refuses it), so this now bites in the test files that still do.
-   Type-check can't see these - only running the test (or a named-import
-   convention) can.
-7. **A test you have never watched fail is not a gate.** After adding one,
-   remove the behaviour it claims to protect and confirm it fails. A test that
-   passes both with and without the fix restates the code instead of guarding
-   it.
-8. **Check the current tree before ranking the work.** A run-history audit shows
-   symptoms; it does not show whether the cause is still present. Read the
-   source of the thing being prioritised, not only its logs.
-
----
-
-## Commands and runtime setup
-
-Use [CONTRIBUTING.md](CONTRIBUTING.md) for setup, builds, and applicable checks.
-Use [docs/releasing.md](docs/releasing.md) for snapshot preparation and releases.
-For host operations, `deploy/run-scrape.sh` drives scrape and build together;
-`wfm-scrape build` remains the complete snapshot/catalog generator.
-The Windows runbook documents platform build and probe requirements.
-
-`bun scripts/check-agent-instructions.ts` (from the repository root) verifies
-that these instruction files' links resolve and that every `*/AGENTS.md` is
-reachable from the router above.
+  forbids provenance and self-attribution, not discussion of AI where AI is the
+  subject. `scripts/check-attribution.ts` gates commit messages and pull
+  request bodies.

@@ -42,3 +42,9 @@ Record any local constraint that changes how checks should be run - a small
 temporary filesystem, a restricted sandbox, a specific toolchain location. Keep
 the portable rule in the tracked instruction files and put only the
 machine-specific value here.
+
+- Worktree home: `<repo>/.worktrees/`.
+- Browser automation: `<path to the Chromium binary>` when a browser tool cannot
+  find Chrome (a Playwright cache build such as
+  `~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome` works as
+  `executablePath`).

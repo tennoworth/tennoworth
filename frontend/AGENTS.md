@@ -5,11 +5,7 @@
 Before any UI markup, style, layout, or interaction-state change, read
 [`../docs/design-system.md`](../docs/design-system.md) completely. Reuse its
 tokens and patterns, preserve behavior and edits during resizing, and verify
-both themes and narrow/short/wide layouts in the actual styled app. Generic
-design suggestions do not override this product's visual contract.
-
-This gate is repeated in the root and rust instruction files on purpose: missing
-it is expensive, and each copy is read where UI work starts.
+both themes and narrow/short/wide layouts in the actual styled app.
 
 Shared frontend for the desktop app, overlay, and static informational site.
 Hosted builds also prerender physical public pages through `scripts/prerender.ts`;
@@ -37,26 +33,20 @@ fetches will fail CORS. All WFM data must come from the static
 `wfm-scrape`; desktop release preparation refreshes the repo copy from the
 box's locked pair.
 
-`warframestat.us` used to be the one allowed direct call (it sent
-CORS headers; the resolver hit `/items/` for `/Lotus/...` paths) --
-**upstream dropped its CORS headers** and broke every inventory upload. The resolver catalog is now baked too:
-`wfm-scrape build` writes `public/wfstat-catalog.json` (slim
-`[uniqueName, {name, category}]` pairs, forced `Accept-Language: en` --
-localized names silently fail the WFM name join). All vendor data
-(relic rewards, vault status, **Baro schedule** - `market.baro`,
-resolver catalog) is baked at build time and served same-origin; the
-CSP `connect-src` has no third-party origins left. A runtime
-warframestat fetch broke this rule once before and vanished during
-outages - don't reintroduce one.
+All vendor data - the resolver catalog (`wfm-scrape build` writes
+`public/wfstat-catalog.json` with forced English names, because localized names
+fail the WFM name join), relic rewards, vault status and the Baro schedule - is
+baked at build time and served same-origin, so the hosted CSP `connect-src` is
+`self` only. A runtime warframestat fetch once broke inventory uploads when
+upstream dropped its CORS headers; don't reintroduce one.
 
 Desktop network access stays in Rust. Frontend features consume typed
 capabilities from `src/contracts/`; shells choose implementations from
 `src/adapters/`. Hosted capabilities provide public market/history access only,
 not fake interactive methods. Preserve cache-first startup and strictly newer
-snapshot replacement. The webview must never receive the WFM JWT. The one
-exception runs the other way: the login dialog's paste-token fallback (for
-when the sign-in window cannot load warframe.market) sends a user-pasted
-token to Rust once and clears the field. Nothing sends a JWT back to the SPA.
+snapshot replacement. The webview never receives the WFM JWT (trust boundaries:
+../SECURITY.md); the login dialog's paste-token fallback only sends a pasted
+token to Rust once and clears the field.
 
 ### One source of truth for owned-item resolution
 Native inventory normalization (`market_domain::inventory` in Rust) is the only
@@ -108,19 +98,6 @@ reads.
 No side effects, no writes, no mutations. If it computes a value, it
 goes in `$derived`. If it performs an action (including saving to
 localStorage), it goes in an event handler or `$effect`.
-
-### Don't destructure `$state` objects
-Destructuring takes a snapshot - you get plain values, not reactive
-bindings. Always access through the original (`user.name`), never
-`const { name } = user`.
-
-### Use event attributes, not directives
-`onclick={fn}`, not `on:click={fn}`. The directive form is deprecated
-in Svelte 5 and will warn during build.
-
-### Pass callbacks as props, not via `createEventDispatcher`
-Child components take callbacks (`onunlocked={fn}`, `onimport={fn}`) as
-`$props()` props, not `dispatch(...)`.
 
 ### Conditional surfaces do not isolate global component CSS
 A component's `<style>` is bundled when the component is statically imported,
@@ -268,16 +245,9 @@ are in the root instruction file. These are frontend-specific:
 - **The unlock dialog always offers "Forgot it? Log in again"** - a
   forgotten passphrase is unrecoverable by design; re-login is the only
   reset, so the escape hatch must never be removed.
-- **Verify in the browser, and A/B the fix.** For UI changes drive
-  Playwright or the dev server. "Tests pass" ≠ "feature works" - and a
-  passing test after a fix doesn't prove the bug was real. Revert the fix,
-  re-run the same script, watch it fail, restore. That is what turned R1
-  (the review modal resetting in-flight edits) from a plausible reading of
-  the code into a demonstrated defect.
-  Gotchas that cost time here: the Playwright MCP wants Chrome specifically
-  but `~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome` works when
-  passed as `executablePath`; the app stays on the onboarding view until an
-  inventory is loaded, so anything gated on a desktop session (the bulk
+- **Verify in the browser, and A/B the fix**: revert it, rerun the same
+  script, watch it fail, restore.
+  The app stays on the onboarding view until an inventory is loaded, so anything gated on a desktop session (the bulk
   List CTA, the orders panel) is invisible before that; the review modal is a
   `div[role="dialog"]`, not a `<dialog>`; use the fictional preview samples documented in CONTRIBUTING.md.
 - **Runtime evidence must be the real styled surface.** A component harness
