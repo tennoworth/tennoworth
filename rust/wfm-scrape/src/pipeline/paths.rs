@@ -1,5 +1,27 @@
 use std::path::PathBuf;
 
+/// Where `build` reads the sweep's CSV and writes what it publishes. The box
+/// keeps both outside the checkout (`--data-dir`, `--publish-dir`); a local run
+/// defaults to the checkout, where the tracked bootstrap snapshot lives.
+#[derive(Debug, Clone)]
+pub struct Dirs {
+    pub data: PathBuf,
+    pub publish: PathBuf,
+}
+
+impl Dirs {
+    pub fn resolve(data: Option<PathBuf>, publish: Option<PathBuf>) -> Result<Self, String> {
+        if let (Some(data), Some(publish)) = (&data, &publish) {
+            return Ok(Dirs { data: data.clone(), publish: publish.clone() });
+        }
+        let root = find_root()?;
+        Ok(Dirs {
+            data: data.unwrap_or_else(|| root.clone()),
+            publish: publish.unwrap_or_else(|| root.join("frontend").join("public")),
+        })
+    }
+}
+
 pub fn find_root() -> Result<PathBuf, String> {
     let dir = std::env::current_dir().map_err(|e| format!("cwd: {e}"))?;
     find_root_from(dir)
@@ -24,6 +46,13 @@ fn find_root_from(mut dir: PathBuf) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_dirs_need_no_checkout() {
+        let dirs = Dirs::resolve(Some("/srv/wfm/data/scrape".into()), Some("/srv/wfm/data/public".into())).unwrap();
+        assert_eq!(dirs.data, PathBuf::from("/srv/wfm/data/scrape"));
+        assert_eq!(dirs.publish, PathBuf::from("/srv/wfm/data/public"));
+    }
 
     #[test]
     fn locates_linked_worktrees_without_requiring_generated_csv() {

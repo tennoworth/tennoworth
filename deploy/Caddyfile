@@ -96,8 +96,15 @@
 	# history.json (relics.run-derived, box-only state) is live data too.
 	# market-public.json is the slim copy the prerendered pages refresh from, and
 	# market-home.json the homepage's copy without desktop-only fields.
-	@livedata path /market.json /market-public.json /market-home.json /wfstat-catalog.json /definitions.json /history.json
+	@livedata path /market.json /market-public.json /market-home.json /wfstat-catalog.json /history.json
 	handle @livedata {
+		root * /srv/wfm/data/public
+		header Cache-Control "public, max-age=300, must-revalidate"
+		file_server
+	}
+	# The scan hotfix file is tracked, so it is served from the checkout: a
+	# change reaches users with the next pull, not the next release.
+	handle /definitions.json {
 		root * /srv/wfm/app/frontend/public
 		header Cache-Control "public, max-age=300, must-revalidate"
 		file_server

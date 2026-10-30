@@ -5,12 +5,16 @@
 # rebuild the full-shape snapshot. This is the ONE production scrape entrypoint,
 # driven by the self-hosted systemd timer.
 #
-# `wfm-scrape scrape` produces
-# wfm_results.csv and `wfm-scrape build` renders BOTH frontend/public/market.json
-# and frontend/public/wfstat-catalog.json from it.
+# `wfm-scrape scrape` produces wfm_results.csv in DATA, and `wfm-scrape build`
+# renders market.json, its slim copies and wfstat-catalog.json from it into
+# PUBLISH. Neither is the checkout: the box's live data never shares a tree
+# with git, so a pull can neither discard it nor be blocked by it.
 #
 # Environment (all optional):
-#   APP      repo root to run in          (default /srv/wfm/app - the LXC layout)
+#   DATA     the sweep's own state: CSV, statistics cache, WFM cooldown and
+#            policy copy (default /srv/wfm/data/scrape)
+#   PUBLISH  what the site serves (default /srv/wfm/data/public). A local run
+#            sets DATA=. PUBLISH=frontend/public from the repository root.
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
 #   STATS_INTERVAL  how long an item's statistics are reused (default 6h);
 #               empty fetches every item's statistics every sweep
@@ -20,16 +24,18 @@
 #               build; 0 skips it for a one-off local scrape
 set -euo pipefail
 
-APP="${APP:-/srv/wfm/app}"
+DATA="${DATA:-/srv/wfm/data/scrape}"
+PUBLISH="${PUBLISH:-/srv/wfm/data/public}"
 CSV=wfm_results.csv
 MIN_ROWS=800                 # absolute floor; a healthy scrape keeps ~2.6k
-cd "$APP"
+PUBLISH="$(cd "$PUBLISH" && pwd)"
+cd "$DATA"
 
 # Release preparation copies market.json and wfstat-catalog.json as one pair.
-# Lock the stable app-directory inode for the whole scrape so that copy either
+# Lock the publish directory's inode for the whole scrape so that copy either
 # sees the complete previous generation or waits for this one; it can never
 # catch the deliberate catalog-first / market-last publication gap below.
-exec 9<.
+exec 9<"$PUBLISH"
 flock -n 9 || { echo "ABORT: another scrape or snapshot operation holds the output lock." >&2; exit 1; }
 
 # Retain the row-count guard as an independent check on upstream shape changes.
@@ -73,15 +79,15 @@ fi
 
 # `build` writes the catalog BEFORE the snapshot (both atomic tmp+rename), so a
 # reader catching the gap sees new-catalog + old-market, never the reverse.
-"$SCRAPE_BIN" build
+"$SCRAPE_BIN" build --data-dir "$DATA" --publish-dir "$PUBLISH"
 echo "scrape complete: $now rows, $(date -Is)"
 
-# Long price history (relics.run → frontend/public/history.json). Production-only:
+# Long price history (relics.run → $PUBLISH/history.json). Production-only:
 # the artifact is its own state (only new days are fetched, normally one file
 # per day), so it must live where it persists. A failure here must not fail the
 # scrape: history is a bonus surface, market.json is not.
 if [ "${HISTORY:-1}" = "1" ]; then
-  if ! "$SCRAPE_BIN" history; then
+  if ! "$SCRAPE_BIN" history --publish-dir "$PUBLISH"; then
     echo "history: update failed (market.json is unaffected); will retry on the next tick." >&2
   fi
 fi

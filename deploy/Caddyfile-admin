@@ -31,7 +31,7 @@
 	# Calendar dates for suggested drafts. The CSP only allows this origin, so
 	# the dashboard reads the same live snapshot the public site serves.
 	handle /market.json {
-		root * /srv/wfm/app/frontend/public
+		root * /srv/wfm/data/public
 		file_server
 	}
 	handle_errors {

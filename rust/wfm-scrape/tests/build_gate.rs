@@ -122,3 +122,30 @@ fn build_produces_full_shape_market_json() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+// ---- box layout: input and output outside any checkout ---------------------
+
+/// The box runs `build` from its data directory with no checkout above it.
+/// The flags alone must say where the CSV is read and where the lock and the
+/// WFM state live; falling back to a checkout would write into it again.
+#[test]
+fn build_reads_and_locks_the_named_data_dir_outside_a_checkout() {
+    let root = std::env::temp_dir().join(format!("wfm-scrape-dirs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (data, publish) = (root.join("scrape"), root.join("public"));
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::create_dir_all(&publish).unwrap();
+    let out = run(
+        &["build", "--data-dir", data.to_str().unwrap(), "--publish-dir", publish.to_str().unwrap()],
+        &root,
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success());
+    assert!(
+        stderr.contains(&format!("{} not found", data.join("wfm_results.csv").display())),
+        "{stderr}"
+    );
+    assert!(data.join(".wfm-output.lock").exists(), "the lock belongs in the data dir");
+    assert!(!root.join(".wfm-output.lock").exists());
+    std::fs::remove_dir_all(&root).unwrap();
+}
+

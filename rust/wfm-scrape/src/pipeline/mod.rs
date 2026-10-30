@@ -11,7 +11,7 @@ mod publish;
 mod rivens;
 mod usage;
 mod world;
-pub use paths::find_root;
+pub use paths::{find_root, Dirs};
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -29,12 +29,12 @@ use crate::pipeline::render::assemble_snapshot;
 use crate::ingest::de;
 use crate::ingest::de::extract as de_extract;
 
-pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), String> {
+pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>, dirs: Option<&Dirs>) -> Result<(), String> {
     let now = now_arg
         .map(|s| clock::parse_stamp(s).ok_or_else(|| format!("invalid --now stamp: {s}")))
         .unwrap_or_else(|| Ok(Utc::now()))?;
 
-    let inputs::BuildInputs { http, csv_path, json_out, catalog_out, prior } = inputs::prepare(fixtures_dir)?;
+    let inputs::BuildInputs { http, csv_path, json_out, catalog_out, prior } = inputs::prepare(fixtures_dir, dirs)?;
 
     let prior_stamps: HashMap<String, String> = prior
         .get("surface_fetched_at")

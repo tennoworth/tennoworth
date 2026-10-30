@@ -9,7 +9,7 @@ OnFailure=wfm-alert@%n.service
 Type=oneshot
 User=wfm
 Group=wfm
-WorkingDirectory=/srv/wfm/app
+WorkingDirectory=/srv/wfm/data/scrape
 ExecStart=/srv/wfm/run-scrape.sh
 # Actual runtime crept past 3600s (item count + pacing grew) and systemd was
 # killing the scrape a few hundred seconds short of writing market.json -
@@ -17,11 +17,11 @@ ExecStart=/srv/wfm/run-scrape.sh
 TimeoutStartSec=7200
 Nice=10
 
-# Sandboxing - the scraper rewrites files under its repo (market.json,
-# wfstat-catalog.json, wfm_results.csv) and nothing else.
+# Sandboxing - the sweep writes its own state and what the site serves, and
+# nothing else; the checkout is read-only to it.
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/srv/wfm/app
+ReadWritePaths=/srv/wfm/data/scrape /srv/wfm/data/public
 ProtectHome=true
 PrivateTmp=true
 ProtectKernelTunables=true

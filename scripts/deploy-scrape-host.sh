@@ -108,6 +108,11 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
+# The pipeline writes only under $HOST_ROOT/data. A box whose live files still
+# sit in the checkout would come out of this deploy serving nothing.
+$SSH "$HOST" "test -f '$HOST_ROOT/data/public/market.json' && test -d '$HOST_ROOT/data/scrape'" \
+  || die "$HOST_ROOT/data/public/market.json is missing - move the live data out of the checkout first"
+
 # ---- 4. hold the schedule, then drain what it already started --------------
 # Checking for an idle box before staging does not close the window: the timer
 # can fire at any point in the install, and the live files are replaced one at a

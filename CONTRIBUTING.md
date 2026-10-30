@@ -349,8 +349,7 @@ bun scripts/check-public-surface.ts
 ```
 
 Edit CSP directives in `scripts/sync-csp.ts`, then run `bun run csp` from
-`frontend/`; do not hand-edit the generated policies. Root-layout deployment
-changes also require the [transition runbook](docs/repository-layout-transition.md).
+`frontend/`; do not hand-edit the generated policies.
 
 ## Submit a pull request
 
