@@ -64,15 +64,11 @@ reconcile_deployed() {
 
   # Units need root plus a daemon-reload, so report rather than act - a puller
   # that silently restarts systemd units is a different and larger promise.
-  for u in wfm-app-pull wfm-web-pull wfm-policy-pull wfm-players tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor tennoworth-publisher tennoworth-publisher-backup; do
-    for ext in service timer; do
-      src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
-      [ -f "$src" ] && [ -f "$dst" ] || continue
-      cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
-    done
-  done
-  for src in deploy/tennoworth-job-*.path; do
+  # Every unit file is covered, so a new one cannot be left out of a list; the
+  # sweep and the host check are the pipeline deploy's, as above.
+  for src in deploy/*.service deploy/*.timer deploy/*.path; do
     [ -f "$src" ] || continue
+    case "${src#deploy/}" in tennoworth-scrape.*|tennoworth-host-check.*) continue;; esac
     dst="/etc/systemd/system/${src#deploy/}"
     [ -f "$dst" ] || continue
     cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"

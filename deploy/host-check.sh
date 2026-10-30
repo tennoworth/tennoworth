@@ -7,7 +7,7 @@
 # pipeline is installed only by scripts/deploy-scrape-host.sh, by hand, while
 # the checkout follows main on its own: on 2026-10-01 the box ran 03ff5b0 three
 # pipeline merges behind main and nothing said so. A failed or timed-out sweep
-# already alerts through wfm-scrape.service's own OnFailure.
+# already alerts through tennoworth-scrape.service's own OnFailure.
 #
 # Fails closed: missing evidence is an error, not an empty result.
 #
@@ -24,7 +24,7 @@ usage: host-check.sh [options]
 
   --out <json>                write the report here (always also printed to stdout)
   --deployed <path>           deployment record (default /srv/wfm/deployed.json)
-  --binary <path>             installed pipeline (default /srv/wfm/bin/wfm-scrape)
+  --binary <path>             installed pipeline (default /srv/wfm/bin/tennoworth-pipeline)
   --app <dir>                 the box's checkout of main, which the deployed
                               pipeline is compared against (default /srv/wfm/app)
   --deploy-grace-hours <n>    how long pipeline changes in the checkout may wait
@@ -39,7 +39,7 @@ USAGE
 
 OUT=""
 DEPLOYED="/srv/wfm/deployed.json"
-BINARY="/srv/wfm/bin/wfm-scrape"
+BINARY="/srv/wfm/bin/tennoworth-pipeline"
 APP="/srv/wfm/app"
 DEPLOY_GRACE_HOURS=24
 CSV="/srv/wfm/data/scrape/wfm_results.csv"
@@ -130,14 +130,14 @@ NOW_ISO="$(epoch_to_iso "$NOW_EPOCH")"
 
 # ---- the sweep unit ---------------------------------------------------------
 
-service_state="$("$SYSTEMCTL" show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)"
-service_result="$("$SYSTEMCTL" show wfm-scrape.service -p Result --value 2>/dev/null || true)"
+service_state="$("$SYSTEMCTL" show tennoworth-scrape.service -p ActiveState --value 2>/dev/null || true)"
+service_result="$("$SYSTEMCTL" show tennoworth-scrape.service -p Result --value 2>/dev/null || true)"
 case "${service_result:-}" in
-  timeout) error "wfm-scrape.service timed out";;
-  failed) error "wfm-scrape.service failed";;
+  timeout) error "tennoworth-scrape.service timed out";;
+  failed) error "tennoworth-scrape.service failed";;
 esac
 case "${service_state:-}" in
-  failed) error "wfm-scrape.service is in a failed state";;
+  failed) error "tennoworth-scrape.service is in a failed state";;
 esac
 
 # ---- sweep output and disk --------------------------------------------------
@@ -164,11 +164,11 @@ fi
 
 # ---- timers -----------------------------------------------------------------
 
-timer_enabled="$("$SYSTEMCTL" show wfm-scrape.timer -p UnitFileState --value 2>/dev/null || true)"
-timer_active="$("$SYSTEMCTL" show wfm-scrape.timer -p ActiveState --value 2>/dev/null || true)"
-next_elapse_raw="$("$SYSTEMCTL" show wfm-scrape.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)"
-[ "$timer_enabled" = enabled ] || error "wfm-scrape.timer is ${timer_enabled:-unknown}, not enabled"
-[ "$timer_active" = active ] || error "wfm-scrape.timer is ${timer_active:-unknown}, not active"
+timer_enabled="$("$SYSTEMCTL" show tennoworth-scrape.timer -p UnitFileState --value 2>/dev/null || true)"
+timer_active="$("$SYSTEMCTL" show tennoworth-scrape.timer -p ActiveState --value 2>/dev/null || true)"
+next_elapse_raw="$("$SYSTEMCTL" show tennoworth-scrape.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)"
+[ "$timer_enabled" = enabled ] || error "tennoworth-scrape.timer is ${timer_enabled:-unknown}, not enabled"
+[ "$timer_active" = active ] || error "tennoworth-scrape.timer is ${timer_active:-unknown}, not active"
 # While its sweep runs, systemd reports no next elapse for the timer: the next
 # one is scheduled when the run ends. Reading that as a broken timer turned
 # every check that landed mid-sweep - every other hour - into a false alert.
@@ -178,13 +178,13 @@ case "${service_state:-}" in
 esac
 next_elapse_epoch=""
 case "${next_elapse_raw:-}" in
-  ''|n/a) [ "$sweep_running" = true ] || error "wfm-scrape.timer has no next elapse";;
+  ''|n/a) [ "$sweep_running" = true ] || error "tennoworth-scrape.timer has no next elapse";;
   *) next_elapse_epoch="$(iso_to_epoch "$next_elapse_raw")" || true;;
 esac
 if [ -z "${next_elapse_epoch:-}" ]; then
-  [ "$sweep_running" = true ] || error "cannot read wfm-scrape.timer's next elapse"
+  [ "$sweep_running" = true ] || error "cannot read tennoworth-scrape.timer's next elapse"
 elif [ $((next_elapse_epoch + BOUNDARY_GRACE_SECONDS)) -lt "$NOW_EPOCH" ]; then
-  error "wfm-scrape.timer missed its ${next_elapse_raw} boundary by over 15 minutes"
+  error "tennoworth-scrape.timer missed its ${next_elapse_raw} boundary by over 15 minutes"
 fi
 
 retired_timer="$("$SYSTEMCTL" is-enabled wfm-scrape-pull.timer 2>/dev/null || true)"
@@ -225,7 +225,7 @@ fi
 # desktop package's own entry there, which says nothing about the pipeline.
 SCRAPER_SOURCES=(
   rust/wfm-scrape rust/wfm-client rust/market-domain rust/Cargo.toml
-  deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer
+  deploy/run-scrape.sh deploy/tennoworth-scrape.service deploy/tennoworth-scrape.timer
   deploy/host-check.sh deploy/tennoworth-host-check.service deploy/tennoworth-host-check.timer
 )
 # Root reads a checkout owned by wfm, which git refuses without this.

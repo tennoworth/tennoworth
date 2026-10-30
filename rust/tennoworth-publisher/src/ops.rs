@@ -28,14 +28,15 @@ pub struct Job {
     pub cooldown: i64,
 }
 
-/// Every job the dashboard can start. Each needs a matching
-/// `deploy/tennoworth-job-<id>.path` unit; a test holds the two lists together.
+/// Every job the dashboard can start, each an instance of
+/// `deploy/tennoworth-job@.path` whose unit is `tennoworth-<id>.service`; a test
+/// holds the names together.
 pub const JOBS: &[Job] = &[
     Job {
         id: "scrape",
         label: "Run market sweep",
         description: "Starts a full sweep now. It takes about 40 minutes and uses the WFM request budget. A scheduled sweep that comes due while it runs is skipped.",
-        unit: "wfm-scrape.service",
+        unit: "tennoworth-scrape.service",
         cooldown: 15 * 60,
     },
     Job {
@@ -49,21 +50,21 @@ pub const JOBS: &[Job] = &[
         id: "backup",
         label: "Snapshot announcements",
         description: "Takes a consistent copy of drafts and history now. The newest 30 copies are kept.",
-        unit: "tennoworth-publisher-backup.service",
+        unit: "tennoworth-backup.service",
         cooldown: 60,
     },
     Job {
         id: "web-pull",
         label: "Pull website",
         description: "Refreshes the box's rollback copy of the website from main, if it changed. The live site is served from Cloudflare.",
-        unit: "wfm-web-pull.service",
+        unit: "tennoworth-web-pull.service",
         cooldown: 120,
     },
     Job {
         id: "policy-pull",
         label: "Pull WFM policy",
         description: "Installs the latest signed WFM access policy, if it changed.",
-        unit: "wfm-policy-pull.service",
+        unit: "tennoworth-policy-pull.service",
         cooldown: 120,
     },
 ];
@@ -82,8 +83,8 @@ struct Service {
 const SERVICES: &[Service] = &[
     Service {
         label: "Market sweep",
-        unit: "wfm-scrape.service",
-        timer: Some("wfm-scrape.timer"),
+        unit: "tennoworth-scrape.service",
+        timer: Some("tennoworth-scrape.timer"),
         health_port: None,
     },
     Service {
@@ -94,25 +95,25 @@ const SERVICES: &[Service] = &[
     },
     Service {
         label: "App checkout pull",
-        unit: "wfm-app-pull.service",
-        timer: Some("wfm-app-pull.timer"),
+        unit: "tennoworth-app-pull.service",
+        timer: Some("tennoworth-app-pull.timer"),
         health_port: None,
     },
     Service {
         label: "WFM policy pull",
-        unit: "wfm-policy-pull.service",
-        timer: Some("wfm-policy-pull.timer"),
+        unit: "tennoworth-policy-pull.service",
+        timer: Some("tennoworth-policy-pull.timer"),
         health_port: None,
     },
     Service {
         label: "Usage collector",
-        unit: "tennoworth-usage.service",
+        unit: "tennoworth-collector@usage.service",
         timer: None,
         health_port: Some(8082),
     },
     Service {
         label: "Price reports",
-        unit: "tennoworth-reports.service",
+        unit: "tennoworth-collector@reports.service",
         timer: None,
         health_port: Some(8083),
     },
@@ -124,8 +125,8 @@ const SERVICES: &[Service] = &[
     },
     Service {
         label: "Announcement snapshot",
-        unit: "tennoworth-publisher-backup.service",
-        timer: Some("tennoworth-publisher-backup.timer"),
+        unit: "tennoworth-backup.service",
+        timer: Some("tennoworth-backup.timer"),
         health_port: None,
     },
     Service {
@@ -637,14 +638,14 @@ mod tests {
 
     #[test]
     fn show_output_maps_services_timers_and_missing_units() {
-        let output = "Id=wfm-scrape.service\nLoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStartTimestamp=Mon 2026-10-12 12:00:01 UTC\nExecMainExitTimestamp=Mon 2026-10-12 12:36:40 UTC\nNextElapseUSecRealtime=\n\nId=wfm-scrape.timer\nLoadState=loaded\nActiveState=active\nSubState=waiting\nResult=success\nExecMainStartTimestamp=\nExecMainExitTimestamp=\nNextElapseUSecRealtime=Mon 2026-10-12 14:00:00 UTC\n\nId=caddy.service\nLoadState=not-found\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStartTimestamp=\nExecMainExitTimestamp=\nNextElapseUSecRealtime=\n";
+        let output = "Id=tennoworth-scrape.service\nLoadState=loaded\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStartTimestamp=Mon 2026-10-12 12:00:01 UTC\nExecMainExitTimestamp=Mon 2026-10-12 12:36:40 UTC\nNextElapseUSecRealtime=\n\nId=tennoworth-scrape.timer\nLoadState=loaded\nActiveState=active\nSubState=waiting\nResult=success\nExecMainStartTimestamp=\nExecMainExitTimestamp=\nNextElapseUSecRealtime=Mon 2026-10-12 14:00:00 UTC\n\nId=caddy.service\nLoadState=not-found\nActiveState=inactive\nSubState=dead\nResult=success\nExecMainStartTimestamp=\nExecMainExitTimestamp=\nNextElapseUSecRealtime=\n";
         let units = parse_show(output);
-        let scrape = &units["wfm-scrape.service"];
+        let scrape = &units["tennoworth-scrape.service"];
         assert!(scrape.installed);
         assert_eq!(scrape.started_at.as_deref(), Some("2026-10-12T12:00:01Z"));
         assert_eq!(scrape.finished_at.as_deref(), Some("2026-10-12T12:36:40Z"));
         assert_eq!(
-            units["wfm-scrape.timer"].started_at.as_deref(),
+            units["tennoworth-scrape.timer"].started_at.as_deref(),
             Some("2026-10-12T14:00:00Z")
         );
         assert!(!units["caddy.service"].installed);
@@ -667,13 +668,13 @@ mod tests {
 
     #[test]
     fn alert_log_keeps_recent_entries_newest_first_with_context() {
-        let log = "    tail of a cut entry\n=== 2026-10-01T03:10:04Z  old.service  result=exit-code\n    old context\n=== 2026-10-09T03:10:04Z  wfm-app-pull.service  result=exit-code\n    fatal: unable to access\n    Failed with result 'exit-code'.\n=== 2026-10-10T01:00:00Z  wfm-scrape.service  result=timeout\n";
+        let log = "    tail of a cut entry\n=== 2026-10-01T03:10:04Z  old.service  result=exit-code\n    old context\n=== 2026-10-09T03:10:04Z  tennoworth-app-pull.service  result=exit-code\n    fatal: unable to access\n    Failed with result 'exit-code'.\n=== 2026-10-10T01:00:00Z  tennoworth-scrape.service  result=timeout\n";
         let since = DateTime::parse_from_rfc3339("2026-10-05T00:00:00Z")
             .unwrap()
             .timestamp();
         let entries = alerts(log, since);
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].unit, "wfm-scrape.service");
+        assert_eq!(entries[0].unit, "tennoworth-scrape.service");
         assert_eq!(entries[0].result, "timeout");
         assert_eq!(
             entries[1].context,
@@ -714,7 +715,7 @@ mod tests {
             .args(["--deployed"])
             .arg(dir.path().join("deployed.json"))
             .args(["--binary"])
-            .arg(dir.path().join("wfm-scrape"))
+            .arg(dir.path().join("tennoworth-pipeline"))
             .args(["--app"])
             .arg(dir.path().join("app"))
             .args(["--disk-path"])
@@ -767,38 +768,39 @@ mod tests {
         assert!(job("rm -rf /").is_none());
     }
 
-    /// Each job needs a path unit that watches exactly its own directory and
-    /// starts exactly its own service, and no path unit may start anything else.
+    /// One path template serves every job: `tennoworth-job@<id>.path` watches
+    /// `/srv/wfm/jobs/<id>` and starts `tennoworth-<id>.service`, so each job's
+    /// unit must be named after its id and the template may watch nothing else.
     #[test]
     fn every_job_has_exactly_one_matching_path_unit() {
         let deploy = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../deploy");
-        let mut found = BTreeSet::new();
+        let template = fs::read_to_string(deploy.join("tennoworth-job@.path")).unwrap();
+        let lines: Vec<&str> = template.lines().map(str::trim).collect();
+        assert!(lines.contains(&"PathChanged=/srv/wfm/jobs/%i"));
+        assert!(lines.contains(&"Unit=tennoworth-%i.service"));
+        assert_eq!(
+            lines.iter().filter(|l| l.starts_with("Path")).count(),
+            1,
+            "the job template must watch one path"
+        );
         for entry in fs::read_dir(&deploy).unwrap() {
             let name = entry.unwrap().file_name().into_string().unwrap();
-            let Some(id) = name
-                .strip_prefix("tennoworth-job-")
-                .and_then(|n| n.strip_suffix(".path"))
-            else {
-                continue;
-            };
-            let job = job(id)
-                .unwrap_or_else(|| panic!("{name} starts a job the publisher does not offer"));
-            let unit = fs::read_to_string(deploy.join(&name)).unwrap();
-            let lines: Vec<&str> = unit.lines().map(str::trim).collect();
             assert!(
-                lines.contains(&format!("PathChanged=/srv/wfm/jobs/{id}").as_str()),
-                "{name} watches the wrong path"
+                !(name.starts_with("tennoworth-job") && name.ends_with(".path"))
+                    || name == "tennoworth-job@.path",
+                "{name}: jobs are instances of tennoworth-job@.path"
             );
+        }
+        let mut found = BTreeSet::new();
+        for job in JOBS {
+            assert_eq!(job.unit, format!("tennoworth-{}.service", job.id), "job {}", job.id);
             assert!(
-                lines.contains(&format!("Unit={}", job.unit).as_str()),
-                "{name} starts the wrong unit"
+                deploy.join(job.unit).exists(),
+                "job {} starts {}, which deploy/ does not ship",
+                job.id,
+                job.unit
             );
-            assert_eq!(
-                lines.iter().filter(|l| l.starts_with("Path")).count(),
-                1,
-                "{name} must watch one path"
-            );
-            found.insert(id.to_owned());
+            found.insert(job.id.to_owned());
         }
         let expected: BTreeSet<String> = JOBS.iter().map(|job| job.id.to_owned()).collect();
         assert_eq!(found, expected);

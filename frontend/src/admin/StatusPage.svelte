@@ -13,7 +13,7 @@
 
   const box = $derived(current?.status ?? null);
   const hostCheck = $derived(box?.host_check ?? null);
-  const sweep = $derived(box?.services.find(service => service.service.unit === 'wfm-scrape.service') ?? null);
+  const sweep = $derived(box?.services.find(service => service.service.unit === 'tennoworth-scrape.service') ?? null);
   const sweeping = $derived(!!sweep && running(sweep.service));
   // systemd clears the exit time when a new sweep starts, so while one runs the
   // last finished sweep is the published snapshot's age at the last host check.

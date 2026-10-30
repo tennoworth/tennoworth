@@ -5,7 +5,7 @@
 # rebuild the full-shape snapshot. This is the ONE production scrape entrypoint,
 # driven by the self-hosted systemd timer.
 #
-# `wfm-scrape scrape` produces wfm_results.csv in DATA, and `wfm-scrape build`
+# `tennoworth-pipeline scrape` produces wfm_results.csv in DATA, and `tennoworth-pipeline build`
 # renders market.json, its slim copies and wfstat-catalog.json from it into
 # PUBLISH. Neither is the checkout: the box's live data never shares a tree
 # with git, so a pull can neither discard it nor be blocked by it.
@@ -15,7 +15,7 @@
 #            policy copy (default /srv/wfm/data/scrape)
 #   PUBLISH  what the site serves (default /srv/wfm/data/public). A local run
 #            sets DATA=. PUBLISH=frontend/public from the repository root.
-#   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
+#   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/tennoworth-pipeline)
 #   STATS_INTERVAL  how long an item's statistics are reused (default 6h);
 #               empty fetches every item's statistics every sweep
 #   STATS_CACHE   where reused statistics are kept (default stats-cache.json,
@@ -42,7 +42,7 @@ flock -n 9 || { echo "ABORT: another scrape or snapshot operation holds the outp
 prior=0
 [ -f "$CSV" ] && prior=$(( $(wc -l < "$CSV") - 1 ))
 
-SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/wfm-scrape}"
+SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/tennoworth-pipeline}"
 [ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (scripts/deploy-scrape-host.sh installs it)." >&2; exit 1; }
 SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
 # Daily medians move once a day and the 48-hour figures drift slowly, while

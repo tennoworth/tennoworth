@@ -18,7 +18,7 @@ export async function loadCatalogs(): Promise<Catalogs> {
   }
 
   const r = await fetch(WFSTAT_CATALOG_URL);
-  if (!r.ok) throw new Error(`wfstat-catalog.json responded ${r.status} - rebuild the snapshot (wfm-scrape build)`);
+  if (!r.ok) throw new Error(`wfstat-catalog.json responded ${r.status} - rebuild the snapshot (tennoworth-pipeline build)`);
   // Already in slim [uniqueName, {name, category}] form - baked that way.
   const slim = (await r.json()) as SlimCatalog;
   if (!Array.isArray(slim)) throw new Error('wfstat-catalog.json is not an array');

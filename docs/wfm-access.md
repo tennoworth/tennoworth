@@ -51,9 +51,9 @@ of 2026-09-09, whose scraper restrictions are the compiled defaults above.
 |---|---|---|
 | Hard ceiling | 2 request starts per second | governor spacing and in-flight cap |
 | Requests per sweep | 6,438 | 1 catalog + 3,840 statistics + 2,597 orders, from the run's own summary |
-| Sweep wall time | 60-89 minutes that day | `journalctl -u wfm-scrape.service` |
+| Sweep wall time | 60-89 minutes that day | `journalctl -u tennoworth-scrape.service` |
 | Floor if nothing else were spent | 54 minutes | 6,438 x 500 ms |
-| Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/wfm-scrape.timer` |
+| Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/tennoworth-scrape.timer` |
 | Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the validated policy triggers; books every sweep | `deploy/run-scrape.sh`, `stats_cache.rs` |
 | Mean over a day | ~0.9 request starts per second before statistics reuse; the offline replay of the 2026-09/10 corpus projected about 42% fewer requests with it | derived from the rows above |
 

@@ -3,7 +3,7 @@
 
 // -------- market.json --------
 
-/** Per-slug market entry baked by `wfm-scrape build`. */
+/** Per-slug market entry baked by `tennoworth-pipeline build`. */
 export interface MarketItemEntry {
   price_basis?: 'unit';
   avg: number;

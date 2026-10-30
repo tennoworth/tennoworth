@@ -1,7 +1,7 @@
 [Unit]
 Description=Snapshot the private announcement publisher database
 After=tennoworth-publisher.service
-OnFailure=wfm-alert@%n.service
+OnFailure=tennoworth-alert@%n.service
 
 [Service]
 Type=oneshot

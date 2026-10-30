@@ -2,7 +2,7 @@
 //!
 //! There is no second implementation to diff against, so the gates assert the
 //! binary's behaviour on the frozen fixtures, end to end: shell the
-//! freshly-built binary (`env!("CARGO_BIN_EXE_wfm-scrape")` - Cargo rebuilds it
+//! freshly-built binary (`env!("CARGO_BIN_EXE_tennoworth-pipeline")` - Cargo rebuilds it
 //! before integration tests run, so a stale artifact cannot green them), run it
 //! against a copy of the committed fixtures, and check the output.
 #![allow(
@@ -15,7 +15,7 @@
 
 pub use std::path::{Path, PathBuf};
 pub use std::process::Command;
-pub const BIN: &str = env!("CARGO_BIN_EXE_wfm-scrape");
+pub const BIN: &str = env!("CARGO_BIN_EXE_tennoworth-pipeline");
 /// Root of the cargo workspace (rust/).
 pub const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 

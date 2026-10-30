@@ -80,7 +80,7 @@ AGENTS.local.md
 # Long price history (relics.run-derived). Box-only state, ~7 MB, rewritten
 # daily; served live by Caddy, never committed. See wfm-scrape/src/history.rs.
 /frontend/public/history.json
-# Written by `wfm-scrape build` beside market.json; the site falls back to market.json without them.
+# Written by `tennoworth-pipeline build` beside market.json; the site falls back to market.json without them.
 /frontend/public/market-public.json
 /frontend/public/market-home.json
 

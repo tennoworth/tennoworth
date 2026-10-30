@@ -1,4 +1,4 @@
-//! `wfm-scrape` binary - the host-only market pipeline.
+//! `tennoworth-pipeline` binary (crate `wfm-scrape`) - the host-only market pipeline.
 //!
 //! Subcommands:
 //! - `build`: reads `wfm_results.csv`, fetches upstreams, reconciles with the
@@ -20,7 +20,7 @@ use wfm_scrape::{clock, ingest::LiveHttp};
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let Some(command) = args.get(1) else {
-        eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--data-dir <DIR>] [--publish-dir <DIR>] [--now <ISO>]");
+        eprintln!("usage: tennoworth-pipeline build|scrape|history [--fixtures-dir <DIR>] [--data-dir <DIR>] [--publish-dir <DIR>] [--now <ISO>]");
         return std::process::ExitCode::FAILURE;
     };
     let live = extract_flag(&args, "--fixtures-dir").is_none();
@@ -190,7 +190,7 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// `wfm-scrape history [--publish-dir <DIR>] [--out <history.json>]
+/// `tennoworth-pipeline history [--publish-dir <DIR>] [--out <history.json>]
 ///                    [--market <market.json>] [--days N] [--bootstrap-days N]
 ///                    [--now <ISO>]`
 ///
@@ -241,7 +241,7 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         .unwrap_or_default();
     if name_to_slug.is_empty() {
         return Err(format!(
-            "{} has no catalog - run `wfm-scrape build` first",
+            "{} has no catalog - run `tennoworth-pipeline build` first",
             market_path.display()
         ));
     }

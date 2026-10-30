@@ -3,7 +3,7 @@ Description=Refresh Warframe market.json from warframe.market + warframestat
 Wants=network-online.target
 After=network-online.target
 
-OnFailure=wfm-alert@%n.service
+OnFailure=tennoworth-alert@%n.service
 
 [Service]
 Type=oneshot

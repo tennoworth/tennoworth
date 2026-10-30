@@ -1,5 +1,5 @@
 [Unit]
-Description=Monitor price-report collector availability
+Description=Monitor %i collector availability
 [Timer]
 OnBootSec=5min
 OnUnitActiveSec=5min

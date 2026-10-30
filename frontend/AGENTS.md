@@ -33,7 +33,7 @@ fetches will fail CORS. All WFM data must come from the static
 `wfm-scrape`; desktop release preparation refreshes the repo copy from the
 box's locked pair.
 
-All vendor data - the resolver catalog (`wfm-scrape build` writes
+All vendor data - the resolver catalog (`tennoworth-pipeline build` writes
 `public/wfstat-catalog.json` with forced English names, because localized names
 fail the WFM name join), relic rewards, vault status and the Baro schedule - is
 baked at build time and served same-origin, so the hosted CSP `connect-src` is

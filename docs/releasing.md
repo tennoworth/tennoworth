@@ -157,7 +157,7 @@ For website delivery, retain the currently deployed bundle and its commit and
 checksum before replacing the rolling artifact. `build-web` deploys the site to
 Cloudflare in the same run that publishes `web-latest`. The box keeps a
 rollback copy that it refreshes only on request (the dashboard's Pull website
-job, or `wfm-web-pull.service`), and serves it only if the site route is
+job, or `tennoworth-web-pull.service`), and serves it only if the site route is
 removed. Verify the new deployed commit, the main page and its assets, and
 market-data loading. On a failed or timed-out deployment, report promotion as
 complete and deployment as unverified. Recovery must identify a retained known-good

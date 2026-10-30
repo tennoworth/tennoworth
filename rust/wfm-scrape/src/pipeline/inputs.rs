@@ -73,7 +73,7 @@ pub(super) fn prepare(fixtures_dir: Option<&Path>, dirs: Option<&Dirs>) -> Resul
 
     if !csv_path.exists() {
         return Err(format!(
-            "{} not found - run `wfm-scrape scrape` first.",
+            "{} not found - run `tennoworth-pipeline scrape` first.",
             csv_path.display()
         ));
     }

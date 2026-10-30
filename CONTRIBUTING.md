@@ -336,7 +336,7 @@ unknown values, unavailable sources, malformed siblings, and interrupted
 publication as well as usable data. A failed fetch must not turn old data into
 fresh data or missing data into zero.
 
-Do not regenerate production snapshots for an unrelated PR. `wfm-scrape build`
+Do not regenerate production snapshots for an unrelated PR. `tennoworth-pipeline build`
 is the full snapshot/catalog generator; `scrape` alone only produces CSV. Live
 scraping has a separate operational cost and is unnecessary for fixture work.
 

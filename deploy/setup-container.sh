@@ -71,7 +71,7 @@ chown wfm:wfm /srv/wfm/data
 # The sweep's own state, and what the site serves (Caddy reads it).
 install -d -m 0750 -o wfm -g wfm /srv/wfm/data/scrape
 install -d -m 0755 -o wfm -g wfm /srv/wfm/data/public
-# The policy puller runs as wfm (wfm-policy-pull.service) and publishes here.
+# The policy puller runs as wfm (tennoworth-policy-pull.service) and publishes here.
 chown -R wfm:wfm /srv/wfm/policy
 # Root installs the executed copies from the checkout, so a wfm-writable
 # checkout was a route to code root would run. The pipeline now writes only
@@ -99,24 +99,34 @@ else
   systemctl reload caddy
 fi
 
-install -m 0644 "$DEPLOY/wfm-policy-pull.service" /etc/systemd/system/wfm-policy-pull.service
-install -m 0644 "$DEPLOY/wfm-policy-pull.timer" /etc/systemd/system/wfm-policy-pull.timer
+# Units were named wfm-* before they took the project's name. Re-running this
+# on such a box retires the ones it installs, so the old timers cannot keep
+# firing beside the new ones.
+for old in wfm-policy-pull.timer wfm-app-pull.timer; do
+  systemctl disable --now "$old" >/dev/null 2>&1 || true
+done
+rm -f /etc/systemd/system/wfm-policy-pull.service /etc/systemd/system/wfm-policy-pull.timer \
+  /etc/systemd/system/wfm-app-pull.service /etc/systemd/system/wfm-app-pull.timer \
+  /etc/systemd/system/wfm-web-pull.service /etc/systemd/system/wfm-alert@.service
+
+install -m 0644 "$DEPLOY/tennoworth-policy-pull.service" /etc/systemd/system/tennoworth-policy-pull.service
+install -m 0644 "$DEPLOY/tennoworth-policy-pull.timer" /etc/systemd/system/tennoworth-policy-pull.timer
 # Enable after installing the verifier with the dedicated public key.
 if [ -x /srv/wfm/bin/wfm-policy ]; then
   systemctl daemon-reload
-  systemctl enable --now wfm-policy-pull.timer
+  systemctl enable --now tennoworth-policy-pull.timer
 fi
 
 # The scrape units come with the binary they execute, from
 # scripts/deploy-scrape-host.sh; provisioning the box never creates half that
 # set on its own.
 echo "==> App-pull timer, on-demand web pull"
-install -m 0644 "$DEPLOY/wfm-alert@.service"      /etc/systemd/system/wfm-alert@.service
-install -m 0644 "$DEPLOY/wfm-app-pull.service"    /etc/systemd/system/wfm-app-pull.service
-install -m 0644 "$DEPLOY/wfm-app-pull.timer"      /etc/systemd/system/wfm-app-pull.timer
-install -m 0644 "$DEPLOY/wfm-web-pull.service"    /etc/systemd/system/wfm-web-pull.service
+install -m 0644 "$DEPLOY/tennoworth-alert@.service"      /etc/systemd/system/tennoworth-alert@.service
+install -m 0644 "$DEPLOY/tennoworth-app-pull.service"    /etc/systemd/system/tennoworth-app-pull.service
+install -m 0644 "$DEPLOY/tennoworth-app-pull.timer"      /etc/systemd/system/tennoworth-app-pull.timer
+install -m 0644 "$DEPLOY/tennoworth-web-pull.service"    /etc/systemd/system/tennoworth-web-pull.service
 systemctl daemon-reload
-systemctl enable --now wfm-app-pull.timer
+systemctl enable --now tennoworth-app-pull.timer
 
 echo "==> Unattended security upgrades"
 apt-get install -y unattended-upgrades
@@ -138,17 +148,17 @@ cat <<'NEXT'
 
 2. The site's pages are served from Cloudflare (deploy/cloudflare-web). The box
    keeps a rollback copy without building anything here (keep node/bun off the
-   exposed box): wfm-web-pull.service fetches the web-latest release asset into
+   exposed box): tennoworth-web-pull.service fetches the web-latest release asset into
    $REPO/frontend/dist. It has no timer; populate the copy once now, and again
    before any rollback:
-     systemctl start wfm-web-pull.service
+     systemctl start tennoworth-web-pull.service
 
 3. Deploy the scrape pipeline from the maintainer checkout
    (scripts/deploy-scrape-host.sh). It installs the binary, its driver script
    and the wfm-scrape units, enables the sweep timer, and refuses a revision
    that is not reviewed and clean. Kick a first sweep here:
-     systemctl start wfm-scrape.service
-     journalctl -u wfm-scrape.service -f
+     systemctl start tennoworth-scrape.service
+     journalctl -u tennoworth-scrape.service -f
    Watch for repeated 429/403 (WFM 1015). The UA is a descriptive project
    string - the form WFM's rules require and the only one verified accepted -
    so this should be fine from a residential IP, but verify.
