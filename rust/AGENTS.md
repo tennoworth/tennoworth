@@ -35,7 +35,8 @@ These bind every crate here, including callers:
 
 - **Every WFM HTTP attempt, including retries, goes through
   `wfm-client::transport`**, under the policy in
-  [../docs/wfm-access.md](../docs/wfm-access.md). Never blindly retry an
+  [../docs/wfm-access.md](../docs/wfm-access.md); the retry layers are listed
+  in [wfm-client/AGENTS.md](wfm-client/AGENTS.md). Never blindly retry an
   ambiguous create.
 - **The listing caps have one home.** `MAX_PLAN_ITEMS`, `MIN_PLATINUM` and
   `MAX_PLATINUM` are defined once in `market-domain/src/limits.rs` and imported
