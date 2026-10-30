@@ -127,28 +127,19 @@ through the Cloudflare API, never by a deploy. The box also keeps pulling the
 `web-latest` bundle, so removing the site route serves the site from the box
 again.
 
-## CI inventory
+## Stored and host identifiers
 
-`.github/workflows/` holds the release and verification workflows:
-`release-desktop` (manual dispatch bound to an approved commit; creates the
-immutable `desktop-v*` tag during publication), `build-web`,
-`build-usage` and `build-reports` (thin callers of the shared
-`collector-build`), the manual `build-publisher`, `audit`, `ui-smoke`, the weekly
-`republish-rolling` (which re-dispatches `build-web`, `build-usage` and
-`build-reports`), the hourly `refresh-web` (which dispatches `build-web` on
-`main` when the box serves a newer market snapshot than the published pages
-were prerendered from), and the on-demand
-`ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
-`.github/actions/`: `setup-rust`, `setup-windows-ocr`, `stage-tessdata` and
-`publish-rolling-release`, which the workflows above call into. The host-only scrape pipeline has no workflow: it is
-deployed directly by
-[`scripts/deploy-scrape-host.sh`](../scripts/deploy-scrape-host.sh), which is
-its only installer.
+These names predate the project name or are read by software already installed,
+so they are frozen. Never rename one in a refactor; a deliberate change needs
+its own migration for data already on users' machines or the host.
 
-Cache policy, trigger paths and the ruleset configuration are owned elsewhere:
-see [rust-toolkit-2026-lessons.md](rust-toolkit-2026-lessons.md) for the CI
-cache measurements and [github-rulesets/](github-rulesets/) for the applied
-repository rulesets.
+| Identifier | Where it lives |
+|---|---|
+| `wfminv` | `~/.config/wfminv/` (JWT envelope, pending-plan journal) on both platforms; the browser storage namespace `wfminv:<key>-vN` and IndexedDB `wfminv`; the encrypted export format `wfminv-encrypted-v1`. New keys use the same namespace. |
+| `app.tennoworth.desktop` | Tauri identifier, which names the app data directory holding the SQLite database |
+| IPC command and event names | `tauri::generate_handler!` registrations and the generated event constants |
+| `desktop-v*`, `*-latest` | release tags and rolling artifacts the updater and host pullers fetch |
+| `/srv/wfm`, user `wfm` | host layout and service account |
 
 ## Dependency direction
 
@@ -163,13 +154,23 @@ flowchart TD
   Adapters --> Contracts
   Adapters --> Domain
   Domain --> Contracts
-  Adapters -->|desktop IPC| Desktop[Native commands and services]
+  Adapters -->|desktop IPC| Desktop[tennoworth-desktop]
   Desktop --> Core[wfm-core]
+  Desktop --> Client[wfm-client]
+  Desktop --> Market[market-domain]
   Desktop --> Math[market-math]
-  Core --> Client[wfm-client]
-  Core --> Market[market-domain]
+  Desktop --> Feed[tennoworth-announcements]
+  Desktop --> Reports[tennoworth-reports]
+  Core --> Client
+  Core --> Market
+  Market --> Math
+  Wasm[market-domain-wasm] --> Market
   Scrape[wfm-scrape] --> Math
   Scrape --> Client
+  Publisher[tennoworth-publisher] --> Feed
+  Publisher --> Market
+  Usage[tennoworth-usage] --> Gate[collector-gate]
+  Reports --> Gate
 ```
 
 Shells choose implementations and provide desktop services through Svelte

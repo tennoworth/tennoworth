@@ -1,35 +1,23 @@
 # wfm-core/ - acquisition, auth, orders and recovery
 
 Parent rules: [`../AGENTS.md`](../AGENTS.md). Transport - headers, user agent,
-budgets, retry - lives in [`../wfm-client/AGENTS.md`](../wfm-client/AGENTS.md);
+budgets, retry - is [`../wfm-client/AGENTS.md`](../wfm-client/AGENTS.md)'s;
 this file covers what the core does with it.
 
-## Pacing, caps and pending-plan recovery
+## Caps and pending plans
 
-Driven by the desktop's IPC commands (`submit_plan` / `get_pending_plan` /
-`resume_pending_plan` / …):
-
-- Every WFM HTTP attempt, including retries, goes through
-  `wfm-client::transport`. Use the current request-budget and reconciliation
-  policy in ../../docs/wfm-access.md; do not add independent sleeps or retry
-  loops.
-- `MAX_PLAN_ITEMS = 50`, `MIN_PLATINUM = 5`, `MAX_PLATINUM = 3000`
-  (the WFM UI cap - maxed arcanes legitimately trade 1500-2500p; an
-  earlier 999 cap silently blocked those listings).
-  Slug-mismatch guard: refuse listings priced ≥ 3× below the
+- The listing caps are imported from `market_domain::limits` (cross-crate
+  invariant in ../AGENTS.md). `MAX_PLATINUM` is the WFM UI cap because maxed
+  arcanes legitimately trade at 1500-2500p; an earlier 999 cap silently blocked
+  them. The slug-mismatch guard refuses a listing priced 3× or more below the
   reference `low_sell`.
-
-  The caps live in `market_domain::limits` and are imported here, by the
-  desktop's listing commands and by trade-session selection - see the
-  cross-crate invariant in [`../AGENTS.md`](../AGENTS.md).
-- Pending-plan recovery: every plan is persisted to
-  `~/.config/wfminv/pending_plan.json` (atomic tmp+rename) before the
-  first POST. Each item is marked uncertain on disk before its execution,
-  then updated with the known outcome; a failed outcome write leaves the
-  uncertain marker for recovery. The desktop records confirmed results in
-  SQLite before deleting a finished journal; failed history recording leaves
-  it available for retry. `get_pending_plan` / `resume_pending_plan` /
-  `discard_pending_plan` expose this to the webview.
+- Reviewed batches are journaled to `~/.config/wfminv/pending_plan.json`
+  before the first POST, through `trading/pending.rs`; the recovery semantics
+  (uncertain marker per item, journal cleanup order, discard) are owned by
+  [docs/architecture.md](../../docs/architecture.md#data-and-failure-boundaries).
+  The desktop exposes them as `get_pending_plan` / `resume_pending_plan` /
+  `discard_pending_plan`. Change the journal format only with a migration for
+  files already on disk.
 
 ## Cross-platform memory access
 
@@ -69,13 +57,8 @@ cookie, and `jwt_is_signed_in` (`/v2/me`: 401 = still the anonymous cookie
 every visitor gets) decides when it is a real session. v2 endpoints require
 this cookie-style JWT - header-style is rejected.
 
-`api.warframe.market` calls carry `Crossplay` + `Platform` + `Language` through
-`wfm_client::wfm_headers()`.
-
-User-Agent: always the descriptive project UA, built by
-`wfm_client::user_agent(component, version)`. WFM's rules (ToS §11) REQUIRE it
-and treat browser spoofing as block-worthy; the descriptive UA is accepted on
-every v1/v2 endpoint.
+Every `api.warframe.market` call carries the headers and descriptive user agent
+from `wfm-client` (WFM's ToS §11 requires the UA); see its AGENTS.md.
 
 | Action | Method + path | Body / notes |
 |---|---|---|

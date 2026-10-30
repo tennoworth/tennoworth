@@ -17,8 +17,7 @@
 // WHAT IT DOES NOT CHECK
 //   * Whether a document reads as research. A note deliberately published as
 //     user documentation is user documentation; this checks where maintainer
-//     material lives, not its vocabulary. Do not add a filename denylist here:
-//     `docs/rust-toolkit-2026-lessons.md` is tracked, public and linked.
+//     material lives, not its vocabulary. Do not add a filename denylist here.
 //   * Binary assets and data files under docs/ (screenshots, ruleset JSON).
 //
 // When this fails, the fix is not to weaken it. A tracked document belongs to

@@ -1,10 +1,35 @@
-# 2026 Rust toolkit decisions
+# CI and the Rust toolkit
 
-This note records which recommendations from
-[My 2026 Rust Toolkit](https://www.namtao.com/rust-toolkit-2026/) were adopted
-and which were measured and rejected.
+This document owns the workflow inventory, the cache policy, and which Rust
+toolkit practices were adopted or measured and rejected. Required checks and
+when they apply are in [CONTRIBUTING.md](../CONTRIBUTING.md); the applied
+repository rulesets are in [github-rulesets/](github-rulesets/).
 
-## Adopted
+## Workflows
+
+`.github/workflows/` holds the release and verification workflows:
+`release-desktop` (manual dispatch bound to an approved commit; creates the
+immutable `desktop-v*` tag during publication), `build-web`,
+`build-usage` and `build-reports` (thin callers of the shared
+`collector-build`), the manual `build-publisher`, `audit`, `ui-smoke`, the weekly
+`republish-rolling` (which re-dispatches `build-web`, `build-usage` and
+`build-reports`), the hourly `refresh-web` (which dispatches `build-web` on
+`main` when the box serves a newer market snapshot than the published pages
+were prerendered from), and the on-demand
+`ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
+`.github/actions/`: `setup-rust`, `setup-windows-ocr`, `stage-tessdata` and
+`publish-rolling-release`, which the workflows above call into. The host-only scrape pipeline has no workflow: it is
+deployed directly by
+[`scripts/deploy-scrape-host.sh`](../scripts/deploy-scrape-host.sh), which is
+its only installer.
+
+## Toolkit decisions
+
+Recommendations from
+[My 2026 Rust Toolkit](https://www.namtao.com/rust-toolkit-2026/), adopted or
+measured and rejected.
+
+### Adopted
 
 | Lesson | Where it landed |
 |---|---|
