@@ -5,9 +5,9 @@ pub mod csv_input;
 pub mod history;
 mod inputs;
 mod paths;
+mod publish;
 pub mod reconcile;
 pub mod render;
-mod publish;
 mod rivens;
 mod usage;
 mod world;
@@ -24,17 +24,27 @@ use crate::clock;
 /// is stale" warning.
 const STALE_DAYS: i64 = 7;
 use crate::ingest;
-use crate::pipeline::reconcile::{reconcile, reconcile_keyed, KeyStamps, Observation};
-use crate::pipeline::render::assemble_snapshot;
 use crate::ingest::de;
 use crate::ingest::de::extract as de_extract;
+use crate::pipeline::reconcile::{reconcile, reconcile_keyed, KeyStamps, Observation};
+use crate::pipeline::render::assemble_snapshot;
 
-pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>, dirs: Option<&Dirs>) -> Result<(), String> {
+pub fn build(
+    fixtures_dir: Option<&Path>,
+    now_arg: Option<&str>,
+    dirs: Option<&Dirs>,
+) -> Result<(), String> {
     let now = now_arg
         .map(|s| clock::parse_stamp(s).ok_or_else(|| format!("invalid --now stamp: {s}")))
         .unwrap_or_else(|| Ok(Utc::now()))?;
 
-    let inputs::BuildInputs { http, csv_path, json_out, catalog_out, prior } = inputs::prepare(fixtures_dir, dirs)?;
+    let inputs::BuildInputs {
+        http,
+        csv_path,
+        json_out,
+        catalog_out,
+        prior,
+    } = inputs::prepare(fixtures_dir, dirs)?;
 
     let prior_stamps: HashMap<String, String> = prior
         .get("surface_fetched_at")
@@ -51,8 +61,14 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>, dirs: Option<&D
         .unwrap_or_default();
 
     let catalog::CatalogSources {
-        catalog, mut meta_by_slug, wfstat_raw, path_to_info,
-        mut set_to_parts, parents_complete, catalog_fresh, path_to_info_complete,
+        catalog,
+        mut meta_by_slug,
+        wfstat_raw,
+        path_to_info,
+        mut set_to_parts,
+        parents_complete,
+        catalog_fresh,
+        path_to_info_complete,
     } = catalog::fetch(http.as_ref(), fixtures_dir, &catalog_out, &prior)?;
 
     // ---- Digital Extremes first-party ingest -------------------------------
@@ -225,7 +241,11 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>, dirs: Option<&D
         }
     }
 
-    let usage::UsageSources { usage_old, usage_history, usage_observation } = usage::fetch(http.as_ref(), &prior, &catalog);
+    let usage::UsageSources {
+        usage_old,
+        usage_history,
+        usage_observation,
+    } = usage::fetch(http.as_ref(), &prior, &catalog);
 
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all
     // four refinements instead of intact only, and correct rarity labels (the
@@ -464,8 +484,21 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>, dirs: Option<&D
             .unwrap_or(0)
     );
 
-    let rivens::RivenSources { rivens, de_dispositions, disposition_state, riven_stats, riven_stats_children, pc_riven_stats_state } =
-        rivens::fetch(http.as_ref(), &de_snap, &prior, &rivens_old, &riven_stats_old, now);
+    let rivens::RivenSources {
+        rivens,
+        de_dispositions,
+        disposition_state,
+        riven_stats,
+        riven_stats_children,
+        pc_riven_stats_state,
+    } = rivens::fetch(
+        http.as_ref(),
+        &de_snap,
+        &prior,
+        &rivens_old,
+        &riven_stats_old,
+        now,
+    );
 
     let path_to_info_for_de = path_to_info.clone();
     let observation = |data: HashMap<String, serde_json::Value>, complete| {
@@ -589,8 +622,19 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>, dirs: Option<&D
         now,
         STALE_DAYS,
     );
-    let world::WorldSurfaces { vault: r_world_vault, deals: r_world_deals, goals: r_world_goals, events: r_world_events } =
-        world::reconcile_children(&de_world_observation, &path_to_info_for_de, &de_alias, &prior, &prior_child_stamps, now);
+    let world::WorldSurfaces {
+        vault: r_world_vault,
+        deals: r_world_deals,
+        goals: r_world_goals,
+        events: r_world_events,
+    } = world::reconcile_children(
+        &de_world_observation,
+        &path_to_info_for_de,
+        &de_alias,
+        &prior,
+        &prior_child_stamps,
+        now,
+    );
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -779,7 +823,8 @@ mod tests {
     #[test]
     fn the_stale_age_is_the_one_the_calendar_shows() {
         let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../tests/fixtures/stale-days.json")).unwrap();
+            serde_json::from_str(include_str!("../../../../tests/fixtures/stale-days.json"))
+                .unwrap();
         assert_eq!(fixture["stale_days"].as_i64(), Some(super::STALE_DAYS));
     }
 }

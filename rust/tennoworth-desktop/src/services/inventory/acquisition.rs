@@ -108,7 +108,10 @@ fn record_game_scan(
         let _ = db.clear_allowance();
         eprintln!("tennoworth: scan observation not recorded: {error}");
     }
-    let _ = app.emit(crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED, ());
+    let _ = app.emit(
+        crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED,
+        (),
+    );
     snapshot_id
 }
 

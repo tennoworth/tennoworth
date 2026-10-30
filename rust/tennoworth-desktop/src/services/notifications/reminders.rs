@@ -1,11 +1,14 @@
 //! Clock-driven reminders use the same cached snapshot as the desktop, never a
 //! second upstream feed. A visit's carried stock is not evidence of current stock.
 use crate::{
-    contracts::notification::{BaroNotification, BaroNotificationValue, DigestNotification, DigestOpportunity, NotificationContent},
+    contracts::notification::{
+        BaroNotification, BaroNotificationValue, DigestNotification, DigestOpportunity,
+        NotificationContent,
+    },
     persistence::Db,
     services::market::cache::{self as market, MarketCache},
-    services::notifications::{self, Candidate},
     services::market::sellables::{self, MarketData},
+    services::notifications::{self, Candidate},
 };
 use chrono::{DateTime, Local, Timelike};
 use market_domain::{
@@ -216,7 +219,10 @@ pub fn scheduled(
                                         value.more_tradeable
                                     ));
                                 }
-                                let price_stamp = match string(market, "updated_at") { "" => "unknown", stamp => stamp };
+                                let price_stamp = match string(market, "updated_at") {
+                                    "" => "unknown",
+                                    stamp => stamp,
+                                };
                                 body.push_str(&format!(". Prices: {price_stamp}. Arrival can depress prices; resale is not guaranteed."));
                             }
                             if let (Some(ducats), Some(items), Some(cheap)) =
@@ -378,11 +384,15 @@ pub fn digest(
     let mut candidate = Candidate::once(format!("digest:{local_day}"), "digest", "Today's sell opportunities".into(),
         format!("{}. Estimated market values, not guaranteed sales. Inventory: {inventory_at}. Prices: {}.", opportunities.join(" · "), string(market, "updated_at")), "sell", now);
     candidate.content = Some(NotificationContent::Digest(DigestNotification {
-        opportunities: rows.iter().take(5).map(|r| DigestOpportunity {
-            name: r.name.clone(),
-            quantity: r.sellable_qty,
-            price: r.price,
-        }).collect(),
+        opportunities: rows
+            .iter()
+            .take(5)
+            .map(|r| DigestOpportunity {
+                name: r.name.clone(),
+                quantity: r.sellable_qty,
+                price: r.price,
+            })
+            .collect(),
         inventory_at: inventory_at.into(),
         price_at: string(market, "updated_at").into(),
     }));
@@ -461,9 +471,12 @@ pub fn start(app: AppHandle, on_market_refresh: impl Fn(&AppHandle) + Send + 'st
             let mut refreshed: Option<Instant> = None;
             loop {
                 if refreshed.is_none_or(|t| t.elapsed() >= Duration::from_secs(15 * 60)) {
-                    let announcements = market::refresh_announcements(&app.state::<MarketCache>().dir());
+                    let announcements =
+                        market::refresh_announcements(&app.state::<MarketCache>().dir());
                     if announcements.updated {
-                        if let Some(body) = announcements.body.as_deref() { app.state::<MarketCache>().adopt_announcements(body); }
+                        if let Some(body) = announcements.body.as_deref() {
+                            app.state::<MarketCache>().adopt_announcements(body);
+                        }
                         let _ = app.emit(crate::services::announcements::EVENT, ());
                     }
                     let result = market::refresh(&app.state::<MarketCache>().dir());
@@ -550,23 +563,57 @@ mod tests {
     }
     #[test]
     fn baro_inbox_fixture_matches_the_native_notice() {
-        let fixture: Value = serde_json::from_str(include_str!("../../../../../tests/fixtures/notifications/baro.json")).unwrap();
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../../tests/fixtures/notifications/baro.json"
+        ))
+        .unwrap();
         let owned: Vec<PlannerOwned> = serde_json::from_value(fixture["owned"].clone()).unwrap();
         let held = owned.iter().map(|r| r.slug.clone()).collect();
-        let notice = scheduled(&fixture["market"], &held, Some(&owned), stamp(fixture["now"].as_str().unwrap()).unwrap()).remove(0);
+        let notice = scheduled(
+            &fixture["market"],
+            &held,
+            Some(&owned),
+            stamp(fixture["now"].as_str().unwrap()).unwrap(),
+        )
+        .remove(0);
         assert_eq!(notice.body, fixture["expected_body"].as_str().unwrap());
-        assert_eq!(serde_json::to_value(notice.content).unwrap(), fixture["expected_content"]);
+        assert_eq!(
+            serde_json::to_value(notice.content).unwrap(),
+            fixture["expected_content"]
+        );
     }
 
     #[test]
     fn digest_details_match_the_inbox_fixture() {
-        let fixture: Value = serde_json::from_str(include_str!("../../../../../tests/fixtures/notifications/digest.json")).unwrap();
-        let rows: Vec<_> = fixture["rows"].as_array().unwrap().iter().map(|row| sellables::SellableRow {
-            name: row["name"].as_str().unwrap().into(), slug: row["slug"].as_str().unwrap().into(),
-            sellable_qty: row["sellable_qty"].as_i64().unwrap(), price: row["price"].as_f64().unwrap(), score: row["score"].as_f64().unwrap(),
-        }).collect();
-        let notice = digest(&fixture["market"], &rows, fixture["inventory_at"].as_str().unwrap(), stamp(fixture["now"].as_str().unwrap()).unwrap(), "2026-09-04", 18).unwrap();
-        assert_eq!(serde_json::to_value(notice.content).unwrap(), fixture["expected_content"]);
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../../tests/fixtures/notifications/digest.json"
+        ))
+        .unwrap();
+        let rows: Vec<_> = fixture["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| sellables::SellableRow {
+                name: row["name"].as_str().unwrap().into(),
+                slug: row["slug"].as_str().unwrap().into(),
+                sellable_qty: row["sellable_qty"].as_i64().unwrap(),
+                price: row["price"].as_f64().unwrap(),
+                score: row["score"].as_f64().unwrap(),
+            })
+            .collect();
+        let notice = digest(
+            &fixture["market"],
+            &rows,
+            fixture["inventory_at"].as_str().unwrap(),
+            stamp(fixture["now"].as_str().unwrap()).unwrap(),
+            "2026-09-04",
+            18,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(notice.content).unwrap(),
+            fixture["expected_content"]
+        );
         assert!(notice.body.contains("Arcane Energize ×12: ~48p each"));
     }
 

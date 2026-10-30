@@ -44,7 +44,10 @@ fn parse_window(
     url_name: &str,
     co: &mut Coercions,
 ) -> Result<Vec<StatsDay>, String> {
-    let arr = match closed.and_then(|c| c.get(window)).and_then(|w| w.as_array()) {
+    let arr = match closed
+        .and_then(|c| c.get(window))
+        .and_then(|w| w.as_array())
+    {
         Some(a) => a,
         None => return Ok(vec![]),
     };
@@ -59,7 +62,10 @@ fn parse_window(
             max_price: coerce_field(d, "max_price", &format!("{path}.max_price"), co)?,
             volume: coerce_field(d, "volume", &format!("{path}.volume"), co)?,
             avg_price: coerce_field(d, "avg_price", &format!("{path}.avg_price"), co)?,
-            subtype: d.get("subtype").and_then(|s| s.as_str()).map(|s| s.to_string()),
+            subtype: d
+                .get("subtype")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string()),
             mod_rank: parse_mod_rank(d.get("mod_rank")),
         });
     }
@@ -77,7 +83,11 @@ pub(crate) fn parse_mod_rank(v: Option<&Value>) -> Option<Option<i64>> {
     match v {
         None => None,
         Some(Value::Null) => Some(None),
-        Some(x) => Some(Some(x.as_i64().or_else(|| x.as_f64().map(|f| f as i64)).unwrap_or(0))),
+        Some(x) => Some(Some(
+            x.as_i64()
+                .or_else(|| x.as_f64().map(|f| f as i64))
+                .unwrap_or(0),
+        )),
     }
 }
 
@@ -115,7 +125,8 @@ mod tests {
 
     #[test]
     fn non_object_day_rows_are_skipped() {
-        let payload = json!({"statistics_closed": {"48hours": [null, 5, {"median": 10, "volume": 1}]}});
+        let payload =
+            json!({"statistics_closed": {"48hours": [null, 5, {"median": 10, "volume": 1}]}});
         let (recent, _) = parse(&payload);
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].median, 10.0);

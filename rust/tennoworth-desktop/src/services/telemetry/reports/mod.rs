@@ -358,7 +358,8 @@ async fn erase_recent(
     // Persist this before contacting the service, including when deletion fails:
     // retries must never upload the trades the user has asked us to remove.
     let through = db.last_trade_id().map_err(|_| unavailable())?;
-    db.set_setting(MARK, &through.to_string()).map_err(|_| unavailable())?;
+    db.set_setting(MARK, &through.to_string())
+        .map_err(|_| unavailable())?;
     let today = Utc::now().date_naive();
     for week in open_weeks(today) {
         let request = serde_json::json!({

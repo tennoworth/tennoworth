@@ -111,7 +111,10 @@ pub struct MarketCache {
 
 impl MarketCache {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, announcements: std::sync::Mutex::new(None) }
+        Self {
+            dir,
+            announcements: std::sync::Mutex::new(None),
+        }
     }
 
     /// The cached snapshot body, or None on a first run / unreadable / empty
@@ -127,14 +130,22 @@ impl MarketCache {
     }
 
     pub fn cached_announcements(&self) -> Option<String> {
-        crate::poison::guard(&self.announcements).clone().or_else(|| read_cache(&self.dir, &ANNOUNCEMENTS))
+        crate::poison::guard(&self.announcements)
+            .clone()
+            .or_else(|| read_cache(&self.dir, &ANNOUNCEMENTS))
     }
 
     pub fn adopt_announcements(&self, body: &str) {
-        let Some(next) = crate::services::announcements::validated_stamp(body) else { return; };
+        let Some(next) = crate::services::announcements::validated_stamp(body) else {
+            return;
+        };
         let mut current = crate::poison::guard(&self.announcements);
-        let prior = current.as_deref().and_then(crate::services::announcements::validated_stamp);
-        if prior.is_none_or(|prior| next >= prior) { *current = Some(body.to_owned()); }
+        let prior = current
+            .as_deref()
+            .and_then(crate::services::announcements::validated_stamp);
+        if prior.is_none_or(|prior| next >= prior) {
+            *current = Some(body.to_owned());
+        }
     }
 
     /// Cloneable owned dir, so the async command can hand it to `spawn_blocking`
@@ -159,7 +170,10 @@ fn read_cache(dir: &Path, spec: &ArtifactSpec) -> Option<String> {
 
 /// The body's stamp when it passes the artifact's validity gate, else None.
 fn valid_stamp(spec: &ArtifactSpec, body: &str) -> Option<String> {
-    spec.validate.map_or_else(|| parse_stamp(body, spec.stamp_key), |validate| validate(body))
+    spec.validate.map_or_else(
+        || parse_stamp(body, spec.stamp_key),
+        |validate| validate(body),
+    )
 }
 
 /// The cached body, only if it still passes the artifact's gate. A cache that
@@ -275,7 +289,10 @@ pub(crate) fn artifact_client() -> Option<&'static reqwest::blocking::Client> {
 
 /// Read at most `max` bytes of UTF-8 body; anything longer is an error, not a
 /// truncated body that could still happen to parse.
-pub(crate) fn read_bounded(resp: reqwest::blocking::Response, max: usize) -> Result<String, String> {
+pub(crate) fn read_bounded(
+    resp: reqwest::blocking::Response,
+    max: usize,
+) -> Result<String, String> {
     use std::io::Read;
     let mut raw = Vec::new();
     resp.take(max as u64 + 1)
@@ -475,7 +492,8 @@ mod tests {
         handle.join().unwrap();
         // The mock reuses one ETag, so force a body response to exercise validation.
         std::fs::remove_file(etag_path(&dir, &ANNOUNCEMENTS)).unwrap();
-        let invalid = r#"{"version":1,"updated_at":"2026-10-14T00:00:00Z","messages":[{"id":"broken"}]}"#;
+        let invalid =
+            r#"{"version":1,"updated_at":"2026-10-14T00:00:00Z","messages":[{"id":"broken"}]}"#;
         let (url, handle) = spawn_mock_serving(1, invalid);
         assert!(!refresh_artifact(&dir, &ANNOUNCEMENTS, &url).updated);
         handle.join().unwrap();
@@ -485,9 +503,20 @@ mod tests {
         let (url, handle) = spawn_mock_serving(1, empty);
         assert!(refresh_artifact(&dir, &ANNOUNCEMENTS, &url).updated);
         handle.join().unwrap();
-        assert!(crate::services::announcements::parse(&read_cache(&dir, &ANNOUNCEMENTS).unwrap()).unwrap().messages.is_empty());
-        let limits: serde_json::Value = serde_json::from_str(include_str!("../../../../../tests/fixtures/announcements/limits.json")).unwrap();
-        assert_eq!(ANNOUNCEMENTS.max_bytes as u64, limits["max_bytes"].as_u64().unwrap());
+        assert!(
+            crate::services::announcements::parse(&read_cache(&dir, &ANNOUNCEMENTS).unwrap())
+                .unwrap()
+                .messages
+                .is_empty()
+        );
+        let limits: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../../tests/fixtures/announcements/limits.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            ANNOUNCEMENTS.max_bytes as u64,
+            limits["max_bytes"].as_u64().unwrap()
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -604,14 +633,20 @@ mod tests {
         let cached = r#"{"updated_at":"2026-07-01T00:00:00Z","items":{"a":{}}}"#;
         write_atomic(&cache_path(&dir, &MARKET), cached.as_bytes()).unwrap();
         let (url, handle) = spawn_mock(2);
-        let tight = ArtifactSpec { max_bytes: BODY.len() - 1, ..MARKET };
+        let tight = ArtifactSpec {
+            max_bytes: BODY.len() - 1,
+            ..MARKET
+        };
 
         let refused = refresh_artifact(&dir, &tight, &url);
         assert!(!refused.updated, "an oversized body must not be accepted");
         assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(cached));
 
         // Positive control: exactly at the ceiling is still read whole.
-        let exact = ArtifactSpec { max_bytes: BODY.len(), ..MARKET };
+        let exact = ArtifactSpec {
+            max_bytes: BODY.len(),
+            ..MARKET
+        };
         assert!(refresh_artifact(&dir, &exact, &url).updated);
         handle.join().unwrap();
     }
@@ -740,7 +775,10 @@ mod tests {
         let r = refresh_artifact(&dir, &MARKET, &url);
 
         assert!(!r.updated, "a rollback must not report a new snapshot");
-        assert_eq!(r.body, None, "a rollback must not hand the SPA older prices");
+        assert_eq!(
+            r.body, None,
+            "a rollback must not hand the SPA older prices"
+        );
         assert_eq!(
             read_cache(&dir, &MARKET).as_deref(),
             Some(newer),
@@ -787,7 +825,10 @@ mod tests {
         let (url, handle) = spawn_mock(1);
         let r = refresh_artifact(&dir, &MARKET, &url);
 
-        assert!(r.updated, "a stamp we cannot read must not freeze the cache");
+        assert!(
+            r.updated,
+            "a stamp we cannot read must not freeze the cache"
+        );
         assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
         let _ = handle.join();
         let _ = std::fs::remove_dir_all(&dir);
@@ -838,7 +879,11 @@ mod tests {
                 .unwrap()
                 .with_timezone(&chrono::Utc);
             assert_eq!(
-                stamp_replaces(case["current"].as_str(), case["next"].as_str().unwrap(), now),
+                stamp_replaces(
+                    case["current"].as_str(),
+                    case["next"].as_str().unwrap(),
+                    now
+                ),
                 case["replaces"].as_bool().unwrap(),
                 "{}",
                 case["name"]
@@ -848,7 +893,9 @@ mod tests {
 
     #[test]
     fn the_bundled_snapshot_satisfies_the_runtime_contract() {
-        assert!(validated_market_stamp(crate::services::market::sellables::BUNDLED_MARKET).is_some());
+        assert!(
+            validated_market_stamp(crate::services::market::sellables::BUNDLED_MARKET).is_some()
+        );
     }
 
     /// A cache stamped in the future used to win every ordering check, so no
@@ -863,7 +910,10 @@ mod tests {
         let (url, handle) = spawn_mock(1);
         let r = refresh_artifact(&dir, &MARKET, &url);
 
-        assert!(r.updated, "a valid snapshot must replace the future-stamped cache");
+        assert!(
+            r.updated,
+            "a valid snapshot must replace the future-stamped cache"
+        );
         assert_eq!(cache.cached().as_deref(), Some(BODY));
         let _ = handle.join();
         let _ = std::fs::remove_dir_all(&dir);

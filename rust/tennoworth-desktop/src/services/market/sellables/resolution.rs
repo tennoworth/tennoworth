@@ -20,10 +20,14 @@ fn bundled_catalog() -> &'static HashMap<String, CatalogItem> {
 
 impl PathTables for MarketData {
     fn path_info(&self, path: &str) -> Option<(&str, &str, Option<&str>)> {
-        self.path_to_info.get(path).map(|info| (info.name.as_str(), info.slug.as_str(), None))
+        self.path_to_info
+            .get(path)
+            .map(|info| (info.name.as_str(), info.slug.as_str(), None))
     }
     fn catalog_entry(&self, path: &str) -> Option<(&str, Option<&str>)> {
-        bundled_catalog().get(path).map(|info| (info.name.as_str(), info.category.as_deref()))
+        bundled_catalog()
+            .get(path)
+            .map(|info| (info.name.as_str(), info.category.as_deref()))
     }
     fn slug_for(&self, lower_name: &str) -> Option<&str> {
         self.catalog.get(lower_name).map(String::as_str)

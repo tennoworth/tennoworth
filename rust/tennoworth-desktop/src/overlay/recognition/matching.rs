@@ -67,13 +67,12 @@ pub(in crate::overlay) fn match_ocr_lines(
                 // Contained as whole words only: "limbo prime blueprint" holds
                 // the letters of "bo prime blueprint", and plain substring
                 // containment scored that a perfect read of Bo.
-                let whole_score = if &line == candidate
-                    || padded_line.contains(&format!(" {candidate} "))
-                {
-                    1.0
-                } else {
-                    strsim::normalized_levenshtein(&line, candidate)
-                };
+                let whole_score =
+                    if &line == candidate || padded_line.contains(&format!(" {candidate} ")) {
+                        1.0
+                    } else {
+                        strsim::normalized_levenshtein(&line, candidate)
+                    };
                 let read_words: Vec<&str> = line.split_whitespace().collect();
                 let candidate_words: Vec<&str> = candidate.split_whitespace().collect();
                 let positional_score = if read_words.len() == candidate_words.len() {

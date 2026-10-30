@@ -299,7 +299,8 @@ pub fn load_settings(db: &Db) -> AutoScanSettings {
 pub fn save_settings(db: &Db, settings: AutoScanSettings) -> Result<AutoScanSettings, String> {
     let settings = settings.sanitized();
     let raw = serde_json::to_string(&settings).map_err(|e| e.to_string())?;
-    db.set_setting(SETTINGS_KEY, &raw).map_err(|e| e.to_string())?;
+    db.set_setting(SETTINGS_KEY, &raw)
+        .map_err(|e| e.to_string())?;
     Ok(settings)
 }
 
@@ -366,7 +367,14 @@ fn run_loop(app: AppHandle, on_scanned: fn(&AppHandle)) {
             }
         }
 
-        let decision = decide(&tick_at(settings, state.held(), pid, run, last_attempt_at, now));
+        let decision = decide(&tick_at(
+            settings,
+            state.held(),
+            pid,
+            run,
+            last_attempt_at,
+            now,
+        ));
         let mut due = match decision {
             Decision::Wait(at) => Some(at),
             _ => None,
@@ -382,7 +390,9 @@ fn run_loop(app: AppHandle, on_scanned: fn(&AppHandle)) {
                     tracked.attempts += 1;
                 }
                 last_attempt_at = Some(now);
-                match crate::services::inventory::acquisition::scan_and_record_unless(&app, || state.held()) {
+                match crate::services::inventory::acquisition::scan_and_record_unless(&app, || {
+                    state.held()
+                }) {
                     Ok(None) => {
                         // A listing flow opened during the walk. Not an attempt:
                         // the next tick sees the hold and waits it out.
@@ -441,8 +451,7 @@ fn run_loop(app: AppHandle, on_scanned: fn(&AppHandle)) {
             status.mirror_settings(current);
             status.game_running = pid.is_some();
             status.next_check_at = due.map(|at| {
-                crate::services::unix_now()
-                    + at.saturating_duration_since(after).as_secs() as i64
+                crate::services::unix_now() + at.saturating_duration_since(after).as_secs() as i64
             });
         });
     }
@@ -518,7 +527,10 @@ mod tests {
             Decision::Wait(now + FIRST_SCAN_DELAY)
         );
         let later = now + FIRST_SCAN_DELAY;
-        assert_eq!(decide(&tick(later, Some(7), Some(running), None)), Decision::Scan);
+        assert_eq!(
+            decide(&tick(later, Some(7), Some(running), None)),
+            Decision::Scan
+        );
     }
 
     #[test]
@@ -531,7 +543,10 @@ mod tests {
             Decision::Wait(last + HOUR)
         );
         let due = last + HOUR;
-        assert_eq!(decide(&tick(due, Some(7), Some(running), Some(last))), Decision::Scan);
+        assert_eq!(
+            decide(&tick(due, Some(7), Some(running), Some(last))),
+            Decision::Scan
+        );
     }
 
     #[test]
@@ -558,13 +573,23 @@ mod tests {
         let now = Instant::now();
         // No tracked run yet - the loop has just seen the new pid.
         assert_eq!(
-            decide(&tick(now, Some(9), None, Some(ago(now, Duration::from_secs(1))))),
+            decide(&tick(
+                now,
+                Some(9),
+                None,
+                Some(ago(now, Duration::from_secs(1)))
+            )),
             Decision::Wait(now + FIRST_SCAN_DELAY)
         );
         // A run that changed pid is not the tracked run: same answer.
         let stale = run(7, ago(now, HOUR), PROMPT_ATTEMPTS, true);
         assert_eq!(
-            decide(&tick(now, Some(9), Some(stale), Some(ago(now, Duration::from_secs(1))))),
+            decide(&tick(
+                now,
+                Some(9),
+                Some(stale),
+                Some(ago(now, Duration::from_secs(1)))
+            )),
             Decision::Wait(now + FIRST_SCAN_DELAY)
         );
     }
@@ -578,7 +603,12 @@ mod tests {
         let relaunched = run(9, now, 0, false);
         let previous_attempt = ago(now, HOUR);
         assert_eq!(
-            decide(&tick(now, Some(9), Some(relaunched), Some(previous_attempt))),
+            decide(&tick(
+                now,
+                Some(9),
+                Some(relaunched),
+                Some(previous_attempt)
+            )),
             Decision::Wait(now + FIRST_SCAN_DELAY)
         );
         // And a very recent attempt still spaces the retry.

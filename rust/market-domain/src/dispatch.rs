@@ -1,5 +1,5 @@
 //! A single registry couples native operations with their input and output types.
-use crate::{baro::*, advisor::*, inventory::*, planners::*, scoring::*, trade_session::*};
+use crate::{advisor::*, baro::*, inventory::*, planners::*, scoring::*, trade_session::*};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -52,9 +52,10 @@ impl DomainRequest {
             }
             match value {
                 serde_json::Value::Number(number)
-                    if bound_numbers && number
-                        .as_f64()
-                        .is_none_or(|v| !v.is_finite() || v.abs() > 9_007_199_254_740_991.0) =>
+                    if bound_numbers
+                        && number.as_f64().is_none_or(|v| {
+                            !v.is_finite() || v.abs() > 9_007_199_254_740_991.0
+                        }) =>
                 {
                     return Err("The calculation contains an out-of-range number.".into())
                 }
@@ -146,18 +147,26 @@ mod tests {
                 }
                 (Value::Array(a), Value::Array(b)) => {
                     assert_eq!(a.len(), b.len());
-                    for (a, b) in a.iter().zip(b) { compare(a, b); }
+                    for (a, b) in a.iter().zip(b) {
+                        compare(a, b);
+                    }
                 }
                 (Value::Object(a), Value::Object(b)) => {
                     assert_eq!(a.len(), b.len());
-                    for (key, value) in b { compare(a.get(key).unwrap(), value); }
+                    for (key, value) in b {
+                        compare(a.get(key).unwrap(), value);
+                    }
                 }
                 _ => assert_eq!(actual, expected),
             }
         }
-        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../tests/fixtures/domain-ipc.json")).unwrap();
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../../tests/fixtures/domain-ipc.json")).unwrap();
         for case in cases {
-            let request: DomainRequest = serde_json::from_value(serde_json::json!({"operation":case["operation"],"input":case["input"]})).unwrap();
+            let request: DomainRequest = serde_json::from_value(
+                serde_json::json!({"operation":case["operation"],"input":case["input"]}),
+            )
+            .unwrap();
             let response = serde_json::to_value(request.execute().unwrap()).unwrap();
             compare(&response["result"], &case["expected"]);
         }
@@ -166,21 +175,37 @@ mod tests {
     #[test]
     fn raw_inventory_metadata_does_not_relax_quantity_or_shape_validation() {
         use serde_json::{json, Value};
-        let request = |inventory: Value| serde_json::from_value::<DomainRequest>(json!({
+        let request = |inventory: Value| {
+            serde_json::from_value::<DomainRequest>(json!({
             "operation":"normalize_inventory", "input":{"inventory":inventory,"catalog":[],"market":{}}
-        })).unwrap();
-        for count in [json!(-1), json!(1.5), json!("3"), json!(9_007_199_254_740_992_u64)] {
+        })).unwrap()
+        };
+        for count in [
+            json!(-1),
+            json!(1.5),
+            json!("3"),
+            json!(9_007_199_254_740_992_u64),
+        ] {
             let result = request(json!({"RewardSeed":u64::MAX,
-                "MiscItems":[{"ItemType":"/Lotus/Part","ItemCount":count}]})).execute();
-            assert!(matches!(result, Err(error) if error == "Inventory count must be a nonnegative safe integer"));
+                "MiscItems":[{"ItemType":"/Lotus/Part","ItemCount":count}]}))
+            .execute();
+            assert!(
+                matches!(result, Err(error) if error == "Inventory count must be a nonnegative safe integer")
+            );
         }
         let mut metadata = Value::Null;
-        for _ in 0..65 { metadata = json!({"nested":metadata}); }
-        assert!(matches!(request(json!({"metadata":metadata})).execute(), Err(error) if error == "The calculation request is too large."));
+        for _ in 0..65 {
+            metadata = json!({"nested":metadata});
+        }
+        assert!(
+            matches!(request(json!({"metadata":metadata})).execute(), Err(error) if error == "The calculation request is too large.")
+        );
         let numeric_request: DomainRequest = serde_json::from_value(json!({
             "operation":"trade_session", "input":{"candidates":[],"mode":"fast","budget":9_007_199_254_740_992_u64,"target":null}
         })).unwrap();
-        assert!(matches!(numeric_request.execute(), Err(error) if error == "The calculation contains an out-of-range number."));
+        assert!(
+            matches!(numeric_request.execute(), Err(error) if error == "The calculation contains an out-of-range number.")
+        );
     }
 
     #[test]

@@ -373,8 +373,10 @@ mod tests {
 
     #[test]
     fn the_stated_retry_terms_are_the_ones_the_client_uses() {
-        let terms: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../../tests/fixtures/usage/check-in.json")).unwrap();
+        let terms: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../../tests/fixtures/usage/check-in.json"
+        ))
+        .unwrap();
         assert_eq!(terms["max_attempts_per_day"], MAX_ATTEMPTS_PER_DAY);
         assert_eq!(terms["retry_interval_seconds"], RETRY_INTERVAL_SECS);
     }

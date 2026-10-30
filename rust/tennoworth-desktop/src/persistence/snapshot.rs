@@ -23,7 +23,9 @@ pub fn extract_items(inventory_json: &[u8]) -> serde_json::Result<Vec<SnapshotIt
         let slot = agg.entry(row.path).or_insert((0, 0));
         let count = row.count as i64;
         slot.0 = slot.0.saturating_add(count);
-        if row.xp > 0.0 { slot.1 = slot.1.saturating_add(count); }
+        if row.xp > 0.0 {
+            slot.1 = slot.1.saturating_add(count);
+        }
     }
 
     Ok(agg

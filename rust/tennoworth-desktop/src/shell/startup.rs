@@ -34,7 +34,9 @@ fn health() -> Health {
 /// Scan definitions also carry the overlay's reward-screen markers. Definitions
 /// only fetches and parses them; the overlay owns their rules, so a refusal is
 /// its verdict, reported with the scan's own.
-fn install_definitions(dir: &std::path::Path) -> crate::services::market::definitions::DefinitionsOutcome {
+fn install_definitions(
+    dir: &std::path::Path,
+) -> crate::services::market::definitions::DefinitionsOutcome {
     let mut out = crate::services::market::definitions::refresh_and_install(dir);
     if let Err(reason) = overlay::install_reward_markers(&out.reward_log_markers) {
         eprintln!("tennoworth: definitions rejected reward_log_markers: {reason}");

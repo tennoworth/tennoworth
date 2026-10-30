@@ -34,7 +34,11 @@ pub struct CsvRow {
 
 impl CsvRow {
     fn from_headers_and_fields(headers: &[String], fields: &[String]) -> Self {
-        let map: HashMap<&str, &str> = headers.iter().map(|h| h.as_str()).zip(fields.iter().map(|f| f.as_str())).collect();
+        let map: HashMap<&str, &str> = headers
+            .iter()
+            .map(|h| h.as_str())
+            .zip(fields.iter().map(|f| f.as_str()))
+            .collect();
         let g = |k: &str| map.get(k).copied().unwrap_or("").to_string();
         CsvRow {
             url_name: g("url_name"),
@@ -65,7 +69,8 @@ impl CsvRow {
 pub fn read_csv_rows(path: &Path) -> Result<Vec<CsvRow>, String> {
     let mut f = std::fs::File::open(path).map_err(|e| format!("cannot open {path:?}: {e}"))?;
     let mut s = String::new();
-    f.read_to_string(&mut s).map_err(|e| format!("cannot read {path:?}: {e}"))?;
+    f.read_to_string(&mut s)
+        .map_err(|e| format!("cannot read {path:?}: {e}"))?;
     read_csv(&s)
 }
 
@@ -101,7 +106,8 @@ pub fn parse_medians_7d(raw: &str) -> Vec<f64> {
         return vec![];
     }
     let cleaned = raw.replace('\'', "\"");
-    let v: serde_json::Value = serde_json::from_str(&cleaned).unwrap_or(serde_json::Value::Array(vec![]));
+    let v: serde_json::Value =
+        serde_json::from_str(&cleaned).unwrap_or(serde_json::Value::Array(vec![]));
     match v {
         serde_json::Value::Array(arr) => arr.iter().filter_map(|x| x.as_f64()).collect(),
         _ => vec![],
@@ -121,7 +127,10 @@ mod tests {
 
     #[test]
     fn parses_integer_list_repr() {
-        assert_eq!(parse_medians_7d("[10, 12, 8, 14, 11, 10, 9]"), vec![10.0, 12.0, 8.0, 14.0, 11.0, 10.0, 9.0]);
+        assert_eq!(
+            parse_medians_7d("[10, 12, 8, 14, 11, 10, 9]"),
+            vec![10.0, 12.0, 8.0, 14.0, 11.0, 10.0, 9.0]
+        );
     }
 
     #[test]

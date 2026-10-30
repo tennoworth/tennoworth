@@ -1,7 +1,7 @@
-use crate::ingest::Http;
-use crate::pipeline::reconcile::Observation;
 use crate::ingest::de;
 use crate::ingest::de::extract as de_extract;
+use crate::ingest::Http;
+use crate::pipeline::reconcile::Observation;
 use crate::pipeline::render;
 use std::collections::HashMap;
 

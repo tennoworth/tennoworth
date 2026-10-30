@@ -1,9 +1,9 @@
 //! Curated, expiring messages. Remote prose is data, never an instruction to trade.
 use super::{market::cache::MarketCache, notifications};
 use crate::contracts::notification::{AnnouncementNotification, Candidate, NotificationContent};
-use tauri::{AppHandle, Manager};
 use announcement_feed::stamp;
 pub use announcement_feed::{parse, source_allowed, validated_stamp, AnnouncementFeed};
+use tauri::{AppHandle, Manager};
 
 pub const EVENT: &str = "announcements-changed";
 const BUNDLED: &str = include_str!("../../../../frontend/public/announcements.json");
@@ -19,16 +19,33 @@ pub fn load(cache: &MarketCache) -> Option<AnnouncementFeed> {
 }
 
 pub fn candidates(feed: &AnnouncementFeed, now: i64) -> Vec<Candidate> {
-    feed.messages.iter().filter_map(|message| {
-        let start = stamp(&message.starts_at)?;
-        let end = stamp(&message.ends_at)?;
-        if now < start || now >= end { return None; }
-        let mut candidate = Candidate::once(format!("announcement:{}", message.id), "announcements", message.title.clone(), message.body.clone(), "sell", now);
-        // Clearing history or moving a deadline must never repeat the same ID.
-        candidate.expires_at = i64::MAX;
-        candidate.content = Some(NotificationContent::Announcement(AnnouncementNotification { source_url: message.source_url.clone(), ends_at: message.ends_at.clone() }));
-        Some(candidate)
-    }).collect()
+    feed.messages
+        .iter()
+        .filter_map(|message| {
+            let start = stamp(&message.starts_at)?;
+            let end = stamp(&message.ends_at)?;
+            if now < start || now >= end {
+                return None;
+            }
+            let mut candidate = Candidate::once(
+                format!("announcement:{}", message.id),
+                "announcements",
+                message.title.clone(),
+                message.body.clone(),
+                "sell",
+                now,
+            );
+            // Clearing history or moving a deadline must never repeat the same ID.
+            candidate.expires_at = i64::MAX;
+            candidate.content = Some(NotificationContent::Announcement(
+                AnnouncementNotification {
+                    source_url: message.source_url.clone(),
+                    ends_at: message.ends_at.clone(),
+                },
+            ));
+            Some(candidate)
+        })
+        .collect()
 }
 
 /// Popups use only a feed fetched from the site. The bundled copy can still carry
@@ -43,8 +60,11 @@ pub fn deliver(app: &AppHandle) {
         for candidate in candidates(&feed, notifications::now()) {
             match notifications::publish(app, candidate) {
                 Ok(true) => break,
-                Ok(false) => {},
-                Err(error) => { eprintln!("tennoworth: announcement could not be recorded: {error}"); break; },
+                Ok(false) => {}
+                Err(error) => {
+                    eprintln!("tennoworth: announcement could not be recorded: {error}");
+                    break;
+                }
             }
         }
     }
@@ -57,12 +77,33 @@ mod tests {
 
     #[test]
     fn announcement_contract_matches_shared_cases() {
-        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/announcements/cases.json")).unwrap();
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/announcements/cases.json"
+        ))
+        .unwrap();
         for case in cases.as_array().unwrap() {
             let feed = parse(&case["feed"].to_string());
-            assert_eq!(feed.is_some(), case["valid"].as_bool().unwrap(), "{}", case["name"]);
-            let ids: Vec<_> = feed.as_ref().map(|feed| candidates(feed, stamp(case["now"].as_str().unwrap()).unwrap()).into_iter().map(|c| c.key.strip_prefix("announcement:").unwrap().to_string()).collect()).unwrap_or_default();
-            assert_eq!(serde_json::to_value(ids).unwrap(), case["active_ids"], "{}", case["name"]);
+            assert_eq!(
+                feed.is_some(),
+                case["valid"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+            let ids: Vec<_> = feed
+                .as_ref()
+                .map(|feed| {
+                    candidates(feed, stamp(case["now"].as_str().unwrap()).unwrap())
+                        .into_iter()
+                        .map(|c| c.key.strip_prefix("announcement:").unwrap().to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            assert_eq!(
+                serde_json::to_value(ids).unwrap(),
+                case["active_ids"],
+                "{}",
+                case["name"]
+            );
         }
         assert!(parse(BUNDLED).is_some());
     }
@@ -75,13 +116,19 @@ mod tests {
         let now = stamp(&feed.messages[0].starts_at).unwrap();
         let candidate = candidates(&feed, now).remove(0);
         let db = Db::open(&path).unwrap();
-        assert!(db.insert_notification(&candidate, now, true, true).unwrap().is_some());
+        assert!(db
+            .insert_notification(&candidate, now, true, true)
+            .unwrap()
+            .is_some());
         assert_eq!(db.list_notifications().unwrap()[0].delivery, "pending");
         db.clear_notifications().unwrap();
         db.prune_notifications(now + 365 * 86400).unwrap();
         drop(db);
         let db = Db::open(&path).unwrap();
-        assert!(db.insert_notification(&candidate, now + 60, true, true).unwrap().is_none());
+        assert!(db
+            .insert_notification(&candidate, now + 60, true, true)
+            .unwrap()
+            .is_none());
         assert!(db.list_notifications().unwrap().is_empty());
     }
 
@@ -91,11 +138,20 @@ mod tests {
         let feed = parse(BUNDLED).unwrap();
         let now = stamp(&feed.messages[0].starts_at).unwrap();
         let candidate = candidates(&feed, now).remove(0);
-        assert!(db.insert_notification(&candidate, now, true, false).unwrap().is_none());
-        assert!(db.insert_notification(&candidate, now + 1, true, true).unwrap().is_none());
+        assert!(db
+            .insert_notification(&candidate, now, true, false)
+            .unwrap()
+            .is_none());
+        assert!(db
+            .insert_notification(&candidate, now + 1, true, true)
+            .unwrap()
+            .is_none());
         assert!(db.list_notifications().unwrap().is_empty());
         let db = Db::open_in_memory().unwrap();
-        assert!(db.insert_notification(&candidate, now, false, true).unwrap().is_some());
+        assert!(db
+            .insert_notification(&candidate, now, false, true)
+            .unwrap()
+            .is_some());
         assert_eq!(db.list_notifications().unwrap()[0].delivery, "inbox_only");
     }
 

@@ -186,7 +186,9 @@ pub fn relic_rewards_from_de(
         let Some(name) = row.get("name").and_then(|v| v.as_str()) else {
             continue;
         };
-        let Some(slug) = relic_slug(name) else { continue };
+        let Some(slug) = relic_slug(name) else {
+            continue;
+        };
         // The four refinement variants carry identical reward lists, so the
         // first one wins and the rest are skipped rather than merged.
         if build.rewards.contains_key(&slug) {
@@ -217,7 +219,9 @@ pub fn relic_rewards_from_de(
                 continue;
             };
             let rarity = rw.get("rarity").and_then(|v| v.as_str()).unwrap_or("");
-            let Some(chances) = chances_for(rarity) else { continue };
+            let Some(chances) = chances_for(rarity) else {
+                continue;
+            };
             let chances = uniform.map_or(chances, |each| [each; 4]);
 
             let Some(info) = resolve_path(path, path_to_info, &alias) else {
@@ -309,7 +313,9 @@ pub fn recipes_from_export(
         else {
             continue;
         };
-        let Some(slug) = info.get("slug").and_then(|v| v.as_str()) else { continue };
+        let Some(slug) = info.get("slug").and_then(|v| v.as_str()) else {
+            continue;
+        };
 
         let mut entry = serde_json::Map::new();
         for (src, dst) in [
@@ -578,12 +584,20 @@ pub fn usage_from_export(
     };
 
     for (category, items) in all {
-        let Some(items) = items.as_object() else { continue };
+        let Some(items) = items.as_object() else {
+            continue;
+        };
         for (name, buckets) in items {
-            let Some(buckets) = buckets.as_object() else { continue };
-            let Some(share) = buckets.get("ALL").and_then(|v| v.as_f64())
+            let Some(buckets) = buckets.as_object() else {
+                continue;
+            };
+            let Some(share) = buckets
+                .get("ALL")
+                .and_then(|v| v.as_f64())
                 .filter(|share| share.is_finite() && *share >= 0.0)
-            else { continue };
+            else {
+                continue;
+            };
             let lower = name.to_lowercase();
             // DE says "Braton Prime"; WFM lists "Braton Prime Set".
             let Some(slug) = catalog
@@ -640,12 +654,20 @@ pub fn usage_history_from_export(
         return (out, accepted, unmatched);
     };
     for (category, items) in all {
-        let Some(items) = items.as_object() else { continue };
+        let Some(items) = items.as_object() else {
+            continue;
+        };
         for (name, buckets) in items {
-            let Some(buckets) = buckets.as_object() else { continue };
-            let Some(share) = buckets.get("ALL").and_then(|v| v.as_f64())
+            let Some(buckets) = buckets.as_object() else {
+                continue;
+            };
+            let Some(share) = buckets
+                .get("ALL")
+                .and_then(|v| v.as_f64())
                 .filter(|share| share.is_finite() && *share >= 0.0)
-            else { continue };
+            else {
+                continue;
+            };
             accepted += 1;
             let lower = name.to_lowercase();
             let Some(slug) = catalog
@@ -691,8 +713,11 @@ fn reward_items(
 ) -> Option<(Vec<Value>, bool, i64)> {
     let obj = reward.as_object()?;
     let recognized = ["credits", "items", "countedItems"]
-        .iter().any(|key| obj.contains_key(*key));
-    if !recognized { return None; }
+        .iter()
+        .any(|key| obj.contains_key(*key));
+    if !recognized {
+        return None;
+    }
     let credits = match obj.get("credits") {
         Some(value) => value.as_i64().filter(|value| *value >= 0)?,
         None => 0,
@@ -708,7 +733,9 @@ fn reward_items(
     let mut out = Vec::new();
     let mut complete = true;
     let mut push = |unique: &str, quantity: i64| {
-        if quantity <= 0 { return false; }
+        if quantity <= 0 {
+            return false;
+        }
         let mut row = serde_json::Map::new();
         row.insert("unique".into(), Value::String(unique.to_string()));
         row.insert("quantity".into(), Value::from(quantity));
@@ -727,12 +754,16 @@ fn reward_items(
         true
     };
     for item in items {
-        if !item.as_str().is_some_and(|path| push(path, 1)) { return None; }
+        if !item.as_str().is_some_and(|path| push(path, 1)) {
+            return None;
+        }
     }
     for item in counted {
         let unique = item.get("ItemType").and_then(|v| v.as_str())?;
         let quantity = item.get("ItemCount").and_then(|v| v.as_i64())?;
-        if !push(unique, quantity) { return None; }
+        if !push(unique, quantity) {
+            return None;
+        }
     }
     Some((out, complete, credits))
 }
@@ -740,17 +771,29 @@ fn reward_items(
 fn reward_group(kind: &str, threshold: Option<f64>, items: Vec<Value>, credits: i64) -> Value {
     let mut group = serde_json::Map::new();
     group.insert("kind".into(), Value::String(kind.to_string()));
-    if let Some(threshold) = threshold { group.insert("threshold".into(), Value::from(threshold)); }
-    if credits > 0 { group.insert("credits".into(), Value::from(credits)); }
+    if let Some(threshold) = threshold {
+        group.insert("threshold".into(), Value::from(threshold));
+    }
+    if credits > 0 {
+        group.insert("credits".into(), Value::from(credits));
+    }
     group.insert("rewards".into(), Value::Array(items));
     Value::Object(group)
 }
 
 fn world_id(row: &Value, source: &str) -> String {
-    if let Some(id) = row.get("_id").and_then(|v| v.get("$oid")).and_then(|v| v.as_str()) {
+    if let Some(id) = row
+        .get("_id")
+        .and_then(|v| v.get("$oid"))
+        .and_then(|v| v.as_str())
+    {
         return id.to_string();
     }
-    let tag = row.get("Tag").or_else(|| row.get("Prop")).and_then(|v| v.as_str()).unwrap_or("untagged");
+    let tag = row
+        .get("Tag")
+        .or_else(|| row.get("Prop"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("untagged");
     let start = de_millis(row.get("Activation").or_else(|| row.get("EventStartDate"))).unwrap_or(0);
     let end = de_millis(row.get("Expiry").or_else(|| row.get("EventEndDate"))).unwrap_or(0);
     format!("{source}:{tag}:{start}:{end}")
@@ -768,36 +811,75 @@ pub fn event_rewards_from_world_child(
     iso: impl Fn(i64) -> String,
 ) -> EventRewardBuild {
     let mut build = EventRewardBuild::default();
-    let Some(rows) = world.get(key).and_then(|v| v.as_array()) else { return build };
+    let Some(rows) = world.get(key).and_then(|v| v.as_array()) else {
+        return build;
+    };
     build.raw_rows = rows.len();
     for row in rows {
-        let Some(obj) = row.as_object() else { build.invalid_rows += 1; continue };
-        let start_field = if key == "Goals" { "Activation" } else { "EventStartDate" };
-        let end_field = if key == "Goals" { "Expiry" } else { "EventEndDate" };
-        let Some(start) = de_millis(obj.get(start_field)) else { build.invalid_rows += 1; continue };
-        let Some(end) = de_millis(obj.get(end_field)) else { build.invalid_rows += 1; continue };
-        if end <= start { build.invalid_rows += 1; continue }
+        let Some(obj) = row.as_object() else {
+            build.invalid_rows += 1;
+            continue;
+        };
+        let start_field = if key == "Goals" {
+            "Activation"
+        } else {
+            "EventStartDate"
+        };
+        let end_field = if key == "Goals" {
+            "Expiry"
+        } else {
+            "EventEndDate"
+        };
+        let Some(start) = de_millis(obj.get(start_field)) else {
+            build.invalid_rows += 1;
+            continue;
+        };
+        let Some(end) = de_millis(obj.get(end_field)) else {
+            build.invalid_rows += 1;
+            continue;
+        };
+        if end <= start {
+            build.invalid_rows += 1;
+            continue;
+        }
         let source = if key == "Goals" { "goal" } else { "event" };
         let id = world_id(row, source);
         let title = if key == "Goals" {
-            obj.get("Tag").or_else(|| obj.get("Desc")).and_then(|v| v.as_str())
+            obj.get("Tag")
+                .or_else(|| obj.get("Desc"))
+                .and_then(|v| v.as_str())
                 .map(readable_from_path)
         } else {
-            obj.get("Messages").and_then(|v| v.as_array()).and_then(|messages| {
-                messages.iter()
-                    .find(|message| message.get("LanguageCode").and_then(|v| v.as_str()) == Some("en"))
-                    .or_else(|| messages.first())
-                    .and_then(|message| message.get("Message")).and_then(|v| v.as_str())
-                    .map(str::to_string)
-            }).or_else(|| obj.get("Prop").and_then(|v| v.as_str()).map(readable_from_path))
-        }.unwrap_or_else(|| "Warframe event".into());
+            obj.get("Messages")
+                .and_then(|v| v.as_array())
+                .and_then(|messages| {
+                    messages
+                        .iter()
+                        .find(|message| {
+                            message.get("LanguageCode").and_then(|v| v.as_str()) == Some("en")
+                        })
+                        .or_else(|| messages.first())
+                        .and_then(|message| message.get("Message"))
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string)
+                })
+                .or_else(|| {
+                    obj.get("Prop")
+                        .and_then(|v| v.as_str())
+                        .map(readable_from_path)
+                })
+        }
+        .unwrap_or_else(|| "Warframe event".into());
         if key != "Goals" {
             build.unknown_rows += 1;
-            build.rows.insert(id.clone(), serde_json::json!({
-                "id": id, "source": source, "title": title,
-                "starts_at": iso(start), "ends_at": iso(end),
-                "completeness": "unknown", "groups": [],
-            }));
+            build.rows.insert(
+                id.clone(),
+                serde_json::json!({
+                    "id": id, "source": source, "title": title,
+                    "starts_at": iso(start), "ends_at": iso(end),
+                    "completeness": "unknown", "groups": [],
+                }),
+            );
             continue;
         }
         let mut groups = Vec::new();
@@ -811,8 +893,16 @@ pub fn event_rewards_from_world_child(
             ) {
                 (Some(goals), Some(rewards)) if goals.len() == rewards.len() => {
                     for (threshold, reward) in goals.iter().zip(rewards) {
-                        let Some(threshold) = threshold.as_f64() else { malformed = true; break };
-                        let Some((items, resolved, credits)) = reward_items(reward, path_to_info, alias) else { malformed = true; break };
+                        let Some(threshold) = threshold.as_f64() else {
+                            malformed = true;
+                            break;
+                        };
+                        let Some((items, resolved, credits)) =
+                            reward_items(reward, path_to_info, alias)
+                        else {
+                            malformed = true;
+                            break;
+                        };
                         complete &= resolved;
                         groups.push(reward_group("milestone", Some(threshold), items, credits));
                     }
@@ -822,27 +912,40 @@ pub fn event_rewards_from_world_child(
         }
         for (field, kind) in [("Reward", "final"), ("BonusReward", "bonus")] {
             if let Some(reward) = obj.get(field) {
-                let Some((items, resolved, credits)) = reward_items(reward, path_to_info, alias) else { malformed = true; break };
+                let Some((items, resolved, credits)) = reward_items(reward, path_to_info, alias)
+                else {
+                    malformed = true;
+                    break;
+                };
                 complete &= resolved;
                 groups.push(reward_group(kind, None, items, credits));
             }
         }
-        if malformed { build.invalid_rows += 1; continue }
-        if groups.is_empty() {
-            build.unknown_rows += 1;
-            build.rows.insert(id.clone(), serde_json::json!({
-                "id": id, "source": source, "title": title,
-                "starts_at": iso(start), "ends_at": iso(end),
-                "completeness": "unknown", "groups": [],
-            }));
+        if malformed {
+            build.invalid_rows += 1;
             continue;
         }
-        build.rows.insert(id.clone(), serde_json::json!({
-            "id": id, "source": source, "title": title,
-            "starts_at": iso(start), "ends_at": iso(end),
-            "completeness": if complete { "complete" } else { "partial" },
-            "groups": groups,
-        }));
+        if groups.is_empty() {
+            build.unknown_rows += 1;
+            build.rows.insert(
+                id.clone(),
+                serde_json::json!({
+                    "id": id, "source": source, "title": title,
+                    "starts_at": iso(start), "ends_at": iso(end),
+                    "completeness": "unknown", "groups": [],
+                }),
+            );
+            continue;
+        }
+        build.rows.insert(
+            id.clone(),
+            serde_json::json!({
+                "id": id, "source": source, "title": title,
+                "starts_at": iso(start), "ends_at": iso(end),
+                "completeness": if complete { "complete" } else { "partial" },
+                "groups": groups,
+            }),
+        );
     }
     build
 }
@@ -868,7 +971,10 @@ pub fn baro_from_world(
     iso: impl Fn(i64) -> String,
 ) -> HashMap<String, Value> {
     let mut out = HashMap::new();
-    let Some(trader) = world.get("VoidTraders").and_then(|v| v.as_array()).and_then(|a| a.first())
+    let Some(trader) = world
+        .get("VoidTraders")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
     else {
         return out;
     };
@@ -889,7 +995,11 @@ pub fn baro_from_world(
     }
 
     let mut inventory = Vec::new();
-    for entry in trader.get("Manifest").and_then(|v| v.as_array()).unwrap_or(&Vec::new()) {
+    for entry in trader
+        .get("Manifest")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&Vec::new())
+    {
         let Some(path) = entry.get("ItemType").and_then(|v| v.as_str()) else {
             continue;
         };
@@ -986,7 +1096,11 @@ pub fn readable_from_path(path: &str) -> String {
 /// trading, and the estimate can be weeks out.
 pub fn vault_rotation_from_world(world: &Value, iso: impl Fn(i64) -> String) -> Vec<Value> {
     let mut out = Vec::new();
-    for trader in world.get("PrimeVaultTraders").and_then(|v| v.as_array()).unwrap_or(&Vec::new()) {
+    for trader in world
+        .get("PrimeVaultTraders")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&Vec::new())
+    {
         let Some(activation) = de_millis(trader.get("Activation")) else {
             continue;
         };
@@ -1031,11 +1145,17 @@ pub fn deals_from_world(
     iso: impl Fn(i64) -> String,
 ) -> Vec<Value> {
     let mut out = Vec::new();
-    for deal in world.get("DailyDeals").and_then(|v| v.as_array()).unwrap_or(&Vec::new()) {
+    for deal in world
+        .get("DailyDeals")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&Vec::new())
+    {
         let Some(path) = deal.get("StoreItem").and_then(|v| v.as_str()) else {
             continue;
         };
-        let Some(expiry) = de_millis(deal.get("Expiry")) else { continue };
+        let Some(expiry) = de_millis(deal.get("Expiry")) else {
+            continue;
+        };
         let info = resolve_path(path, path_to_info, alias);
         let mut row = serde_json::Map::new();
         row.insert(
@@ -1138,16 +1258,28 @@ mod tests {
     fn resolve_path_returns_none_rather_than_guessing() {
         let info = p2i();
         let alias = recipe_alias(&recipes());
-        assert!(resolve_path("/Lotus/Types/Recipes/Components/FormaBlueprint", &info, &alias).is_none());
+        assert!(resolve_path(
+            "/Lotus/Types/Recipes/Components/FormaBlueprint",
+            &info,
+            &alias
+        )
+        .is_none());
     }
 
     #[test]
     fn a_relic_of_one_rarity_splits_its_odds_evenly() {
-        let paths: Vec<String> = (0..8).map(|i| format!("/Lotus/Upgrades/Mods/Requiem/Mod{i}")).collect();
+        let paths: Vec<String> = (0..8)
+            .map(|i| format!("/Lotus/Upgrades/Mods/Requiem/Mod{i}"))
+            .collect();
         let info: HashMap<String, Value> = paths
             .iter()
             .enumerate()
-            .map(|(i, p)| (p.clone(), serde_json::json!({"name": format!("Mod {i}"), "slug": format!("mod_{i}")})))
+            .map(|(i, p)| {
+                (
+                    p.clone(),
+                    serde_json::json!({"name": format!("Mod {i}"), "slug": format!("mod_{i}")}),
+                )
+            })
             .collect();
         let relics = serde_json::json!({"ExportRelicArcane": [{
             "name": "Requiem Eterna Relic",
@@ -1158,7 +1290,10 @@ mod tests {
         let rewards = build.rewards["requiem_eterna_relic"].as_array().unwrap();
         assert_eq!(rewards.len(), 8);
         for refinement in REFINEMENTS {
-            let total: f64 = rewards.iter().map(|r| r["chances"][refinement].as_f64().unwrap()).sum();
+            let total: f64 = rewards
+                .iter()
+                .map(|r| r["chances"][refinement].as_f64().unwrap())
+                .sum();
             assert!((total - 100.0).abs() < 0.05, "{refinement}: {total}");
         }
         assert_eq!(rewards[0]["chance"], 12.5);
@@ -1166,7 +1301,10 @@ mod tests {
 
     #[test]
     fn relic_slug_matches_the_existing_key_shape() {
-        assert_eq!(relic_slug("Lith H2 Relic").as_deref(), Some("lith_h2_relic"));
+        assert_eq!(
+            relic_slug("Lith H2 Relic").as_deref(),
+            Some("lith_h2_relic")
+        );
         assert_eq!(relic_slug("Axi A1 Relic").as_deref(), Some("axi_a1_relic"));
         assert_eq!(relic_slug("Not A Thing"), None);
     }
@@ -1199,8 +1337,14 @@ mod tests {
         assert_eq!(build.rewards.len(), 1, "the four variants are one relic");
         let rows = build.rewards["lith_h2_relic"].as_array().unwrap();
         assert_eq!(rows.len(), 1, "Forma is untradeable and stays unresolved");
-        assert_eq!(rows[0]["rarity"], "Common", "not the old source's 'Uncommon'");
-        assert_eq!(rows[0]["chance"], 25.33, "bare `chance` stays intact for old consumers");
+        assert_eq!(
+            rows[0]["rarity"], "Common",
+            "not the old source's 'Uncommon'"
+        );
+        assert_eq!(
+            rows[0]["chance"], 25.33,
+            "bare `chance` stays intact for old consumers"
+        );
         assert_eq!(rows[0]["chances"]["radiant"], 16.67);
         assert_eq!(rows[0]["chances"]["intact"], 25.33);
         assert_eq!(build.unresolved, 2);
@@ -1223,7 +1367,9 @@ mod tests {
     #[test]
     fn recipe_ingredients_keep_untradeable_items_visible_but_unpriced() {
         let (r, _) = recipes_from_export(&recipes(), &p2i());
-        let ing = r["oberon_prime_systems_blueprint"]["ingredients"].as_array().unwrap();
+        let ing = r["oberon_prime_systems_blueprint"]["ingredients"]
+            .as_array()
+            .unwrap();
         assert_eq!(ing.len(), 1);
         // Orokin Cell has no market slug. It must still be listed, or a build
         // plan silently claims a build is free when it is not.
@@ -1257,7 +1403,9 @@ mod tests {
              "buildPrice": 25000, "buildTime": 259200, "skipBuildTimePrice": 50}
         ]});
         let (r, _) = recipes_from_export(&recipes, &info);
-        let entry = r.get("nova_prime_blueprint").expect("final assembly is costed");
+        let entry = r
+            .get("nova_prime_blueprint")
+            .expect("final assembly is costed");
         assert_eq!(entry["build_price"], 25000);
         assert_eq!(entry["rush_price"], 50);
     }
@@ -1278,15 +1426,24 @@ mod tests {
             {"uniqueName": "/r2", "resultType": "/b", "buildPrice": 5000}
         ]});
         let (r, collisions) = recipes_from_export(&recipes, &info);
-        assert_eq!(collisions, 1, "the second is reported, not silently applied");
-        assert_eq!(r["same_slug"]["build_price"], 15000, "first wins, deterministically");
+        assert_eq!(
+            collisions, 1,
+            "the second is reported, not silently applied"
+        );
+        assert_eq!(
+            r["same_slug"]["build_price"], 15000,
+            "first wins, deterministically"
+        );
     }
 
     #[test]
     fn usage_joins_through_the_set_name_wfm_actually_lists() {
         // DE says "Braton Prime"; warframe.market lists "Braton Prime Set".
         let mut catalog = HashMap::new();
-        catalog.insert("braton prime set".to_string(), "braton_prime_set".to_string());
+        catalog.insert(
+            "braton prime set".to_string(),
+            "braton_prime_set".to_string(),
+        );
         catalog.insert("torid".to_string(), "torid".to_string());
 
         let mut buckets = serde_json::Map::new();
@@ -1305,7 +1462,10 @@ mod tests {
         }});
 
         let (u, unmatched) = usage_from_export(&doc, 2025, &catalog);
-        assert_eq!(unmatched, 1, "a name that does not resolve misses, it is not guessed");
+        assert_eq!(
+            unmatched, 1,
+            "a name that does not resolve misses, it is not guessed"
+        );
         let braton = &u["braton_prime_set"];
         assert_eq!(braton["share"], 3.42, "stored as a percentage");
         assert_eq!(braton["peak_mr"], 10);
@@ -1338,7 +1498,10 @@ mod tests {
         let (rows, accepted, unmatched) = usage_history_from_export(&doc, &catalog);
         assert_eq!(accepted, 3);
         assert_eq!(unmatched, 1);
-        assert_eq!(rows["direct"], serde_json::json!({"name":"Direct","category":"Primary","share":10.0}));
+        assert_eq!(
+            rows["direct"],
+            serde_json::json!({"name":"Direct","category":"Primary","share":10.0})
+        );
         assert_eq!(rows["parent_set"]["share"], 20.0);
         assert!(rows.values().all(|row| row.get("by_mr").is_none()));
     }
@@ -1346,44 +1509,96 @@ mod tests {
     #[test]
     fn live_shape_fixture_preserves_goal_reward_groups() {
         let world: Value = serde_json::from_str(include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/de-events.json"
-        ))).unwrap();
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/de-events.json"
+        )))
+        .unwrap();
         let p2i = HashMap::from([
-            ("/Lotus/Weapons/TestFinalWeapon".into(), serde_json::json!({"name":"Test Final Weapon","slug":"test_final_weapon"})),
-            ("/Lotus/Upgrades/Mods/TestMilestoneMod".into(), serde_json::json!({"name":"Test Milestone Mod","slug":"test_milestone_mod"})),
+            (
+                "/Lotus/Weapons/TestFinalWeapon".into(),
+                serde_json::json!({"name":"Test Final Weapon","slug":"test_final_weapon"}),
+            ),
+            (
+                "/Lotus/Upgrades/Mods/TestMilestoneMod".into(),
+                serde_json::json!({"name":"Test Milestone Mod","slug":"test_milestone_mod"}),
+            ),
         ]);
-        let goals = event_rewards_from_world_child(&world, "Goals", &p2i, &HashMap::new(), |ms| ms.to_string());
+        let goals = event_rewards_from_world_child(&world, "Goals", &p2i, &HashMap::new(), |ms| {
+            ms.to_string()
+        });
         assert_eq!(goals.raw_rows, 3);
         assert_eq!(goals.rows.len(), 3);
-        assert_eq!(goals.unknown_rows, 1, "Jobs reward tables are observed but not fixed containers");
+        assert_eq!(
+            goals.unknown_rows, 1,
+            "Jobs reward tables are observed but not fixed containers"
+        );
         let first = &goals.rows["redacted-goal-milestones"];
         assert_eq!(first["groups"].as_array().unwrap().len(), 3);
         assert_eq!(first["groups"][0]["kind"], "milestone");
         assert_eq!(first["groups"][0]["threshold"], 5.0);
         assert_eq!(first["groups"][2]["kind"], "final");
-        assert_eq!(first["groups"][2]["rewards"][0]["slug"], "test_final_weapon");
-        assert_eq!(first["completeness"], "partial", "an unresolved token keeps reach conservative");
+        assert_eq!(
+            first["groups"][2]["rewards"][0]["slug"],
+            "test_final_weapon"
+        );
+        assert_eq!(
+            first["completeness"], "partial",
+            "an unresolved token keeps reach conservative"
+        );
         assert_eq!(first["groups"][1]["credits"], 50_000);
-        assert_eq!(goals.rows["redacted-goal-bonus"]["groups"][0]["credits"], 50_000);
+        assert_eq!(
+            goals.rows["redacted-goal-bonus"]["groups"][0]["credits"],
+            50_000
+        );
         assert_eq!(goals.rows["redacted-goal-jobs"]["completeness"], "unknown");
 
-        let events = event_rewards_from_world_child(&world, "Events", &p2i, &HashMap::new(), |ms| ms.to_string());
-        assert_eq!(events.rows["redacted-announcement"]["title"], "Redacted announcement");
-        assert_eq!(events.rows["redacted-announcement"]["completeness"], "unknown");
-        assert_eq!(events.unknown_rows, 1, "live Events were announcements, not reward rows");
+        let events =
+            event_rewards_from_world_child(&world, "Events", &p2i, &HashMap::new(), |ms| {
+                ms.to_string()
+            });
+        assert_eq!(
+            events.rows["redacted-announcement"]["title"],
+            "Redacted announcement"
+        );
+        assert_eq!(
+            events.rows["redacted-announcement"]["completeness"],
+            "unknown"
+        );
+        assert_eq!(
+            events.unknown_rows, 1,
+            "live Events were announcements, not reward rows"
+        );
 
         let credit_only = serde_json::json!({"Goals":[{
             "_id":{"$oid":"credits"}, "Activation":1, "Expiry":2, "Tag":"CreditGoal",
             "Reward":{"credits":50000,"items":[],"countedItems":[]}
         }]});
-        let credit_goal = event_rewards_from_world_child(&credit_only, "Goals", &HashMap::new(), &HashMap::new(), |ms| ms.to_string());
+        let credit_goal = event_rewards_from_world_child(
+            &credit_only,
+            "Goals",
+            &HashMap::new(),
+            &HashMap::new(),
+            |ms| ms.to_string(),
+        );
         assert_eq!(credit_goal.rows["credits"]["groups"][0]["credits"], 50_000);
-        assert_eq!(credit_goal.rows["credits"]["groups"][0]["rewards"].as_array().unwrap().len(), 0);
+        assert_eq!(
+            credit_goal.rows["credits"]["groups"][0]["rewards"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
 
         let empty_reward = serde_json::json!({"Goals":[{
             "_id":{"$oid":"empty"}, "Activation":1, "Expiry":2, "Tag":"EmptyGoal", "Reward":{}
         }]});
-        let rejected = event_rewards_from_world_child(&empty_reward, "Goals", &HashMap::new(), &HashMap::new(), |ms| ms.to_string());
+        let rejected = event_rewards_from_world_child(
+            &empty_reward,
+            "Goals",
+            &HashMap::new(),
+            &HashMap::new(),
+            |ms| ms.to_string(),
+        );
         assert!(rejected.rows.is_empty());
         assert_eq!(rejected.invalid_rows, 1);
 
@@ -1391,10 +1606,22 @@ mod tests {
             "_id":{"$oid":"zero"}, "Activation":1, "Expiry":2, "Tag":"ZeroGoal",
             "Reward":{"credits":0,"items":[],"countedItems":[]}
         }]});
-        let accepted = event_rewards_from_world_child(&explicit_zero, "Goals", &HashMap::new(), &HashMap::new(), |ms| ms.to_string());
+        let accepted = event_rewards_from_world_child(
+            &explicit_zero,
+            "Goals",
+            &HashMap::new(),
+            &HashMap::new(),
+            |ms| ms.to_string(),
+        );
         assert_eq!(accepted.invalid_rows, 0);
         assert_eq!(accepted.rows["zero"]["completeness"], "complete");
-        assert_eq!(accepted.rows["zero"]["groups"][0]["rewards"].as_array().unwrap().len(), 0);
+        assert_eq!(
+            accepted.rows["zero"]["groups"][0]["rewards"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
     }
 
     #[test]

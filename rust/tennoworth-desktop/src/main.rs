@@ -7,8 +7,8 @@ mod overlay;
 mod persistence;
 mod poison;
 mod services;
-mod vision;
 mod shell;
+mod vision;
 
 fn main() {
     shell::run(commands::auth::publish_access_changes);

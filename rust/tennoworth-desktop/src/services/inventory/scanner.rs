@@ -1,5 +1,5 @@
-use std::sync::OnceLock;
 use game_acquisition::inventory::InventoryScanner;
+use std::sync::OnceLock;
 
 /// Process-wide scanner so the single-flight guard actually serializes two
 /// concurrent `scan_inventory` invokes (a second concurrent scan gets

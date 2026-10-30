@@ -1,8 +1,8 @@
-use crate::ingest::{self, Http, RivenChildOutcome};
-use crate::pipeline::reconcile::Disposition;
 use crate::clock;
 use crate::ingest::de;
 use crate::ingest::de::extract as de_extract;
+use crate::ingest::{self, Http, RivenChildOutcome};
+use crate::pipeline::reconcile::Disposition;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, HashMap};
 
@@ -77,8 +77,12 @@ pub(super) fn fetch(
         de::ManifestOutcome::Usable | de::ManifestOutcome::Invalid => {
             crate::pipeline::reconcile::Disposition::PreservedInvalid
         }
-        de::ManifestOutcome::Unchanged => crate::pipeline::reconcile::Disposition::PreservedUnchanged,
-        de::ManifestOutcome::Unavailable => crate::pipeline::reconcile::Disposition::PreservedUnavailable,
+        de::ManifestOutcome::Unchanged => {
+            crate::pipeline::reconcile::Disposition::PreservedUnchanged
+        }
+        de::ManifestOutcome::Unavailable => {
+            crate::pipeline::reconcile::Disposition::PreservedUnavailable
+        }
     };
     if !joined_usable && !de_dispos.is_empty() {
         eprintln!("  warning: {}/{} DE dispositions joined (prior exact set {}) - preserving prior exact provenance", joined_dispositions.len(), de_dispos.len(), prior_de_dispositions.len());

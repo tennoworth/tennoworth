@@ -172,7 +172,10 @@ pub struct ResolvedPath {
 /// can never invent an item. A catalog name without a market entry falls back
 /// to [`slug_guess`]; callers that need a live market row check it themselves.
 pub fn resolve_path(path: &str, tables: &impl PathTables) -> Option<ResolvedPath> {
-    if let Some((name, slug, category)) = tables.path_info(path).filter(|(_, slug, _)| !slug.is_empty()) {
+    if let Some((name, slug, category)) = tables
+        .path_info(path)
+        .filter(|(_, slug, _)| !slug.is_empty())
+    {
         return Some(ResolvedPath {
             name: name.into(),
             slug: slug.into(),
@@ -181,15 +184,26 @@ pub fn resolve_path(path: &str, tables: &impl PathTables) -> Option<ResolvedPath
         });
     }
     let info = tables.catalog_entry(path).or_else(|| {
-        ["Component", "Blueprint"]
-            .iter()
-            .find_map(|suffix| path.strip_suffix(suffix).and_then(|p| tables.catalog_entry(p)))
+        ["Component", "Blueprint"].iter().find_map(|suffix| {
+            path.strip_suffix(suffix)
+                .and_then(|p| tables.catalog_entry(p))
+        })
     });
     let Some((name, category)) = info else {
-        return path_guess_candidates(path).into_iter().find_map(|candidate| {
-            let slug = tables.slug_for(&candidate.to_lowercase()).filter(|s| !s.is_empty())?.to_owned();
-            Some(ResolvedPath { name: candidate, slug, category: None, refinement: None })
-        });
+        return path_guess_candidates(path)
+            .into_iter()
+            .find_map(|candidate| {
+                let slug = tables
+                    .slug_for(&candidate.to_lowercase())
+                    .filter(|s| !s.is_empty())?
+                    .to_owned();
+                Some(ResolvedPath {
+                    name: candidate,
+                    slug,
+                    category: None,
+                    refinement: None,
+                })
+            });
     };
     if let Some((base, refinement)) = name.rsplit_once(' ') {
         if ["Intact", "Exceptional", "Flawless", "Radiant"].contains(&refinement) {
@@ -209,7 +223,12 @@ pub fn resolve_path(path: &str, tables: &impl PathTables) -> Option<ResolvedPath
     let slug = tables
         .slug_for(&name.to_lowercase())
         .map_or_else(|| slug_guess(name), str::to_owned);
-    Some(ResolvedPath { name: name.into(), slug, category: category.map(Into::into), refinement: None })
+    Some(ResolvedPath {
+        name: name.into(),
+        slug,
+        category: category.map(Into::into),
+        refinement: None,
+    })
 }
 
 struct RequestTables<'a> {
@@ -219,13 +238,18 @@ struct RequestTables<'a> {
 
 impl PathTables for RequestTables<'_> {
     fn path_info(&self, path: &str) -> Option<(&str, &str, Option<&str>)> {
-        self.market
-            .path_to_info
-            .get(path)
-            .map(|info| (info.name.as_str(), info.slug.as_str(), info.category.as_deref()))
+        self.market.path_to_info.get(path).map(|info| {
+            (
+                info.name.as_str(),
+                info.slug.as_str(),
+                info.category.as_deref(),
+            )
+        })
     }
     fn catalog_entry(&self, path: &str) -> Option<(&str, Option<&str>)> {
-        self.catalog.get(path).map(|info| (info.name.as_str(), info.category.as_deref()))
+        self.catalog
+            .get(path)
+            .map(|info| (info.name.as_str(), info.category.as_deref()))
     }
     fn slug_for(&self, lower_name: &str) -> Option<&str> {
         self.market.catalog.get(lower_name).map(String::as_str)
@@ -236,7 +260,11 @@ pub fn normalize_inventory(request: InventoryRequest) -> Result<NormalizedInvent
     let flat = flatten_inventory(&request.inventory)?;
     let kept = kept_levels(&request.inventory);
     let tables = RequestTables {
-        catalog: request.catalog.iter().map(|(path, info)| (path.as_str(), info)).collect(),
+        catalog: request
+            .catalog
+            .iter()
+            .map(|(path, info)| (path.as_str(), info))
+            .collect(),
         market: &request.market,
     };
     let mut output = NormalizedInventory {
@@ -247,7 +275,13 @@ pub fn normalize_inventory(request: InventoryRequest) -> Result<NormalizedInvent
     let mut positions = BTreeMap::new();
     for item in flat {
         let resolved = resolve_path(&item.path, &tables).filter(|r| !r.slug.is_empty());
-        let Some(ResolvedPath { name, slug, category, refinement: subtype }) = resolved else {
+        let Some(ResolvedPath {
+            name,
+            slug,
+            category,
+            refinement: subtype,
+        }) = resolved
+        else {
             *output.unresolved.entry(item.category).or_default() += 1;
             continue;
         };

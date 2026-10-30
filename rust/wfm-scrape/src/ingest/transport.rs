@@ -39,12 +39,24 @@ pub struct LiveHttp {
 
 static WFM_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 pub(crate) fn ensure_wfm_complete() -> Result<(), String> {
-    wfm_client::governor::process().check(wfm_client::governor::Kind::Read, &wfm_client::governor::context()).map_err(|e| e.to_string())?;
-    if WFM_FAILED.load(std::sync::atomic::Ordering::Acquire) { Err("WFM access failed during ingestion; keeping the previous published snapshot.".into()) } else { Ok(()) }
+    wfm_client::governor::process()
+        .check(
+            wfm_client::governor::Kind::Read,
+            &wfm_client::governor::context(),
+        )
+        .map_err(|e| e.to_string())?;
+    if WFM_FAILED.load(std::sync::atomic::Ordering::Acquire) {
+        Err("WFM access failed during ingestion; keeping the previous published snapshot.".into())
+    } else {
+        Ok(())
+    }
 }
 fn is_wfm_host(url: &str) -> bool {
     reqwest::Url::parse(url).ok().is_some_and(|url| {
-        matches!(url.host_str(), Some("api.warframe.market" | "warframe.market"))
+        matches!(
+            url.host_str(),
+            Some("api.warframe.market" | "warframe.market")
+        )
     })
 }
 
@@ -53,28 +65,46 @@ impl LiveHttp {
         let is_wfm = is_wfm_host(url);
         let result = if is_wfm {
             (|| {
-                let response = wfm_client::transport::send(wfm_client::wfm_headers(self.client.get(url), "pc"), wfm_client::governor::Kind::Read).map_err(|e| e.to_string())?;
-                if !response.status().is_success() { return Err(format!("WFM HTTP {}", response.status())); }
+                let response = wfm_client::transport::send(
+                    wfm_client::wfm_headers(self.client.get(url), "pc"),
+                    wfm_client::governor::Kind::Read,
+                )
+                .map_err(|e| e.to_string())?;
+                if !response.status().is_success() {
+                    return Err(format!("WFM HTTP {}", response.status()));
+                }
                 response.bytes().map_err(|e| e.to_string())
             })()
         } else {
-            self.client.get(url).send().and_then(reqwest::blocking::Response::error_for_status).and_then(reqwest::blocking::Response::bytes).map(|b| b.to_vec()).map_err(|e| e.to_string())
+            self.client
+                .get(url)
+                .send()
+                .and_then(reqwest::blocking::Response::error_for_status)
+                .and_then(reqwest::blocking::Response::bytes)
+                .map(|b| b.to_vec())
+                .map_err(|e| e.to_string())
         };
-        if is_wfm && result.is_err() { WFM_FAILED.store(true, std::sync::atomic::Ordering::Release); }
+        if is_wfm && result.is_err() {
+            WFM_FAILED.store(true, std::sync::atomic::Ordering::Release);
+        }
         result
     }
 }
 impl Http for LiveHttp {
     fn get_json(&self, url: &str) -> Result<serde_json::Value, String> {
         serde_json::from_slice(&self.request(url)?).map_err(|e| {
-            if is_wfm_host(url) { WFM_FAILED.store(true, std::sync::atomic::Ordering::Release); }
+            if is_wfm_host(url) {
+                WFM_FAILED.store(true, std::sync::atomic::Ordering::Release);
+            }
             format!("{url}: JSON parse: {e}")
         })
     }
     fn get_text(&self, url: &str) -> Result<String, String> {
         String::from_utf8(self.request(url)?).map_err(|e| format!("{url}: UTF-8: {e}"))
     }
-    fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> { self.request(url) }
+    fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> {
+        self.request(url)
+    }
 }
 
 /// Fixture implementation of [`Http`] - serves pre-recorded responses from
@@ -119,7 +149,9 @@ mod tests {
             assert!(is_wfm_host(url), "{url}");
         }
         for url in [
-            "invalid", "", "https://warframe.market.example/v2/items",
+            "invalid",
+            "",
+            "https://warframe.market.example/v2/items",
             "https://example.com/warframe.market",
             "https://warframe.market@example.com/",
         ] {

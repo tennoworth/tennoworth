@@ -193,7 +193,9 @@ fn guaranteed(hir: &regex_syntax::hir::Hir) -> HashSet<usize> {
                 guaranteed(&repetition.sub)
             }
         }
-        HirKind::Empty | HirKind::Literal(_) | HirKind::Class(_) | HirKind::Look(_) => HashSet::new(),
+        HirKind::Empty | HirKind::Literal(_) | HirKind::Class(_) | HirKind::Look(_) => {
+            HashSet::new()
+        }
     }
 }
 
@@ -217,7 +219,8 @@ fn guaranteed(hir: &regex_syntax::hir::Hir) -> HashSet<usize> {
 /// the crate's own example is `.*[^A-Z]|[A-Z]` over a long run of uppercase.
 /// Both the pattern and the haystack are untrusted here, so a definition can be
 /// quadratic by construction; the scan's own work budget is what contains that.
-pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {    let mut rejections = Vec::new();
+pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {
+    let mut rejections = Vec::new();
     let default = ScanPatterns::default();
 
     fn build_one(
@@ -316,12 +319,18 @@ static INSTALLED: LazyLock<RwLock<Arc<ScanPatterns>>> =
 /// Replace the pattern set for subsequent scans. Applying an all-default set
 /// is the documented way to revert to compiled-in behaviour.
 pub fn install_patterns(patterns: ScanPatterns) {
-    *INSTALLED.write().unwrap_or_else(std::sync::PoisonError::into_inner) = Arc::new(patterns);
+    *INSTALLED
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Arc::new(patterns);
 }
 
 /// The set a scan should use, snapshotted for the duration of that scan.
 pub fn current_patterns() -> Arc<ScanPatterns> {
-    Arc::clone(&INSTALLED.read().unwrap_or_else(std::sync::PoisonError::into_inner))
+    Arc::clone(
+        &INSTALLED
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    )
 }
 
 /// Resource ceiling for one scan.
@@ -474,7 +483,10 @@ impl PatternCounts {
     fn charge_match(&mut self, budget: &ScanBudget) -> Result<()> {
         self.matches += 1;
         if self.matches > budget.max_matches {
-            bail!("{}", budget_exceeded("matches examined", budget.max_matches as u64));
+            bail!(
+                "{}",
+                budget_exceeded("matches examined", budget.max_matches as u64)
+            );
         }
         self.charge_time(budget)
     }
@@ -491,7 +503,10 @@ impl PatternCounts {
         }
         self.bytes += len;
         if self.bytes > budget.max_bytes {
-            bail!("{}", budget_exceeded("retained bytes", budget.max_bytes as u64));
+            bail!(
+                "{}",
+                budget_exceeded("retained bytes", budget.max_bytes as u64)
+            );
         }
         Ok(())
     }
@@ -499,7 +514,10 @@ impl PatternCounts {
     /// Refuse a new distinct key once the accumulator is full.
     fn charge_entry(&self, held: usize, budget: &ScanBudget) -> Result<()> {
         if held >= budget.max_entries {
-            bail!("{}", budget_exceeded("distinct entries", budget.max_entries as u64));
+            bail!(
+                "{}",
+                budget_exceeded("distinct entries", budget.max_entries as u64)
+            );
         }
         Ok(())
     }
@@ -800,7 +818,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             .context(OPEN_PROCESS_FAILED)?;
 
         let mut counts = PatternCounts::default();
-    let budget = ScanBudget::default();
+        let budget = ScanBudget::default();
         let mut addr: usize = 0;
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         let mbi_size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
@@ -1105,8 +1123,13 @@ mod tests {
             None,
         ));
         let mut counts = PatternCounts::default();
-        aggregate_match(b"nothing to see here ", &p, &mut counts, &ScanBudget::default())
-            .expect("within budget");
+        aggregate_match(
+            b"nothing to see here ",
+            &p,
+            &mut counts,
+            &ScanBudget::default(),
+        )
+        .expect("within budget");
         assert!(counts.creds.is_empty());
         assert!(p.ct.is_match(SAMPLE), "untouched patterns still work");
     }

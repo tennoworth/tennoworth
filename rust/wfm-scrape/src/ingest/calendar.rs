@@ -130,7 +130,9 @@ pub fn align_calendar_with_vault_status(
         if vault_status.get(slug).map(String::as_str) != Some("vaulted") {
             continue;
         }
-        let Some(row) = row.as_object_mut() else { continue };
+        let Some(row) = row.as_object_mut() else {
+            continue;
+        };
         if row.get("vaulted").and_then(|v| v.as_bool()) == Some(true) {
             continue;
         }
@@ -139,7 +141,10 @@ pub fn align_calendar_with_vault_status(
             let passed = row
                 .get("est_vault_date")
                 .and_then(|d| d.as_str())
-                .filter(|d| clock::parse_isoformat_utc(&d.replace('Z', "+00:00")).is_some_and(|at| at <= now))
+                .filter(|d| {
+                    clock::parse_isoformat_utc(&d.replace('Z', "+00:00"))
+                        .is_some_and(|at| at <= now)
+                })
                 .map(str::to_string);
             if let Some(date) = passed {
                 row.insert("vault_date".into(), serde_json::Value::String(date));
@@ -406,7 +411,8 @@ mod tests {
     #[test]
     fn the_vaulting_soon_horizon_matches_the_shared_fixture() {
         let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../tests/fixtures/vault-soon.json")).unwrap();
+            serde_json::from_str(include_str!("../../../../tests/fixtures/vault-soon.json"))
+                .unwrap();
         assert_eq!(Some(super::VAULT_SOON_DAYS), fixture["days"].as_i64());
     }
 }

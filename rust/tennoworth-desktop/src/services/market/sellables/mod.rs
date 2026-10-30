@@ -18,15 +18,15 @@
 //!      run before any C4 refresh. The live market prefers the app-data cache
 //!      (last known-good from the server) over the compile-time bundle.
 
-use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 #[cfg(test)]
 use market_domain::inventory::{path_guess_candidates, slug_guess};
-use market_domain::math::sell_priority::PricedEntry;
 #[cfg(test)]
 use market_domain::math::sell_priority;
+use market_domain::math::sell_priority::PricedEntry;
 use serde::{Deserialize, Deserializer};
 
 #[cfg(test)]
@@ -46,7 +46,8 @@ pub use ranking::{build_notification, rank_sellables};
 /// committed (unlike the gitignored `dist-desktop`, so `include_str!` never
 /// breaks a fresh checkout). The market floor is only used when the app-data
 /// cache is absent/corrupt; the catalog never changes at runtime.
-pub(crate) const BUNDLED_MARKET: &str = include_str!("../../../../../../frontend/public/market.json");
+pub(crate) const BUNDLED_MARKET: &str =
+    include_str!("../../../../../../frontend/public/market.json");
 const BUNDLED_CATALOG: &str = include_str!("../../../../../../frontend/public/wfstat-catalog.json");
 
 /// One ranked sellable row - the shape the tray label and the notification both
@@ -295,11 +296,22 @@ mod tests {
 
         let ranked = rank_sellables(&db, &market);
         assert_eq!(
-            ranked.iter().map(|row| (&row.slug, row.sellable_qty)).collect::<Vec<_>>(),
-            fixture.expected.tray.iter().map(|row| (&row.slug, row.sellable_qty)).collect::<Vec<_>>()
+            ranked
+                .iter()
+                .map(|row| (&row.slug, row.sellable_qty))
+                .collect::<Vec<_>>(),
+            fixture
+                .expected
+                .tray
+                .iter()
+                .map(|row| (&row.slug, row.sellable_qty))
+                .collect::<Vec<_>>()
         );
         assert_eq!(
-            ranked.iter().map(|row| row.slug.clone()).collect::<Vec<_>>(),
+            ranked
+                .iter()
+                .map(|row| row.slug.clone())
+                .collect::<Vec<_>>(),
             fixture.expected.shared_order
         );
     }
@@ -585,7 +597,10 @@ mod tests {
     #[test]
     fn load_falls_back_to_the_bundle_for_a_cache_that_breaks_the_contract() {
         for (tag, body) in [
-            ("no-stamp", r#"{"items":{"broken_only":{"vol":1,"low_sell":1}}}"#),
+            (
+                "no-stamp",
+                r#"{"items":{"broken_only":{"vol":1,"low_sell":1}}}"#,
+            ),
             (
                 "bad-stamp",
                 r#"{"updated_at":"whenever","items":{"broken_only":{"vol":1,"low_sell":1}}}"#,
@@ -600,7 +615,10 @@ mod tests {
 
             let market = MarketData::load(&MarketCache::new(dir.clone()));
 
-            assert!(!market.items.contains_key("broken_only"), "{tag}: the cache was adopted");
+            assert!(
+                !market.items.contains_key("broken_only"),
+                "{tag}: the cache was adopted"
+            );
             assert!(
                 market.items.contains_key("acceltra_prime_barrel"),
                 "{tag}: the bundle should be what we loaded"
@@ -719,7 +737,10 @@ mod tests {
     fn refined_relics_stay_out_of_slug_only_counts() {
         let market = MarketData::bundled();
         let relic = bundled_catalog_path_named(" Intact");
-        assert!(market.resolve(&relic).is_none(), "{relic} merged into a refinement-less slug");
+        assert!(
+            market.resolve(&relic).is_none(),
+            "{relic} merged into a refinement-less slug"
+        );
     }
 
     fn bundled_catalog_path_named(suffix: &str) -> String {
@@ -748,8 +769,14 @@ mod tests {
     // ---- decamel / slug_guess helpers ------------------------------------
     #[test]
     fn decamel_inserts_spaces_like_the_ts_regex() {
-        assert_eq!(path_name_guess("SagekPrimeBarrel").unwrap(), "Sagek Prime Barrel");
-        assert_eq!(path_name_guess("AcceleratedBlast").unwrap(), "Accelerated Blast");
+        assert_eq!(
+            path_name_guess("SagekPrimeBarrel").unwrap(),
+            "Sagek Prime Barrel"
+        );
+        assert_eq!(
+            path_name_guess("AcceleratedBlast").unwrap(),
+            "Accelerated Blast"
+        );
         assert_eq!(path_name_guess("Already Spaced").unwrap(), "Already Spaced");
     }
 

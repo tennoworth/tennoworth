@@ -1,8 +1,8 @@
 use super::STALE_DAYS;
-use crate::pipeline::reconcile::{reconcile, Observation, Reconciled};
 use crate::clock;
 use crate::ingest::de;
 use crate::ingest::de::extract as de_extract;
+use crate::pipeline::reconcile::{reconcile, Observation, Reconciled};
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, HashMap};
 

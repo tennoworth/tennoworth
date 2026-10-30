@@ -11,28 +11,31 @@ use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
+use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use wfm_trading::orders::listing::{
     bulk_set_visibility, delete_order as core_delete_order, list_user_orders,
     update_order as core_update_order, PerOrderResult, UpdateRequest, VisibilityRequest,
 };
-use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use wfm_trading::orders::pending::{
     clear_finished_pending, clear_pending, journal_state, load_pending, JournalState, PendingPlan,
 };
 use wfm_trading::orders::plan::{
-    execute_plan as core_execute_plan, run_pending, ItemResult, PlanItem, PlanRequest, PlanResponse,
-    PlanValidationError,
+    execute_plan as core_execute_plan, run_pending, ItemResult, PlanItem, PlanRequest,
+    PlanResponse, PlanValidationError,
 };
 
-use crate::persistence::Db;
 use crate::contracts::command_error::CmdError;
+use crate::persistence::Db;
 use crate::services::wfm::session::WfmSession;
 
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 
 fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), PlanValidationError> {
     for item in items.iter().filter(|item| item.order_type == "sell") {
-        crate::services::trading::protection::validate_snapshot(&app.state::<Db>(), item.inventory_snapshot_id)?;
+        crate::services::trading::protection::validate_snapshot(
+            &app.state::<Db>(),
+            item.inventory_snapshot_id,
+        )?;
     }
     validate_protected_plan(app, items)?;
     if items.iter().all(|i| i.session.is_none()) {
@@ -260,19 +263,29 @@ fn finish_plan(path: &std::path::Path, response: &mut PlanResponse) {
 /// hold a finished batch's journal open, which is what retired listing_log.
 fn record_outcomes(app: &AppHandle, items: &[PlanItem], response: &PlanResponse) {
     let db = app.state::<Db>();
-    crate::services::trading::outcomes::record(&db, &response.plan_id, items, &response.results, crate::services::unix_now());
+    crate::services::trading::outcomes::record(
+        &db,
+        &response.plan_id,
+        items,
+        &response.results,
+        crate::services::unix_now(),
+    );
 }
 
 fn finished_plan_response(pending: &PendingPlan) -> PlanResponse {
     PlanResponse {
         plan_id: pending.plan_id.clone(),
-        results: pending.items.iter().map(|item| ItemResult {
-            slug: item.slug.clone(),
-            status: item.status.clone(),
-            message: item.message.clone(),
-            order_id: item.order_id.clone(),
-            action: item.action.clone(),
-        }).collect(),
+        results: pending
+            .items
+            .iter()
+            .map(|item| ItemResult {
+                slug: item.slug.clone(),
+                status: item.status.clone(),
+                message: item.message.clone(),
+                order_id: item.order_id.clone(),
+                action: item.action.clone(),
+            })
+            .collect(),
         durability_error: None,
     }
 }
@@ -338,12 +351,17 @@ pub fn get_pending_plan(
 
 #[tauri::command]
 pub fn discard_pending_plan(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
-    let _guard = session.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
+    let _guard = session
+        .begin_plan()
+        .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
     clear_pending(session.pending_path())
         .map_err(|error| CmdError::internal(format!("The saved batch was not discarded. {error}")))
 }
 #[tauri::command]
-pub fn cancel_plan(session: State<'_, Arc<WfmSession>>, request_id: String) -> Result<(), CmdError> {
+pub fn cancel_plan(
+    session: State<'_, Arc<WfmSession>>,
+    request_id: String,
+) -> Result<(), CmdError> {
     session.cancel_plan(&request_id)
 }
 
@@ -368,7 +386,8 @@ pub async fn resume_pending_plan(
             }
         };
         let request = s.claim_plan_request(request_id)?;
-        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations =
+            crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
         if pending.is_finished() {
             let _guard = mutations.begin_only()?;
@@ -378,9 +397,11 @@ pub async fn resume_pending_plan(
             return Ok::<_, CmdError>(response);
         }
         let (_guard, unlocked) = mutations.begin()?;
-        let mut response = wfm_client::governor::with_context(request.context(), || run_pending(s.pending_path(), &unlocked, &mut pending, || {
-            validate_session_plan(&app, &reviewed)
-        }));
+        let mut response = wfm_client::governor::with_context(request.context(), || {
+            run_pending(s.pending_path(), &unlocked, &mut pending, || {
+                validate_session_plan(&app, &reviewed)
+            })
+        });
         finish_plan(s.pending_path(), &mut response);
         record_outcomes(&app, &reviewed, &response);
         Ok::<_, CmdError>(response)
@@ -429,9 +450,7 @@ fn display_order(
 
 /// The user's current WFM listings, decoded before crossing IPC (GET /orders).
 #[tauri::command]
-pub async fn fetch_orders(
-    session: State<'_, Arc<WfmSession>>,
-) -> Result<Vec<OwnOrder>, CmdError> {
+pub async fn fetch_orders(session: State<'_, Arc<WfmSession>>) -> Result<Vec<OwnOrder>, CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
@@ -465,7 +484,10 @@ pub async fn update_order(
     // can't push a listing past what the WFM UI allows.
     if let Some(p) = patch.platinum {
         if p > MAX_PLATINUM {
-            return Err(CmdError::of("wfm", format!("price {p}p > max {MAX_PLATINUM}p")));
+            return Err(CmdError::of(
+                "wfm",
+                format!("price {p}p > max {MAX_PLATINUM}p"),
+            ));
         }
     }
     let s = Arc::clone(&session);
@@ -502,7 +524,8 @@ pub async fn delete_order(
 ) -> Result<(), CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations =
+            crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let (_guard, unlocked) = mutations.begin()?;
         core_delete_order(&unlocked, &order_id).map_err(CmdError::wfm)
     })
@@ -520,7 +543,8 @@ pub async fn bulk_visibility(
 ) -> Result<Vec<PerOrderResult>, CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations =
+            crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let (_guard, unlocked) = mutations.begin()?;
         Ok(bulk_set_visibility(
             &unlocked,
@@ -551,7 +575,8 @@ mod tests {
                 "order_type": "sell", "visible": false, "status": "ok",
                 "order_id": "remote-order", "action": "created"
             }]
-        })).unwrap();
+        }))
+        .unwrap();
         write_pending_atomic(&path, &pending).unwrap();
         let mut response = finished_plan_response(&pending);
         finish_plan(&path, &mut response);
@@ -571,19 +596,26 @@ mod tests {
                 "order_type": "sell", "visible": false,
                 "status": "uncertain_mutation"
             }]
-        })).unwrap();
+        }))
+        .unwrap();
         write_pending_atomic(&path, &pending).unwrap();
         let mut response = PlanResponse {
             plan_id: pending.plan_id.clone(),
             results: vec![ItemResult {
-                slug: "listed_item".into(), status: "ok".into(), message: None,
-                order_id: Some("known-remote-order".into()), action: Some("created".into()),
+                slug: "listed_item".into(),
+                status: "ok".into(),
+                message: None,
+                order_id: Some("known-remote-order".into()),
+                action: Some("created".into()),
             }],
             durability_error: Some("Could not save the confirmed listing result".into()),
         };
         finish_plan(&path, &mut response);
         assert!(response.durability_error.is_some());
-        assert_eq!(load_pending(&path).unwrap().unwrap().items[0].status, "uncertain_mutation");
+        assert_eq!(
+            load_pending(&path).unwrap().unwrap().items[0].status,
+            "uncertain_mutation"
+        );
     }
 
     #[test]

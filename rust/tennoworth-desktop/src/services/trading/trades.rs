@@ -216,7 +216,9 @@ pub enum LedgerOutcome {
     Failed(String),
 }
 
-fn unavailable_adjustment_follow_up(error: &crate::contracts::command_error::CmdError) -> &'static str {
+fn unavailable_adjustment_follow_up(
+    error: &crate::contracts::command_error::CmdError,
+) -> &'static str {
     match error.code {
         "busy" => "Another order change blocked the automatic adjustment for this sale. Review My Orders after it finishes; the sold listing was not adjusted.",
         "needs_login" | "needs_unlock" => "Sign in or unlock your market login to review sell orders.",
@@ -237,7 +239,10 @@ pub fn handle_trade(
         Ok(None) => return LedgerOutcome::AlreadyKnown,
         Err(e) => return LedgerOutcome::Failed(e.to_string()),
     };
-    let _ = app.emit(crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED, ());
+    let _ = app.emit(
+        crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED,
+        (),
+    );
     let mut adjusted: Vec<(String, i64)> = Vec::new();
     let mut follow_up: Vec<String> = Vec::new();
 
@@ -257,7 +262,8 @@ pub fn handle_trade(
         // change. Taking the account here stops the two interleaving. When
         // busy, the sale stays recorded but the listing needs manual review:
         // trade deduplication will not run this adjustment again.
-        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&session));
+        let mutations =
+            crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&session));
         // Bound before the branch: an `if let` scrutinee's temporary outlives
         // the binding, so the guard would be dropped after the coordinator it
         // borrows from.
@@ -408,7 +414,10 @@ fn report_ledger_blocked(
     // afterwards - a new scan is what confirms the remaining trades.
     match app.state::<Db>().allowance_gap() {
         Ok(true) => {
-            let _ = app.emit(crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED, ());
+            let _ = app.emit(
+                crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED,
+                (),
+            );
         }
         Ok(false) => {}
         Err(e) => eprintln!("tennoworth: could not mark the trade allowance uncertain: {e}"),
@@ -468,8 +477,9 @@ pub fn start_tailer(
             let mut blocked: Option<(String, u64)> = None;
             // Both callbacks describe the same poll, so the outcome is shared
             // rather than owned by either closure.
-            let outcome =
-                std::cell::RefCell::new(crate::services::game_log::recording::PollOutcome::default());
+            let outcome = std::cell::RefCell::new(
+                crate::services::game_log::recording::PollOutcome::default(),
+            );
             let recorder = recorder.clone();
             crate::services::game_log::eelog::tail_forever_with_lines(
                 &p,
@@ -505,7 +515,10 @@ pub fn start_tailer(
                     };
                     announce_recording(&app, &outcome.borrow(), &recorder);
                     if app.state::<Db>().allowance_gap().unwrap_or(false) {
-                        let _ = app.emit(crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED, ());
+                        let _ = app.emit(
+                            crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED,
+                            (),
+                        );
                     }
                 },
                 || {
@@ -860,9 +873,17 @@ mod tests {
     fn own_sell_orders_reads_valid_siblings_and_logs_refused_rows() {
         use wfm_trading::market::catalog::ItemMeta;
         let unlocked = Unlocked {
-            jwt: String::new(), username: "fixture".into(), platform: "pc".into(),
+            jwt: String::new(),
+            username: "fixture".into(),
+            platform: "pc".into(),
             catalog: Arc::new(BTreeMap::new()),
-            id_to_item: Arc::new(BTreeMap::from([("item".into(), ItemMeta { name: "Part".into(), slug: "part".into() })])),
+            id_to_item: Arc::new(BTreeMap::from([(
+                "item".into(),
+                ItemMeta {
+                    name: "Part".into(),
+                    slug: "part".into(),
+                },
+            )])),
         };
         for body in [
             serde_json::json!({"data":{"sell":[
@@ -877,10 +898,14 @@ mod tests {
             ]}),
         ] {
             let mut logs = Vec::new();
-            let orders = own_sell_orders_with_log(&body, &unlocked, |reason| logs.push(reason.to_owned()));
+            let orders =
+                own_sell_orders_with_log(&body, &unlocked, |reason| logs.push(reason.to_owned()));
             assert_eq!(orders, vec![order("a", "part", 2)]);
             assert_eq!(logs.len(), 2);
-            assert!(logs.iter().any(|line| line.contains("quantity")), "{logs:?}");
+            assert!(
+                logs.iter().any(|line| line.contains("quantity")),
+                "{logs:?}"
+            );
         }
     }
 

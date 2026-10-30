@@ -10,8 +10,8 @@
 //! supported, or not understood at all.
 
 use anyhow::{bail, Context, Result};
-use market_domain::orders::{ItemConstraints, NormalizedOrder, OrderRow, OrderSide, RefusedRow};
 use market_domain::limits::MAX_PER_TRADE;
+use market_domain::orders::{ItemConstraints, NormalizedOrder, OrderRow, OrderSide, RefusedRow};
 
 /// How many characters of the raw row an unsupported or ambiguous row keeps as
 /// evidence. Enough for a banner the user can act on, bounded so a hostile or
@@ -47,7 +47,9 @@ pub fn decode_orders(
 
     if let Some(reason) = orders.iter().find_map(|row| match row {
         OrderRow::Supported(_) => None,
-        OrderRow::Unsupported(refused) | OrderRow::Ambiguous(refused) => Some(refused.reason.as_str()),
+        OrderRow::Unsupported(refused) | OrderRow::Ambiguous(refused) => {
+            Some(refused.reason.as_str())
+        }
     }) {
         bail!("Orders response has a row this build cannot interpret ({reason}); reconcile current orders before changing listings.");
     }
@@ -178,7 +180,9 @@ fn decode_row(
         None => None,
         Some(value) if value.is_null() => None,
         Some(value) => match value.as_u64() {
-            Some(lot) if (1..=u64::from(MAX_PER_TRADE)).contains(&lot) && quantity % lot == 0 => Some(lot),
+            Some(lot) if (1..=u64::from(MAX_PER_TRADE)).contains(&lot) && quantity % lot == 0 => {
+                Some(lot)
+            }
             _ => return unfilled(row, "row carries an invalid trade lot"),
         },
     };

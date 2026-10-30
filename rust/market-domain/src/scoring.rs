@@ -340,7 +340,10 @@ mod tests {
             "../../../tests/fixtures/sell-priority/liquidity-boundary.json"
         ))
         .unwrap();
-        assert_eq!(boundary["liquid_vol"].as_f64(), Some(sell_priority::LIQUID_VOL));
+        assert_eq!(
+            boundary["liquid_vol"].as_f64(),
+            Some(sell_priority::LIQUID_VOL)
+        );
         for c in boundary["cases"].as_array().unwrap() {
             let f = |k: &str| c[k].as_f64().unwrap();
             let priced = PricedEntry {
@@ -350,7 +353,12 @@ mod tests {
                 median_now: 0.0,
                 median_90d: f("median_90d"),
             };
-            assert_eq!(sell_priority::clearing_price(&priced), f("clearing"), "vol {}", f("vol"));
+            assert_eq!(
+                sell_priority::clearing_price(&priced),
+                f("clearing"),
+                "vol {}",
+                f("vol")
+            );
         }
     }
     #[derive(Deserialize)]

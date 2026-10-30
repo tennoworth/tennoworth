@@ -126,14 +126,11 @@ pub fn add_game_ref_paths(
                     .and_then(|stem| wfstat_categories.get(stem))
             })
         });
-        let category = known
-            .cloned()
-            .flatten()
-            .or_else(|| {
-                category_from_tags(&m.tags)
-                    .or_else(|| set_category(slug, meta))
-                    .map(str::to_string)
-            });
+        let category = known.cloned().flatten().or_else(|| {
+            category_from_tags(&m.tags)
+                .or_else(|| set_category(slug, meta))
+                .map(str::to_string)
+        });
         if let Some(category) = category {
             info.insert("category".into(), category.into());
         }
@@ -675,7 +672,11 @@ mod tests {
             ),
             (
                 "ayatan_amber_star".to_string(),
-                wfm("Ayatan Amber Star", &["ayatan_sculpture"], "/Lotus/Types/Items/FusionTreasures/OroFusexOrnamentB"),
+                wfm(
+                    "Ayatan Amber Star",
+                    &["ayatan_sculpture"],
+                    "/Lotus/Types/Items/FusionTreasures/OroFusexOrnamentB",
+                ),
             ),
             (
                 "scene_b".to_string(),

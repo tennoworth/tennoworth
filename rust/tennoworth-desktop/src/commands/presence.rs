@@ -9,7 +9,9 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::contracts::command_error::CmdError;
 use crate::persistence::Db;
-use crate::services::wfm::presence::{self, PresenceChoice, PresenceSettings, PresenceState, PresenceStatus};
+use crate::services::wfm::presence::{
+    self, PresenceChoice, PresenceSettings, PresenceState, PresenceStatus,
+};
 
 #[tauri::command]
 pub fn presence_status(state: State<'_, PresenceState>) -> PresenceStatus {
@@ -18,7 +20,10 @@ pub fn presence_status(state: State<'_, PresenceState>) -> PresenceStatus {
 
 /// Pick a status. Waits for warframe.market's answer off the main thread.
 #[tauri::command]
-pub async fn set_presence(app: AppHandle, status: PresenceChoice) -> Result<PresenceStatus, CmdError> {
+pub async fn set_presence(
+    app: AppHandle,
+    status: PresenceChoice,
+) -> Result<PresenceStatus, CmdError> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<PresenceState>();
         state.set(status)?;

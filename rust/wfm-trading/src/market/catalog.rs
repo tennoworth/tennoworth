@@ -2,11 +2,11 @@
 //! WFM's `/orders` endpoint returns only a raw `itemId`, so this injects the
 //! display name the browser panels need, looked up against the catalog.
 
-use wfm_client::transport::GovernedRequest;
-use wfm_client::governor::Kind;
 use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use std::collections::BTreeMap;
+use wfm_client::governor::Kind;
+use wfm_client::transport::GovernedRequest;
 
 pub struct WfmCatalogItem {
     pub item_id: String,
@@ -88,7 +88,8 @@ fn parse_wfm_catalog(body: &serde_json::Value) -> Result<BTreeMap<String, WfmCat
                         )
                     })
                 });
-            let set_identity = slug.ends_with("_set") && max_rank.is_none()
+            let set_identity = slug.ends_with("_set")
+                && max_rank.is_none()
                 && it.get("setRoot").and_then(|v| v.as_bool()) == Some(true);
             let session_supported = (supported_tag || set_identity)
                 && subtypes.is_empty()
@@ -144,7 +145,10 @@ pub fn index_item_meta(catalog: &BTreeMap<String, WfmCatalogItem>) -> BTreeMap<S
         .collect()
 }
 
-pub(crate) fn attach_item_meta(order: &mut serde_json::Value, id_to_item: &BTreeMap<String, ItemMeta>) {
+pub(crate) fn attach_item_meta(
+    order: &mut serde_json::Value,
+    id_to_item: &BTreeMap<String, ItemMeta>,
+) {
     let id = order
         .get("itemId")
         .and_then(|v| v.as_str())
@@ -199,11 +203,17 @@ mod tests {
 
     #[test]
     fn complete_set_identity_requires_an_explicit_tradable_rankless_root() {
-        let base = serde_json::json!({"id":"set", "slug":"example_set", "setRoot":true, "tradable":true});
+        let base =
+            serde_json::json!({"id":"set", "slug":"example_set", "setRoot":true, "tradable":true});
         let parse = |row| parse_wfm_catalog(&serde_json::json!({"data":[row]})).unwrap();
         assert!(parse(base.clone())["example_set"].session_supported);
-        for (key, value) in [("tradable", serde_json::json!(false)), ("maxRank", serde_json::json!(5)), ("setRoot", serde_json::json!("true"))] {
-            let mut row = base.clone(); row[key] = value;
+        for (key, value) in [
+            ("tradable", serde_json::json!(false)),
+            ("maxRank", serde_json::json!(5)),
+            ("setRoot", serde_json::json!("true")),
+        ] {
+            let mut row = base.clone();
+            row[key] = value;
             assert!(!parse(row)["example_set"].session_supported);
         }
     }

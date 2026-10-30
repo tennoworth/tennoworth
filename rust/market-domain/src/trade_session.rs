@@ -1,5 +1,5 @@
+use crate::limits::{MAX_PER_TRADE, MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use crate::math::sell_priority::{clearing_price, PricedEntry, LIQUID_VOL};
-use crate::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM, MAX_PER_TRADE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -501,8 +501,18 @@ mod tests {
         }).collect();
         (fixture, candidates)
     }
-    fn plan(candidates: Vec<SessionCandidate>, mode: SessionMode, budget: f64, target: Option<f64>) -> SessionPlan {
-        select_session(SessionRequest { candidates, mode, budget, target })
+    fn plan(
+        candidates: Vec<SessionCandidate>,
+        mode: SessionMode,
+        budget: f64,
+        target: Option<f64>,
+    ) -> SessionPlan {
+        select_session(SessionRequest {
+            candidates,
+            mode,
+            budget,
+            target,
+        })
     }
     #[test]
     fn each_mode_has_its_documented_selection_behavior() {
@@ -511,17 +521,32 @@ mod tests {
             let mode: SessionMode = serde_json::from_value(case["mode"].clone()).unwrap();
             let budget = case["budget"].as_f64().unwrap();
             let chosen = plan(inventory.clone(), mode, budget, None);
-            let rows: Vec<Value> = chosen.rows.iter()
+            let rows: Vec<Value> = chosen
+                .rows
+                .iter()
                 .map(|r| serde_json::json!([r.candidate.slug, r.quantity, r.per_trade]))
                 .collect();
-            let expected: Vec<Value> = case["rows"].as_array().unwrap().iter()
+            let expected: Vec<Value> = case["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
                 .map(|r| serde_json::json!([r[0], r[1].as_f64(), r[2].as_f64()]))
                 .collect();
             assert_eq!(rows, expected, "{}", case["mode"]);
-            assert_eq!(Some(chosen.total), case["total"].as_f64(), "{}", case["mode"]);
+            assert_eq!(
+                Some(chosen.total),
+                case["total"].as_f64(),
+                "{}",
+                case["mode"]
+            );
             assert_eq!(f64::from(chosen.trades), budget, "{}", case["mode"]);
             let reversed = inventory.iter().rev().cloned().collect();
-            assert_eq!(plan(reversed, mode, budget, None), chosen, "{} is order independent", case["mode"]);
+            assert_eq!(
+                plan(reversed, mode, budget, None),
+                chosen,
+                "{} is order independent",
+                case["mode"]
+            );
         }
     }
     #[test]
@@ -534,7 +559,9 @@ mod tests {
         assert_eq!(chosen.rows[0].quantity, 3.0);
         assert!(chosen.rows[0].reason.contains("Hold advice"));
         held.sellable = 0.0;
-        assert!(plan(vec![held], SessionMode::Max, 8.0, None).rows.is_empty());
+        assert!(plan(vec![held], SessionMode::Max, 8.0, None)
+            .rows
+            .is_empty());
     }
     #[test]
     fn best_sells_now_modes_leave_held_items_for_later() {
@@ -563,8 +590,14 @@ mod tests {
     fn a_target_stops_selection_allows_a_bundle_overshoot_and_reports_shortfall() {
         let (_, inventory) = mode_inventory();
         let covered = plan(inventory.clone(), SessionMode::Max, 3.0, Some(500.0));
-        assert_eq!((covered.trades, covered.total, covered.shortfall), (1, 600.0, Some(0.0)));
-        assert_eq!(plan(inventory, SessionMode::Max, 1.0, Some(1000.0)).shortfall, Some(400.0));
+        assert_eq!(
+            (covered.trades, covered.total, covered.shortfall),
+            (1, 600.0, Some(0.0))
+        );
+        assert_eq!(
+            plan(inventory, SessionMode::Max, 1.0, Some(1000.0)).shortfall,
+            Some(400.0)
+        );
     }
     #[test]
     fn unpriced_refined_synthetic_and_ambiguous_rows_are_excluded() {
@@ -575,7 +608,13 @@ mod tests {
         refined.subtype = Some("radiant".into());
         let mut synthetic = inventory[2].clone();
         synthetic.slug = "example_set".into();
-        let rows = vec![unpriced, refined, synthetic, inventory[3].clone(), inventory[3].clone()];
+        let rows = vec![
+            unpriced,
+            refined,
+            synthetic,
+            inventory[3].clone(),
+            inventory[3].clone(),
+        ];
         assert!(plan(rows, SessionMode::Max, 50.0, None).rows.is_empty());
     }
     #[test]
@@ -593,7 +632,12 @@ mod tests {
     fn invalid_budgets_allocate_nothing() {
         let (_, inventory) = mode_inventory();
         for budget in [0.0, -1.0, 1.5] {
-            assert!(plan(inventory.clone(), SessionMode::Max, budget, None).rows.is_empty(), "{budget}");
+            assert!(
+                plan(inventory.clone(), SessionMode::Max, budget, None)
+                    .rows
+                    .is_empty(),
+                "{budget}"
+            );
         }
     }
     #[test]

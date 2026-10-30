@@ -12,7 +12,10 @@ pub struct Dirs {
 impl Dirs {
     pub fn resolve(data: Option<PathBuf>, publish: Option<PathBuf>) -> Result<Self, String> {
         if let (Some(data), Some(publish)) = (&data, &publish) {
-            return Ok(Dirs { data: data.clone(), publish: publish.clone() });
+            return Ok(Dirs {
+                data: data.clone(),
+                publish: publish.clone(),
+            });
         }
         let root = find_root()?;
         Ok(Dirs {
@@ -49,7 +52,11 @@ mod tests {
 
     #[test]
     fn explicit_dirs_need_no_checkout() {
-        let dirs = Dirs::resolve(Some("/srv/wfm/data/scrape".into()), Some("/srv/wfm/data/public".into())).unwrap();
+        let dirs = Dirs::resolve(
+            Some("/srv/wfm/data/scrape".into()),
+            Some("/srv/wfm/data/public".into()),
+        )
+        .unwrap();
         assert_eq!(dirs.data, PathBuf::from("/srv/wfm/data/scrape"));
         assert_eq!(dirs.publish, PathBuf::from("/srv/wfm/data/public"));
     }

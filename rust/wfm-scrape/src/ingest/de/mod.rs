@@ -21,7 +21,6 @@
 
 pub mod extract;
 
-
 use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;

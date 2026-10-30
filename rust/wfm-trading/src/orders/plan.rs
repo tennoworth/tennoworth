@@ -9,15 +9,17 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::identity::random_token;
-use crate::time::chrono_now_iso;
 use crate::market::catalog::WfmCatalogItem;
-use crate::orders::outcome::MutationOutcome;
+use crate::orders::decode::DecodedOrders;
 use crate::orders::listing::{
     decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked,
 };
-use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM, MAX_PER_TRADE};
-use crate::orders::decode::DecodedOrders;
-use crate::orders::pending::{journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan};
+use crate::orders::outcome::MutationOutcome;
+use crate::orders::pending::{
+    journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan,
+};
+use crate::time::chrono_now_iso;
+use market_domain::limits::{MAX_PER_TRADE, MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 
 /// Resets a plan-in-flight flag on scope exit - including early return and
@@ -315,9 +317,13 @@ pub fn run_pending(
     };
 
     run_pending_with(pending_path, pending, validate, |item, validate| {
-        execute_one(&http, unlocked, item, &mut || {
-            decode_user_orders(unlocked, &list_user_orders(unlocked)?)
-        }, validate)
+        execute_one(
+            &http,
+            unlocked,
+            item,
+            &mut || decode_user_orders(unlocked, &list_user_orders(unlocked)?),
+            validate,
+        )
     })
 }
 
@@ -325,12 +331,15 @@ fn run_pending_with(
     pending_path: &std::path::Path,
     pending: &mut PendingPlan,
     validate: impl FnMut() -> Result<(), PlanValidationError>,
-    execute: impl FnMut(
-        &PlanItem,
-        &mut dyn FnMut() -> Result<(), PlanValidationError>,
-    ) -> ItemResult,
+    execute: impl FnMut(&PlanItem, &mut dyn FnMut() -> Result<(), PlanValidationError>) -> ItemResult,
 ) -> PlanResponse {
-    run_pending_with_store(pending_path, pending, validate, execute, write_pending_atomic)
+    run_pending_with_store(
+        pending_path,
+        pending,
+        validate,
+        execute,
+        write_pending_atomic,
+    )
 }
 
 fn run_pending_with_store(
@@ -375,7 +384,10 @@ fn run_pending_with_store(
                 item.status = crate::orders::pending::STATUS_PENDING.into();
                 item.message = prior_message;
             }
-            return durability_failure(pending, format!("Could not save the listing before sending it: {error}"));
+            return durability_failure(
+                pending,
+                format!("Could not save the listing before sending it: {error}"),
+            );
         }
         let result = execute(&plan_item, &mut validate);
         // Both stop the batch, but they do not mean the same thing and the
@@ -419,27 +431,59 @@ fn run_pending_with_store(
 }
 
 fn durability_failure(pending: &PendingPlan, message: String) -> PlanResponse {
-    let results = pending.items.iter().map(|item| ItemResult {
-        slug: item.slug.clone(),
-        status: item.status.clone(),
-        message: item.message.clone(),
-        order_id: item.order_id.clone(),
-        action: item.action.clone(),
-    }).collect();
-    PlanResponse { plan_id: pending.plan_id.clone(), results, durability_error: Some(message) }
+    let results = pending
+        .items
+        .iter()
+        .map(|item| ItemResult {
+            slug: item.slug.clone(),
+            status: item.status.clone(),
+            message: item.message.clone(),
+            order_id: item.order_id.clone(),
+            action: item.action.clone(),
+        })
+        .collect();
+    PlanResponse {
+        plan_id: pending.plan_id.clone(),
+        results,
+        durability_error: Some(message),
+    }
 }
 
-fn validation_failure(pending: &PendingPlan, error: impl Into<PlanValidationError>) -> PlanResponse {
+fn validation_failure(
+    pending: &PendingPlan,
+    error: impl Into<PlanValidationError>,
+) -> PlanResponse {
     let error = error.into();
     let message = error.to_string();
     // A late validation stop must retain earlier confirmed rows so the desktop
     // can record their order IDs even though later rows were never sent.
     if matches!(error, PlanValidationError::Market(_))
-        || pending.items.iter().any(|item| matches!(item.status.as_str(),
-            crate::orders::pending::STATUS_OK | crate::orders::pending::STATUS_ERROR)) {
-        return PlanResponse { plan_id: pending.plan_id.clone(), results: pending.items.iter().map(|item| ItemResult {
-            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == crate::orders::pending::STATUS_PENDING { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
-        }).collect(), durability_error: None };
+        || pending.items.iter().any(|item| {
+            matches!(
+                item.status.as_str(),
+                crate::orders::pending::STATUS_OK | crate::orders::pending::STATUS_ERROR
+            )
+        })
+    {
+        return PlanResponse {
+            plan_id: pending.plan_id.clone(),
+            results: pending
+                .items
+                .iter()
+                .map(|item| ItemResult {
+                    slug: item.slug.clone(),
+                    status: item.status.clone(),
+                    message: if item.status == crate::orders::pending::STATUS_PENDING {
+                        Some(message.clone())
+                    } else {
+                        item.message.clone()
+                    },
+                    order_id: item.order_id.clone(),
+                    action: item.action.clone(),
+                })
+                .collect(),
+            durability_error: None,
+        };
     }
     PlanResponse {
         plan_id: pending.plan_id.clone(),
@@ -710,11 +754,22 @@ fn execute_one(
 
     let existing = match read_orders() {
         Ok(decoded) => index_existing_orders(&decoded),
-        Err(error) => return ItemResult { slug: item.slug.clone(), status: "pending".into(), message: Some(format!("Could not revalidate current orders: {error}")), order_id: None, action: None },
+        Err(error) => {
+            return ItemResult {
+                slug: item.slug.clone(),
+                status: "pending".into(),
+                message: Some(format!("Could not revalidate current orders: {error}")),
+                order_id: None,
+                action: None,
+            }
+        }
     };
     if let Some(reviewed) = &item.reviewed_order {
         if !review_matches(reviewed, existing.get(&plan_item_key(item, cat))) {
-            return mk_err("Order state changed or is ambiguous. Review the batch again before posting.".into());
+            return mk_err(
+                "Order state changed or is ambiguous. Review the batch again before posting."
+                    .into(),
+            );
         }
     }
     if let Err(error) = validate() {
@@ -768,7 +823,13 @@ fn execute_one(
                 action: Some("updated".into()),
             }
         } else {
-            ItemResult { slug: item.slug.clone(), status: r.status, message: r.message, order_id: Some(prior.id.clone()), action: None }
+            ItemResult {
+                slug: item.slug.clone(),
+                status: r.status,
+                message: r.message,
+                order_id: Some(prior.id.clone()),
+                action: None,
+            }
         };
     }
 
@@ -804,11 +865,15 @@ fn execute_one(
     );
     let resp = match resp {
         Ok(r) => r,
-        Err(e) => return ItemResult {
-            slug: item.slug.clone(),
-            status: MutationOutcome::from(&e).status_str().into(),
-            message: Some(e.to_string()), order_id: None, action: None,
-        },
+        Err(e) => {
+            return ItemResult {
+                slug: item.slug.clone(),
+                status: MutationOutcome::from(&e).status_str().into(),
+                message: Some(e.to_string()),
+                order_id: None,
+                action: None,
+            }
+        }
     };
     let status = resp.status();
     let resp_body: serde_json::Value = match resp.json() {
@@ -870,9 +935,9 @@ fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bo
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
     use super::*;
     use crate::orders::pending::clear_finished_pending;
+    use std::time::Duration;
 
     #[test]
     fn late_validation_failure_preserves_confirmed_rows_for_history() {
@@ -885,16 +950,36 @@ mod tests {
         })).unwrap();
         write_pending_atomic(&path, &pending).unwrap();
         let mut validations = 0;
-        let response = run_pending_with(&path, &mut pending, || {
-            validations += 1;
-            if validations == 3 { Err(PlanValidationError::Invalid("inventory changed".into())) }
-            else { Ok(()) }
-        }, |item, _| ItemResult { slug: item.slug.clone(), status: "ok".into(),
-            message: None, order_id: Some("remote-sent".into()), action: Some("created".into()) });
+        let response = run_pending_with(
+            &path,
+            &mut pending,
+            || {
+                validations += 1;
+                if validations == 3 {
+                    Err(PlanValidationError::Invalid("inventory changed".into()))
+                } else {
+                    Ok(())
+                }
+            },
+            |item, _| ItemResult {
+                slug: item.slug.clone(),
+                status: "ok".into(),
+                message: None,
+                order_id: Some("remote-sent".into()),
+                action: Some("created".into()),
+            },
+        );
         assert_eq!(response.results.len(), 2);
         assert_eq!(response.results[0].order_id.as_deref(), Some("remote-sent"));
-        assert_eq!(response.results[1].status, crate::orders::pending::STATUS_PENDING);
-        assert!(response.results[1].message.as_deref().unwrap().contains("inventory changed"));
+        assert_eq!(
+            response.results[1].status,
+            crate::orders::pending::STATUS_PENDING
+        );
+        assert!(response.results[1]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("inventory changed"));
         let _ = std::fs::remove_file(&path);
     }
 
@@ -910,23 +995,48 @@ mod tests {
             })).unwrap();
             write_pending_atomic(&path, &pending).unwrap();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                run_pending_with(&path, &mut pending, || Ok(()), |item, _| {
-                    if item.slug == format!("item-{}", count - 1) {
-                        panic!("simulated crash after remote application");
-                    }
-                    ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
-                        order_id: Some(item.slug.clone()), action: Some("created".into()) }
-                })
+                run_pending_with(
+                    &path,
+                    &mut pending,
+                    || Ok(()),
+                    |item, _| {
+                        if item.slug == format!("item-{}", count - 1) {
+                            panic!("simulated crash after remote application");
+                        }
+                        ItemResult {
+                            slug: item.slug.clone(),
+                            status: "ok".into(),
+                            message: None,
+                            order_id: Some(item.slug.clone()),
+                            action: Some("created".into()),
+                        }
+                    },
+                )
             }));
             assert!(result.is_err());
-            let mut restored = crate::orders::pending::load_pending(&path).unwrap().unwrap();
-            assert_eq!(restored.items[count - 1].status, crate::orders::pending::STATUS_UNCERTAIN);
+            let mut restored = crate::orders::pending::load_pending(&path)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                restored.items[count - 1].status,
+                crate::orders::pending::STATUS_UNCERTAIN
+            );
             let mut resent = Vec::new();
-            run_pending_with(&path, &mut restored, || Ok(()), |item, _| {
-                resent.push(item.slug.clone());
-                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
-                    order_id: None, action: None }
-            });
+            run_pending_with(
+                &path,
+                &mut restored,
+                || Ok(()),
+                |item, _| {
+                    resent.push(item.slug.clone());
+                    ItemResult {
+                        slug: item.slug.clone(),
+                        status: "ok".into(),
+                        message: None,
+                        order_id: None,
+                        action: None,
+                    }
+                },
+            );
             assert!(resent.is_empty());
             let _ = std::fs::remove_file(&path);
         }
@@ -935,7 +1045,8 @@ mod tests {
     #[test]
     fn failed_result_rewrite_reports_known_outcome_and_preserves_disk_marker() {
         for count in [1, 3] {
-            let path = std::env::temp_dir().join(format!("durable-rewrite-{}.json", random_token(8)));
+            let path =
+                std::env::temp_dir().join(format!("durable-rewrite-{}.json", random_token(8)));
             let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
                 "plan_id":"rewrite", "started_at":"test", "items":(0..count).map(|index| serde_json::json!({
                     "slug":format!("item-{index}"), "quantity":1, "platinum":12,
@@ -944,19 +1055,42 @@ mod tests {
             })).unwrap();
             write_pending_atomic(&path, &pending).unwrap();
             let mut writes = 0;
-            let response = run_pending_with_store(&path, &mut pending, || Ok(()), |item, _| {
-                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
-                    order_id: Some(format!("remote-{}", item.slug)), action: Some("created".into()) }
-            }, |path, plan| {
-                writes += 1;
-                if writes == count * 2 { anyhow::bail!("injected disk failure") }
-                write_pending_atomic(path, plan)
-            });
-            assert!(response.durability_error.as_deref().unwrap().contains("injected disk failure"));
+            let response = run_pending_with_store(
+                &path,
+                &mut pending,
+                || Ok(()),
+                |item, _| ItemResult {
+                    slug: item.slug.clone(),
+                    status: "ok".into(),
+                    message: None,
+                    order_id: Some(format!("remote-{}", item.slug)),
+                    action: Some("created".into()),
+                },
+                |path, plan| {
+                    writes += 1;
+                    if writes == count * 2 {
+                        anyhow::bail!("injected disk failure")
+                    }
+                    write_pending_atomic(path, plan)
+                },
+            );
+            assert!(response
+                .durability_error
+                .as_deref()
+                .unwrap()
+                .contains("injected disk failure"));
             assert_eq!(response.results[count - 1].status, "ok");
-            assert_eq!(response.results[count - 1].order_id.as_deref(), Some(format!("remote-item-{}", count - 1).as_str()));
-            let restored = crate::orders::pending::load_pending(&path).unwrap().unwrap();
-            assert_eq!(restored.items[count - 1].status, crate::orders::pending::STATUS_UNCERTAIN);
+            assert_eq!(
+                response.results[count - 1].order_id.as_deref(),
+                Some(format!("remote-item-{}", count - 1).as_str())
+            );
+            let restored = crate::orders::pending::load_pending(&path)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                restored.items[count - 1].status,
+                crate::orders::pending::STATUS_UNCERTAIN
+            );
             assert!(!restored.is_finished());
             let _ = std::fs::remove_file(&path);
         }
@@ -966,31 +1100,60 @@ mod tests {
     fn finished_in_memory_does_not_clear_an_unrecorded_final_result() {
         let path = std::env::temp_dir().join(format!("durable-final-{}.json", random_token(8)));
         let unlocked = Unlocked {
-            jwt: "fixture".into(), username: "fixture".into(), platform: "pc".into(),
+            jwt: "fixture".into(),
+            username: "fixture".into(),
+            platform: "pc".into(),
             catalog: std::sync::Arc::new(BTreeMap::new()),
             id_to_item: std::sync::Arc::new(BTreeMap::new()),
         };
-        let response = execute_plan_with(&path, &unlocked,
-            PlanRequest { items: vec![plan_item("final", None, None)] },
+        let response = execute_plan_with(
+            &path,
+            &unlocked,
+            PlanRequest {
+                items: vec![plan_item("final", None, None)],
+            },
             |path, _, pending| {
                 let mut writes = 0;
-                run_pending_with_store(path, pending, || Ok(()), |item, _| ItemResult {
-                    slug: item.slug.clone(), status: "ok".into(), message: None,
-                    order_id: Some("remote-final".into()), action: Some("created".into()),
-                }, |path, plan| {
-                    writes += 1;
-                    if writes == 2 { anyhow::bail!("injected result write failure") }
-                    write_pending_atomic(path, plan)
-                })
-            });
-        assert_eq!(response.results[0].order_id.as_deref(), Some("remote-final"));
+                run_pending_with_store(
+                    path,
+                    pending,
+                    || Ok(()),
+                    |item, _| ItemResult {
+                        slug: item.slug.clone(),
+                        status: "ok".into(),
+                        message: None,
+                        order_id: Some("remote-final".into()),
+                        action: Some("created".into()),
+                    },
+                    |path, plan| {
+                        writes += 1;
+                        if writes == 2 {
+                            anyhow::bail!("injected result write failure")
+                        }
+                        write_pending_atomic(path, plan)
+                    },
+                )
+            },
+        );
+        assert_eq!(
+            response.results[0].order_id.as_deref(),
+            Some("remote-final")
+        );
         assert!(response.durability_error.is_some());
-        let saved = crate::orders::pending::load_pending(&path).unwrap().expect("journal retained");
-        assert_eq!(saved.items[0].status, crate::orders::pending::STATUS_UNCERTAIN);
+        let saved = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .expect("journal retained");
+        assert_eq!(
+            saved.items[0].status,
+            crate::orders::pending::STATUS_UNCERTAIN
+        );
         let mut finished_in_memory = saved.clone();
         finished_in_memory.items[0].status = crate::orders::pending::STATUS_OK.into();
         clear_finished_pending(&path, &finished_in_memory).unwrap();
-        assert!(path.exists(), "an uncertain disk marker must survive a finished memory snapshot");
+        assert!(
+            path.exists(),
+            "an uncertain disk marker must survive a finished memory snapshot"
+        );
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1004,16 +1167,40 @@ mod tests {
         })).unwrap();
         write_pending_atomic(&path, &pending).unwrap();
         let mut sent = false;
-        let response = run_pending_with_store(&path, &mut pending, || Ok(()), |item, _| {
-            sent = true;
-            ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
-                order_id: None, action: None }
-        }, |_, _| anyhow::bail!("injected marker write failure"));
+        let response = run_pending_with_store(
+            &path,
+            &mut pending,
+            || Ok(()),
+            |item, _| {
+                sent = true;
+                ItemResult {
+                    slug: item.slug.clone(),
+                    status: "ok".into(),
+                    message: None,
+                    order_id: None,
+                    action: None,
+                }
+            },
+            |_, _| anyhow::bail!("injected marker write failure"),
+        );
         assert!(!sent);
-        assert!(response.durability_error.as_deref().unwrap().contains("before sending"));
-        assert_eq!(response.results[0].status, crate::orders::pending::STATUS_PENDING);
-        assert_eq!(crate::orders::pending::load_pending(&path).unwrap().unwrap().items[0].status,
-            crate::orders::pending::STATUS_PENDING);
+        assert!(response
+            .durability_error
+            .as_deref()
+            .unwrap()
+            .contains("before sending"));
+        assert_eq!(
+            response.results[0].status,
+            crate::orders::pending::STATUS_PENDING
+        );
+        assert_eq!(
+            crate::orders::pending::load_pending(&path)
+                .unwrap()
+                .unwrap()
+                .items[0]
+                .status,
+            crate::orders::pending::STATUS_PENDING
+        );
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1023,10 +1210,9 @@ mod tests {
     fn index_orders_body(
         body: &serde_json::Value,
     ) -> anyhow::Result<BTreeMap<OrderKey, ExistingOrder>> {
-        Ok(index_existing_orders(&crate::orders::decode::decode_orders(
-            body,
-            &Unconstrained,
-        )?))
+        Ok(index_existing_orders(
+            &crate::orders::decode::decode_orders(body, &Unconstrained)?,
+        ))
     }
 
     struct Unconstrained;
@@ -1058,7 +1244,8 @@ mod tests {
             id_to_item: std::sync::Arc::new(BTreeMap::new()),
         };
         for item_count in [1, 2] {
-            let path = std::env::temp_dir().join(format!("uncertain-boundary-{}.json", random_token(8)));
+            let path =
+                std::env::temp_dir().join(format!("uncertain-boundary-{}.json", random_token(8)));
             let items = (0..item_count)
                 .map(|index| plan_item(&format!("item-{index}"), None, None))
                 .collect();
@@ -1067,37 +1254,63 @@ mod tests {
                 &unlocked,
                 PlanRequest { items },
                 |path, _, pending| {
-                    run_pending_with(path, pending, || Ok(()), |item, _| ItemResult {
-                        slug: item.slug.clone(),
-                        status: if item.slug == format!("item-{}", item_count - 1) {
-                            STATUS_UNCERTAIN.into()
-                        } else {
-                            "ok".into()
+                    run_pending_with(
+                        path,
+                        pending,
+                        || Ok(()),
+                        |item, _| ItemResult {
+                            slug: item.slug.clone(),
+                            status: if item.slug == format!("item-{}", item_count - 1) {
+                                STATUS_UNCERTAIN.into()
+                            } else {
+                                "ok".into()
+                            },
+                            message: None,
+                            order_id: None,
+                            action: None,
                         },
-                        message: None,
-                        order_id: None,
-                        action: None,
-                    })
+                    )
                 },
             );
             assert_eq!(response.results.last().unwrap().status, STATUS_UNCERTAIN);
-            let mut restarted = load_pending(&path).unwrap().expect("unresolved journal survives");
+            let mut restarted = load_pending(&path)
+                .unwrap()
+                .expect("unresolved journal survives");
             assert!(matches!(journal_state(&path), JournalState::Unfinished));
             let replacement = execute_plan_with(
                 &path,
                 &unlocked,
-                PlanRequest { items: vec![plan_item("replacement", None, None)] },
+                PlanRequest {
+                    items: vec![plan_item("replacement", None, None)],
+                },
                 |_, _, _| panic!("an unresolved journal must block execution"),
             );
             assert_eq!(replacement.results[0].status, "error");
-            assert_eq!(load_pending(&path).unwrap().unwrap().plan_id, restarted.plan_id);
+            assert_eq!(
+                load_pending(&path).unwrap().unwrap().plan_id,
+                restarted.plan_id
+            );
             let mut resent = Vec::new();
-            run_pending_with(&path, &mut restarted, || Ok(()), |item, _| {
-                resent.push(item.slug.clone());
-                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None, order_id: None, action: None }
-            });
+            run_pending_with(
+                &path,
+                &mut restarted,
+                || Ok(()),
+                |item, _| {
+                    resent.push(item.slug.clone());
+                    ItemResult {
+                        slug: item.slug.clone(),
+                        status: "ok".into(),
+                        message: None,
+                        order_id: None,
+                        action: None,
+                    }
+                },
+            );
             clear_finished_pending(&path, &restarted).unwrap();
-            assert!(resent.is_empty(), "restart must not replay an uncertain send");
+            assert!(
+                resent.is_empty(),
+                "restart must not replay an uncertain send"
+            );
             assert!(matches!(journal_state(&path), JournalState::Unfinished));
             let _ = std::fs::remove_file(&path);
         }
@@ -1144,13 +1357,19 @@ mod tests {
         // batch rather than sending later items ahead of it.
         assert_eq!(attempted, ["ambiguous"]);
         assert_eq!(
-            response.results.iter().map(|row| row.status.as_str()).collect::<Vec<_>>(),
+            response
+                .results
+                .iter()
+                .map(|row| row.status.as_str())
+                .collect::<Vec<_>>(),
             ["uncertain_mutation", "pending"]
         );
 
         // The journal records what actually happened, and the later item is
         // still waiting.
-        let saved = crate::orders::pending::load_pending(&path).expect("journal readable").expect("journal kept");
+        let saved = crate::orders::pending::load_pending(&path)
+            .expect("journal readable")
+            .expect("journal kept");
         assert_eq!(
             saved.items[0].status, "uncertain_mutation",
             "an unknown outcome must not be recorded as never-sent"
@@ -1158,7 +1377,9 @@ mod tests {
         assert_eq!(saved.items[1].status, "pending");
 
         // And a resume must not re-send it as though nothing had been sent.
-        let mut pending = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+        let mut pending = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .unwrap();
         let mut resumed: Vec<String> = Vec::new();
         run_pending_with(
             &path,
@@ -1166,7 +1387,13 @@ mod tests {
             || Ok(()),
             |item, _validate| {
                 resumed.push(item.slug.clone());
-                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None, order_id: Some("o".into()), action: None }
+                ItemResult {
+                    slug: item.slug.clone(),
+                    status: "ok".into(),
+                    message: None,
+                    order_id: Some("o".into()),
+                    action: None,
+                }
             },
         );
         // The unresolved item is skipped; the rest of the batch is not held
@@ -1256,7 +1483,9 @@ mod tests {
                     .collect::<Vec<_>>(),
                 ["ok", "pending", "pending"]
             );
-            let mut saved = crate::orders::pending::load_pending(&path).expect("readable").expect("present");
+            let mut saved = crate::orders::pending::load_pending(&path)
+                .expect("readable")
+                .expect("present");
             assert_eq!(saved.items[1].status, "pending");
             assert_eq!(
                 saved.items[1].message.as_deref(),
@@ -1381,7 +1610,8 @@ mod tests {
         let orders = index_orders_body(&serde_json::json!({"data":[
             {"id":"one","itemId":"item","type":"sell","quantity":1,"platinum":10},
             {"id":"two","itemId":"item","type":"sell","quantity":2,"platinum":20}
-        ]})).unwrap();
+        ]}))
+        .unwrap();
         assert!(orders.values().next().unwrap().ambiguous);
     }
 
@@ -1504,14 +1734,23 @@ mod tests {
         };
         // Even a validation regression must never send a unit test to WFM.
         let http = Client::builder()
-        .retry(reqwest::retry::never())
-        .redirect(wfm_client::redirect_policy())
+            .retry(reqwest::retry::never())
+            .redirect(wfm_client::redirect_policy())
             .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
             .timeout(Duration::from_millis(100))
             .build()
             .unwrap();
         let mut reads = 0;
-        let result = execute_one(&http, &unlocked, &item, &mut || { reads += 1; Ok(DecodedOrders::empty()) }, &mut || Ok(()));
+        let result = execute_one(
+            &http,
+            &unlocked,
+            &item,
+            &mut || {
+                reads += 1;
+                Ok(DecodedOrders::empty())
+            },
+            &mut || Ok(()),
+        );
         assert_eq!(reads, 0);
         assert_eq!(result.status, "error");
         assert!(result.message.unwrap().contains("divide quantity"));
@@ -1755,14 +1994,49 @@ mod tests {
 
     #[test]
     fn pending_and_uncertain_results_match_the_shared_frontend_contract() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/wfm-access/outcomes.json")).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/wfm-access/outcomes.json"
+        ))
+        .unwrap();
         let item = plan_item("accelerated_blast", None, None);
-        let session = Unlocked { jwt: "fixture".into(), username: "fixture".into(), platform: "pc".into(), catalog: std::sync::Arc::new(BTreeMap::from([("accelerated_blast".into(), cat("item", None, &[]))])), id_to_item: std::sync::Arc::new(BTreeMap::new()) };
-        let http = Client::builder().retry(reqwest::retry::never()).redirect(wfm_client::redirect_policy()).proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap()).timeout(Duration::from_millis(100)).build().unwrap();
-        let pending = execute_one(&http, &session, &item, &mut || Err(anyhow::anyhow!("offline")), &mut || Ok(()));
-        assert_eq!(serde_json::to_value(pending).unwrap()["status"], fixture["pending"]["status"]);
-        let uncertain = execute_one(&http, &session, &item, &mut || Ok(DecodedOrders::empty()), &mut || Ok(()));
-        assert_eq!(serde_json::to_value(uncertain).unwrap()["status"], fixture["uncertain_mutation"]["status"]);
+        let session = Unlocked {
+            jwt: "fixture".into(),
+            username: "fixture".into(),
+            platform: "pc".into(),
+            catalog: std::sync::Arc::new(BTreeMap::from([(
+                "accelerated_blast".into(),
+                cat("item", None, &[]),
+            )])),
+            id_to_item: std::sync::Arc::new(BTreeMap::new()),
+        };
+        let http = Client::builder()
+            .retry(reqwest::retry::never())
+            .redirect(wfm_client::redirect_policy())
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+            .timeout(Duration::from_millis(100))
+            .build()
+            .unwrap();
+        let pending = execute_one(
+            &http,
+            &session,
+            &item,
+            &mut || Err(anyhow::anyhow!("offline")),
+            &mut || Ok(()),
+        );
+        assert_eq!(
+            serde_json::to_value(pending).unwrap()["status"],
+            fixture["pending"]["status"]
+        );
+        let uncertain = execute_one(
+            &http,
+            &session,
+            &item,
+            &mut || Ok(DecodedOrders::empty()),
+            &mut || Ok(()),
+        );
+        assert_eq!(
+            serde_json::to_value(uncertain).unwrap()["status"],
+            fixture["uncertain_mutation"]["status"]
+        );
     }
-
 }

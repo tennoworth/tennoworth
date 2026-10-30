@@ -256,16 +256,14 @@ fn current_reprint(market: &Value, mapping: &BTreeMap<String, String>) -> Reprin
         }
     }
     // A set comes back when any of its parts does; a part only by itself.
-    let sets: Vec<String> = from_relics.iter().filter_map(|c| mapping.get(c).cloned()).collect();
+    let sets: Vec<String> = from_relics
+        .iter()
+        .filter_map(|c| mapping.get(c).cloned())
+        .collect();
     from_relics.extend(sets);
     Reprint { sold, from_relics }
 }
-fn advise(
-    slug: &str,
-    set: &str,
-    request: &AdvisorRequest,
-    reprint: &Reprint,
-) -> Option<Verdict> {
+fn advise(slug: &str, set: &str, request: &AdvisorRequest, reprint: &Reprint) -> Option<Verdict> {
     let calendar = request.market.get("calendar")?;
     let cal = calendar.get("primes")?.get(set)?;
     if !cal.is_object() {

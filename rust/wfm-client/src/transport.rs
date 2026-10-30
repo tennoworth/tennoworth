@@ -272,7 +272,11 @@ mod tests {
         for second in [OK, SHORT_THROTTLE] {
             let (url, starts, task) = server(vec![SHORT_THROTTLE, second]);
             let governor = Arc::new(crate::governor::Governor::default());
-            let result = send_on(&governor, crate::build_client(2).unwrap().post(url), Kind::Mutation);
+            let result = send_on(
+                &governor,
+                crate::build_client(2).unwrap().post(url),
+                Kind::Mutation,
+            );
             if second == OK {
                 assert_eq!(result.unwrap().text().unwrap(), "{}");
             } else {
@@ -304,8 +308,17 @@ mod tests {
         });
         let governor = Arc::new(crate::governor::Governor::default());
         let result = crate::governor::with_context(
-            crate::governor::Context { cancelled: Some(cancelled), ..Default::default() },
-            || send_on(&governor, crate::build_client(2).unwrap().post(url), Kind::Mutation),
+            crate::governor::Context {
+                cancelled: Some(cancelled),
+                ..Default::default()
+            },
+            || {
+                send_on(
+                    &governor,
+                    crate::build_client(2).unwrap().post(url),
+                    Kind::Mutation,
+                )
+            },
         );
         task.join().unwrap();
         assert!(matches!(result, Err(AccessError::Cancelled)));

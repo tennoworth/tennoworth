@@ -41,7 +41,10 @@ pub fn listed_items(
 ) -> Vec<ListedItem> {
     if plan_id.is_empty()
         || items.len() != results.len()
-        || items.iter().zip(results).any(|(item, result)| item.slug != result.slug)
+        || items
+            .iter()
+            .zip(results)
+            .any(|(item, result)| item.slug != result.slug)
     {
         return Vec::new();
     }
@@ -170,7 +173,10 @@ pub fn summarize(
             .clone()
             .unwrap_or_else(|| format!("{}#{}", row.plan_id, row.plan_index));
         let index = *order_of.entry(key).or_insert_with(|| {
-            by_slug.entry(row.slug.as_str()).or_default().push(orders.len());
+            by_slug
+                .entry(row.slug.as_str())
+                .or_default()
+                .push(orders.len());
             orders.push(Order {
                 first: row,
                 offered: 0,
@@ -186,7 +192,12 @@ pub fn summarize(
         });
         steps.push(Step::Listed(index, row));
     }
-    steps.extend(sales.iter().filter(|trade| trade.kind == "sale").map(Step::Sold));
+    steps.extend(
+        sales
+            .iter()
+            .filter(|trade| trade.kind == "sale")
+            .map(Step::Sold),
+    );
     steps.sort_by_key(Step::key);
 
     for step in steps {
@@ -209,10 +220,13 @@ pub fn summarize(
             .collect();
         let one_kind = given.first().is_some_and(|first| {
             sale.items.iter().all(|item| item.direction == "given")
-                && given.iter().all(|item| item.name.trim().eq_ignore_ascii_case(first.name.trim()))
+                && given
+                    .iter()
+                    .all(|item| item.name.trim().eq_ignore_ascii_case(first.name.trim()))
         });
         let total: i64 = given.iter().map(|item| item.qty).sum();
-        let unit = (one_kind && total > 0 && sale.plat > 0).then(|| sale.plat as f64 / total as f64);
+        let unit =
+            (one_kind && total > 0 && sale.plat > 0).then(|| sale.plat as f64 / total as f64);
 
         for item in given {
             let Some(slug) = resolve(item.name.trim()) else {
@@ -286,7 +300,10 @@ impl Group {
         if let Some(waited) = waited {
             self.hours.push(waited as f64 / 3600.0);
         }
-        for (deadline, slot) in [(DAY, &mut self.out.within_day), (7 * DAY, &mut self.out.within_week)] {
+        for (deadline, slot) in [
+            (DAY, &mut self.out.within_day),
+            (7 * DAY, &mut self.out.within_week),
+        ] {
             let sold_in_time = waited.is_some_and(|waited| waited <= deadline);
             // A listing younger than the deadline can be judged only if it
             // already sold; otherwise its outcome is not known yet.
@@ -348,7 +365,14 @@ mod tests {
     const NOW: i64 = 1_800_000_000;
     const HOUR: i64 = 3600;
 
-    fn listing(index: i64, slug: &str, qty: i64, plat: i64, at: i64, origin: ListingOrigin) -> ListedItem {
+    fn listing(
+        index: i64,
+        slug: &str,
+        qty: i64,
+        plat: i64,
+        at: i64,
+        origin: ListingOrigin,
+    ) -> ListedItem {
         ListedItem {
             plan_id: "plan".into(),
             plan_index: index,
@@ -372,8 +396,30 @@ mod tests {
     #[test]
     fn resubmitting_an_order_does_not_count_its_copies_twice() {
         let listed = [
-            on_order(listing(0, "ash_prime_systems", 10, 20, NOW - 3 * DAY, ListingOrigin::Manual), "a", "order-1"),
-            on_order(listing(0, "ash_prime_systems", 10, 20, NOW - 2 * DAY, ListingOrigin::Manual), "b", "order-1"),
+            on_order(
+                listing(
+                    0,
+                    "ash_prime_systems",
+                    10,
+                    20,
+                    NOW - 3 * DAY,
+                    ListingOrigin::Manual,
+                ),
+                "a",
+                "order-1",
+            ),
+            on_order(
+                listing(
+                    0,
+                    "ash_prime_systems",
+                    10,
+                    20,
+                    NOW - 2 * DAY,
+                    ListingOrigin::Manual,
+                ),
+                "b",
+                "order-1",
+            ),
         ];
         let out = summarize(true, &listed, &[], &resolve, NOW).manual;
         assert_eq!((out.listings, out.quantity_listed), (1, 10));
@@ -382,16 +428,46 @@ mod tests {
     #[test]
     fn an_update_after_a_sale_offers_what_was_sold_plus_what_remains() {
         let listed = [
-            on_order(listing(0, "ash_prime_systems", 10, 20, NOW - 9 * DAY, ListingOrigin::Manual), "a", "order-1"),
+            on_order(
+                listing(
+                    0,
+                    "ash_prime_systems",
+                    10,
+                    20,
+                    NOW - 9 * DAY,
+                    ListingOrigin::Manual,
+                ),
+                "a",
+                "order-1",
+            ),
             // Re-listed the seven left at a new price.
-            on_order(listing(0, "ash_prime_systems", 7, 25, NOW - 8 * DAY, ListingOrigin::Manual), "b", "order-1"),
+            on_order(
+                listing(
+                    0,
+                    "ash_prime_systems",
+                    7,
+                    25,
+                    NOW - 8 * DAY,
+                    ListingOrigin::Manual,
+                ),
+                "b",
+                "order-1",
+            ),
         ];
         let sales = [
-            sale(1, NOW - 9 * DAY + HOUR, 60, &[("Ash Prime Systems", 3, "given")]),
+            sale(
+                1,
+                NOW - 9 * DAY + HOUR,
+                60,
+                &[("Ash Prime Systems", 3, "given")],
+            ),
             sale(2, NOW - 7 * DAY, 175, &[("Ash Prime Systems", 7, "given")]),
         ];
         let out = summarize(true, &listed, &sales, &resolve, NOW).manual;
-        assert_eq!((out.listings, out.quantity_listed, out.quantity_sold), (1, 10, 10));
+        assert_eq!(
+            (out.listings, out.quantity_listed, out.quantity_sold),
+            (1, 10, 10)
+        );
         // 3 at 20p then 7 at 25p, each against the price listed at the time.
         assert_eq!(out.price_ratio, Some(1.0));
         assert_eq!(out.median_hours_to_first_sale, Some(1.0));
@@ -400,8 +476,22 @@ mod tests {
     #[test]
     fn an_order_older_than_the_window_keeps_its_own_sales() {
         let listed = [
-            listing(0, "ash_prime_systems", 1, 20, NOW - 40 * DAY, ListingOrigin::Session),
-            listing(1, "ash_prime_systems", 1, 30, NOW - 5 * DAY, ListingOrigin::Manual),
+            listing(
+                0,
+                "ash_prime_systems",
+                1,
+                20,
+                NOW - 40 * DAY,
+                ListingOrigin::Session,
+            ),
+            listing(
+                1,
+                "ash_prime_systems",
+                1,
+                30,
+                NOW - 5 * DAY,
+                ListingOrigin::Manual,
+            ),
         ];
         let sales = [sale(1, NOW - DAY, 20, &[("Ash Prime Systems", 1, "given")])];
         let out = summarize(true, &listed, &sales, &resolve, NOW);
@@ -421,7 +511,11 @@ mod tests {
             partner: "Buyer".into(),
             kind: "sale".into(),
             plat: 40,
-            items: vec![TradeItem { name: "Ash Prime Systems".into(), qty: 2, direction: "given".into() }],
+            items: vec![TradeItem {
+                name: "Ash Prime Systems".into(),
+                qty: 2,
+                direction: "given".into(),
+            }],
             log_stamp: None,
         };
         let position = crate::services::game_log::eelog::LogPosition {
@@ -430,7 +524,8 @@ mod tests {
             end: 1,
             observed_after: NOW - DAY,
         };
-        db.insert_trade(&trade, NOW - DAY, &position).expect("trade");
+        db.insert_trade(&trade, NOW - DAY, &position)
+            .expect("trade");
         // plan_item lists two copies: the 40-day-old order takes both.
         let out = read(&db, &resolve, NOW).expect("summary").manual;
         assert_eq!((out.listings, out.quantity_sold), (1, 0));
@@ -466,11 +561,32 @@ mod tests {
 
     #[test]
     fn a_priced_sale_counts_quantity_price_and_time() {
-        let listed = [listing(0, "ash_prime_systems", 3, 20, NOW - 10 * DAY, ListingOrigin::Manual)];
-        let sales = [sale(1, NOW - 10 * DAY + 6 * HOUR, 40, &[("Ash Prime Systems", 2, "given")])];
+        let listed = [listing(
+            0,
+            "ash_prime_systems",
+            3,
+            20,
+            NOW - 10 * DAY,
+            ListingOrigin::Manual,
+        )];
+        let sales = [sale(
+            1,
+            NOW - 10 * DAY + 6 * HOUR,
+            40,
+            &[("Ash Prime Systems", 2, "given")],
+        )];
         let out = summarize(true, &listed, &sales, &resolve, NOW).manual;
-        assert_eq!((out.listings, out.quantity_listed, out.quantity_sold), (1, 3, 2));
-        assert_eq!(out.within_day, WithinDeadline { eligible: 1, sold: 1 });
+        assert_eq!(
+            (out.listings, out.quantity_listed, out.quantity_sold),
+            (1, 3, 2)
+        );
+        assert_eq!(
+            out.within_day,
+            WithinDeadline {
+                eligible: 1,
+                sold: 1
+            }
+        );
         assert_eq!(out.median_hours_to_first_sale, Some(6.0));
         assert_eq!(out.price_ratio, Some(1.0));
         assert_eq!(out.priced_quantity, 2);
@@ -478,12 +594,22 @@ mod tests {
 
     #[test]
     fn a_mixed_trade_counts_quantity_but_not_price() {
-        let listed = [listing(0, "ash_prime_systems", 1, 20, NOW - 2 * DAY, ListingOrigin::Manual)];
+        let listed = [listing(
+            0,
+            "ash_prime_systems",
+            1,
+            20,
+            NOW - 2 * DAY,
+            ListingOrigin::Manual,
+        )];
         let sales = [sale(
             1,
             NOW - DAY,
             60,
-            &[("Ash Prime Systems", 1, "given"), ("Nova Prime Set", 1, "given")],
+            &[
+                ("Ash Prime Systems", 1, "given"),
+                ("Nova Prime Set", 1, "given"),
+            ],
         )];
         let out = summarize(true, &listed, &sales, &resolve, NOW).manual;
         assert_eq!(out.quantity_sold, 1);
@@ -493,8 +619,20 @@ mod tests {
 
     #[test]
     fn a_sale_before_the_listing_is_not_its_outcome() {
-        let listed = [listing(0, "ash_prime_systems", 1, 20, NOW - DAY, ListingOrigin::Manual)];
-        let sales = [sale(1, NOW - 2 * DAY, 20, &[("Ash Prime Systems", 1, "given")])];
+        let listed = [listing(
+            0,
+            "ash_prime_systems",
+            1,
+            20,
+            NOW - DAY,
+            ListingOrigin::Manual,
+        )];
+        let sales = [sale(
+            1,
+            NOW - 2 * DAY,
+            20,
+            &[("Ash Prime Systems", 1, "given")],
+        )];
         let out = summarize(true, &listed, &sales, &resolve, NOW).manual;
         assert_eq!(out.quantity_sold, 0);
         assert_eq!(out.median_hours_to_first_sale, None);
@@ -503,10 +641,29 @@ mod tests {
     #[test]
     fn sales_fill_the_oldest_listing_first_and_never_exceed_it() {
         let listed = [
-            listing(0, "ash_prime_systems", 1, 20, NOW - 9 * DAY, ListingOrigin::Session),
-            listing(1, "ash_prime_systems", 1, 25, NOW - 8 * DAY, ListingOrigin::Manual),
+            listing(
+                0,
+                "ash_prime_systems",
+                1,
+                20,
+                NOW - 9 * DAY,
+                ListingOrigin::Session,
+            ),
+            listing(
+                1,
+                "ash_prime_systems",
+                1,
+                25,
+                NOW - 8 * DAY,
+                ListingOrigin::Manual,
+            ),
         ];
-        let sales = [sale(1, NOW - 7 * DAY, 60, &[("Ash Prime Systems", 3, "given")])];
+        let sales = [sale(
+            1,
+            NOW - 7 * DAY,
+            60,
+            &[("Ash Prime Systems", 3, "given")],
+        )];
         let out = summarize(true, &listed, &sales, &resolve, NOW);
         assert_eq!(out.session.quantity_sold, 1);
         assert_eq!(out.manual.quantity_sold, 1);
@@ -517,23 +674,64 @@ mod tests {
     #[test]
     fn unsold_listings_stay_in_the_denominator_once_they_can_be_judged() {
         let listed = [
-            listing(0, "ash_prime_systems", 1, 20, NOW - 8 * DAY, ListingOrigin::Manual),
-            listing(1, "nova_prime_set", 1, 90, NOW - 2 * HOUR, ListingOrigin::Manual),
+            listing(
+                0,
+                "ash_prime_systems",
+                1,
+                20,
+                NOW - 8 * DAY,
+                ListingOrigin::Manual,
+            ),
+            listing(
+                1,
+                "nova_prime_set",
+                1,
+                90,
+                NOW - 2 * HOUR,
+                ListingOrigin::Manual,
+            ),
         ];
         let out = summarize(true, &listed, &[], &resolve, NOW).manual;
         assert_eq!(out.listings, 2);
         assert_eq!(out.quantity_sold, 0);
-        assert_eq!(out.within_day, WithinDeadline { eligible: 1, sold: 0 });
-        assert_eq!(out.within_week, WithinDeadline { eligible: 1, sold: 0 });
+        assert_eq!(
+            out.within_day,
+            WithinDeadline {
+                eligible: 1,
+                sold: 0
+            }
+        );
+        assert_eq!(
+            out.within_week,
+            WithinDeadline {
+                eligible: 1,
+                sold: 0
+            }
+        );
     }
 
     #[test]
     fn an_unresolved_name_or_a_purchase_matches_nothing() {
-        let listed = [listing(0, "ash_prime_systems", 1, 20, NOW - DAY, ListingOrigin::Manual)];
+        let listed = [listing(
+            0,
+            "ash_prime_systems",
+            1,
+            20,
+            NOW - DAY,
+            ListingOrigin::Manual,
+        )];
         let mut bought = sale(2, NOW - HOUR, 20, &[("Ash Prime Systems", 1, "received")]);
         bought.kind = "purchase".into();
-        let sales = [sale(1, NOW - HOUR, 20, &[("Unknown Thing", 1, "given")]), bought];
-        assert_eq!(summarize(true, &listed, &sales, &resolve, NOW).manual.quantity_sold, 0);
+        let sales = [
+            sale(1, NOW - HOUR, 20, &[("Unknown Thing", 1, "given")]),
+            bought,
+        ];
+        assert_eq!(
+            summarize(true, &listed, &sales, &resolve, NOW)
+                .manual
+                .quantity_sold,
+            0
+        );
     }
 
     fn plan_item(slug: &str, order_type: &str, session: bool) -> PlanItem {
@@ -573,7 +771,9 @@ mod tests {
     fn a_response_that_does_not_line_up_records_nothing() {
         let items = [plan_item("a", "sell", false), plan_item("b", "sell", false)];
         assert!(listed_items("plan", &items, &[result("", "error")], NOW).is_empty());
-        assert!(listed_items("plan", &items, &[result("b", "ok"), result("a", "ok")], NOW).is_empty());
+        assert!(
+            listed_items("plan", &items, &[result("b", "ok"), result("a", "ok")], NOW).is_empty()
+        );
     }
 
     #[test]
@@ -597,9 +797,18 @@ mod tests {
         let db = Db::open_in_memory().expect("db");
         let results = [result("a", "ok")];
         let items = [plan_item("a", "sell", false)];
-        record(&db, "old", &items, &results, NOW - crate::persistence::LISTING_RETENTION_SECS - 1);
+        record(
+            &db,
+            "old",
+            &items,
+            &results,
+            NOW - crate::persistence::LISTING_RETENTION_SECS - 1,
+        );
         record(&db, "new", &items, &results, NOW);
         let kept = db.listings_since(0).expect("read");
-        assert_eq!(kept.iter().map(|l| l.plan_id.as_str()).collect::<Vec<_>>(), ["new"]);
+        assert_eq!(
+            kept.iter().map(|l| l.plan_id.as_str()).collect::<Vec<_>>(),
+            ["new"]
+        );
     }
 }

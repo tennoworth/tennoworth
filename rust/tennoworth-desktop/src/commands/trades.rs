@@ -2,9 +2,9 @@
 
 use tauri::{AppHandle, Manager, State};
 
+use crate::contracts::command_error::CmdError;
 use crate::persistence::{Db, TradeRow};
 use crate::services::game_log::state::EeLogState;
-use crate::contracts::command_error::CmdError;
 
 #[tauri::command]
 pub fn trade_session_state(

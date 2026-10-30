@@ -47,7 +47,9 @@ pub enum HttpOutcome {
     /// recorded for it (unix ms, 0 when none could be read). [`fetch_json`]
     /// waits out a short one; an unknown one stops the sweep, because retrying a
     /// throttle with no deadline is how a client gets blocked.
-    RateLimited { cooldown_until_ms: u64 },
+    RateLimited {
+        cooldown_until_ms: u64,
+    },
     /// Any other non-2xx (4xx/5xx).
     HttpError(u16),
     /// Connection/timeout/read/parse failure (a JSON decode error lands here
@@ -73,7 +75,9 @@ pub trait Sleeper: Send + Sync {
 /// A poisoned lock means a worker panicked; the data behind it is a counter, so
 /// reading the last value beats propagating the panic into the abort path.
 fn lock<T>(value: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    value.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    value
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Real time - the production sleeper.
@@ -370,7 +374,11 @@ pub fn snapshot_age_s(path: &std::path::Path) -> Option<u64> {
 /// transport, which already recorded this response's `Retry-After` with the
 /// governor: calling `throttled()` again here would only double one throttle's
 /// backoff, so this reads the stored deadline rather than re-reporting it.
-fn admitted_cooldown_wait(sweep: &SweepMetrics, cooldown_until_ms: u64, now_ms: u64) -> Option<u64> {
+fn admitted_cooldown_wait(
+    sweep: &SweepMetrics,
+    cooldown_until_ms: u64,
+    now_ms: u64,
+) -> Option<u64> {
     let wait = cooldown_until_ms.saturating_sub(now_ms);
     if wait == 0 || wait > MAX_COOLDOWN_WAIT_MS || !sweep.admit_cooldown_wait(wait) {
         return None;
@@ -424,7 +432,9 @@ fn fetch_json_in(
                 let now = wfm_client::governor::unix_ms();
                 match admitted_cooldown_wait(sweep, cooldown_until_ms, now) {
                     Some(wait) => {
-                        eprintln!("WFM throttled the request; waiting {wait} ms for the cooldown to end.");
+                        eprintln!(
+                            "WFM throttled the request; waiting {wait} ms for the cooldown to end."
+                        );
                         sleeper.sleep(Duration::from_millis(wait));
                     }
                     None => {
@@ -444,7 +454,13 @@ fn fetch_json_in(
                 return None;
             }
             HttpOutcome::HttpError(status) => {
-                if !wait_to_retry(sweep, sleeper, class, attempt, &format!("WFM HTTP {status}")) {
+                if !wait_to_retry(
+                    sweep,
+                    sleeper,
+                    class,
+                    attempt,
+                    &format!("WFM HTTP {status}"),
+                ) {
                     return None;
                 }
             }
@@ -475,7 +491,10 @@ fn wait_to_retry(
         eprintln!("WFM request stopped: {reason}; retries exhausted");
         return false;
     };
-    eprintln!("WFM request failed: {reason}; retrying in {} s.", wait / 1000);
+    eprintln!(
+        "WFM request failed: {reason}; retrying in {} s.",
+        wait / 1000
+    );
     sleeper.sleep(Duration::from_millis(wait));
     true
 }
@@ -617,7 +636,9 @@ impl ScrapeHttp for FixtureScrapeHttp {
             cur
         };
         let (status, body) = response_at(value, i);
-        let size = serde_json::to_vec(&body).map(|b| b.len() as u64).unwrap_or(0);
+        let size = serde_json::to_vec(&body)
+            .map(|b| b.len() as u64)
+            .unwrap_or(0);
         metrics().record_bytes(classify_url(url), size);
         outcome_for(status, body)
     }
@@ -677,10 +698,15 @@ mod tests {
 
     #[test]
     fn throttling_aborts_without_retrying_or_sleeping() {
-        let http = ScriptedHttp::new(URL, vec![
-                HttpOutcome::RateLimited { cooldown_until_ms: 0 },
+        let http = ScriptedHttp::new(
+            URL,
+            vec![
+                HttpOutcome::RateLimited {
+                    cooldown_until_ms: 0,
+                },
                 HttpOutcome::Ok(json!({"data": 1})),
-            ]);
+            ],
+        );
         let sleeper = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sleeper, URL), None);
         assert!(sleeper.recorded().is_empty());
@@ -701,7 +727,11 @@ mod tests {
         let sleeper = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sleeper, URL), Some(json!(4)));
         let sleeps = sleeper.recorded();
-        assert_eq!(sleeps.len(), 1, "the cooldown is waited out once: {sleeps:?}");
+        assert_eq!(
+            sleeps.len(),
+            1,
+            "the cooldown is waited out once: {sleeps:?}"
+        );
         assert!(
             sleeps[0] > Duration::ZERO && sleeps[0] <= Duration::from_millis(150),
             "the wait is the deadline's remainder: {sleeps:?}"
@@ -761,7 +791,10 @@ mod tests {
                     admitted += usize::from(task.join().unwrap_or(false));
                 }
             });
-            assert_eq!(admitted, 1, "round {round}: one slot was left, and it is one slot");
+            assert_eq!(
+                admitted, 1,
+                "round {round}: one slot was left, and it is one slot"
+            );
             assert_eq!(sweep.cooldown_waits(), MAX_COOLDOWN_WAITS);
             assert!(sweep.cooldown_wait_ms() <= MAX_COOLDOWN_WAIT_TOTAL_MS);
         }
@@ -796,7 +829,10 @@ mod tests {
             ],
         );
         let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sl, URL), Some(json!(9)));
+        assert_eq!(
+            fetch_json_in(&SweepMetrics::default(), &http, &sl, URL),
+            Some(json!(9))
+        );
         assert_eq!(sl.recorded(), vec![Duration::from_secs(30)]);
     }
 
@@ -811,7 +847,10 @@ mod tests {
             ],
         );
         let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sl, URL), None);
+        assert_eq!(
+            fetch_json_in(&SweepMetrics::default(), &http, &sl, URL),
+            None
+        );
         // No sleep after the final attempt: 30 s, 90 s only.
         assert_eq!(
             sl.recorded(),
@@ -829,7 +868,10 @@ mod tests {
             ],
         );
         let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sl, URL), Some(json!(7)));
+        assert_eq!(
+            fetch_json_in(&SweepMetrics::default(), &http, &sl, URL),
+            Some(json!(7))
+        );
         assert_eq!(sl.recorded(), vec![Duration::from_secs(30)]);
     }
 
@@ -873,7 +915,6 @@ mod tests {
         assert!(matches!(http.get(URL), HttpOutcome::Ok(_)));
     }
 
-
     #[test]
     fn a_malformed_body_after_server_retries_does_not_restart_the_retry_budget() {
         use std::io::{Read, Write};
@@ -884,11 +925,18 @@ mod tests {
                 let (mut socket, _) = listener.accept().unwrap();
                 let mut input = [0; 4096];
                 let _ = socket.read(&mut input).unwrap();
-                write!(socket, "HTTP/1.1 {status} Test\r\nContent-Length: 1\r\nConnection: close\r\n\r\nx").unwrap();
+                write!(
+                    socket,
+                    "HTTP/1.1 {status} Test\r\nContent-Length: 1\r\nConnection: close\r\n\r\nx"
+                )
+                .unwrap();
             }
             listener
         });
-        let http = LiveScrapeHttp { client: wfm_client::build_client(2).unwrap(), platform: "pc".into() };
+        let http = LiveScrapeHttp {
+            client: wfm_client::build_client(2).unwrap(),
+            platform: "pc".into(),
+        };
         assert!(fetch_json_in(&SweepMetrics::default(), &http, &NoopSleeper, &url).is_none());
         // Counted at the server: the governor's request count is process-wide,
         // and other tests send through it concurrently.
@@ -923,7 +971,10 @@ mod tests {
     #[test]
     fn a_server_error_outlasting_the_transport_is_retried_by_the_sweep() {
         let (url, server) = serve(vec![Some(503), Some(503), Some(503), Some(200)]);
-        let http = LiveScrapeHttp { client: wfm_client::build_client(2).unwrap(), platform: "pc".into() };
+        let http = LiveScrapeHttp {
+            client: wfm_client::build_client(2).unwrap(),
+            platform: "pc".into(),
+        };
         let sleeper = RecordingSleeper::new();
         let sweep = SweepMetrics::default();
         assert_eq!(fetch_json_in(&sweep, &http, &sleeper, &url), Some(json!(5)));
@@ -935,18 +986,33 @@ mod tests {
     #[test]
     fn a_dropped_connection_outlasting_the_transport_is_retried_by_the_sweep() {
         let (url, server) = serve(vec![None, None, None, Some(200)]);
-        let http = LiveScrapeHttp { client: wfm_client::build_client(2).unwrap(), platform: "pc".into() };
+        let http = LiveScrapeHttp {
+            client: wfm_client::build_client(2).unwrap(),
+            platform: "pc".into(),
+        };
         let sleeper = RecordingSleeper::new();
-        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sleeper, &url), Some(json!(5)));
+        assert_eq!(
+            fetch_json_in(&SweepMetrics::default(), &http, &sleeper, &url),
+            Some(json!(5))
+        );
         server.join().unwrap();
         assert_eq!(sleeper.recorded(), vec![Duration::from_secs(30)]);
     }
 
     #[test]
     fn a_client_error_is_not_retried() {
-        let http = ScriptedHttp::new(URL, vec![HttpOutcome::HttpError(404), HttpOutcome::Ok(json!({"data": 1}))]);
+        let http = ScriptedHttp::new(
+            URL,
+            vec![
+                HttpOutcome::HttpError(404),
+                HttpOutcome::Ok(json!({"data": 1})),
+            ],
+        );
         let sleeper = RecordingSleeper::new();
-        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sleeper, URL), None);
+        assert_eq!(
+            fetch_json_in(&SweepMetrics::default(), &http, &sleeper, URL),
+            None
+        );
         assert!(sleeper.recorded().is_empty());
     }
 
@@ -957,17 +1023,36 @@ mod tests {
         let sweep = SweepMetrics::default();
         let sleeper = RecordingSleeper::new();
         for _ in 0..10 {
-            let http = ScriptedHttp::new(URL, (0..3).map(|_| HttpOutcome::Transport("down".into())).collect());
+            let http = ScriptedHttp::new(
+                URL,
+                (0..3)
+                    .map(|_| HttpOutcome::Transport("down".into()))
+                    .collect(),
+            );
             assert_eq!(fetch_json_in(&sweep, &http, &sleeper, URL), None);
         }
-        let waited: u64 = sleeper.recorded().iter().map(|d| d.as_millis() as u64).sum();
+        let waited: u64 = sleeper
+            .recorded()
+            .iter()
+            .map(|d| d.as_millis() as u64)
+            .sum();
         assert!(sweep.recovery_waits() <= MAX_RECOVERY_WAITS);
         assert!(waited <= MAX_RECOVERY_WAIT_TOTAL_MS, "{waited} ms");
         assert_eq!(waited, sweep.recovery_wait_ms());
-        let http = ScriptedHttp::new(URL, vec![HttpOutcome::Transport("down".into()), HttpOutcome::Ok(json!({"data": 1}))]);
+        let http = ScriptedHttp::new(
+            URL,
+            vec![
+                HttpOutcome::Transport("down".into()),
+                HttpOutcome::Ok(json!({"data": 1})),
+            ],
+        );
         let before = sleeper.recorded().len();
         assert_eq!(fetch_json_in(&sweep, &http, &sleeper, URL), None);
-        assert_eq!(sleeper.recorded().len(), before, "a spent sweep does not wait again");
+        assert_eq!(
+            sleeper.recorded().len(),
+            before,
+            "a spent sweep does not wait again"
+        );
     }
 
     #[test]
@@ -979,9 +1064,17 @@ mod tests {
         let start = std::sync::Barrier::new(16);
         let admitted: usize = std::thread::scope(|scope| {
             let tasks: Vec<_> = (0..16)
-                .map(|_| scope.spawn(|| { start.wait(); sweep.admit_recovery_wait(1) }))
+                .map(|_| {
+                    scope.spawn(|| {
+                        start.wait();
+                        sweep.admit_recovery_wait(1)
+                    })
+                })
                 .collect();
-            tasks.into_iter().map(|t| usize::from(t.join().unwrap_or(false))).sum()
+            tasks
+                .into_iter()
+                .map(|t| usize::from(t.join().unwrap_or(false)))
+                .sum()
         });
         assert_eq!(admitted, 1);
     }

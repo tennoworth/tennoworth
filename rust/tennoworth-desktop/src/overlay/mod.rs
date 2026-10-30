@@ -475,10 +475,7 @@ pub fn setup_overlay_capture(state: State<'_, OverlayState>) -> Result<OverlaySt
     {
         return Err("ocr_unavailable: bundled English OCR model did not initialize".into());
     }
-    state.set_status(
-        "recognizing",
-        Some("checking screen-capture access".into()),
-    );
+    state.set_status("recognizing", Some("checking screen-capture access".into()));
     if let Err(error) = capture_warframe() {
         state.set_status("error", Some(error.clone()));
         return Err(error);
@@ -708,8 +705,7 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
         .spawn(move || {
             if let Err(error) = capture_and_recognize(&app, &source, triggered_at) {
                 eprintln!("tennoworth: relic scan ({source}) failed: {error}");
-                app.state::<OverlayState>()
-                    .set_status("error", Some(error));
+                app.state::<OverlayState>().set_status("error", Some(error));
             }
             app.state::<OverlayState>().lifecycle.finish();
         })
@@ -967,16 +963,14 @@ fn capture_and_recognize(
                     timings.total_ms = elapsed_ms(run_started);
                     write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
                     state.set_status("showing", Some(error.clone()));
-                    state.finish_run(
-                        OverlayLastRun {
-                            outcome: error,
-                            trigger_source: source.into(),
-                            expected_slots,
-                            recognized_slots,
-                            timings,
-                            diagnostics_directory: diagnostic_path,
-                        },
-                    );
+                    state.finish_run(OverlayLastRun {
+                        outcome: error,
+                        trigger_source: source.into(),
+                        expected_slots,
+                        recognized_slots,
+                        timings,
+                        diagnostics_directory: diagnostic_path,
+                    });
                     eprintln!(
                         "tennoworth: relic scan {capture_id} showing {recognized_slots} of {expected_slots} recognized slots without recommendations"
                     );
@@ -990,16 +984,14 @@ fn capture_and_recognize(
         }
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, None);
-        state.finish_run(
-            OverlayLastRun {
-                outcome: error.clone(),
-                trigger_source: source.into(),
-                expected_slots,
-                recognized_slots,
-                timings,
-                diagnostics_directory: diagnostic_path,
-            },
-        );
+        state.finish_run(OverlayLastRun {
+            outcome: error.clone(),
+            trigger_source: source.into(),
+            expected_slots,
+            recognized_slots,
+            timings,
+            diagnostics_directory: diagnostic_path,
+        });
         return Err(error);
     };
     let owned = if settings.show_owned {
@@ -1032,16 +1024,14 @@ fn capture_and_recognize(
     ) {
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
-        state.finish_run(
-            OverlayLastRun {
-                outcome: error.clone(),
-                trigger_source: source.into(),
-                expected_slots,
-                recognized_slots: result.slots.len(),
-                timings,
-                diagnostics_directory: diagnostic_path,
-            },
-        );
+        state.finish_run(OverlayLastRun {
+            outcome: error.clone(),
+            trigger_source: source.into(),
+            expected_slots,
+            recognized_slots: result.slots.len(),
+            timings,
+            diagnostics_directory: diagnostic_path,
+        });
         return Err(error);
     }
     timings.cached_display_ms = elapsed_ms(run_started);
@@ -1067,13 +1057,14 @@ fn capture_and_recognize(
             })
             .collect();
         if !queries.is_empty() {
-            if let Ok(live) =
-                wfm_client::governor::with_context(wfm_client::governor::Context {
+            if let Ok(live) = wfm_client::governor::with_context(
+                wfm_client::governor::Context {
                     cancelled: Some(state.lifecycle.cancellation(&capture_id)),
                     expires: live_started.checked_add(Duration::from_secs(15)),
                     ..Default::default()
-                }, || wfm_trading::market::live_top::fetch_live_tops("pc", None, &queries, |_, _| {}))
-            {
+                },
+                || wfm_trading::market::live_top::fetch_live_tops("pc", None, &queries, |_, _| {}),
+            ) {
                 for slot in &mut result.slots {
                     slot.live_platinum = slot
                         .slug
@@ -1097,16 +1088,14 @@ fn capture_and_recognize(
 
     timings.total_ms = elapsed_ms(run_started);
     write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
-    state.finish_run(
-        OverlayLastRun {
-            outcome: "success".into(),
-            trigger_source: source.into(),
-            expected_slots,
-            recognized_slots: result.slots.len(),
-            timings,
-            diagnostics_directory: diagnostic_path,
-        },
-    );
+    state.finish_run(OverlayLastRun {
+        outcome: "success".into(),
+        trigger_source: source.into(),
+        expected_slots,
+        recognized_slots: result.slots.len(),
+        timings,
+        diagnostics_directory: diagnostic_path,
+    });
 
     schedule_overlay_hide(app, capture_id);
     Ok(())
@@ -1134,4 +1123,3 @@ fn unix_millis() -> u128 {
 fn elapsed_ms(started: Instant) -> u64 {
     started.elapsed().as_millis().min(u64::MAX as u128) as u64
 }
-

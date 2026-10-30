@@ -11,8 +11,8 @@
 //! Requests share the process-wide governor with listings, watches and login.
 //! The caller reports progress because validation and queued work add latency.
 
-use wfm_client::governor::Kind;
 use market_domain::limits::MAX_PER_TRADE;
+use wfm_client::governor::Kind;
 
 use anyhow::{bail, Result};
 use reqwest::blocking::Client;
@@ -284,9 +284,15 @@ fn fetch_one_at(
     me: Option<&str>,
 ) -> Result<LiveTop> {
     let observed = wfm_client::transport::read_json_observed(
-        wfm_client::wfm_headers(client.get(&url), platform), Kind::Read,
-        wfm_client::transport::ReadKey { url, platform: platform.into(), account: me.map(String::from) },
-        std::time::Duration::from_secs(15), false,
+        wfm_client::wfm_headers(client.get(&url), platform),
+        Kind::Read,
+        wfm_client::transport::ReadKey {
+            url,
+            platform: platform.into(),
+            account: me.map(String::from),
+        },
+        std::time::Duration::from_secs(15),
+        false,
     )?;
     let mut top = parse_top(q, &observed.value, me)?;
     stamp_observed(&mut top, platform, &observed);
@@ -316,7 +322,9 @@ pub fn fetch_live_tops(
     queries: &[LiveTopQuery],
     mut on_progress: impl FnMut(usize, usize),
 ) -> Result<Vec<LiveTop>> {
-    if queries.len() > 100 { bail!("At most 100 live-price queries are allowed."); }
+    if queries.len() > 100 {
+        bail!("At most 100 live-price queries are allowed.");
+    }
     let client = browser_client(20)?;
     let total = queries.len();
     let mut out = Vec::with_capacity(total);

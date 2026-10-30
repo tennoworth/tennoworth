@@ -4,7 +4,9 @@
 use tauri::State;
 
 use crate::persistence::Db;
-use crate::services::inventory::auto_scan::{self, AutoScanSettings, AutoScanState, AutoScanStatus};
+use crate::services::inventory::auto_scan::{
+    self, AutoScanSettings, AutoScanState, AutoScanStatus,
+};
 
 #[tauri::command]
 pub fn get_auto_scan_settings(db: State<'_, Db>) -> AutoScanSettings {

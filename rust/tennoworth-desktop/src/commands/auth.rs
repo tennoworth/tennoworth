@@ -151,15 +151,17 @@ pub fn wfm_access_status() -> wfm_client::governor::AccessStatus {
 }
 pub fn publish_access_changes(app: tauri::AppHandle) {
     use tauri::Emitter;
-    let _ = std::thread::Builder::new().name("wfm-access-status".into()).spawn(move || {
-        let mut previous = None;
-        loop {
-            let current = wfm_access_status();
-            if previous.as_ref() != Some(&current) {
-                let _ = app.emit(WFM_ACCESS_EVENT, &current);
-                previous = Some(current);
+    let _ = std::thread::Builder::new()
+        .name("wfm-access-status".into())
+        .spawn(move || {
+            let mut previous = None;
+            loop {
+                let current = wfm_access_status();
+                if previous.as_ref() != Some(&current) {
+                    let _ = app.emit(WFM_ACCESS_EVENT, &current);
+                    previous = Some(current);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
             }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-    });
+        });
 }

@@ -138,11 +138,7 @@ pub fn score_row(owned: f64, m: &PricedEntry) -> SellScore {
     score_row_weighted(owned, m, None)
 }
 
-pub fn score_row_weighted(
-    owned: f64,
-    m: &PricedEntry,
-    usage_share: Option<f64>,
-) -> SellScore {
+pub fn score_row_weighted(owned: f64, m: &PricedEntry, usage_share: Option<f64>) -> SellScore {
     let vol = truthy(m.vol);
     let price = clearing_price(m);
     let daily_sales = (vol / 2.0).max(0.05);
@@ -160,7 +156,13 @@ mod tests {
     // Ported 1:1 from frontend/src/domain/sell-priority.test.ts so the two
     // suites move together.
     fn m(vol: f64, low_sell: f64, avg: f64, median_now: f64, median_90d: f64) -> PricedEntry {
-        PricedEntry { vol, low_sell, avg, median_now, median_90d }
+        PricedEntry {
+            vol,
+            low_sell,
+            avg,
+            median_now,
+            median_90d,
+        }
     }
 
     #[test]

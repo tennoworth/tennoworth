@@ -6,9 +6,9 @@
 //! auction searches at 10 requests/minute. The shared governor enforces
 //! conservative spacing between starts, without accumulated burst slots.
 
-use wfm_client::governor::Kind;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
+use wfm_client::governor::Kind;
 
 use crate::http::browser_client;
 
@@ -73,11 +73,16 @@ pub struct RivenStatFilter {
 fn is_stat_slug(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 64
-        && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'/')
+        && s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'/')
 }
 
 fn stat_list(stats: &[String]) -> String {
-    stats.iter().map(|s| s.replace('/', "%2F")).collect::<Vec<_>>().join(",")
+    stats
+        .iter()
+        .map(|s| s.replace('/', "%2F"))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// `buyout_policy=with` keeps only auctions that name a buyout. Without it the
@@ -87,7 +92,12 @@ fn auctions_url(weapon_slug: &str, filter: &RivenStatFilter) -> Result<String> {
     if filter.positive.len() > MAX_POSITIVE_STATS || filter.negative.len() > MAX_NEGATIVE_STATS {
         bail!("too many stats in a comps filter");
     }
-    if !filter.positive.iter().chain(&filter.negative).all(|s| is_stat_slug(s)) {
+    if !filter
+        .positive
+        .iter()
+        .chain(&filter.negative)
+        .all(|s| is_stat_slug(s))
+    {
         bail!("invalid stat in a comps filter");
     }
     let mut url = format!(
@@ -217,9 +227,15 @@ pub fn fetch_riven_comps(
     let url = auctions_url(weapon_slug, filter)?;
     let client = browser_client(20)?;
     let body = wfm_client::transport::read_json(
-        wfm_client::wfm_headers(client.get(&url), platform), Kind::Contract,
-        wfm_client::transport::ReadKey { url, platform: platform.into(), account: None },
-        std::time::Duration::from_secs(60), false,
+        wfm_client::wfm_headers(client.get(&url), platform),
+        Kind::Contract,
+        wfm_client::transport::ReadKey {
+            url,
+            platform: platform.into(),
+            account: None,
+        },
+        std::time::Duration::from_secs(60),
+        false,
     )?;
     parse_auctions(&body)
 }
@@ -240,7 +256,10 @@ mod tests {
     #[test]
     fn url_carries_the_stat_filter_with_slashes_encoded() {
         let filter = RivenStatFilter {
-            positive: vec!["critical_damage".into(), "base_damage_/_melee_damage".into()],
+            positive: vec![
+                "critical_damage".into(),
+                "base_damage_/_melee_damage".into(),
+            ],
             negative: vec!["zoom".into()],
         };
         assert_eq!(

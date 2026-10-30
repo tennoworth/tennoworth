@@ -53,7 +53,11 @@ impl Db {
                     "SELECT slug, count, leveled FROM snapshot_item WHERE snapshot_id = ?1 ORDER BY slug",
                 )?;
                 let rows = stmt.query_map([id], |r| {
-                    Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?))
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, i64>(1)?,
+                        r.get::<_, i64>(2)?,
+                    ))
                 })?;
                 rows.collect::<rusqlite::Result<Vec<_>>>()?
             };

@@ -59,7 +59,9 @@ impl AppIconColour {
     /// exactly what an install without the setting shows.
     pub fn window_image(self, app: &AppHandle) -> Option<Image<'static>> {
         match self {
-            Self::Blue => app.default_window_icon().map(|icon| icon.clone().to_owned()),
+            Self::Blue => app
+                .default_window_icon()
+                .map(|icon| icon.clone().to_owned()),
             Self::Ink => Some(tauri::include_image!("icons/app-icon/ink-64.png")),
             Self::Rag => Some(tauri::include_image!("icons/app-icon/rag-64.png")),
         }
@@ -167,7 +169,9 @@ mod taskbar {
                 Some(LPARAM(next.map_or(0, |icon| icon.0 as isize))),
             );
         }
-        let mut current = CURRENT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut current = CURRENT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(old) = std::mem::replace(&mut *current, next.map(|icon| icon.0 as isize)) {
             // SAFETY: `old` came from CreateIcon below and the window no longer uses it.
             unsafe {
@@ -199,7 +203,9 @@ mod taskbar {
 pub fn set_app_icon(app: AppHandle, colour: String) -> Result<AppIconOutcome, CmdError> {
     let parsed = persist(&app.state::<Db>(), &colour)?;
     apply(&app, parsed);
-    Ok(AppIconOutcome { window_icon: window_icon_supported() })
+    Ok(AppIconOutcome {
+        window_icon: window_icon_supported(),
+    })
 }
 
 #[cfg(test)]

@@ -1,16 +1,13 @@
-use super::*;
 use super::contract::{validate_erase, validate_sales, validate_shape};
 use super::store::{aggregate, RawSale, MAX_SALES_PER_CONTRIBUTOR_WEEK, MIN_CONTRIBUTORS};
+use super::*;
 use chrono::{DateTime, NaiveDate};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::future::IntoFuture;
 
 fn fixture() -> Value {
-    serde_json::from_str(include_str!(
-        "../../../../tests/fixtures/reports.json"
-    ))
-    .unwrap()
+    serde_json::from_str(include_str!("../../../../tests/fixtures/reports.json")).unwrap()
 }
 
 fn fixture_today() -> NaiveDate {
@@ -195,7 +192,10 @@ fn a_contributor_past_the_weekly_cap_is_refused() {
         Err(StatusCode::TOO_MANY_REQUESTS)
     );
     assert_eq!(
-        store.conn().query_row("SELECT COUNT(*) FROM sale", [], |r| r.get::<_, i64>(0)).unwrap(),
+        store
+            .conn()
+            .query_row("SELECT COUNT(*) FROM sale", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
         MAX_SALES_PER_CONTRIBUTOR_WEEK,
         "an over-cap batch must roll back all inserts"
     );

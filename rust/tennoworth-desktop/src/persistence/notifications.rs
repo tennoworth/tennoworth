@@ -31,7 +31,8 @@ impl Db {
                     read: r.get(6)?,
                     delivery: r.get(7)?,
                     // An older or unreadable payload must not hide the saved prose.
-                    content: r.get::<_, Option<String>>(8)?
+                    content: r
+                        .get::<_, Option<String>>(8)?
                         .and_then(|raw| serde_json::from_str(&raw).ok()),
                 })
             })?
@@ -108,7 +109,11 @@ impl Db {
         tx.execute("INSERT INTO notification_checkpoint(key, stage, at, expires_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(key) DO UPDATE SET stage=excluded.stage, at=excluded.at, expires_at=excluded.expires_at",
             rusqlite::params![n.key, n.stage, now, n.expires_at])?;
         let id = if enabled {
-            let content = n.content.as_ref().map(serde_json::to_string).transpose()
+            let content = n
+                .content
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()
                 .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
             tx.execute("INSERT INTO notification(category, title, body, target, created_at, delivery, content) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 rusqlite::params![n.category, n.title, n.body, n.target, now, if native { "pending" } else { "inbox_only" }, content])?;

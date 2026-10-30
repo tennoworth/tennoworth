@@ -11,11 +11,11 @@ use tauri::{AppHandle, Manager, Wry};
 
 use crate::poison::guard;
 
-use crate::services::inventory::acquisition::{publish_scan, scan_and_record};
 use crate::persistence::Db;
+use crate::services::inventory::acquisition::{publish_scan, scan_and_record};
 use crate::services::market::cache::MarketCache;
-use crate::services::wfm::presence::{self, PresenceChoice, PresenceState};
 use crate::services::market::sellables::{self, MarketData, ScanNotification, SellableRow};
+use crate::services::wfm::presence::{self, PresenceChoice, PresenceState};
 
 /// How many sellables the tray menu shows.
 const TRAY_LIMIT: usize = 5;
@@ -73,13 +73,7 @@ fn build_tray_menu(
     let mut mb = MenuBuilder::new(app);
     let mut sellable_items: Vec<MenuItem<Wry>> = Vec::new();
     if top.is_empty() {
-        let hint = MenuItem::with_id(
-            app,
-            "noop",
-            EMPTY_SELLABLES,
-            false,
-            None::<&str>,
-        )?;
+        let hint = MenuItem::with_id(app, "noop", EMPTY_SELLABLES, false, None::<&str>)?;
         sellable_items.push(hint);
     } else {
         for (r, label) in top.iter().zip(labels) {
@@ -96,15 +90,30 @@ fn build_tray_menu(
         let status = state.status();
         let label = status.tray_label();
         if status.signed_in {
-            let usable = status.connected && status.problem != Some(presence::PresenceProblem::NotVerified);
+            let usable =
+                status.connected && status.problem != Some(presence::PresenceProblem::NotVerified);
             let choice = |id: &str, choice: PresenceChoice| {
-                CheckMenuItem::with_id(app, id, choice.label(), usable, status.status == Some(choice), None::<&str>)
+                CheckMenuItem::with_id(
+                    app,
+                    id,
+                    choice.label(),
+                    usable,
+                    status.status == Some(choice),
+                    None::<&str>,
+                )
             };
             let online = choice("presence:online", PresenceChoice::Online)?;
             let ingame = choice("presence:ingame", PresenceChoice::Ingame)?;
             let invisible = choice("presence:invisible", PresenceChoice::Invisible)?;
             let separator = PredefinedMenuItem::separator(app)?;
-            let follow = CheckMenuItem::with_id(app, "presence:follow", "Follow the game", true, status.following, None::<&str>)?;
+            let follow = CheckMenuItem::with_id(
+                app,
+                "presence:follow",
+                "Follow the game",
+                true,
+                status.following,
+                None::<&str>,
+            )?;
             let submenu = Submenu::with_id_and_items(
                 app,
                 "presence",
@@ -115,7 +124,11 @@ fn build_tray_menu(
             mb = mb.item(&submenu).separator();
             *guard(&app.state::<TrayState>().presence) = Some(PresenceItems::Menu {
                 submenu,
-                choices: [(PresenceChoice::Online, online), (PresenceChoice::Ingame, ingame), (PresenceChoice::Invisible, invisible)],
+                choices: [
+                    (PresenceChoice::Online, online),
+                    (PresenceChoice::Ingame, ingame),
+                    (PresenceChoice::Invisible, invisible),
+                ],
                 follow,
             });
         } else {
@@ -136,12 +149,19 @@ fn build_tray_menu(
 /// window redrawing on every change. Signing in or out changes the entry's
 /// shape, so only that rebuilds.
 pub fn refresh_presence(app: &AppHandle) {
-    let Some(state) = app.try_state::<PresenceState>() else { return };
+    let Some(state) = app.try_state::<PresenceState>() else {
+        return;
+    };
     let status = state.status();
     let tray = app.state::<TrayState>();
     let updated = match guard(&tray.presence).as_ref() {
-        Some(PresenceItems::Menu { submenu, choices, follow }) if status.signed_in => {
-            let usable = status.connected && status.problem != Some(presence::PresenceProblem::NotVerified);
+        Some(PresenceItems::Menu {
+            submenu,
+            choices,
+            follow,
+        }) if status.signed_in => {
+            let usable =
+                status.connected && status.problem != Some(presence::PresenceProblem::NotVerified);
             let mut ok = submenu.set_text(status.tray_label()).is_ok();
             for (choice, item) in choices {
                 ok &= item.set_checked(status.status == Some(*choice)).is_ok();
@@ -149,7 +169,9 @@ pub fn refresh_presence(app: &AppHandle) {
             }
             ok && follow.set_checked(status.following).is_ok()
         }
-        Some(PresenceItems::Line(line)) if !status.signed_in => line.set_text(status.tray_label()).is_ok(),
+        Some(PresenceItems::Line(line)) if !status.signed_in => {
+            line.set_text(status.tray_label()).is_ok()
+        }
         _ => false,
     };
     if !updated {
@@ -177,7 +199,10 @@ fn tray_follow(app: &AppHandle) {
     if status.settings.follow_game && !status.following {
         state.follow_now();
     } else {
-        let settings = presence::PresenceSettings { follow_game: !status.settings.follow_game, ..status.settings };
+        let settings = presence::PresenceSettings {
+            follow_game: !status.settings.follow_game,
+            ..status.settings
+        };
         match presence::save_settings(&app.state::<Db>(), settings) {
             Ok(saved) => state.settings_changed(saved),
             Err(e) => eprintln!("tennoworth: tray follow setting failed: {e}"),

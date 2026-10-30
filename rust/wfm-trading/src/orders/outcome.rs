@@ -48,7 +48,6 @@ impl MutationOutcome {
             Self::Uncertain => STATUS_UNCERTAIN,
         }
     }
-
 }
 
 impl From<&AccessError> for MutationOutcome {
@@ -102,7 +101,6 @@ mod tests {
         assert_eq!(MutationOutcome::Rejected.status_str(), "error");
     }
 
-
     #[test]
     fn a_governor_refusal_is_classified_by_what_it_means_for_the_send() {
         // Ambiguous: the market may hold it.
@@ -139,5 +137,4 @@ mod tests {
             );
         }
     }
-
 }

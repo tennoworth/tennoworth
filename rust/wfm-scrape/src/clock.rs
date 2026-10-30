@@ -87,7 +87,10 @@ mod tests {
             Some(utc(2026, 7, 25, 10, 30, 0))
         );
         // Bare date → midnight UTC.
-        assert_eq!(parse_isoformat_utc("2020-08-11"), Some(utc(2020, 8, 11, 0, 0, 0)));
+        assert_eq!(
+            parse_isoformat_utc("2020-08-11"),
+            Some(utc(2020, 8, 11, 0, 0, 0))
+        );
         // Non-UTC offset is honored.
         assert_eq!(
             parse_isoformat_utc("2026-01-01T02:00:00+02:00"),

@@ -2,19 +2,19 @@
 
 mod baro;
 mod calendar;
-pub mod de;
 mod catalog;
+pub mod de;
 mod relics;
 mod rivens;
 pub(crate) mod transport;
 pub use baro::{carry_baro_inventory, fetch_baro};
 pub use calendar::{
-    align_calendar_with_vault_status, fetch_calendar, fetch_vault_status, frames_in_pack_name, resurgence_rotations,
-    WFSTAT_VAULT_TRADER_URL,
+    align_calendar_with_vault_status, fetch_calendar, fetch_vault_status, frames_in_pack_name,
+    resurgence_rotations, WFSTAT_VAULT_TRADER_URL,
 };
 pub use catalog::{
-    add_game_ref_paths, fetch_catalog_wfm, fetch_parent_data, fetch_wfstat_raw,
-    slim_wfstat_items, wfstat_categories, CatalogFetch, WFSTAT_ITEMS_URL,
+    add_game_ref_paths, fetch_catalog_wfm, fetch_parent_data, fetch_wfstat_raw, slim_wfstat_items,
+    wfstat_categories, CatalogFetch, WFSTAT_ITEMS_URL,
 };
 pub use relics::fetch_relic_rewards;
 pub use rivens::{

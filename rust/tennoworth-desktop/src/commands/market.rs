@@ -13,10 +13,10 @@ use crate::poison::guard;
 use wfm_trading::market::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 use wfm_trading::market::rivens::{fetch_riven_comps, RivenAuction, RivenStatFilter};
 
+use crate::contracts::command_error::CmdError;
 use crate::persistence::Db;
 use crate::services::market::cache::{self as market, MarketCache, RefreshResult};
 use crate::services::market::sellables::{self, SellableRow};
-use crate::contracts::command_error::CmdError;
 use crate::services::wfm::session::WfmSession;
 use crate::shell::tray::{rebuild_tray, TrayState};
 
@@ -38,7 +38,9 @@ pub fn cached_market(cache: State<'_, MarketCache>) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn get_announcements(cache: State<'_, MarketCache>) -> Option<crate::services::announcements::AnnouncementFeed> {
+pub fn get_announcements(
+    cache: State<'_, MarketCache>,
+) -> Option<crate::services::announcements::AnnouncementFeed> {
     crate::services::announcements::load(&cache)
 }
 
@@ -156,7 +158,14 @@ pub async fn live_top_prices(
     tauri::async_runtime::spawn_blocking(move || {
         fetch_live_tops(&platform, me.as_deref(), &queries, |done, total| {
             if let Some(request_id) = request_id {
-                let _ = app.emit(EVENT_LIVE_TOP_PROGRESS, LiveTopProgress { request_id, done, total });
+                let _ = app.emit(
+                    EVENT_LIVE_TOP_PROGRESS,
+                    LiveTopProgress {
+                        request_id,
+                        done,
+                        total,
+                    },
+                );
             }
         })
         .map_err(CmdError::wfm)

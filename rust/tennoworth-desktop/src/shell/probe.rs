@@ -14,8 +14,8 @@ use tauri::{AppHandle, Manager, State};
 use crate::poison::guard;
 use wfm_trading::orders::listing::Unlocked;
 
-use crate::services::market::sellables::ScanNotification;
 use crate::contracts::command_error::CmdError;
+use crate::services::market::sellables::ScanNotification;
 use crate::services::wfm::session::WfmSession;
 use crate::shell::tray::{post_scan_surfaces, TrayState};
 
@@ -530,7 +530,10 @@ pub fn build_probe_script(runtag: &str) -> String {
     PROBE_JS
         .replace("__RUNTAG__", runtag)
         .replace("__FIXTURE__", &fixture_literal)
-        .replace("__DOMAIN_CASES__", include_str!("../../../../tests/fixtures/domain-ipc.json"))
+        .replace(
+            "__DOMAIN_CASES__",
+            include_str!("../../../../tests/fixtures/domain-ipc.json"),
+        )
 }
 
 /// Probe-only: run the full post-scan surface path (rebuild tray + fire the
@@ -572,7 +575,10 @@ pub fn debug_write_login(
 /// (empty catalog, fake JWT) - no network. Listing commands then exercise
 /// their offline validation paths; anything that would hit WFM fails per-item.
 #[tauri::command]
-pub fn debug_seed_unlocked(app: AppHandle, session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
+pub fn debug_seed_unlocked(
+    app: AppHandle,
+    session: State<'_, Arc<WfmSession>>,
+) -> Result<(), CmdError> {
     if !enabled() {
         return Err(CmdError::internal("debug_seed_unlocked is probe-only"));
     }
@@ -587,9 +593,9 @@ pub fn debug_seed_unlocked(app: AppHandle, session: State<'_, Arc<WfmSession>>) 
 }
 
 fn check_trade_contention(app: &AppHandle, session: &Arc<WfmSession>) -> Result<(), CmdError> {
+    use crate::contracts::trading::{LogPosition, TradeEvent, TradeItem};
     use crate::services::trading::order_mutations::OrderMutations;
     use crate::services::trading::trades::{handle_trade, LedgerOutcome};
-    use crate::contracts::trading::{LogPosition, TradeEvent, TradeItem};
 
     let mutations = OrderMutations::new(Arc::clone(session));
     let _reviewed = mutations.begin_only()?;
@@ -597,29 +603,59 @@ fn check_trade_contention(app: &AppHandle, session: &Arc<WfmSession>) -> Result<
         partner: "Contention fixture".into(),
         kind: "sale".into(),
         plat: 12,
-        items: vec![TradeItem { name: "Fixture item".into(), qty: 1, direction: "given".into() }],
+        items: vec![TradeItem {
+            name: "Fixture item".into(),
+            qty: 1,
+            direction: "given".into(),
+        }],
         log_stamp: None,
     };
     let position = LogPosition {
-        session: "probe-contention".into(), start: 0, end: 1, observed_after: 0,
+        session: "probe-contention".into(),
+        start: 0,
+        end: 1,
+        observed_after: 0,
     };
-    if !matches!(handle_trade(app, trade.clone(), position.clone()), LedgerOutcome::Recorded) {
+    if !matches!(
+        handle_trade(app, trade.clone(), position.clone()),
+        LedgerOutcome::Recorded
+    ) {
         return Err(CmdError::internal("Contended sale was not recorded"));
     }
     let db = app.state::<crate::persistence::Db>();
-    let rows = db.list_trades(100).map_err(|e| CmdError::internal(e.to_string()))?;
+    let rows = db
+        .list_trades(100)
+        .map_err(|e| CmdError::internal(e.to_string()))?;
     let sales: Vec<_> = rows.iter().filter(|r| r.partner == trade.partner).collect();
     if sales.len() != 1 || sales.iter().any(|r| r.wfm_closed) {
-        return Err(CmdError::internal("Contended sale was duplicated or marked adjusted"));
+        return Err(CmdError::internal(
+            "Contended sale was duplicated or marked adjusted",
+        ));
     }
-    let notices = db.list_notifications().map_err(|e| CmdError::internal(e.to_string()))?;
-    if !notices.iter().any(|n| n.category == "trades" && n.target == "orders"
-        && n.body.contains("Review My Orders") && n.body.contains("was not adjusted")
-        && !n.body.contains("Sign in") && !n.body.contains("listing updated")) {
-        return Err(CmdError::internal("Contended sale lacks accurate follow-up"));
+    let notices = db
+        .list_notifications()
+        .map_err(|e| CmdError::internal(e.to_string()))?;
+    if !notices.iter().any(|n| {
+        n.category == "trades"
+            && n.target == "orders"
+            && n.body.contains("Review My Orders")
+            && n.body.contains("was not adjusted")
+            && !n.body.contains("Sign in")
+            && !n.body.contains("listing updated")
+    }) {
+        return Err(CmdError::internal(
+            "Contended sale lacks accurate follow-up",
+        ));
     }
-    if !matches!(handle_trade(app, trade, position), LedgerOutcome::AlreadyKnown)
-        || db.list_notifications().map_err(|e| CmdError::internal(e.to_string()))?.len() != notices.len() {
+    if !matches!(
+        handle_trade(app, trade, position),
+        LedgerOutcome::AlreadyKnown
+    ) || db
+        .list_notifications()
+        .map_err(|e| CmdError::internal(e.to_string()))?
+        .len()
+        != notices.len()
+    {
         return Err(CmdError::internal("Acknowledged sale was processed twice"));
     }
     Ok(())

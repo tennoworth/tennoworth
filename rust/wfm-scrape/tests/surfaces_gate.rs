@@ -126,10 +126,26 @@ fn build_uses_de_export_and_world_state() {
 fn carried_baro_stock_is_resolved_against_the_current_map() {
     let dir = stage_fixtures("build");
     let args = |now: &'static str| {
-        vec!["build".to_string(), "--fixtures-dir".into(), dir.to_str().unwrap().into(), "--now".into(), now.into()]
+        vec![
+            "build".to_string(),
+            "--fixtures-dir".into(),
+            dir.to_str().unwrap().into(),
+            "--now".into(),
+            now.into(),
+        ]
     };
-    let first = run(&args("2026-07-01T12:00:00Z").iter().map(String::as_str).collect::<Vec<_>>(), &dir);
-    assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+    let first = run(
+        &args("2026-07-01T12:00:00Z")
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        &dir,
+    );
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
 
     // The prior snapshot as a cycle whose map lacked the item would have left it.
     let mut prior: serde_json::Value =
@@ -140,7 +156,11 @@ fn carried_baro_stock_is_resolved_against_the_current_map() {
         row.remove("slug");
         row.insert("item".into(), serde_json::json!("Path Derived Name"));
     }
-    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&prior).unwrap(),
+    )
+    .unwrap();
 
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
@@ -153,17 +173,33 @@ fn carried_baro_stock_is_resolved_against_the_current_map() {
     trader.remove("Manifest");
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
-    let second = run(&args("2026-07-02T12:00:00Z").iter().map(String::as_str).collect::<Vec<_>>(), &dir);
-    assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+    let second = run(
+        &args("2026-07-02T12:00:00Z")
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        &dir,
+    );
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     let baro = &snap["baro"];
-    assert_eq!(baro["inventory_for"], captured_for, "the stock is the carried visit's");
+    assert_eq!(
+        baro["inventory_for"], captured_for,
+        "the stock is the carried visit's"
+    );
     let inv = baro["inventory"].as_array().unwrap();
     assert_eq!(inv[0]["slug"], "volt_prime_chassis_blueprint");
     assert_ne!(inv[0]["item"], "Path Derived Name");
     assert!(inv[1].get("slug").is_none(), "a cosmetic stays unpriced");
-    assert_eq!(inv[1]["item"], "Path Derived Name", "an unresolvable row is left as captured");
+    assert_eq!(
+        inv[1]["item"], "Path Derived Name",
+        "an unresolvable row is left as captured"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -344,10 +380,8 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    let observed: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(fixtures_dir("de-events.json")).unwrap(),
-    )
-    .unwrap();
+    let observed: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(fixtures_dir("de-events.json")).unwrap()).unwrap();
     let world = responses["https://api.warframe.com/cdn/worldState.php"]
         .as_object_mut()
         .unwrap();
@@ -475,8 +509,7 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     let repeated: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(
-        repeated["surface_provenance"]["world.events"]["data_fetched_at"],
-        "2026-06-01T12:00:00Z",
+        repeated["surface_provenance"]["world.events"]["data_fetched_at"], "2026-06-01T12:00:00Z",
         "a second partial publication must retain the original evidence time"
     );
     assert_eq!(
@@ -522,30 +555,39 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
         "cleared_authoritative_empty"
     );
     assert_eq!(
-        third["surface_provenance"]["world.goals"]["data_fetched_at"],
-        "2026-07-04T12:00:00Z",
+        third["surface_provenance"]["world.goals"]["data_fetched_at"], "2026-07-04T12:00:00Z",
         "an authoritative empty observation is current evidence"
     );
     assert_eq!(
-        third["surface_provenance"]["world.events"]["data_fetched_at"],
-        "",
+        third["surface_provenance"]["world.events"]["data_fetched_at"], "",
         "carried legacy rows without a source stamp must keep unknown age"
     );
 
     std::fs::copy(dir.join("market.json"), &prior_path).unwrap();
-    responses["https://api.warframe.com/cdn/worldState.php"]["Events"] =
-        observed["Events"].clone();
+    responses["https://api.warframe.com/cdn/worldState.php"]["Events"] = observed["Events"].clone();
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-05T12:00:00Z"
+        ],
         &dir
     )
     .status
     .success());
     let recovered: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(recovered["surface_provenance"]["world.events"]["disposition"], "published_fresh");
-    assert_eq!(recovered["surface_provenance"]["world.events"]["data_fetched_at"], "2026-07-05T12:00:00Z");
+    assert_eq!(
+        recovered["surface_provenance"]["world.events"]["disposition"],
+        "published_fresh"
+    );
+    assert_eq!(
+        recovered["surface_provenance"]["world.events"]["data_fetched_at"],
+        "2026-07-05T12:00:00Z"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -912,7 +954,11 @@ fn items_only_warframe_market_knows_reach_every_resolver_surface() {
     let mut prior = snap.clone();
     prior["set_to_parts"]["citrine_prime_set"]["parts"][1]["component_name"] =
         "Neuroptics (warframestat)".into();
-    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&prior).unwrap(),
+    )
+    .unwrap();
     responses
         .remove("https://api.warframestat.us/warframes/")
         .expect("fixture serves the warframe parents");
@@ -927,7 +973,11 @@ fn items_only_warframe_market_knows_reach_every_resolver_surface() {
         ],
         &dir,
     );
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let partial: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(
@@ -1351,7 +1401,10 @@ fn de_endpoints_are_still_alive() {
     // A moved endpoint fails every attempt; a momentary outage does not. One
     // unavailable worldState read turned the 2026-09-28 weekly audit red while
     // the box fetched it fine on every sweep either side.
-    fn patiently<T, E: std::fmt::Debug>(what: &str, mut attempt: impl FnMut() -> Result<T, E>) -> T {
+    fn patiently<T, E: std::fmt::Debug>(
+        what: &str,
+        mut attempt: impl FnMut() -> Result<T, E>,
+    ) -> T {
         let mut last = None;
         for n in 0..3 {
             if n > 0 {
@@ -1916,7 +1969,6 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-
 // ---- per-key evidence age on partially fetched surfaces ---------------------
 
 /// A key upstream stopped returning, on a surface one of whose sources keeps
@@ -1929,10 +1981,20 @@ fn a_carried_key_keeps_its_own_age_and_is_dropped_after_the_stale_window() {
     let responses_path = dir.join("fixture_responses.json");
     let build = |now: &str| {
         let out = run(
-            &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", now],
+            &[
+                "build",
+                "--fixtures-dir",
+                dir.to_str().unwrap(),
+                "--now",
+                now,
+            ],
             &dir,
         );
-        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
         let market: serde_json::Value =
             serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
@@ -1940,13 +2002,20 @@ fn a_carried_key_keeps_its_own_age_and_is_dropped_after_the_stale_window() {
     };
 
     let (first, _) = build("2026-07-01T12:00:00Z");
-    assert_eq!(first["surface_provenance"]["vault_status"]["disposition"], "published_fresh");
+    assert_eq!(
+        first["surface_provenance"]["vault_status"]["disposition"],
+        "published_fresh"
+    );
 
     // Upstream has dropped this key, and one vault source fails from now on.
     let mut prior: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("prior-market.json")).unwrap()).unwrap();
     prior["vault_status"]["ghost_prime_set"] = "vaulted".into();
-    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&prior).unwrap(),
+    )
+    .unwrap();
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&responses_path).unwrap()).unwrap();
     let pets = responses
@@ -1958,7 +2027,10 @@ fn a_carried_key_keeps_its_own_age_and_is_dropped_after_the_stale_window() {
     std::fs::write(&responses_path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
     let (second, _) = build("2026-07-03T12:00:00Z");
-    assert_eq!(second["surface_provenance"]["vault_status"]["disposition"], "merged_partial");
+    assert_eq!(
+        second["surface_provenance"]["vault_status"]["disposition"],
+        "merged_partial"
+    );
     assert_eq!(second["vault_status"]["ghost_prime_set"], "vaulted");
     assert_eq!(
         second["surface_key_fetched_at"]["vault_status"]["carried"]["ghost_prime_set"],
@@ -1990,7 +2062,11 @@ fn a_carried_key_keeps_its_own_age_and_is_dropped_after_the_stale_window() {
     prior["vault_status"]["old_prime_set"] = "vaulted".into();
     prior["surface_key_fetched_at"]["vault_status"]["carried"] =
         serde_json::json!({"old_prime_set": "2026-06-25T12:00:00Z"});
-    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&prior).unwrap(),
+    )
+    .unwrap();
     let (fourth, _) = build("2026-07-10T12:00:00Z");
     assert!(
         fourth["vault_status"].get("old_prime_set").is_none(),

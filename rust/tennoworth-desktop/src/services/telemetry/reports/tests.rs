@@ -1,6 +1,6 @@
 use super::*;
-use crate::services::game_log::eelog::{LogPosition, TradeEvent};
 use crate::contracts::trading::TradeItem;
+use crate::services::game_log::eelog::{LogPosition, TradeEvent};
 use serde_json::{json, Value};
 use std::future::IntoFuture;
 
@@ -328,7 +328,8 @@ async fn run_pass(endpoint: &str, consent_on: bool) -> (Db, i64, i64) {
 #[tokio::test]
 async fn an_accepted_batch_advances_the_mark_and_the_weekly_count() {
     let store =
-        tennoworth_collectors::reports::Store::new(rusqlite::Connection::open_in_memory().unwrap()).unwrap();
+        tennoworth_collectors::reports::Store::new(rusqlite::Connection::open_in_memory().unwrap())
+            .unwrap();
     let service = tennoworth_collectors::reports::Collector::new(store);
     service.tick().unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -336,8 +337,9 @@ async fn an_accepted_batch_advances_the_mark_and_the_weekly_count() {
         "http://{}/api/reports/sales",
         listener.local_addr().unwrap()
     );
-    let task =
-        tokio::spawn(axum::serve(listener, tennoworth_collectors::reports::router(service)).into_future());
+    let task = tokio::spawn(
+        axum::serve(listener, tennoworth_collectors::reports::router(service)).into_future(),
+    );
 
     let (db, _, newest) = run_pass(&endpoint, true).await;
     assert_eq!(mark(&db).unwrap(), newest);
@@ -484,7 +486,9 @@ async fn deletion_waits_for_an_active_upload_then_erases_its_results() {
         let deletion = erase_recent(&db, &state, &client, &base);
         tokio::pin!(deletion);
         assert!(
-            tokio::time::timeout(Duration::from_secs(1), &mut deletion).await.is_err(),
+            tokio::time::timeout(Duration::from_secs(1), &mut deletion)
+                .await
+                .is_err(),
             "deletion must wait while the upload is blocked"
         );
         assert!(events.lock().unwrap().is_empty());

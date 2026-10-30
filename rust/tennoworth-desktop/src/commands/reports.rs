@@ -39,17 +39,11 @@ mod tests {
 
     #[test]
     fn external_links_are_https_and_host_allowlisted() {
-        assert!(allowed_external_url(
-            "https://warframe.market/items/kogake_prime_set"
-        ).is_some());
-        assert!(allowed_external_url(
-            "https://github.com/tennoworth/tennoworth"
-        ).is_some());
+        assert!(allowed_external_url("https://warframe.market/items/kogake_prime_set").is_some());
+        assert!(allowed_external_url("https://github.com/tennoworth/tennoworth").is_some());
         assert!(allowed_external_url("https://ko-fi.com/prowly").is_some());
         assert!(allowed_external_url("http://warframe.market/items/foo").is_none());
-        assert!(allowed_external_url(
-            "https://warframe.market.evil.example/items/foo"
-        ).is_none());
+        assert!(allowed_external_url("https://warframe.market.evil.example/items/foo").is_none());
         assert!(allowed_external_url("javascript:alert(1)").is_none());
     }
 
@@ -65,10 +59,19 @@ mod tests {
 
     #[test]
     fn every_valid_announcement_source_can_open_in_the_system_browser() {
-        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/announcements/cases.json")).unwrap();
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/announcements/cases.json"
+        ))
+        .unwrap();
         for case in cases.as_array().unwrap() {
             if let Some(feed) = crate::services::announcements::parse(&case["feed"].to_string()) {
-                for message in feed.messages { assert!(allowed_external_url(&message.source_url).is_some(), "{}", message.source_url); }
+                for message in feed.messages {
+                    assert!(
+                        allowed_external_url(&message.source_url).is_some(),
+                        "{}",
+                        message.source_url
+                    );
+                }
             }
         }
     }

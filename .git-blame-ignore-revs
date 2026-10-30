@@ -1,0 +1,6 @@
+# Formatting-only commits, skipped by `git blame` (GitHub reads this file;
+# locally: git config blame.ignoreRevsFile .git-blame-ignore-revs).
+# These SHAs survive only through merge commits; a squash merge needs the new SHA here.
+
+# style(rust): apply rustfmt to the workspace
+9731b6f44d34e69fa6057fd919cfd593ecef4b73

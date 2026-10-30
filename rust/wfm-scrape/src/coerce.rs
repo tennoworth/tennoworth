@@ -53,7 +53,11 @@ impl Coercions {
 /// Coerce one JSON value at `field_path` to an `f64`, following the contract
 /// documented on this module. `field_path` is threaded purely for a legible
 /// error (e.g. `primed_continuity.90days[3].median`).
-pub fn coerce_number(v: &Value, field_path: &str, coercions: &mut Coercions) -> Result<f64, String> {
+pub fn coerce_number(
+    v: &Value,
+    field_path: &str,
+    coercions: &mut Coercions,
+) -> Result<f64, String> {
     match v {
         Value::Null => Ok(0.0),
         Value::Number(n) => {
@@ -129,7 +133,10 @@ mod tests {
     fn missing_field_is_zero() {
         let mut co = c();
         let obj = json!({"median": 5});
-        assert_eq!(coerce_field(&obj, "volume", "x.volume", &mut co).unwrap(), 0.0);
+        assert_eq!(
+            coerce_field(&obj, "volume", "x.volume", &mut co).unwrap(),
+            0.0
+        );
         assert_eq!(co.count, 0);
     }
 

@@ -286,7 +286,11 @@ mod tests {
     #[test]
     fn the_refinement_bar_matches_the_shared_fixture() {
         let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../tests/fixtures/relic-refine.json")).unwrap();
-        assert_eq!(Some(super::REFINE_WORTH_IT), fixture["plat_per_trace"].as_f64());
+            serde_json::from_str(include_str!("../../../../tests/fixtures/relic-refine.json"))
+                .unwrap();
+        assert_eq!(
+            Some(super::REFINE_WORTH_IT),
+            fixture["plat_per_trace"].as_f64()
+        );
     }
 }
