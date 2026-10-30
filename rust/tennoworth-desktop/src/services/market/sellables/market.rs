@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::services::market::cache::MarketCache;
 
@@ -14,17 +15,19 @@ impl MarketData {
     /// that is older than the bundle they just installed. Preferring the cache
     /// unconditionally would pin every native consumer to the rolled-back
     /// snapshot even though a newer one is compiled in.
-    pub fn load(cache: &MarketCache) -> MarketData {
-        let cached = cache
-            .cached()
-            .and_then(|body| serde_json::from_str::<MarketData>(&body).ok());
-        match cached {
-            Some(mut m) if !Self::is_older_than_bundle(&m) => {
-                m.build_usage_parent_index();
-                m
+    ///
+    /// Shared: the cache keeps one parsed copy until `market.json` changes.
+    pub fn load(cache: &MarketCache) -> Arc<MarketData> {
+        cache.parsed_market(|body| {
+            let cached = body.and_then(|body| serde_json::from_str::<MarketData>(&body).ok());
+            match cached {
+                Some(mut m) if !Self::is_older_than_bundle(&m) => {
+                    m.build_usage_parent_index();
+                    m
+                }
+                _ => Self::bundled(),
             }
-            _ => Self::bundled(),
-        }
+        })
     }
 
     /// The slug a price report may name for a traded item, and whether the

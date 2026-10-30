@@ -2,6 +2,41 @@ import type { OwnedRecord } from '../../contracts/data';
 import type { DesktopServices } from '../../contracts/services';
 import type { ProtectionPlan, ProtectionState, ProtectionInventory } from '../../contracts/protection';
 import { humanError } from '../../contracts/errors';
+import { ALLOWANCE_CHANGED_EVENT, TRADE_DETECTED_EVENT, WFM_ACCESS_EVENT } from '../../contracts/generated/desktop';
+
+/**
+ * Native changes that can move listed or available quantities: the trade
+ * allowance, a trade the game confirmed, and signing in or unlocking WFM. A new
+ * inventory arrives through `setInventory`, and the app's own saves refresh
+ * themselves.
+ */
+export const PROTECTION_REFRESH_EVENTS = [ALLOWANCE_CHANGED_EVENT, TRADE_DETECTED_EVENT, WFM_ACCESS_EVENT] as const;
+
+/**
+ * The backstop for listings changed outside the app, on the website or another
+ * client. Each refresh reads the user's orders from warframe.market, and every
+ * listing submission reads them again natively, so this only keeps the shown
+ * quantities current; it was every 30 seconds whether or not anyone looked.
+ */
+export const PROTECTION_BACKSTOP_MS = 5 * 60_000;
+
+/**
+ * While a listing review or Trade Session is open, the quantities refresh this
+ * often instead: that is how an open review learns the native snapshot moved
+ * under it and blocks sending. A review is short and watched, so the cost is
+ * bounded.
+ */
+export const PROTECTION_REVIEW_MS = 30_000;
+
+export interface ProtectionSchedule {
+  listen: (event: string, cb: () => void) => () => void;
+  document: Pick<Document, 'hidden' | 'addEventListener' | 'removeEventListener'>;
+  setInterval: (fn: () => void, ms: number) => number;
+  clearInterval: (id: number) => void;
+  now: () => number;
+  /** Whether a listing review or Trade Session is open. */
+  reviewing: () => boolean;
+}
 
 export class ProtectionController {
   constructor(private port: Pick<DesktopServices, 'desktopProtectionState' | 'desktopSaveProtectionPlan'>) {}
@@ -64,6 +99,30 @@ export class ProtectionController {
       return this.error == null;
     } catch (error) { this.error = humanError(error); return false; }
     finally { this.saving = false; }
+  }
+
+  /**
+   * Keep the quantities current: on native changes, when the window is shown
+   * again, every 30 seconds while a review is open, and otherwise on a slow
+   * backstop. Timed refreshes skip while the window is hidden. Returns the
+   * teardown.
+   */
+  start(schedule: ProtectionSchedule): () => void {
+    const idle = () => !this.loading && !this.saving;
+    let last = schedule.now();
+    const refresh = () => { last = schedule.now(); void this.refresh(); };
+    const stops = PROTECTION_REFRESH_EVENTS.map(event => schedule.listen(event, refresh));
+    const onVisibility = () => { if (!schedule.document.hidden && idle()) refresh(); };
+    schedule.document.addEventListener('visibilitychange', onVisibility);
+    const timer = schedule.setInterval(() => {
+      if (schedule.document.hidden || !idle()) return;
+      if (schedule.reviewing() || schedule.now() - last >= PROTECTION_BACKSTOP_MS) refresh();
+    }, PROTECTION_REVIEW_MS);
+    return () => {
+      schedule.clearInterval(timer);
+      schedule.document.removeEventListener('visibilitychange', onVisibility);
+      for (const stop of stops) stop();
+    };
   }
 
   destroy() { this.disposed = true; this.request++; }

@@ -30,15 +30,61 @@ pub struct SessionInfo {
     pub distinct_creds: usize,
 }
 
+/// The process table kept between lookups, and the game pid it last found.
+///
+/// Presence and the automatic scanner each ask every 15-30 seconds for as long
+/// as the app runs. Rebuilding the table each time read memory, CPU, disk and
+/// exe for every process and every thread on the machine - thousands of
+/// entries under Proton - to answer a question that needs process names.
+static FINDER: LazyLock<std::sync::Mutex<(System, Option<u32>)>> =
+    LazyLock::new(|| std::sync::Mutex::new((System::new(), None)));
+
+/// What a lookup reads: the name, which every refresh carries, and the exe
+/// path once per process for setups whose comm differs from the file name.
+/// Threads are left out explicitly - `nothing()` still lists them - since only
+/// a process can be the game.
+fn lookup_kind() -> sysinfo::ProcessRefreshKind {
+    sysinfo::ProcessRefreshKind::nothing()
+        .with_exe(sysinfo::UpdateKind::OnlyIfNotSet)
+        .without_tasks()
+}
+
+fn refresh(sys: &mut System, which: sysinfo::ProcessesToUpdate<'_>) {
+    sys.refresh_processes_specifics(which, true, lookup_kind());
+}
+
 pub fn find_wf_pid() -> Option<u32> {
-    let mut sys = System::new();
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    pick_game_pid(
+    let mut guard = FINDER
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let (sys, last) = &mut *guard;
+    locate(sys, last, matches_warframe)
+}
+
+/// `is_game` is a parameter so a test can look for its own stand-in while a
+/// real game runs on the same machine.
+fn locate(
+    sys: &mut System,
+    last: &mut Option<u32>,
+    is_game: fn(&sysinfo::Process) -> bool,
+) -> Option<u32> {
+    // While the game runs, re-reading its one pid is enough; the whole table is
+    // read only to find it again.
+    if let Some(pid) = *last {
+        let pid = sysinfo::Pid::from_u32(pid);
+        refresh(sys, sysinfo::ProcessesToUpdate::Some(&[pid]));
+        if sys.process(pid).is_some_and(is_game) {
+            return *last;
+        }
+    }
+    refresh(sys, sysinfo::ProcessesToUpdate::All);
+    *last = pick_game_pid(
         sys.processes()
             .values()
-            .filter(|process| matches_warframe(process))
+            .filter(|process| is_game(process))
             .map(|process| (process.pid().as_u32(), process.thread_kind().is_some())),
-    )
+    );
+    *last
 }
 
 /// Choose the game's pid from `(pid, is_thread)` matches.
@@ -935,6 +981,84 @@ mod tests {
     fn game_pid_is_none_when_only_threads_match() {
         assert_eq!(pick_game_pid([(17052, true)]), None);
         assert_eq!(pick_game_pid([]), None);
+    }
+
+    /// A lookup lists processes only. Listing every thread multiplied the work
+    /// by the machine's thread count, and Proton gives the game dozens.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_lookup_does_not_list_threads() {
+        let (stop, parked) = std::sync::mpsc::channel::<()>();
+        let worker = std::thread::spawn(move || {
+            let _ = parked.recv();
+        });
+        let mut sys = System::new();
+        refresh(&mut sys, sysinfo::ProcessesToUpdate::All);
+        let own = sysinfo::Pid::from_u32(std::process::id());
+        assert!(
+            sys.process(own).is_some(),
+            "the lookup must still list processes"
+        );
+        // Kernel threads are top-level /proc entries, so only userland threads
+        // show whether a process's threads were walked.
+        let threads = sys
+            .processes()
+            .values()
+            .filter(|process| process.thread_kind() == Some(sysinfo::ThreadKind::Userland))
+            .count();
+        assert_eq!(threads, 0, "the lookup listed {threads} threads");
+        drop(stop);
+        worker.join().unwrap();
+    }
+
+    /// The stand-in's directory: unique to this test run, so a real game on the
+    /// same machine never matches.
+    #[cfg(target_os = "linux")]
+    fn stand_in_dir() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("tnw-game-stand-in-{}", std::process::id()))
+    }
+
+    #[cfg(target_os = "linux")]
+    fn is_stand_in(process: &sysinfo::Process) -> bool {
+        matches_warframe(process)
+            && process
+                .exe()
+                .is_some_and(|exe| exe.starts_with(stand_in_dir()))
+    }
+
+    /// A stand-in game: a copy of `sleep` named like the Proton executable.
+    /// Finding it, keeping it through the single-pid fast path, and losing it
+    /// when it exits is the contract presence and the scanner rely on.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_found_game_is_kept_until_it_exits() {
+        let dir = stand_in_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("Warframe.x64.exe");
+        std::fs::copy("/bin/sleep", &exe).unwrap();
+        let mut game = std::process::Command::new(&exe).arg("30").spawn().unwrap();
+
+        let mut sys = System::new();
+        let mut last = None;
+        assert_eq!(locate(&mut sys, &mut last, is_stand_in), Some(game.id()));
+        assert_eq!(last, Some(game.id()));
+        // The fast path answers from the one pid without re-reading the table,
+        // so a process started since the last full read stays unseen.
+        let mut later = std::process::Command::new("/bin/sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        assert_eq!(locate(&mut sys, &mut last, is_stand_in), Some(game.id()));
+        let unseen = sys.process(sysinfo::Pid::from_u32(later.id())).is_none();
+        later.kill().unwrap();
+        later.wait().unwrap();
+        assert!(unseen, "the fast path re-read the whole process table");
+
+        game.kill().unwrap();
+        game.wait().unwrap();
+        assert_eq!(locate(&mut sys, &mut last, is_stand_in), None);
+        assert_eq!(last, None);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     const SAMPLE: &[u8] =

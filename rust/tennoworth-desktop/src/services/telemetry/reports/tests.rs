@@ -277,15 +277,17 @@ fn a_damaged_key_fails_closed() {
     }
 }
 
-fn market() -> MarketData {
-    serde_json::from_value(json!({
-        "catalog": {"primed flow": "primed_flow", "acceltra critacan": "acceltra_riven"},
-        "items": {
-            "primed_flow": {"tags": ["mod", "legendary"]},
-            "acceltra_riven": {"tags": ["mod", "riven_mod"]},
-        },
-    }))
-    .unwrap()
+fn market() -> std::sync::Arc<MarketData> {
+    std::sync::Arc::new(
+        serde_json::from_value(json!({
+            "catalog": {"primed flow": "primed_flow", "acceltra critacan": "acceltra_riven"},
+            "items": {
+                "primed_flow": {"tags": ["mod", "legendary"]},
+                "acceltra_riven": {"tags": ["mod", "riven_mod"]},
+            },
+        }))
+        .unwrap(),
+    )
 }
 
 #[test]

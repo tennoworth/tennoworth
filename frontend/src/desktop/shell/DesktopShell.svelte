@@ -38,7 +38,7 @@ import type { PlanResponse } from '../../contracts/data';
   import WatchlistPanel from '../watches/WatchlistPanel.svelte';
   import NotificationInbox from '../notifications/NotificationInbox.svelte';
   
-import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
+import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
   import LedgerPanel from '../ledger/LedgerPanel.svelte';
   import MarketBrowser from '../../features/market/MarketBrowser.svelte';
   import DesktopUpdateBanner from '../updates/DesktopUpdateBanner.svelte';
@@ -153,11 +153,17 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   const appIcon = untrack(() => new AppIconController({ store, theme, native: transport }));
   onMount(() => appIcon.start());
   onMount(() => {
-    const timer = setInterval(() => { if (!protection.loading && !protection.saving) void protection.refresh(); }, 30_000);
-    const stop = listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => void protection.refresh());
+    const stopProtection = protection.start({
+      listen: (event, cb) => listenForTauriEvent(event, cb),
+      document,
+      setInterval: (fn, ms) => window.setInterval(fn, ms),
+      clearInterval: id => window.clearInterval(id),
+      now: () => Date.now(),
+      reviewing: () => listing.listingOpen || effectiveView === 'session',
+    });
     const stopAutoScan = autoScan.start();
     void autoScan.load();
-    return () => { clearInterval(timer); stop(); stopAutoScan(); protection.destroy(); };
+    return () => { stopProtection(); stopAutoScan(); protection.destroy(); };
   });
   $effect(() => {
     const owned = inventory.resolved.owned;
