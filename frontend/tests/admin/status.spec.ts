@@ -51,7 +51,7 @@ test('a sweep in progress still shows when the last one finished', async ({ page
     status: {
       collected_at: new Date().toISOString(), problems: [], failed_units: [], alerts: [], web_bundle: null,
       backup: { latest_at: new Date(Date.now() - 2 * 60_000).toISOString(), count: 3, error: null },
-      readiness: { ready: false, checked_at: checkedAt.toISOString(), errors: ['scraper is behind'], warnings: [], csv_rows: 2631, newest_sweep_age_seconds: 82 * 60, sweep_wall_seconds: 3540, deploy_revision: null, checkout_head: null, deploy_lag: 'behind', pending_scraper_commits: 4, disk_free_bytes: null, disk_floor_bytes: null },
+      host_check: { ready: false, checked_at: checkedAt.toISOString(), errors: ['scraper is behind'], warnings: [], csv_rows: 2631, snapshot_age_seconds: 82 * 60, deploy_revision: null, checkout_head: null, deploy_lag: 'behind', pending_scraper_commits: 4, disk_free_bytes: null, disk_floor_bytes: null },
       services: [{ label: 'Market sweep', service: sweep, scheduled: true, next_run: null, health: null }],
       jobs: [],
     },

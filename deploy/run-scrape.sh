@@ -12,8 +12,6 @@
 # Environment (all optional):
 #   APP      repo root to run in          (default /srv/wfm/app - the LXC layout)
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
-#   OBSERVATIONS  per-item observation log directory (default
-#               /srv/wfm/observations); empty disables the log
 #   STATS_INTERVAL  how long an item's statistics are reused (default 6h);
 #               empty fetches every item's statistics every sweep
 #   STATS_CACHE   where reused statistics are kept (default stats-cache.json,
@@ -41,13 +39,8 @@ prior=0
 SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/wfm-scrape}"
 [ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (scripts/deploy-scrape-host.sh installs it)." >&2; exit 1; }
 SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
-# The observation log is evidence for a later statistics-refresh decision, never
-# a publication input: the binary warns and carries on when it cannot be
-# written, so a missing directory costs nothing but the log.
-OBSERVATIONS="${OBSERVATIONS-/srv/wfm/observations}"
-[ -n "$OBSERVATIONS" ] && SCRAPE_ARGS+=(--observations-dir "$OBSERVATIONS")
 # Daily medians move once a day and the 48-hour figures drift slowly, while
-# the order book moves every sweep. An offline replay of the observation corpus
+# the order book moves every sweep. A replay of the since-retired observation corpus
 # (317 sweeps, 2026-09-16 to 2026-10-13) put six hours at 42% fewer requests
 # with under 1% of top-100 candidates hidden past one extra sweep. A missing
 # or unreadable cache only costs a full refresh.

@@ -2,8 +2,8 @@
 # Deploy the wfm-scrape pipeline to the host directly, from a reviewed revision.
 #
 # The scrape is host-only infrastructure - the pipeline binary, the verifier
-# built with it to prove its key, one driver script, the corpus readiness check
-# and their units, and nothing a user installs contains any of them - so it does
+# built with it to prove its key, one driver script, the host check and their
+# units, and nothing a user installs contains any of them - so it does
 # not need the GitHub release relay the web bundle and desktop app need. Commits
 # still live in the monorepo and are still reviewed; this script installs an
 # immutable revision of them, and nothing else.
@@ -21,10 +21,7 @@
 #   6. only then are the live paths replaced, so a rejection leaves what is
 #      running exactly as it was,
 #   7. /srv/wfm/deployed.json records what ran and what it was checked against,
-#   8. the sweep schedule is restored, the declared preservation mode is written
-#      where the check reads it, and only then is the monitor armed. The mode is
-#      required: the corpus is protected by a host-level backup this box cannot
-#      see, and the check reports it as declared rather than verified.
+#   8. the sweep schedule is restored, and only then is the host check armed.
 #
 # Environment:
 #   HOST          ssh target                (default wfm)
@@ -32,9 +29,6 @@
 #   HOST_ROOT     deployment root on the box (default /srv/wfm)
 #   SSH / SCP     ssh and scp commands  (default "ssh" and "scp")
 #   DRY_RUN       1 builds and checks, then prints what it would install
-#   PRESERVATION_MODE  required: external-backup. There is no default - a
-#                 deploy that never says how the corpus is preserved must not
-#                 come out ready claiming that it is.
 #   TENNOWORTH_WFM_POLICY_PUBLIC_KEY  required; the base64 Minisign public key
 set -euo pipefail
 
@@ -51,26 +45,11 @@ RELEASES="$HOST_ROOT/releases"
 STAGING="$HOST_ROOT/staging/$REVISION"
 PUBLISHED_POLICY_URL=https://github.com/tennoworth/tennoworth/releases/download/wfm-policy-latest/wfm-policy.json
 REMOTE="${REMOTE:-github}"
-# Where the corpus is preserved, declared explicitly by the operator. There is no
-# default: the check turns this declaration into a ready report, so a deploy that
-# stayed silent about preservation would produce a green box on a claim nobody
-# made - exactly the evidence-free success the readiness check exists to refuse.
-# external-backup is a daily host-level Proxmox backup of the whole container,
-# verified by an operator-run job on another machine.
-PRESERVATION_MODE="${PRESERVATION_MODE:-}"
 
 : "${TENNOWORTH_WFM_POLICY_PUBLIC_KEY:?set TENNOWORTH_WFM_POLICY_PUBLIC_KEY - without it the deployed scraper silently ignores the signed policy}"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'ABORT: %s\n' "$*" >&2; exit 1; }
-
-# An omitted and an empty value are the same refusal: neither declares anything.
-[ -n "$PRESERVATION_MODE" ] \
-  || die "PRESERVATION_MODE is not declared - set it explicitly to external-backup"
-case "$PRESERVATION_MODE" in
-  external-backup) ;;
-  *) die "PRESERVATION_MODE must be external-backup (got '$PRESERVATION_MODE')";;
-esac
 
 # ---- 1. reviewed, clean revision -------------------------------------------
 [ -z "$(git status --porcelain)" ] || die "the working tree is dirty; deploy a committed revision"
@@ -200,7 +179,7 @@ $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
 $SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
-$SCP -q deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer "$HOST:$STAGING/"
+$SCP -q deploy/host-check.sh deploy/tennoworth-host-check.service deploy/tennoworth-host-check.timer deploy/tennoworth-job-host-check.path "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
 # The live paths keep running the previous release until this one is proven on
@@ -214,9 +193,10 @@ install -m 0755 "$STAGING/wfm-policy" "$RELEASES/$REVISION/wfm-policy"
 install -m 0755 "$STAGING/run-scrape.sh" "$RELEASES/$REVISION/run-scrape.sh"
 install -m 0644 "$STAGING/wfm-scrape.service" "$RELEASES/$REVISION/wfm-scrape.service"
 install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.timer"
-install -m 0755 "$STAGING/observations-check.sh" "$RELEASES/$REVISION/observations-check.sh"
-install -m 0644 "$STAGING/wfm-observations-check.service" "$RELEASES/$REVISION/wfm-observations-check.service"
-install -m 0644 "$STAGING/wfm-observations-check.timer" "$RELEASES/$REVISION/wfm-observations-check.timer"
+install -m 0755 "$STAGING/host-check.sh" "$RELEASES/$REVISION/host-check.sh"
+install -m 0644 "$STAGING/tennoworth-host-check.service" "$RELEASES/$REVISION/tennoworth-host-check.service"
+install -m 0644 "$STAGING/tennoworth-host-check.timer" "$RELEASES/$REVISION/tennoworth-host-check.timer"
+install -m 0644 "$STAGING/tennoworth-job-host-check.path" "$RELEASES/$REVISION/tennoworth-job-host-check.path"
 REMOTE_RELEASE
 
 SCRAPER="$RELEASES/$REVISION/wfm-scrape"
@@ -260,14 +240,14 @@ install -m 0755 "$RELEASES/$REVISION/wfm-policy" "/srv/wfm/bin/wfm-policy"
 install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-scrape.timer
-install -m 0755 "$RELEASES/$REVISION/observations-check.sh" "/srv/wfm/observations-check.sh"
-install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.service" /etc/systemd/system/wfm-observations-check.service
-install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.timer" /etc/systemd/system/wfm-observations-check.timer
-# ProtectSystem=strict in both new units grants write access to exactly this
+install -m 0755 "$RELEASES/$REVISION/host-check.sh" "/srv/wfm/host-check.sh"
+install -m 0644 "$RELEASES/$REVISION/tennoworth-host-check.service" /etc/systemd/system/tennoworth-host-check.service
+install -m 0644 "$RELEASES/$REVISION/tennoworth-host-check.timer" /etc/systemd/system/tennoworth-host-check.timer
+# ProtectSystem=strict in the check's unit grants write access to exactly this
 # path, and systemd refuses to start a unit whose ReadWritePaths does not exist.
 # The private dashboard's publisher reads the report through its group; a box
 # without the dashboard keeps it root's. Escaped so the lookup runs on the box.
-install -d -m 0750 -o root -g "\$(getent group tennoworth-publisher >/dev/null && echo tennoworth-publisher || echo root)" "$HOST_ROOT/data/observations-check"
+install -d -m 0750 -o root -g "\$(getent group tennoworth-publisher >/dev/null && echo tennoworth-publisher || echo root)" "$HOST_ROOT/data/host-check"
 systemctl daemon-reload
 # A fresh box otherwise has the units and nothing scheduled: setup-container no
 # longer enables the scrape timer, because this script owns the pipeline now.
@@ -286,10 +266,15 @@ REMOTE_ACTIVATE
 # reset a dependency the base unit declares - so the pull kept running, failed
 # every hour and alerted each time. Removing the units is what ends that.
 $SSH "$HOST" "systemctl disable --now wfm-archive-receipt-pull.timer >/dev/null 2>&1 || true"
-$SSH "$HOST" "rm -f /etc/systemd/system/wfm-archive-receipt-pull.service /etc/systemd/system/wfm-archive-receipt-pull.timer /etc/systemd/system/wfm-observations-check.service.d/preservation.conf /srv/wfm/pull-archive-receipt.sh"
-$SSH "$HOST" "rmdir /etc/systemd/system/wfm-observations-check.service.d 2>/dev/null || true"
+$SSH "$HOST" "rm -f /etc/systemd/system/wfm-archive-receipt-pull.service /etc/systemd/system/wfm-archive-receipt-pull.timer /srv/wfm/pull-archive-receipt.sh"
+# The dashboard's "Check the host" job; only a box with the dashboard has job units.
+$SSH "$HOST" "if [ -f /etc/systemd/system/tennoworth-job-scrape.path ]; then install -m 0644 '$RELEASES/$REVISION/tennoworth-job-host-check.path' /etc/systemd/system/tennoworth-job-host-check.path; fi"
+# The observation corpus and its readiness check are retired. The corpus
+# directory is left in place: removing it waits for a final backup.
+$SSH "$HOST" "systemctl disable --now wfm-observations-check.timer tennoworth-job-readiness.path >/dev/null 2>&1 || true"
+$SSH "$HOST" "rm -rf /etc/systemd/system/wfm-observations-check.service /etc/systemd/system/wfm-observations-check.timer /etc/systemd/system/wfm-observations-check.service.d /etc/systemd/system/tennoworth-job-readiness.path /etc/wfm-observations-check.env /srv/wfm/observations-check.sh /srv/wfm/jobs/readiness"
 $SSH "$HOST" "systemctl daemon-reload"
-$SSH "$HOST" "systemctl reset-failed wfm-archive-receipt-pull.service >/dev/null 2>&1 || true"
+$SSH "$HOST" "systemctl reset-failed wfm-archive-receipt-pull.service wfm-observations-check.service >/dev/null 2>&1 || true"
 
 # ---- 8. record it ---------------------------------------------------------
 $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
@@ -302,7 +287,7 @@ $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
 }
 RECORD
 
-# ---- 9. restore the schedule, declare the mode, then arm the monitor --------
+# ---- 9. restore the schedule, then arm the host check ----------------------
 # The monitor reads the deployment record and the sweep schedule, so it is armed
 # only after those are settled: a persistent timer enabled earlier can fire into
 # the intermediate state and report on a box that is still deploying.
@@ -311,36 +296,29 @@ RECORD
 # so success does not start it twice.
 restore_timer
 
-# The mode is a deployment fact the check cannot infer, so it is written where
-# the unit reads it. An undeclared mode is a not-ready verdict by design.
-$SSH "$HOST" "cat > /etc/wfm-observations-check.env" <<ENV
-# Set by scripts/deploy-scrape-host.sh. external-backup declares that the corpus
-# is protected by host-level Proxmox backups of this container, verified by an
-# operator-run job elsewhere.
-OBSERVATIONS_PRESERVATION=$PRESERVATION_MODE
-ENV
-$SSH "$HOST" "systemctl enable --now wfm-observations-check.timer"
+$SSH "$HOST" "systemctl enable --now tennoworth-host-check.timer"
+$SSH "$HOST" "if [ -f /etc/systemd/system/tennoworth-job-host-check.path ]; then systemctl enable --now tennoworth-job-host-check.path; fi"
 
 # ---- 10. run the check once ------------------------------------------------
 # A check that leaves no report at all means the installed units are broken, and
-# a check that is not ready means the box is not ready to be left unattended.
+# a failing check means the box is not healthy enough to be left unattended.
 # The start's own status is ignored because a not-ready check exits non-zero, so
 # the report is the only verdict - and one left by an earlier run would stand in
 # for a check that never wrote one. Remove it first.
-$SSH "$HOST" "rm -f '$HOST_ROOT/data/observations-check/report.json'" \
-  || die "could not clear the previous readiness report"
-$SSH "$HOST" "systemctl start wfm-observations-check.service" || true
-$SSH "$HOST" "test -s '$HOST_ROOT/data/observations-check/report.json'" \
-  || die "the readiness check produced no report - the installed units are not working"
-READY="$($SSH "$HOST" "grep -o '\"ready\":[a-z ]*' '$HOST_ROOT/data/observations-check/report.json' 2>/dev/null | head -1")"
+$SSH "$HOST" "rm -f '$HOST_ROOT/data/host-check/report.json'" \
+  || die "could not clear the previous host-check report"
+$SSH "$HOST" "systemctl start tennoworth-host-check.service" || true
+$SSH "$HOST" "test -s '$HOST_ROOT/data/host-check/report.json'" \
+  || die "the host check produced no report - the installed units are not working"
+READY="$($SSH "$HOST" "grep -o '\"ready\":[a-z ]*' '$HOST_ROOT/data/host-check/report.json' 2>/dev/null | head -1")"
 case "$READY" in
   *true*)
-    say "readiness: ready ($HOST_ROOT/data/observations-check/report.json on the box, preservation=$PRESERVATION_MODE)";;
+    say "host check: healthy ($HOST_ROOT/data/host-check/report.json on the box)";;
   *)
     # The release is installed and the schedule is running; what failed is the
     # gate this deployment is required to pass.
-    say "readiness: NOT READY ($READY)"
-    die "the readiness check does not pass on the box (preservation=$PRESERVATION_MODE) - fix what it reports rather than disabling the check (report at $HOST_ROOT/data/observations-check/report.json)";;
+    say "host check: NOT HEALTHY ($READY)"
+    die "the host check does not pass on the box - fix what it reports rather than disabling the check (report at $HOST_ROOT/data/host-check/report.json)";;
 esac
 
 say "deployed $(git rev-parse --short "$REVISION"); rollback: install a previous $RELEASES/<rev>/ by hand and daemon-reload"

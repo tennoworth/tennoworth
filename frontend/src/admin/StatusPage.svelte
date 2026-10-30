@@ -12,14 +12,14 @@
   let now = $state(Date.now());
 
   const box = $derived(current?.status ?? null);
-  const readiness = $derived(box?.readiness ?? null);
+  const hostCheck = $derived(box?.host_check ?? null);
   const sweep = $derived(box?.services.find(service => service.service.unit === 'wfm-scrape.service') ?? null);
   const sweeping = $derived(!!sweep && running(sweep.service));
   // systemd clears the exit time when a new sweep starts, so while one runs the
-  // last finished sweep comes from the readiness report instead.
+  // last finished sweep is the published snapshot's age at the last host check.
   const lastSweepAt = $derived(sweep?.service.finished_at && !sweeping ? sweep.service.finished_at
-    : readiness?.newest_sweep_age_seconds != null
-      ? new Date(Date.parse(readiness.checked_at) - readiness.newest_sweep_age_seconds * 1000).toISOString()
+    : hostCheck?.snapshot_age_seconds != null
+      ? new Date(Date.parse(hostCheck.checked_at) - hostCheck.snapshot_age_seconds * 1000).toISOString()
       : null);
   const confirming = $derived(box?.jobs.find(job => job.id === confirm) ?? null);
   // Poll quickly only while something the page started could still change.
@@ -89,9 +89,9 @@
   function count(n: number, noun: string) { return `${n} ${noun}${n === 1 ? '' : 's'}`; }
   function gib(bytes: number | null) { return bytes === null ? 'unknown' : `${(bytes / 2 ** 30).toFixed(1)} GiB`; }
   function lag(): [string, Tone] {
-    switch (readiness?.deploy_lag) {
+    switch (hostCheck?.deploy_lag) {
       case 'current': return ['Scraper current', 'good'];
-      case 'behind': return [`Scraper ${readiness.pending_scraper_commits ?? '?'} commits behind`, 'warn'];
+      case 'behind': return [`Scraper ${hostCheck.pending_scraper_commits ?? '?'} commits behind`, 'warn'];
       case 'ahead': return ['Scraper ahead of main', 'plain'];
       case 'diverged': return ['Scraper diverged from main', 'bad'];
       default: return ['Unknown', 'plain'];
@@ -119,21 +119,21 @@
   {:else}
     <section class="ui-summary-strip summary" aria-label="Box summary">
       <div>
-        <span class="k">Scrape readiness</span>
-        {#if readiness}
-          <strong class="word" data-tone={readiness.ready ? (readiness.warnings.length ? 'warn' : 'good') : 'bad'}>{readiness.ready ? 'Ready' : 'Not ready'}</strong>
-          <small>{count(readiness.errors.length, 'error')} · {count(readiness.warnings.length, 'warning')} · checked {ago(readiness.checked_at)}</small>
+        <span class="k">Host check</span>
+        {#if hostCheck}
+          <strong class="word" data-tone={hostCheck.ready ? (hostCheck.warnings.length ? 'warn' : 'good') : 'bad'}>{hostCheck.ready ? 'Healthy' : 'Not healthy'}</strong>
+          <small>{count(hostCheck.errors.length, 'error')} · {count(hostCheck.warnings.length, 'warning')} · checked {ago(hostCheck.checked_at)}</small>
         {:else}<strong class="word">Unknown</strong><small>No readable report</small>{/if}
       </div>
       <div>
         <span class="k">Last sweep</span>
         <strong class="word" title={local(lastSweepAt)}>{lastSweepAt ? ago(lastSweepAt) : 'Unknown'}</strong>
-        <small>{#if sweeping}Another sweep is running, started {ago(sweep?.service.started_at)}{:else}{readiness?.csv_rows != null ? `${readiness.csv_rows.toLocaleString()} rows` : 'Row count unknown'}{readiness?.sweep_wall_seconds != null ? ` · took ${span(readiness.sweep_wall_seconds)}` : ''}{/if}</small>
+        <small>{#if sweeping}Another sweep is running, started {ago(sweep?.service.started_at)}{:else}{hostCheck?.csv_rows != null ? `${hostCheck.csv_rows.toLocaleString()} rows` : 'Row count unknown'}{/if}</small>
       </div>
       <div>
         <span class="k">Deploy lag</span>
         <strong class="word" data-tone={lagState[1]}>{lagState[0]}</strong>
-        <small class="mono">{readiness?.deploy_revision ? `running ${readiness.deploy_revision.slice(0, 7)}` : 'Deployed revision unknown'}</small>
+        <small class="mono">{hostCheck?.deploy_revision ? `running ${hostCheck.deploy_revision.slice(0, 7)}` : 'Deployed revision unknown'}</small>
       </div>
       <div>
         <span class="k">Announcement snapshot</span>
@@ -145,8 +145,8 @@
     {#if box.failed_units.length}
       <div class="ui-notice" data-tone="bad" role="alert"><strong>Failing now:</strong> <span class="mono">{box.failed_units.join(', ')}</span>. Check its journal on the box.</div>
     {/if}
-    {#if readiness && !readiness.ready}
-      <div class="ui-notice ui-stack" data-tone="bad"><strong>The box is not ready.</strong><ul>{#each readiness.errors as reason}<li>{reason}</li>{/each}</ul></div>
+    {#if hostCheck && !hostCheck.ready}
+      <div class="ui-notice ui-stack" data-tone="bad"><strong>The host check failed.</strong><ul>{#each hostCheck.errors as reason}<li>{reason}</li>{/each}</ul></div>
     {/if}
     {#if box.problems.length}
       <div class="ui-notice ui-stack" data-tone="warn"><strong>Some sources could not be read; the rest of this page is current.</strong><ul>{#each box.problems as problem}<li>{problem}</li>{/each}</ul></div>
@@ -212,18 +212,18 @@
         </div>
       </section>
 
-      <section class="ui-panel" aria-labelledby="readiness-title">
-        <header><h2 id="readiness-title">Readiness report</h2><span>{readiness ? `Checked ${local(readiness.checked_at)}` : 'No report'}</span></header>
-        {#if readiness}
+      <section class="ui-panel" aria-labelledby="host-check-title">
+        <header><h2 id="host-check-title">Host check</h2><span>{hostCheck ? `Checked ${local(hostCheck.checked_at)}` : 'No report'}</span></header>
+        {#if hostCheck}
           <dl class="facts">
-            <dt>CSV rows</dt><dd class="mono">{readiness.csv_rows?.toLocaleString() ?? 'unknown'}</dd>
-            <dt>Newest sweep at check</dt><dd class="mono">{readiness.newest_sweep_age_seconds != null ? `${span(readiness.newest_sweep_age_seconds)} old` : 'unknown'}</dd>
-            <dt>Free disk</dt><dd class="mono">{gib(readiness.disk_free_bytes)} <span class="muted">of {gib(readiness.disk_floor_bytes)} floor</span></dd>
-            <dt>Scraper deployed</dt><dd class="mono">{readiness.deploy_revision?.slice(0, 7) ?? 'unknown'}</dd>
-            <dt>Main on the box</dt><dd class="mono">{readiness.checkout_head?.slice(0, 7) ?? 'unknown'}</dd>
+            <dt>CSV rows</dt><dd class="mono">{hostCheck.csv_rows?.toLocaleString() ?? 'unknown'}</dd>
+            <dt>Snapshot at check</dt><dd class="mono">{hostCheck.snapshot_age_seconds != null ? `${span(hostCheck.snapshot_age_seconds)} old` : 'unknown'}</dd>
+            <dt>Free disk</dt><dd class="mono">{gib(hostCheck.disk_free_bytes)} <span class="muted">of {gib(hostCheck.disk_floor_bytes)} floor</span></dd>
+            <dt>Scraper deployed</dt><dd class="mono">{hostCheck.deploy_revision?.slice(0, 7) ?? 'unknown'}</dd>
+            <dt>Main on the box</dt><dd class="mono">{hostCheck.checkout_head?.slice(0, 7) ?? 'unknown'}</dd>
           </dl>
-          {#if readiness.warnings.length}<div class="ui-stack"><strong>Warnings</strong><ul>{#each readiness.warnings as warning}<li>{warning}</li>{/each}</ul></div>{/if}
-        {:else}<p class="muted">The readiness check has not left a readable report. Run it from Run now.</p>{/if}
+          {#if hostCheck.warnings.length}<div class="ui-stack"><strong>Warnings</strong><ul>{#each hostCheck.warnings as warning}<li>{warning}</li>{/each}</ul></div>{/if}
+        {:else}<p class="muted">The host check has not left a readable report. Run it from Run now.</p>{/if}
       </section>
     </div>
 

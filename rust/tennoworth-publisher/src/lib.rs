@@ -703,11 +703,11 @@ mod tests {
         let body: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), 1 << 20).await.unwrap())
                 .unwrap();
-        assert!(body["status"]["readiness"].is_null());
+        assert!(body["status"]["host_check"].is_null());
         assert!(body["status"]["problems"][0]
             .as_str()
             .unwrap()
-            .contains("readiness"));
+            .contains("host check"));
         assert!(body["status"]["backup"]["error"]
             .as_str()
             .unwrap()

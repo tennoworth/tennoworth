@@ -17,7 +17,7 @@ export type BoxStatus = { collected_at: string,
 /**
  * Sources the publisher could not read; the rest of the page still loads.
  */
-problems: Array<string>, readiness: Readiness | null, services: Array<ServiceStatus>, failed_units: Array<string>, alerts: Array<AlertEntry>, backup: BackupStatus, web_bundle: string | null, jobs: Array<JobStatus>, };
+problems: Array<string>, host_check: HostCheck | null, services: Array<ServiceStatus>, failed_units: Array<string>, alerts: Array<AlertEntry>, backup: BackupStatus, web_bundle: string | null, jobs: Array<JobStatus>, };
 
 export type Change = { request_id: string, expected_revision: number, operation: Operation, id: string | null, content: Content | null, };
 
@@ -43,6 +43,8 @@ export type History = { revision: number, actor: string, at: string, operation: 
  */
 event: EventContent | null, };
 
+export type HostCheck = { ready: boolean, checked_at: string, errors: Array<string>, warnings: Array<string>, csv_rows: number | null, snapshot_age_seconds: number | null, deploy_revision: string | null, checkout_head: string | null, deploy_lag: string | null, pending_scraper_commits: number | null, disk_free_bytes: number | null, disk_floor_bytes: number | null, };
+
 export type JobRequest = { at: string, actor: string, };
 
 export type JobStatus = { id: string, label: string, description: string, unit: UnitStatus,
@@ -64,8 +66,6 @@ export type Operation = "save" | "publish" | "withdraw";
 export type PublicFeedCheck = { url: string, checked_at: string, expected_updated_at: string, served_updated_at: string | null, state: PublicFeedState, error: string | null, };
 
 export type PublicFeedState = "live" | "behind" | "different" | "unreachable";
-
-export type Readiness = { ready: boolean, checked_at: string, errors: Array<string>, warnings: Array<string>, csv_rows: number | null, newest_sweep_age_seconds: number | null, sweep_wall_seconds: number | null, deploy_revision: string | null, checkout_head: string | null, deploy_lag: string | null, pending_scraper_commits: number | null, disk_free_bytes: number | null, disk_floor_bytes: number | null, };
 
 export type RunJob = { job: string, };
 

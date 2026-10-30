@@ -94,22 +94,12 @@ writes `market-public.json` just before `market.json`: the fields listed in
 `tests/fixtures/public-market/fields.json`, which the site's prerendered pages
 refresh from (the frontend checks they give the same page data), and
 `market-home.json`, the snapshot without the desktop-only fields in
-`tests/fixtures/public-market/home.json`, which the hosted homepage reads. With
-`--observations-dir`, `scrape` also streams a per-item observation log (one
-JSONL file per sweep, `src/observations.rs`) holding what each attempted item's
-statistics and book said; it is evidence for the statistics-refresh decision and
-no publication input, so a log that cannot be written warns instead of failing
-the sweep. Retention is 56 days or 2 GiB, whichever binds first, sized so the
-four-week evaluation window closes before the corpus starts losing its earliest
-days; those two bounds are restated in shell by the host readiness check, and
-`tests/fixtures/observation-retention.json` is the shared gate that keeps the
-Rust constants and the shell defaults from drifting apart. The offline
-`replay` simulator that used these logs to choose the statistics schedule was
-removed once production reused statistics, because a sweep with reused rows
-cannot be scored. The fixture regression gates in `tests/` shell the
-freshly built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen
-fixtures in `tests/fixtures/{scrape,build}` - cargo rebuilds the binary first,
-so a stale one cannot green them.
+`tests/fixtures/public-market/home.json`, which the hosted homepage reads.
+The fixture regression gates in `tests/` (`build_gate`, `scrape_gate`,
+`surfaces_gate`) shell the freshly built binary
+(`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen fixtures in
+`tests/fixtures/{scrape,build}` - cargo rebuilds the binary first, so a stale
+one cannot green them.
 
 `--stats-cache <FILE> --stats-interval <6h>` (`src/scrape/stats_cache.rs`) reuses an
 item's statistics between sweeps while its book is still read every sweep. It
@@ -117,26 +107,15 @@ refreshes on the policy that replay validated: first sight, an unusable cached
 entry, a reappearance after an absence, an empty book last time, or age at the
 interval. It caches the derived figures (`StatsStage`), not the daily rows,
 writes the file only after a completed sweep, and treats a missing or foreign
-file as a full refresh, never a failure. Reused rows carry
-`statistics_cached_at` in the observation log, and the readiness check expects statistics requests only for the rows without
-it. Production runs with a six-hour interval (`deploy/run-scrape.sh`); an empty
-`STATS_INTERVAL` restores fetching everything every sweep.
+file as a full refresh, never a failure. Production runs with a six-hour
+interval (`deploy/run-scrape.sh`); an empty `STATS_INTERVAL` restores fetching
+everything every sweep.
 
-The corpus's operational owners are host-only, next to the pipeline:
-`deploy/observations-check.sh` (with `wfm-observations-check.service`/`.timer`,
-installed by `scripts/deploy-scrape-host.sh`) reports whether the corpus is sound
-and complete, and states how it is preserved. Preservation is the host-level
-Proxmox backup of the whole container, proven off the box by
-`scripts/check-lxc-backup.sh`; the check cannot see that backup, so it reports
-the declared mode and never claims preservation is verified. The check answers
-collection-readiness only, never a schedule decision. It ties its
-journal evidence to one systemd invocation and one sweep, and a start that cannot
-be paired is an explicit failure rather than a skipped gate. A partial log that a
-later completed sweep has superseded is a dead sweep kept for post-mortem - a
-warning, and its slot counts as aborted rather than missing, because the sweep's
-own unit already failed when it happened; only a slot with neither a log nor a
-partial is missing and fails - while one nothing has superseded is still a stuck
-sweep. The check also compares the deployed revision with the box's checkout of
-`main`: scraper changes left undeployed past a 24-hour grace fail it, since the
-scraper is installed only by hand. It never ends without a report: an absent
-field is reported as absent and failed.
+The host check is host-only, next to the pipeline: `deploy/host-check.sh`
+(with `tennoworth-host-check.service`/`.timer`, installed by
+`scripts/deploy-scrape-host.sh`) runs hourly and fails when the sweep timer is
+not scheduled, the sweep unit failed, the sweep output is missing, disk is under
+its floor, the installed binary is not the recorded revision's, or pipeline
+changes in the box's checkout of `main` have waited past a 24-hour grace for a
+deploy - the pipeline is installed only by hand. It never ends without a
+report: an absent field is reported as absent and failed.

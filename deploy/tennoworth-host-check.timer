@@ -1,0 +1,12 @@
+[Unit]
+Description=Check the market host
+
+[Timer]
+# Hourly, so a stopped sweep timer or an undeployed pipeline change is reported
+# within the hour. UTC is explicit because an OnCalendar without it follows the
+# host's local time.
+OnCalendar=*-*-* *:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

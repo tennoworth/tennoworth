@@ -85,7 +85,7 @@ fn extract_flag(args: &[String], flag: &str) -> Option<String> {
 /// Wire the `scrape` subcommand.
 ///
 /// Accepts the exact flags run-scrape.sh passes (`--filter --exclude
-/// --min-volume --out --observations-dir`) plus the rest of the argparse
+/// --min-volume --out`) plus the rest of the argparse
 /// surface (`--platform --limit --checkpoint-every --now`), all with matching
 /// defaults.
 /// `--fixtures-dir <DIR>` swaps live HTTP for a frozen `fixture_responses.json`
@@ -128,7 +128,6 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
             .transpose()?
             .unwrap_or(100),
         max_coercions: wfm_scrape::coerce::DEFAULT_MAX_COERCIONS,
-        observations: extract_flag(args, "--observations-dir").map(PathBuf::from),
         stats_cache: match (extract_flag(args, "--stats-cache"), extract_flag(args, "--stats-interval")) {
             (Some(path), Some(interval)) => Some(StatsCacheConfig {
                 path: PathBuf::from(path),

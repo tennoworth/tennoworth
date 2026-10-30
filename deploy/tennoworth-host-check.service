@@ -1,0 +1,27 @@
+[Unit]
+Description=Check that the market sweep is scheduled and the deployed pipeline is current
+# OnFailure is the delivery mechanism for "not healthy": the check exits non-zero
+# whenever evidence is missing, so an unhealthy host pages exactly like a failed
+# sweep instead of waiting to be noticed in a report nobody reads.
+OnFailure=wfm-alert@%n.service
+
+[Service]
+Type=oneshot
+# Root, unlike the sweep: it reads the wfm-owned checkout's history and systemd
+# state. This process only reads, and writes exactly one file, the report below.
+ExecStart=/srv/wfm/host-check.sh --out /srv/wfm/data/host-check/report.json
+Nice=10
+
+# Nothing here needs the network or the ability to change the box; systemd is
+# reached over its own socket.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/wfm/data/host-check
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictAddressFamilies=AF_UNIX
+SystemCallFilter=@system-service
