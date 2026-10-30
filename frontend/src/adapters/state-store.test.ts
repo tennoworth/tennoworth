@@ -1,6 +1,6 @@
 // @ts-nocheck - vitest fixtures; the store's TS contract is exercised by tsc.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { installTauri, removeTauri } from '../dev/test-utils.js';
+import { installTauri, removeTauri } from '../dev/testing/test-utils.js';
 import { createStateStore, LocalStorageStateStore, TauriStateStore, LOCAL_SETTING_KEYS } from './state-store';
 
 // TauriStateStore + the desktop sniff read the Tauri globals; install/remove

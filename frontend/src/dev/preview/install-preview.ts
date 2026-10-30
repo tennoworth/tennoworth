@@ -1,0 +1,188 @@
+import { NOTIFICATION_CATEGORIES } from '../../contracts/desktop';
+import { HostedTransport } from '../../adapters/hosted';
+import notesSample from '../../../../tests/fixtures/update-notes/status.json';
+import defaults from '../../../../tests/fixtures/pacing.json';
+import { loadDomainEvaluator } from './domain-wasm';
+import type { DomainRequest } from '../../contracts/generated/domain';
+import type { UpdateStatus } from '../../contracts/update';
+import { sampleAllocation, sampleGuidance } from './protection-preview';
+import type { ProtectionInventory, ProtectionPlan } from '../../contracts/protection';
+import type { OwnedRecord } from '../../contracts/data';
+import { APP_ICON_COLOURS, type PresenceStatus, type PresenceSettings } from '../../contracts/desktop';
+import { PRESENCE_CHANGED_EVENT } from '../../contracts/events';
+export async function installPreview() {
+  const scenario = new URLSearchParams(location.search).get('sample');
+  const loadAnnouncements = new HostedTransport().loadAnnouncements;
+  // Loaded once; a missing build rejects each calculation with how to build
+  // it, while the rest of the preview keeps working.
+  const domain = loadDomainEvaluator();
+  domain.catch(error => console.error(error));
+  const preview = scenario !== null
+    ? (await import('./preview-data')).createPreview(
+      scenario || 'populated',
+      scenario === 'announcements' ? await loadAnnouncements().catch(() => null) : null,
+      scenario === 'large' ? Object.keys((await (await fetch('/market.json')).json()).items).slice(0, 1500) : [],
+    )
+    : null;
+  let notes: import('../../contracts/update').UpdateNotesStatus = structuredClone(notesSample) as import('../../contracts/update').UpdateNotesStatus;
+  // `support-prompt` is a launch that installed an update: notes first, then the prompt.
+  notes.auto_show = (scenario?.startsWith('update-notes') || scenario === 'support-prompt') ?? false;
+  if (scenario === 'update-notes-single' || scenario === 'update-notes-unknown') {
+    notes.releases = notes.releases.slice(0, 1); notes.changes = notes.releases[0].changes;
+    notes.previous_version = scenario === 'update-notes-single' ? '0.7.102' : null;
+    notes.earlier_version_unknown = scenario === 'update-notes-unknown';
+  }
+  const noUpdate: UpdateStatus = {
+    checked: true,
+    available: false,
+    support: 'disabled_test_build',
+    current_version: 'preview',
+    version: null,
+    notes: null,
+  };
+  // An offered update; with `update-signature` its install fails the way a
+  // release signed by a key this install does not trust does.
+  const updateOffered = scenario === 'feedback-update-error' || scenario === 'update-signature';
+  const empties: Record<string, unknown> = {
+    wfm_access_status: { revision: 0, reason: '', cooldown_until_ms: 0, queue_count: 0, outstanding: 0, requests: 0, throttles: 0, cache_hits: 0, cache_misses: 0, queue_rejections: 0, restrictions: defaults },
+    health: { ok: true, platform: 'linux', app_version: '0.0.0-preview' },
+    wfm_auth_status: { logged_in: false, unlocked: false },
+    update_status: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
+    check_update: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
+    refresh_history: { updated: false, body: null },
+    refresh_market: { updated: false, status: 'offline' },
+    list_watches: [], list_trades: [], list_notifications: [],
+    get_notification_preferences: { popups: true, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true }])) },
+    try_silent_unlock: false,
+    wfm_remember_available: true,
+    get_usage_preferences: { enabled: false, available: false },
+    get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
+    overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
+    setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
+  };
+  // The automatic-scan status mirrors the stored preferences in the real app
+  // (the loop republishes them every tick), so the preview carries the two
+  // together rather than letting a stale status contradict the toggle.
+  let autoScanSettings = { enabled: false, cadenceMinutes: 30, adoptAutomatically: true };
+  // The desktop store keeps settings + the reload-restore snapshot in SQLite
+  // via get_setting/set_setting; back those onto localStorage so a seeded
+  // browser snapshot round-trips exactly like the real thing.
+  let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
+  // `price-sharing` offers the opt-in prompt; `price-sharing-error` refuses the save.
+  let priceReports = { enabled: false, available: scenario?.startsWith('price-sharing') ?? false, sent_this_week: 0 };
+  // Trade presence. `&presence=website|closed|unverified|unreachable` opens the
+  // other states the status strip and Settings show; the default follows a
+  // running game.
+  const presenceCase = new URLSearchParams(location.search).get('presence');
+  const presenceAt = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+  let presence: PresenceStatus = {
+    signedIn: preview !== null && scenario !== 'logged-out', connected: presenceCase !== 'unreachable',
+    status: 'ingame', statusUntil: presenceAt(10), statusSetAt: presenceAt(-12),
+    managed: true, following: true, followPaused: false, gameRunning: true, problem: null, detail: null,
+    settings: { followGame: true, whenClosed: 'invisible', keepForMinutes: null },
+  };
+  if (presenceCase === 'website') presence = { ...presence, status: 'online', statusUntil: presenceAt(58), managed: false, following: false, followPaused: true };
+  if (presenceCase === 'closed') presence = { ...presence, status: 'invisible', statusUntil: null, managed: false, gameRunning: false };
+  if (presenceCase === 'unverified') presence = { ...presence, status: 'invisible', statusUntil: null, managed: false, gameRunning: false, problem: 'not_verified', detail: 'app.errors.userNotVerified' };
+  if (presenceCase === 'unreachable') presence = { ...presence, status: null, statusUntil: null, statusSetAt: null, managed: false, problem: 'unreachable' };
+  const pushPresence = () => {
+    const emit = (globalThis as Record<string, unknown>).__TENNOWORTH_PREVIEW_EMIT__ as ((name: string, payload: unknown) => void) | undefined;
+    emit?.(PRESENCE_CHANGED_EVENT, structuredClone(presence));
+    return structuredClone(presence);
+  };
+  const invoke = (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd === 'get_announcements') return loadAnnouncements();
+    if (cmd === 'presence_status') return Promise.resolve(structuredClone(presence));
+    if (cmd === 'set_presence') {
+      if (presence.problem === 'not_verified') {
+        return Promise.reject({ code: 'presence_not_verified', message: 'warframe.market refused the change: this account is not verified. Verify it on warframe.market, then try again.' });
+      }
+      const status = args?.status as PresenceStatus['status'];
+      const minutes = presence.settings.keepForMinutes;
+      presence = {
+        ...presence, status, statusSetAt: presenceAt(0),
+        statusUntil: status === 'invisible' ? null : presenceAt(minutes ?? 10),
+        managed: minutes == null && status !== 'invisible',
+        following: false, followPaused: presence.settings.followGame,
+      };
+      return new Promise(resolve => setTimeout(() => resolve(pushPresence()), 400));
+    }
+    if (cmd === 'update_presence_settings') {
+      const settings = args?.settings as PresenceSettings;
+      const resumes = settings.followGame && !presence.settings.followGame && presence.gameRunning;
+      presence = { ...presence, settings, following: settings.followGame && !presence.followPaused, followPaused: settings.followGame && presence.followPaused };
+      if (resumes) presence = { ...presence, status: 'ingame', managed: true, following: true, followPaused: false };
+      pushPresence();
+      return Promise.resolve(settings);
+    }
+    if (cmd === 'follow_game_now') {
+      presence = { ...presence, followPaused: false, following: presence.settings.followGame };
+      if (presence.settings.followGame && presence.gameRunning) presence = { ...presence, status: 'ingame', managed: true, statusUntil: presenceAt(10) };
+      pushPresence();
+      return Promise.resolve(null);
+    }
+    if (cmd === 'update_notes') return Promise.resolve(structuredClone(notes));
+    if (cmd === 'update_notes_can_present') return Promise.resolve(true);
+    if (cmd === 'acknowledge_update_notes') { notes.auto_show = false; return Promise.resolve(null); }
+    if (cmd === 'evaluate_domain') return domain.then(evaluate => evaluate(args?.request as DomainRequest));
+    if (args?.key === 'routine-checklist') {
+      if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem('routine-checklist'));
+      if (cmd === 'set_setting') { localStorage.setItem('routine-checklist', String(args.value)); return Promise.resolve(null); }
+    }
+    if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'fetch_orders', 'list_watches', 'list_trades', 'listing_outcomes', 'set_listing_outcomes', 'get_pending_plan', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'bulk_visibility', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
+    if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }
+    if (cmd === 'protection_state') {
+      const snapshot = JSON.parse(localStorage.getItem('last-owned-v2') ?? '{"owned":[]}') as { owned: Array<[string, OwnedRecord]> };
+      return Promise.resolve(sampleGuidance({ plan: protectionPlan, snapshot_id: snapshot.owned.length ? 1 : null,
+        items: Object.fromEntries(snapshot.owned.filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic')).map(([, row]) => [row.slug, sampleAllocation(row.count, row.leveled ?? 0,
+          Number(localStorage.getItem('reserve-copies') ?? 0), protectionPlan.reserves[row.slug] ?? 0, protectionPlan.goal ? null : 0)])),
+        issues: protectionPlan.goal ? ['Open the protected-plan sample to preview a pinned goal.'] : [] }, args?.inventory as ProtectionInventory, Number(localStorage.getItem('reserve-copies') ?? 0), {}));
+    }
+    if (cmd === 'get_price_report_preferences') return Promise.resolve({ ...priceReports });
+    if (cmd === 'set_price_report_preferences') {
+      if (scenario === 'price-sharing-error') return Promise.reject(new Error('Sample price sharing save failed.'));
+      priceReports = { ...priceReports, enabled: Boolean(args?.enabled) };
+      return Promise.resolve({ ...priceReports });
+    }
+    if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
+    if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
+    if (cmd === 'set_notification_preferences') return Promise.resolve(args?.preferences);
+    if (cmd === 'get_auto_scan_settings') return Promise.resolve({ ...autoScanSettings });
+    if (cmd === 'update_auto_scan_settings') {
+      autoScanSettings = (args?.settings as typeof autoScanSettings) ?? autoScanSettings;
+      return Promise.resolve({ ...autoScanSettings });
+    }
+    if (cmd === 'auto_scan_status') return Promise.resolve({
+      ...autoScanSettings, held: false, gameRunning: false, lastScanAt: null, lastError: null, nextCheckAt: null,
+    });
+    if (cmd === 'install_update' && scenario === 'update-signature') {
+      return Promise.reject('Signature verification failed: the update was not signed by a trusted key.');
+    }
+    if (cmd === 'set_app_icon') {
+      return APP_ICON_COLOURS.includes(args?.colour as never)
+        ? Promise.resolve({ windowIcon: true })
+        : Promise.reject({ code: 'invalid', message: `Unknown app icon colour: ${String(args?.colour)}` });
+    }
+    if (cmd === 'test_notification') return Promise.resolve('Test sent (preview).');
+    if (cmd === 'update_overlay_settings') return Promise.resolve(args?.settings ?? null);
+    return Promise.resolve(cmd in empties ? empties[cmd] : null);
+  };
+  const w = globalThis as Record<string, unknown>;
+  w.__TAURI_INTERNALS__ = { invoke };
+  // Event-driven UI (background-scan results, notifications) is invisible in a
+  // preview whose listen() is a no-op. Registering handlers and exposing one
+  // emit entry point lets a browser check drive those surfaces, the same way
+  // the native app pushes them.
+  const handlers = new Map<string, (event: { payload: unknown }) => void>();
+  w.__TENNOWORTH_PREVIEW_EMIT__ = (name: string, payload: unknown) =>
+    handlers.get(name)?.({ payload });
+  w.__TAURI__ = {
+    core: { invoke },
+    event: {
+      listen: (name: string, handler: (event: { payload: unknown }) => void) => {
+        handlers.set(name, handler);
+        return Promise.resolve(() => handlers.delete(name));
+      },
+    },
+  };
+}

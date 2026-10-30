@@ -134,7 +134,7 @@ Use `table.tw.fixed` when declaring fixed column proportions; setting only
 `table-layout: fixed` leaves the automatic item-column sizing rule active and
 can collapse numeric columns. Verify every column, not just document overflow.
 
-The hosted and desktop shells share `src/shells/shell.css`. Its `data-shell`
+The hosted and desktop shells share `src/shell.css`. Its `data-shell`
 attribute limits those rules to shell-owned markup, preserving component style
 isolation after extracting the shells and shared FAQ. Feature components do not
 add this attribute. The reward surface does not consume those selectors.
@@ -593,7 +593,7 @@ direction changes require explicit approval, not an incidental component edit.
 ## Living reference and verification
 
 Open `/?styleguide` on the development server for the living reference in
-[Styleguide.svelte](../frontend/src/dev/Styleguide.svelte). It consumes
+[Styleguide.svelte](../frontend/src/dev/styleguide/Styleguide.svelte). It consumes
 production tokens and shared patterns, not copied mock CSS, and is excluded
 from production builds. It shows both themes, interaction and failure states,
 long content, a locally scrolling table, and an editable native dialog. Theme

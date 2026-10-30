@@ -2,13 +2,13 @@ import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { build } from 'vite';
 import { pathToFileURL } from 'node:url';
-import { pages, pilotItems, itemPath } from '../src/public-site/pages';
-import { activityCandidates, decisionAnswer, decisionText, ducatParts, publicData } from '../src/public-site/model';
+import { pages, pilotItems, itemPath } from '../src/features/market/pages';
+import { activityCandidates, decisionAnswer, decisionText, ducatParts, publicData } from '../src/site/pages/model';
 import type { Market } from '../src/contracts/data';
 
 const root = resolve(import.meta.dirname, '..');
 const renderDir = resolve(root, 'target/public-render');
-await build({ root, logLevel: 'warn', build: { ssr: resolve(root, 'src/public-site/render.ts'), outDir: renderDir, emptyOutDir: true, copyPublicDir: false } });
+await build({ root, logLevel: 'warn', build: { ssr: resolve(root, 'src/site/pages/render.ts'), outDir: renderDir, emptyOutDir: true, copyPublicDir: false } });
 try {
   const { render, PublicPage, PublicHome } = await import(pathToFileURL(resolve(renderDir, 'render.js')).href);
   const market = JSON.parse(await readFile(resolve(root, 'public/market.json'), 'utf8')) as Market;
@@ -35,7 +35,7 @@ try {
     for (const css of chunk.css ?? []) styles.add(css);
     for (const dependency of chunk.imports ?? []) collectStyles(dependency);
   }
-  collectStyles('src/shells/PublicPage.svelte');
+  collectStyles('src/site/shell/PublicPage.svelte');
   const routeTemplate = template.replace('</head>', [...styles].map(css => `<link rel="stylesheet" href="/${css}">`).join('') + '</head>');
   const escape = (s: string) => s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
   for (const route of routes) {

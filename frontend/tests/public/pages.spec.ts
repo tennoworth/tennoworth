@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { pages, pilotItems, pilotSets, itemPath } from '../../src/public-site/pages';
+import { pages, pilotItems, pilotSets, itemPath } from '../../src/features/market/pages';
 import { readFileSync } from 'node:fs';
-import { decisionAnswer, decisionText, formatStampUtc, priceText, publicData } from '../../src/public-site/model';
+import { decisionAnswer, decisionText, formatStampUtc, priceText, publicData } from '../../src/site/pages/model';
 
 // The built pages carry the bundled snapshot, which every desktop release
 // refreshes. Expected text comes from it; model.test.ts pins the arithmetic.

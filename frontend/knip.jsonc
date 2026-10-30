@@ -31,15 +31,15 @@
   // from 2026-09-07 until this exclusion. They are not entries, and not unused
   // files either: vitest runs them.
   "vitest": {
-    "entry": ["src/**/*.test.{ts,svelte}", "!src/dev/architecture.test.ts", "!src/dev/design-system.test.ts"]
+    "entry": ["src/**/*.test.{ts,svelte}", "!src/dev/gates/architecture.test.ts", "!src/dev/gates/design-system.test.ts"]
   },
-  "ignore": ["src/dev/architecture.test.ts", "src/dev/design-system.test.ts"],
+  "ignore": ["src/dev/gates/architecture.test.ts", "src/dev/gates/design-system.test.ts"],
 
   // `bun run knip` also runs `knip --production`, which leaves tests out. That
   // is the pass that sees an export only its own test calls - the default pass
   // counts the test as a caller, which is how a dozen such exports survived.
   // The `!` entries are what production mode keeps: index.html loads
   // theme-boot.js by URL, and the dev helpers exist only for tests.
-  "entry": ["public/theme-boot.js!", "src/admin/main.ts!", "src/public-site/render.ts!"],
-  "project": ["src/**/*.{ts,svelte}!", "public/**/*.js!", "*.ts", "!src/dev/test-utils.ts!", "!src/dev/render-desktop.ts!", "!src/dev/controller-test-root.svelte.ts!"]
+  "entry": ["public/theme-boot.js!", "src/admin/main.ts!", "src/site/pages/render.ts!"],
+  "project": ["src/**/*.{ts,svelte}!", "public/**/*.js!", "*.ts", "!src/dev/testing/test-utils.ts!", "!src/dev/preview/render-desktop.ts!", "!src/dev/testing/controller-test-root.svelte.ts!"]
 }

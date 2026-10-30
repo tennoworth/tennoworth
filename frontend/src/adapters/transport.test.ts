@@ -2,7 +2,7 @@
 import scanResponse from '../../../tests/fixtures/protection/scan-response.json';
 import outcomes from '../../../tests/fixtures/wfm-access/outcomes.json';
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { installTauri, removeTauri } from '../dev/test-utils.js';
+import { installTauri, removeTauri } from '../dev/testing/test-utils.js';
 import { isDesktopRuntime, installDesktopExternalLinkHandler } from './runtime';
 import { HostedTransport } from './hosted';
 import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock, parseScanPayload } from './desktop';
