@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fixture from '../../../tests/fixtures/scan-error-categories.json';
 import { DesktopCmdError, diagnosticCode, diagnosticError, diagnosticHttpStatus } from './errors';
 
-// The Rust side of this gate (wfm-core acquisition::message_fixture_tests)
+// The Rust side of this gate (game-acquisition's message_fixture_tests)
 // proves the scan still produces each message; this proves how it is reported.
 describe('scan failure categories', () => {
   it.each(fixture.cases.map(c => [c.source, c] as const))('%s', (_source, c) => {

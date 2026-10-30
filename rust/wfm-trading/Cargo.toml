@@ -1,0 +1,32 @@
+[package]
+name = "wfm-trading"
+version = "0.1.0"
+edition = "2021"
+description = "warframe.market sign-in, encrypted credentials, recoverable listing plans, order reconciliation, presence and market reads."
+license = "MIT"
+
+[dependencies]
+anyhow = { workspace = true }
+wfm-client = { path = "../wfm-client" }
+# Portable order contract: the decoder translates this API's rows into it, so
+# consumers read a typed order instead of agreeing on a JSON shape.
+market-domain = { path = "../market-domain" }
+reqwest = { workspace = true }
+tungstenite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+directories = "6"
+
+# Sign-in envelope: JWT encryption at rest.
+aes-gcm = "0.10"
+pbkdf2 = "0.12"
+sha2 = { workspace = true }
+hmac = { workspace = true }
+base64 = { workspace = true }
+rand = "0.10"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[lints]
+workspace = true

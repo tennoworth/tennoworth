@@ -1,26 +1,25 @@
-//! wfm-core - game acquisition and WFM trading for the desktop app.
+//! wfm-trading - everything the desktop app does with warframe.market.
 //!
-//! Everything the app does that is NOT shell/webview glue lives here:
-//! process detection + memory scan, DE inventory fetch, warframe.market
-//! auth + encrypted-JWT storage, the listing/order service, pending-plan
-//! persistence. The Tauri desktop
-//! shell (`tennoworth-desktop`) drives this crate over IPC.
+//! Sign-in and the encrypted JWT envelope (`auth`), the signed-in user's
+//! orders and recoverable listing plans (`orders`), presence and the live
+//! order stream (`presence`), and anonymous market reads (`market`). The
+//! Tauri desktop shell drives this crate over IPC.
 //!
 //! Design rule: **no interactive terminal I/O in this crate.** Where the
 //! desktop shell needs a passphrase, it collects it in the webview and hands
-//! the plaintext to `wfm-core` as a parameter. (A handful of best-effort,
-//! non-interactive `eprintln!` diagnostics - pending-plan write warnings, a
-//! loose-key-perms warning - are preserved verbatim from the pre-extraction
-//! binary.)
+//! the plaintext over as a parameter. (A few best-effort, non-interactive
+//! `eprintln!` diagnostics - pending-plan write warnings, a loose-key-perms
+//! warning - remain.)
 
-pub mod acquisition;
+pub mod auth;
 pub mod http;
 pub mod identity;
+pub mod market;
+pub mod orders;
 pub mod paths;
 pub mod platform;
-pub mod poison;
+pub mod presence;
 pub mod time;
-pub mod trading;
 
 // WFM is behind Cloudflare with bot protection. A non-browser UA gets a 1015
 // rate-limit error or a JS challenge before our request ever reaches the API.
@@ -30,11 +29,11 @@ pub mod trading;
 /// [`wfm_client::user_agent`] for the format WFM's rules require. The version
 /// is the *binary's* (the desktop app's), not this library's: the app calls
 /// [`set_app_identity`] once at startup; before that (tests, tools) the UA
-/// carries wfm-core's own name and version.
+/// carries this crate's own name and version.
 pub fn user_agent() -> String {
     let (component, version) = APP_IDENTITY.get().cloned().unwrap_or_else(|| {
         (
-            "wfm-core".to_string(),
+            "wfm-trading".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         )
     });
@@ -51,7 +50,7 @@ pub fn set_app_identity(component: &str, version: &str) {
 
 /// This crate's version string. Trivial, side-effect-free entry point the
 /// Tauri desktop shell can call to confirm it is linked
-/// against a live `wfm-core`.
+/// against a live `wfm-trading`.
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }

@@ -1,5 +1,5 @@
 //! Listing caps. One definition for every place that enforces them: the listing
-//! plan and order edits in `wfm-core`, the desktop's own pre-checks, and trade
+//! plan and order edits in `wfm-trading`, the desktop's own pre-checks, and trade
 //! session selection here. `frontend/src/domain/limits.ts` keeps a copy so the
 //! UI can refuse an out-of-range value before the round trip; the shared
 //! `tests/fixtures/limits.json` keeps the two in step.

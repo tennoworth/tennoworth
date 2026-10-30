@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
-use wfm_core::trading::listing::{
+use wfm_trading::orders::listing::{
     delete_order, list_user_order_rows, update_order, Unlocked, UpdateRequest,
 };
 
@@ -83,7 +83,7 @@ fn own_sell_orders_with_log(
     mut refused: impl FnMut(&str),
 ) -> Vec<OwnSellOrder> {
     use market_domain::orders::{OrderRow, OrderSide};
-    let rows = match wfm_core::trading::listing::decode_user_order_rows(unlocked, body) {
+    let rows = match wfm_trading::orders::listing::decode_user_order_rows(unlocked, body) {
         Ok(rows) => rows,
         Err(error) => {
             refused(&error.to_string());
@@ -542,7 +542,7 @@ mod tests {
     use super::*;
     use crate::services::order_mutations::OrderMutations;
     use std::sync::atomic::{AtomicU32, Ordering};
-    use wfm_core::trading::catalog::WfmCatalogItem;
+    use wfm_trading::market::catalog::WfmCatalogItem;
 
     fn names() -> BTreeMap<String, String> {
         let mut m = BTreeMap::new();
@@ -858,7 +858,7 @@ mod tests {
 
     #[test]
     fn own_sell_orders_reads_valid_siblings_and_logs_refused_rows() {
-        use wfm_core::trading::catalog::ItemMeta;
+        use wfm_trading::market::catalog::ItemMeta;
         let unlocked = Unlocked {
             jwt: String::new(), username: "fixture".into(), platform: "pc".into(),
             catalog: Arc::new(BTreeMap::new()),

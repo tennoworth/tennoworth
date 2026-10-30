@@ -69,7 +69,8 @@ jobs:
               - 'rust/tennoworth-desktop/**'
               - 'rust/wfm-client/**'
               - 'rust/market-domain/**'
-              - 'rust/wfm-core/**'
+              - 'rust/game-acquisition/**'
+              - 'rust/wfm-trading/**'
               - 'frontend/src/**'
               - 'tests/fixtures/relic-ocr/**'
               - 'frontend/index.html'
@@ -90,7 +91,7 @@ jobs:
               - '.github/actions/setup-windows-ocr/**'
               - '.github/actions/stage-tessdata/**'
               - '.github/workflows/ui-smoke.yml'
-              # Instruction files under rust/wfm-core and rust/wfm-client are
+              # Instruction files under the Rust crates are
               # documentation; without this a prose edit runs both probes.
               - '!**/AGENTS.md'
             docs_only:

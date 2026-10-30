@@ -137,7 +137,7 @@ pub fn listed_components(
             true
         }
     }
-    let decoded = wfm_core::trading::orders::decode_orders(body, &Unconstrained)
+    let decoded = wfm_trading::orders::decode::decode_orders(body, &Unconstrained)
         .map_err(|error| error.to_string())?;
     // The decoder proves each row's shape; the slug the catalogue attached is
     // read from the same rows by order id.

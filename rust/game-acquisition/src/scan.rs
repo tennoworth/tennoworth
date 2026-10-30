@@ -12,7 +12,6 @@ use anyhow::anyhow;
 use anyhow::{bail, Result};
 use regex::bytes::Regex;
 
-use crate::poison::{read_guard, write_guard};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, RwLock};
 use std::time::{Duration, Instant};
@@ -307,7 +306,7 @@ pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<P
 /// has fetched `definitions.json`.
 ///
 /// A process global rather than a `scan_session` parameter so the fetch stays a
-/// shell concern: wfm-core owns no network policy, and every existing caller
+/// shell concern: game-acquisition owns no network policy, and every existing caller
 /// keeps its signature. Each scan takes ONE snapshot up front, so a definitions
 /// swap landing mid-scan cannot change the patterns underneath a run in
 /// progress.
@@ -317,12 +316,12 @@ static INSTALLED: LazyLock<RwLock<Arc<ScanPatterns>>> =
 /// Replace the pattern set for subsequent scans. Applying an all-default set
 /// is the documented way to revert to compiled-in behaviour.
 pub fn install_patterns(patterns: ScanPatterns) {
-    *write_guard(&INSTALLED) = Arc::new(patterns);
+    *INSTALLED.write().unwrap_or_else(std::sync::PoisonError::into_inner) = Arc::new(patterns);
 }
 
 /// The set a scan should use, snapshotted for the duration of that scan.
 pub fn current_patterns() -> Arc<ScanPatterns> {
-    Arc::clone(&read_guard(&INSTALLED))
+    Arc::clone(&INSTALLED.read().unwrap_or_else(std::sync::PoisonError::into_inner))
 }
 
 /// Resource ceiling for one scan.

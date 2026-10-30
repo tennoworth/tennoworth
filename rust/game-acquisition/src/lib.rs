@@ -1,3 +1,10 @@
+//! game-acquisition - reads the player's inventory from the running game.
+//!
+//! Finds the Warframe process, scans its memory for the session credentials
+//! the game itself uses, and fetches the inventory from DE with them. It knows
+//! nothing about warframe.market. Like the trading crate it has **no
+//! interactive terminal I/O**: the desktop shell drives it.
+
 pub mod error;
 pub mod inventory;
 pub mod scan;
@@ -51,7 +58,7 @@ mod message_fixture_tests {
     #[test]
     fn scan_failures_still_produce_the_text_the_spa_classifies() {
         let fixture: Fixture = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/scan-error-categories.json"
+            "../../../tests/fixtures/scan-error-categories.json"
         ))
         .expect("fixture parses");
         assert!(!fixture.cases.is_empty());

@@ -1,10 +1,10 @@
 // Live smoke: connect to WFM's order stream, print the first few orders, stop.
-// Run by hand: cargo run -p wfm-core --example ws_smoke
+// Run by hand: cargo run -p wfm-trading --example ws_smoke
 fn main() -> anyhow::Result<()> {
     let start = std::time::Instant::now();
     let mut n = 0u32;
     let count = std::cell::Cell::new(0u32);
-    let mut on = |o: wfm_core::trading::ws::NewOrder| {
+    let mut on = |o: wfm_trading::presence::ws::NewOrder| {
         n += 1;
         count.set(n);
         eprintln!(
@@ -13,7 +13,7 @@ fn main() -> anyhow::Result<()> {
         );
     };
     let stop = || start.elapsed().as_secs() > 15 || count.get() >= 8;
-    wfm_core::trading::ws::run_new_orders_stream("pc", &mut on, &stop)?;
+    wfm_trading::presence::ws::run_new_orders_stream("pc", &mut on, &stop)?;
     eprintln!("got {} orders in {:?}", count.get(), start.elapsed());
     Ok(())
 }

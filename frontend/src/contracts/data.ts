@@ -491,7 +491,7 @@ declare global {
   }
 }
 
-/** Plan items submitted to wfm-core via `submit_plan`. */
+/** Plan items submitted to wfm-trading via `submit_plan`. */
 export interface TradeAllowance {
   remaining: number | null;
   mastery_rank: number | null;
@@ -572,7 +572,7 @@ interface PendingPlanItem {
   subtype?: string | null;
   reference_low_sell?: number | null;
   /** Mirrors the journal's vocabulary, including an outcome the market never
-   *  confirmed - see `PendingItem`'s status constants in `wfm-core`. */
+   *  confirmed - see `PendingItem`'s status constants in `wfm-trading`. */
   status: 'pending' | 'uncertain_mutation' | 'ok' | 'error';
   message?: string | null;
   order_id?: string | null;

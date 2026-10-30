@@ -17,13 +17,15 @@
 //! Message building and parsing are pure and tested against captured frames;
 //! [`PresenceSocket`] is the thin blocking shell around them.
 
+pub mod ws;
+
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tungstenite::Message;
 
-use super::ws::{open_socket, Socket};
+use self::ws::{open_socket, Socket};
 
 /// The shortest and longest duration the server accepts, in seconds.
 pub const MIN_DURATION_SECS: u32 = 60;

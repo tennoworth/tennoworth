@@ -128,7 +128,7 @@ fn raw_http_send_sites_are_classified() {
     let allowed = [
         "wfm-client/src/transport.rs",
         "wfm-client/src/policy.rs",
-        "wfm-core/src/acquisition/inventory.rs",
+        "game-acquisition/src/inventory.rs",
         "tennoworth-desktop/src/services/market.rs",
         // First-party, consent-gated counter: must not inherit WFM identity headers.
         "tennoworth-desktop/src/services/usage.rs",
@@ -165,7 +165,7 @@ fn raw_http_send_sites_are_classified() {
             }
         }
     }
-    for member in ["wfm-core", "wfm-client", "wfm-scrape", "tennoworth-desktop"] {
+    for member in ["game-acquisition", "wfm-trading", "wfm-client", "wfm-scrape", "tennoworth-desktop"] {
         check(&root.join(member).join("src"), root, &allowed);
     }
 }

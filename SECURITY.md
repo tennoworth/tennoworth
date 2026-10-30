@@ -29,7 +29,7 @@ The product crosses the following trust boundaries:
    the commands its capability grants: the reward overlay can read its own
    result and nothing else. Remote scan definitions are installed only when
    signed with the offline WFM policy key. The core logic it drives lives in
-   `rust/wfm-core`.
+   `rust/game-acquisition` and `rust/wfm-trading`.
 
    Scanning is manual by default. An opt-in **Automatic scan** setting
    (Settings) has the app check, on a user-chosen cadence, whether the game
@@ -276,7 +276,7 @@ stated plainly: anything running in your unlocked desktop session that
 can read your keyring can combine the two - at-rest offline protection
 of the file itself is unchanged.
 
-Source: `frontend/src/adapters/encrypted-snapshot.ts`, `rust/wfm-core/src/trading/auth.rs`,
+Source: `frontend/src/adapters/encrypted-snapshot.ts`, `rust/wfm-trading/src/auth.rs`,
 and `rust/tennoworth-desktop/src/persistence/keyring_store.rs`.
 
 ## Reporting a vulnerability

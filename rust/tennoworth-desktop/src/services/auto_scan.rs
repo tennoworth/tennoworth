@@ -1,7 +1,7 @@
 //! Automatic scanning: while the game is running, rescan it on a user-chosen
 //! cadence instead of waiting for a click.
 //!
-//! Detection and the memory read stay in wfm-core (`find_wf_pid` /
+//! Detection and the memory read stay in game-acquisition (`find_wf_pid` /
 //! `scan_session`), so this module adds a schedule, not a second scan path.
 //! The timing decision is pure ([`decide`]) and tested; the loop around it is
 //! the same thin shell as `services/watch.rs`.
@@ -164,24 +164,24 @@ impl AutoScanState {
     }
 
     pub fn settings(&self) -> AutoScanSettings {
-        *wfm_core::poison::guard(&self.settings)
+        *crate::poison::guard(&self.settings)
     }
 
     pub fn set_settings(&self, settings: AutoScanSettings) {
         let settings = settings.sanitized();
-        *wfm_core::poison::guard(&self.settings) = settings;
-        let mut status = wfm_core::poison::guard(&self.status);
+        *crate::poison::guard(&self.settings) = settings;
+        let mut status = crate::poison::guard(&self.status);
         status.mirror_settings(settings);
         // The old failure belonged to the old configuration.
         status.last_error = None;
     }
 
     pub fn status(&self) -> AutoScanStatus {
-        wfm_core::poison::guard(&self.status).clone()
+        crate::poison::guard(&self.status).clone()
     }
 
     pub fn update_status(&self, update: impl FnOnce(&mut AutoScanStatus)) {
-        update(&mut wfm_core::poison::guard(&self.status));
+        update(&mut crate::poison::guard(&self.status));
     }
 
     pub fn held(&self) -> bool {
@@ -353,7 +353,7 @@ fn run_loop(app: AppHandle, on_scanned: fn(&AppHandle)) {
             return;
         };
         let settings = state.settings();
-        let pid = wfm_core::acquisition::scan::find_wf_pid();
+        let pid = game_acquisition::scan::find_wf_pid();
         let now = Instant::now();
         if let Some(pid) = pid {
             if run.is_none_or(|tracked| tracked.pid != pid) {

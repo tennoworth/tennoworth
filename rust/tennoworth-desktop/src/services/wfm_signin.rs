@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 use tauri::webview::Cookie;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
-use wfm_core::trading::auth::jwt_is_signed_in;
+use wfm_trading::auth::jwt_is_signed_in;
 
 use crate::command_error::CmdError;
 

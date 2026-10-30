@@ -1,4 +1,4 @@
-# wfm-core/ - acquisition, auth, orders and recovery
+# wfm-trading/ - auth, orders, presence and recovery
 
 Parent rules: [`../AGENTS.md`](../AGENTS.md). Transport - headers, user agent,
 budgets, retry - is [`../wfm-client/AGENTS.md`](../wfm-client/AGENTS.md)'s;
@@ -12,37 +12,12 @@ this file covers what the core does with it.
   them. The slug-mismatch guard refuses a listing priced 3× or more below the
   reference `low_sell`.
 - Reviewed batches are journaled to `~/.config/wfminv/pending_plan.json`
-  before the first POST, through `trading/pending.rs`; the recovery semantics
+  before the first POST, through `orders/pending.rs`; the recovery semantics
   (uncertain marker per item, journal cleanup order, discard) are owned by
   [docs/architecture.md](../../docs/architecture.md#data-and-failure-boundaries).
   The desktop exposes them as `get_pending_plan` / `resume_pending_plan` /
   `discard_pending_plan`. Change the journal format only with a migration for
   files already on disk.
-
-## Cross-platform memory access
-
-`scan_session(pid)` is implemented twice, gated by
-`#[cfg(target_os = …)]`:
-
-- **Linux**: parse `/proc/<pid>/maps` → seek+read `/proc/<pid>/mem` in
-  chunks with a small overlap so cross-chunk pattern matches don't escape.
-  AppImage runs cannot retain file capabilities on their temporary nosuid
-  mount, so `ptrace_open_error()` directs them to adjust Yama's ptrace scope.
-  A local binary can instead use the tighter one-time
-  `setcap cap_sys_ptrace=eip` grant. Scope 3 disables ptrace even for a
-  capable binary.
-- **Windows**: `VirtualQueryEx` to walk regions, `ReadProcessMemory`
-  to read, filtering on `MEM_COMMIT` and excluding `PAGE_NOACCESS` /
-  `PAGE_GUARD`. No elevation needed if running as the user that
-  launched WF.
-
-Patterns scanned (`regex::bytes::Regex`):
-- `accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})` - session creds
-- `"BuildLabel":"([0-9.]+)/[A-Za-z0-9]+` - game build → appVersion
-- `&ct=([A-Z]{2,4})\b` - platform tag
-
-The scanned values are session secrets: see "The app never prints secrets" in
-[`../AGENTS.md`](../AGENTS.md).
 
 ## WFM API quirks
 
@@ -79,7 +54,7 @@ shape drift in the agent that watches WFM endpoints.
 
 Every 400 response of the form `{"inputs":{"<field>":"<rule>"}}` we've
 hit is captured here. The body assembly lives in `build_order_body()`
-in `wfm-core/src/trading/plan.rs`; treat that function as the single
+in `wfm-trading/src/orders/plan.rs`; treat that function as the single
 source of truth and these notes as the *why*.
 
 | Field | Rule | Notes |

@@ -38,7 +38,7 @@
 
 use std::path::{Path, PathBuf};
 
-use wfm_core::acquisition::scan::{install_patterns, patterns_from_definitions, ScanDefinitions};
+use game_acquisition::scan::{install_patterns, patterns_from_definitions, ScanDefinitions};
 
 use crate::services::market::{artifact_client, read_bounded, write_atomic};
 

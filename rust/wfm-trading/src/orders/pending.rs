@@ -61,9 +61,9 @@ pub struct PendingItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub per_trade: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub session: Option<crate::trading::plan::SessionConstraint>,
+    pub session: Option<crate::orders::plan::SessionConstraint>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reviewed_order: Option<crate::trading::plan::ReviewedOrder>,
+    pub reviewed_order: Option<crate::orders::plan::ReviewedOrder>,
     pub order_type: String,
     pub visible: bool,
     pub rank: Option<u32>,
@@ -271,7 +271,7 @@ mod tests {
         let plan = sample_plan();
         let bytes = serde_json::to_vec(&plan).unwrap();
         let restored: PendingPlan = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(crate::trading::plan::PlanItem::from(&restored.items[0]).inventory_snapshot_id, Some(7));
+        assert_eq!(crate::orders::plan::PlanItem::from(&restored.items[0]).inventory_snapshot_id, Some(7));
     }
 
     #[test]
@@ -300,17 +300,17 @@ mod tests {
         let mut plan = sample_plan();
         plan.items[1].quantity = 12;
         plan.items[1].per_trade = Some(3);
-        plan.items[1].session = Some(crate::trading::plan::SessionConstraint {
+        plan.items[1].session = Some(crate::orders::plan::SessionConstraint {
             snapshot_id: 12,
             utc_day: 20_000,
             budget: 8,
         });
-        plan.items[1].reviewed_order = Some(crate::trading::plan::ReviewedOrder::New);
+        plan.items[1].reviewed_order = Some(crate::orders::plan::ReviewedOrder::New);
         write_pending_atomic(&path, &plan).unwrap();
         let loaded = load_pending(&path).expect("readable").expect("present");
         assert_eq!(loaded.items[1].quantity, 12);
         assert_eq!(loaded.items[1].per_trade, Some(3));
-        let resumed = crate::trading::plan::PlanItem::from(&loaded.items[1]);
+        let resumed = crate::orders::plan::PlanItem::from(&loaded.items[1]);
         assert_eq!(resumed.per_trade, Some(3));
         assert_eq!(resumed.session, plan.items[1].session);
         assert_eq!(resumed.reviewed_order, plan.items[1].reviewed_order);

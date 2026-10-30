@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 
-use wfm_core::trading::plan::PlanGuard;
+use wfm_trading::orders::plan::PlanGuard;
 
 use crate::command_error::CmdError;
 use crate::services::wfm_session::WfmSession;
@@ -42,7 +42,7 @@ impl OrderMutations {
     /// discarded between this check and the caller's send.
     pub fn begin(
         &self,
-    ) -> Result<(AccountGuard<'_>, Arc<wfm_core::trading::listing::Unlocked>), CmdError> {
+    ) -> Result<(AccountGuard<'_>, Arc<wfm_trading::orders::listing::Unlocked>), CmdError> {
         let guard = self.begin_only()?;
         let unlocked = self.session.require_unlocked()?;
         Ok((guard, unlocked))

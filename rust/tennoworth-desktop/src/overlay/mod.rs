@@ -1053,13 +1053,13 @@ fn capture_and_recognize(
 
     if settings.live_prices {
         let live_started = Instant::now();
-        let queries: Vec<wfm_core::trading::live_top::LiveTopQuery> = result
+        let queries: Vec<wfm_trading::market::live_top::LiveTopQuery> = result
             .slots
             .iter()
             .filter_map(|slot| {
                 slot.slug
                     .as_ref()
-                    .map(|slug| wfm_core::trading::live_top::LiveTopQuery {
+                    .map(|slug| wfm_trading::market::live_top::LiveTopQuery {
                         slug: slug.clone(),
                         rank: None,
                         subtype: None,
@@ -1072,7 +1072,7 @@ fn capture_and_recognize(
                     cancelled: Some(state.lifecycle.cancellation(&capture_id)),
                     expires: live_started.checked_add(Duration::from_secs(15)),
                     ..Default::default()
-                }, || wfm_core::trading::live_top::fetch_live_tops("pc", None, &queries, |_, _| {}))
+                }, || wfm_trading::market::live_top::fetch_live_tops("pc", None, &queries, |_, _| {}))
             {
                 for slot in &mut result.slots {
                     slot.live_platinum = slot

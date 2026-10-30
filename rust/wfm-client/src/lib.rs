@@ -91,8 +91,8 @@ pub fn wfm_authed_headers(
         .header("Referer", "https://warframe.market/")
 }
 
-/// WFM account platforms. `pc` covers Steam & Epic. Canonical list - wfm-core
-/// re-exports this (see `wfm_core::trading::auth::PLATFORMS`).
+/// WFM account platforms. `pc` covers Steam & Epic. Canonical list - wfm-trading
+/// re-exports this (see `wfm_trading::auth::PLATFORMS`).
 pub const PLATFORMS: [&str; 4] = ["pc", "ps4", "xbox", "switch"];
 
 /// Reject a mistyped platform up front - an unknown value would otherwise be
@@ -122,7 +122,7 @@ pub fn unwrap_envelope(body: &serde_json::Value) -> &serde_json::Value {
 
 /// Backoff before retry attempt `attempt` (0-indexed): 2s, 4s, 6s, ...
 /// Shared so every retry loop in the workspace uses the same curve instead
-/// of each hand-rolling its own (wfm-core's order-mutation retries use this
+/// of each hand-rolling its own (wfm-trading's order-mutation retries use this
 /// too - see listing.rs's `send_with_retry`).
 pub fn retry_backoff(attempt: u32) -> Duration {
     Duration::from_secs(2 * (attempt as u64 + 1))

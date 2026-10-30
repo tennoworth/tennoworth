@@ -1,5 +1,5 @@
 # TennoWorth desktop shell. One window loading the built SPA via Tauri's asset protocol; the SPA's Transport
-# drives wfm-core through thin commands: health / scan_inventory, the WFM
+# drives game-acquisition and wfm-trading through thin commands: health / scan_inventory, the WFM
 # session (login / unlock - passphrase from the webview, see wfm_session.rs),
 # the listing/order surface.
 [package]
@@ -15,7 +15,7 @@ name = "tennoworth-desktop"
 # `bun scripts/release.ts check` fails a PR if the two drift apart.
 version = "0.8.112"
 edition = "2021"
-description = "TennoWorth desktop shell (Tauri v2). Webview loads the SPA; wfm-core invoked via Tauri commands (health, scan_inventory)."
+description = "TennoWorth desktop shell (Tauri v2). Webview loads the SPA; game-acquisition and wfm-trading invoked via Tauri commands."
 license = "MIT"
 
 [build-dependencies]
@@ -69,7 +69,8 @@ chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
-wfm-core = { path = "../wfm-core" }
+game-acquisition = { path = "../game-acquisition" }
+wfm-trading = { path = "../wfm-trading" }
 wfm-client = { path = "../wfm-client" }
 # The sell-priority scoring (single source of truth, mirrored in sell-priority.ts)
 # used to rank the tray + notification sellables. Pure, no-dep crate.
@@ -80,7 +81,7 @@ rusqlite = { workspace = true }
 # C4 market refresh: the one remote GET (tennoworth.app/market.json). Egress
 # stays in Rust, off the webview. Inherits the
 # workspace's full reqwest feature set (see root Cargo.toml) rather than
-# declaring a smaller one - Cargo already unified it with wfm-core's superset
+# declaring a smaller one - Cargo already unified it with wfm-trading's superset
 # in every `--workspace` build regardless, so the old "subset" declaration
 # here was cosmetic, not a smaller actual build.
 reqwest = { workspace = true }

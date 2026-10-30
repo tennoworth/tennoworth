@@ -297,7 +297,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
 
   // ---- Listing health (live top-of-book + owned quantities) ----
   // "Check live" asks WFM for the exact-tier top-of-book of every SELL listing
-  // with the user's own order already excluded (wfm-core does that by
+  // with the user's own order already excluded (wfm-trading does that by
   // username), then `assessListings` turns it plus the last scan's owned
   // counts into concrete fixes.
   let fixAllBusy = $state(false);

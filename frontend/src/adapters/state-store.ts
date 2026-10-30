@@ -88,7 +88,7 @@ export class LocalStorageStateStore implements SettingsStore {
 }
 
 /**
- * Desktop build. Every method is a wfm-core-backed command over Tauri IPC. The
+ * Desktop build. Every method is a native command over Tauri IPC. The
  * scalar settings ride the `setting` KV table (get_setting/set_setting); the
  * reload-restore snapshot rides the same table under DESKTOP_SNAPSHOT_KEY,
  * serialized with the SAME bytes the browser writes.

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS, MAX_PER_TRADE } from './limits.js';
 import limitsFixture from '../../../tests/fixtures/limits.json';
 
-// Parity gate: wfm-core enforces these server-side (MAX_PLAN_ITEMS and
+// Parity gate: wfm-trading enforces these natively (MAX_PLAN_ITEMS and
 // MIN_PLATINUM in plan.rs, MAX_PLATINUM in listing.rs) and asserts the same
 // fixture from its own test. Rust is the source of truth; drift here
 // surfaces as the UI cheerfully accepting a batch the app then rejects.

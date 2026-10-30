@@ -483,7 +483,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!(
             "update-notes-{}-{}.db",
             std::process::id(),
-            wfm_core::identity::random_token(8)
+            wfm_trading::identity::random_token(8)
         ));
         let db = Db::open(&path).unwrap();
         seed(&db, "0.7.1", Some("0.7.1"));

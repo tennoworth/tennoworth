@@ -57,13 +57,13 @@ impl Recorder {
     }
 
     pub fn state(&self) -> RecordingState {
-        wfm_core::poison::guard(&self.state).clone()
+        crate::poison::guard(&self.state).clone()
     }
 
     /// Replace the state. Returns whether it changed, so the caller can emit a
     /// single event per transition instead of one per poll.
     pub fn set(&self, next: RecordingState) -> bool {
-        let mut state = wfm_core::poison::guard(&self.state);
+        let mut state = crate::poison::guard(&self.state);
         if *state == next {
             return false;
         }

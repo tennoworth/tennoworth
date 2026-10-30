@@ -2,7 +2,7 @@
 //! lifecycle, mirroring serve's `ServeState` listing auth minus the terminal.
 //!
 //! The passphrase arrives from the webview (the `unlock_jwt` / `wfm_login`
-//! commands) instead of a TTY prompt; wfm-core takes it as a parameter, exactly
+//! commands) instead of a TTY prompt; wfm-trading takes it as a parameter, exactly
 //! as designed for this second adapter. The plaintext JWT lives ONLY inside this
 //! process's memory for the session - never on disk (only the AES-GCM envelope,
 //! whose format is unchanged), never in a log line, and never in a value handed
@@ -18,16 +18,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use wfm_core::poison::guard;
+use crate::poison::guard;
 
-use wfm_core::paths::{config_dir_for, default_jwt_path};
-use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
-use wfm_core::trading::auth::{
+use wfm_trading::paths::{config_dir_for, default_jwt_path};
+use wfm_trading::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
+use wfm_trading::auth::{
     decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, validate_passphrase, validate_platform,
     EncryptedJwt,
 };
-use wfm_core::trading::listing::{warm_unlocked, Unlocked};
-use wfm_core::trading::plan::PlanGuard;
+use wfm_trading::orders::listing::{warm_unlocked, Unlocked};
+use wfm_trading::orders::plan::PlanGuard;
 use zeroize::Zeroize;
 
 use crate::command_error::CmdError;
@@ -519,7 +519,7 @@ impl WfmSession {
     /// short passphrase is refused before the user types their WFM password.
     pub fn validate_login(passphrase: &str, platform: &str) -> Result<(), CmdError> {
         validate_platform(platform).map_err(CmdError::internal)?;
-        // Shared with wfm-core so the floor cannot drift (it had: bytes in the
+        // Shared with wfm-trading so the floor cannot drift (it had: bytes in the
         // old CLI, chars here).
         validate_passphrase(passphrase).map_err(|e| CmdError::internal(e.to_string()))
     }
@@ -626,9 +626,9 @@ impl Default for WfmSession {
 /// JWT. Shared by `unlock` (decrypt path) and `login` (fresh-JWT path). This is
 /// the only network in the session module - everything above is offline.
 ///
-/// The warm itself lives in wfm-core; this wrapper exists for the error
+/// The warm itself lives in wfm-trading; this wrapper exists for the error
 /// mapping, which is the only thing that ever differed from serve's copy.
-/// wfm-core returns anyhow so it owes nothing to either shell, and the network
+/// wfm-trading returns anyhow so it owes nothing to either shell, and the network
 /// failures a user sees here are WFM's.
 fn warm(jwt: String, platform: String) -> Result<Unlocked, CmdError> {
     warm_unlocked(jwt, platform).map_err(CmdError::wfm)

@@ -1,8 +1,8 @@
 # Workspace root. Members:
-#   wfm-core            - reusable core: process scan, inventory fetch, WFM auth +
-#                         encrypted-JWT storage, listing/order service, pending-plan
-#                         store. No terminal I/O - the
-#                         desktop shell drives it over IPC.
+#   game-acquisition    - process detection, memory scan, DE inventory fetch.
+#   wfm-trading         - WFM auth + encrypted-JWT storage, listing/order
+#                         service, pending-plan store, presence, market reads.
+#                         Neither has terminal I/O: the desktop drives both.
 #   wfm-scrape          - host-only pipeline crate: `build` renders market.json
 #                         + wfstat-catalog.json, `scrape` runs the WFM scrape.
 #                         The ONLY pipeline; fixture
@@ -16,13 +16,13 @@
 #                         native decision contracts: inventory normalization,
 #                         scoring, planners, generated IPC types.
 #   tennoworth-desktop  - Tauri v2 shell, the app users actually install.
-#                         Drives wfm-core over IPC - the only player adapter.
+#                         Drives both over IPC - the only player adapter.
 #   tennoworth-usage    - the opt-in installation-count service on the host.
 #   tennoworth-reports  - the opt-in anonymous price-report service on the host.
 #   tennoworth-announcements - pure feed contract shared by readers and publishers.
 #   tennoworth-publisher - private host-only announcement publication service.
 [workspace]
-members = ["wfm-core", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "collector-gate", "tennoworth-announcements", "tennoworth-publisher"]
+members = ["game-acquisition", "wfm-trading", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "collector-gate", "tennoworth-announcements", "tennoworth-publisher"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping

@@ -19,11 +19,12 @@ test('an instruction file under a code path does not start native jobs', () => {
   const native = { 'audit.yml': 'rust_code', 'ui-smoke.yml': 'desktop' };
   for (const [name, filter] of Object.entries(native)) {
     const { filters } = load(name);
-    for (const path of ['rust/AGENTS.md', 'rust/wfm-core/AGENTS.md', 'rust/wfm-client/AGENTS.md', 'frontend/AGENTS.md']) {
+    for (const path of ['rust/AGENTS.md', 'rust/wfm-trading/AGENTS.md', 'rust/game-acquisition/AGENTS.md', 'rust/wfm-client/AGENTS.md', 'frontend/AGENTS.md']) {
       expect({ name, path, native: matches(filters[filter], path) }).toEqual({ name, path, native: false });
       expect({ name, path, docs: matches(filters.docs_only, path) }).toEqual({ name, path, docs: true });
     }
-    expect(matches(filters[filter], 'rust/wfm-core/src/lib.rs')).toBe(true);
+    expect(matches(filters[filter], 'rust/wfm-trading/src/lib.rs')).toBe(true);
+    expect(matches(filters[filter], 'rust/game-acquisition/src/scan.rs')).toBe(true);
   }
 });
 

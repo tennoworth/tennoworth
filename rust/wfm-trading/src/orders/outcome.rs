@@ -15,7 +15,7 @@ use wfm_client::governor::AccessError;
 
 // The wire spellings live beside the journal field that stores them; this module
 // maps outcomes onto them rather than declaring a second copy.
-use crate::trading::pending::{STATUS_ERROR, STATUS_OK, STATUS_PENDING, STATUS_UNCERTAIN};
+use crate::orders::pending::{STATUS_ERROR, STATUS_OK, STATUS_PENDING, STATUS_UNCERTAIN};
 
 /// The four things that can happen to a send, with no fourth way to say them.
 ///

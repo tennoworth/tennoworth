@@ -218,7 +218,7 @@ pub(crate) fn open_socket(tick: Duration) -> Result<Socket> {
     );
     req.headers_mut().insert(
         "User-Agent",
-        wfm_client::user_agent("wfm-core-ws", env!("CARGO_PKG_VERSION"))
+        wfm_client::user_agent("wfm-trading-ws", env!("CARGO_PKG_VERSION"))
             .parse()
             .context("ua header")?,
     );

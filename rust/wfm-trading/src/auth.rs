@@ -317,7 +317,7 @@ mod tests {
         #[derive(Deserialize)]
         struct Case { name: String, passphrase: String, accepted: bool }
         let cases: Vec<Case> = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/passphrase-floor.json"
+            "../../../tests/fixtures/passphrase-floor.json"
         )).unwrap();
         for case in cases {
             assert_eq!(validate_passphrase(&case.passphrase).is_ok(), case.accepted, "{}", case.name);

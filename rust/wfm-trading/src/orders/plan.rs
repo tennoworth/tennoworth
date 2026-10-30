@@ -1,7 +1,7 @@
 //! The bulk-listing plan executor: turns a browser-submitted [`PlanRequest`]
 //! into WFM orders, reconciling against the user's existing orders (create
 //! vs. update) and persisting progress after every item so a crash mid-batch
-//! is resumable via [`crate::trading::pending`].
+//! is resumable via [`crate::orders::pending`].
 
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -10,14 +10,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::identity::random_token;
 use crate::time::chrono_now_iso;
-use crate::trading::catalog::WfmCatalogItem;
-use crate::trading::outcome::MutationOutcome;
-use crate::trading::listing::{
+use crate::market::catalog::WfmCatalogItem;
+use crate::orders::outcome::MutationOutcome;
+use crate::orders::listing::{
     decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked,
 };
 use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM, MAX_PER_TRADE};
-use crate::trading::orders::DecodedOrders;
-use crate::trading::pending::{journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan};
+use crate::orders::decode::DecodedOrders;
+use crate::orders::pending::{journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan};
 use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 
 /// Resets a plan-in-flight flag on scope exit - including early return and
@@ -353,7 +353,7 @@ fn run_pending_with_store(
         let Some(item) = pending.items.get(i) else {
             continue;
         };
-        if item.status != crate::trading::pending::STATUS_PENDING {
+        if item.status != crate::orders::pending::STATUS_PENDING {
             continue;
         }
         if let Err(error) = wfm_client::governor::process().check(
@@ -367,12 +367,12 @@ fn run_pending_with_store(
         // A crash after the market accepts the mutation but before its result
         // reaches disk must never leave this item eligible for blind replay.
         if let Some(item) = pending.items.get_mut(i) {
-            item.status = crate::trading::pending::STATUS_UNCERTAIN.into();
+            item.status = crate::orders::pending::STATUS_UNCERTAIN.into();
             item.message = Some("The app stopped while handling this listing. Check My Orders before listing it again.".into());
         }
         if let Err(error) = persist(pending_path, pending) {
             if let Some(item) = pending.items.get_mut(i) {
-                item.status = crate::trading::pending::STATUS_PENDING.into();
+                item.status = crate::orders::pending::STATUS_PENDING.into();
                 item.message = prior_message;
             }
             return durability_failure(pending, format!("Could not save the listing before sending it: {error}"));
@@ -385,7 +385,7 @@ fn run_pending_with_store(
         // re-offers `pending` - leaves it for explicit reconciliation.
         let interrupted = matches!(
             result.status.as_str(),
-            crate::trading::pending::STATUS_PENDING | crate::trading::pending::STATUS_UNCERTAIN
+            crate::orders::pending::STATUS_PENDING | crate::orders::pending::STATUS_UNCERTAIN
         );
         if let Some(item) = pending.items.get_mut(i) {
             item.status = result.status.clone();
@@ -436,9 +436,9 @@ fn validation_failure(pending: &PendingPlan, error: impl Into<PlanValidationErro
     // can record their order IDs even though later rows were never sent.
     if matches!(error, PlanValidationError::Market(_))
         || pending.items.iter().any(|item| matches!(item.status.as_str(),
-            crate::trading::pending::STATUS_OK | crate::trading::pending::STATUS_ERROR)) {
+            crate::orders::pending::STATUS_OK | crate::orders::pending::STATUS_ERROR)) {
         return PlanResponse { plan_id: pending.plan_id.clone(), results: pending.items.iter().map(|item| ItemResult {
-            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == crate::trading::pending::STATUS_PENDING { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
+            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == crate::orders::pending::STATUS_PENDING { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
         }).collect(), durability_error: None };
     }
     PlanResponse {
@@ -872,7 +872,7 @@ fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bo
 mod tests {
     use std::time::Duration;
     use super::*;
-    use crate::trading::pending::clear_finished_pending;
+    use crate::orders::pending::clear_finished_pending;
 
     #[test]
     fn late_validation_failure_preserves_confirmed_rows_for_history() {
@@ -893,7 +893,7 @@ mod tests {
             message: None, order_id: Some("remote-sent".into()), action: Some("created".into()) });
         assert_eq!(response.results.len(), 2);
         assert_eq!(response.results[0].order_id.as_deref(), Some("remote-sent"));
-        assert_eq!(response.results[1].status, crate::trading::pending::STATUS_PENDING);
+        assert_eq!(response.results[1].status, crate::orders::pending::STATUS_PENDING);
         assert!(response.results[1].message.as_deref().unwrap().contains("inventory changed"));
         let _ = std::fs::remove_file(&path);
     }
@@ -919,8 +919,8 @@ mod tests {
                 })
             }));
             assert!(result.is_err());
-            let mut restored = crate::trading::pending::load_pending(&path).unwrap().unwrap();
-            assert_eq!(restored.items[count - 1].status, crate::trading::pending::STATUS_UNCERTAIN);
+            let mut restored = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+            assert_eq!(restored.items[count - 1].status, crate::orders::pending::STATUS_UNCERTAIN);
             let mut resent = Vec::new();
             run_pending_with(&path, &mut restored, || Ok(()), |item, _| {
                 resent.push(item.slug.clone());
@@ -955,8 +955,8 @@ mod tests {
             assert!(response.durability_error.as_deref().unwrap().contains("injected disk failure"));
             assert_eq!(response.results[count - 1].status, "ok");
             assert_eq!(response.results[count - 1].order_id.as_deref(), Some(format!("remote-item-{}", count - 1).as_str()));
-            let restored = crate::trading::pending::load_pending(&path).unwrap().unwrap();
-            assert_eq!(restored.items[count - 1].status, crate::trading::pending::STATUS_UNCERTAIN);
+            let restored = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+            assert_eq!(restored.items[count - 1].status, crate::orders::pending::STATUS_UNCERTAIN);
             assert!(!restored.is_finished());
             let _ = std::fs::remove_file(&path);
         }
@@ -985,10 +985,10 @@ mod tests {
             });
         assert_eq!(response.results[0].order_id.as_deref(), Some("remote-final"));
         assert!(response.durability_error.is_some());
-        let saved = crate::trading::pending::load_pending(&path).unwrap().expect("journal retained");
-        assert_eq!(saved.items[0].status, crate::trading::pending::STATUS_UNCERTAIN);
+        let saved = crate::orders::pending::load_pending(&path).unwrap().expect("journal retained");
+        assert_eq!(saved.items[0].status, crate::orders::pending::STATUS_UNCERTAIN);
         let mut finished_in_memory = saved.clone();
-        finished_in_memory.items[0].status = crate::trading::pending::STATUS_OK.into();
+        finished_in_memory.items[0].status = crate::orders::pending::STATUS_OK.into();
         clear_finished_pending(&path, &finished_in_memory).unwrap();
         assert!(path.exists(), "an uncertain disk marker must survive a finished memory snapshot");
         let _ = std::fs::remove_file(&path);
@@ -1011,9 +1011,9 @@ mod tests {
         }, |_, _| anyhow::bail!("injected marker write failure"));
         assert!(!sent);
         assert!(response.durability_error.as_deref().unwrap().contains("before sending"));
-        assert_eq!(response.results[0].status, crate::trading::pending::STATUS_PENDING);
-        assert_eq!(crate::trading::pending::load_pending(&path).unwrap().unwrap().items[0].status,
-            crate::trading::pending::STATUS_PENDING);
+        assert_eq!(response.results[0].status, crate::orders::pending::STATUS_PENDING);
+        assert_eq!(crate::orders::pending::load_pending(&path).unwrap().unwrap().items[0].status,
+            crate::orders::pending::STATUS_PENDING);
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1023,7 +1023,7 @@ mod tests {
     fn index_orders_body(
         body: &serde_json::Value,
     ) -> anyhow::Result<BTreeMap<OrderKey, ExistingOrder>> {
-        Ok(index_existing_orders(&crate::trading::orders::decode_orders(
+        Ok(index_existing_orders(&crate::orders::decode::decode_orders(
             body,
             &Unconstrained,
         )?))
@@ -1048,7 +1048,7 @@ mod tests {
 
     #[test]
     fn uncertain_only_or_final_send_survives_execution_and_restart() {
-        use crate::trading::pending::{journal_state, load_pending, JournalState, STATUS_UNCERTAIN};
+        use crate::orders::pending::{journal_state, load_pending, JournalState, STATUS_UNCERTAIN};
 
         let unlocked = Unlocked {
             jwt: "fixture".into(),
@@ -1150,7 +1150,7 @@ mod tests {
 
         // The journal records what actually happened, and the later item is
         // still waiting.
-        let saved = crate::trading::pending::load_pending(&path).expect("journal readable").expect("journal kept");
+        let saved = crate::orders::pending::load_pending(&path).expect("journal readable").expect("journal kept");
         assert_eq!(
             saved.items[0].status, "uncertain_mutation",
             "an unknown outcome must not be recorded as never-sent"
@@ -1158,7 +1158,7 @@ mod tests {
         assert_eq!(saved.items[1].status, "pending");
 
         // And a resume must not re-send it as though nothing had been sent.
-        let mut pending = crate::trading::pending::load_pending(&path).unwrap().unwrap();
+        let mut pending = crate::orders::pending::load_pending(&path).unwrap().unwrap();
         let mut resumed: Vec<String> = Vec::new();
         run_pending_with(
             &path,
@@ -1256,7 +1256,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                 ["ok", "pending", "pending"]
             );
-            let mut saved = crate::trading::pending::load_pending(&path).expect("readable").expect("present");
+            let mut saved = crate::orders::pending::load_pending(&path).expect("readable").expect("present");
             assert_eq!(saved.items[1].status, "pending");
             assert_eq!(
                 saved.items[1].message.as_deref(),
@@ -1288,7 +1288,7 @@ mod tests {
             assert_eq!(resumed, ["waiting", "later"]);
             assert!(validations.get() >= resumed.len());
             assert!(response.results.iter().all(|item| item.status == "ok"));
-            assert!(crate::trading::pending::load_pending(&path)
+            assert!(crate::orders::pending::load_pending(&path)
                 .expect("readable")
                 .expect("present")
                 .items

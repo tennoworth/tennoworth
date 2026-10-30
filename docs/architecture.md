@@ -39,9 +39,12 @@ rust/
       recognition/           reward layout, matching, result assembly
       presentation/          native windows and Wayland presentation
       lifecycle.rs           capture exclusion and current-result identity
-  wfm-core/src/
-    acquisition/             process scan and DE inventory acquisition
-    trading/                 authentication, catalog, orders, plans, recovery
+  game-acquisition/          process scan, memory read, DE inventory fetch
+  wfm-trading/src/
+    auth.rs                  sign-in and the encrypted JWT envelope
+    orders/                  order decoding, listing plans, pending journal, outcomes
+    presence/                presence and the live order stream
+    market/                  catalog, live order-book top, riven auctions
   wfm-scrape/src/
     ingest/                  upstream transport and source-specific adapters
     pipeline/                build orchestration, root discovery, publication
@@ -89,9 +92,9 @@ acquired by scanning the running game process; the hosted surface never sees it.
                          ▼
         ┌── desktop app (tennoworth-desktop, Tauri) ──┐
         │  same-origin webview (the SPA)              │
-        │  scan_inventory → wfm-core → IPC            │
+        │  scan_inventory → game-acquisition → IPC    │
         │  wfm_login → wfm-jwt.enc (AES, Rust-side)   │
-        │  listing / orders → wfm-core → WFM          │
+        │  listing / orders → wfm-trading → WFM       │
         └────────────────────────┬────────────────────┘
                                  │
                  ┌───────────────┴──────────────────┐
@@ -154,7 +157,8 @@ flowchart TD
   Adapters --> Domain
   Domain --> Contracts
   Adapters -->|desktop IPC| Desktop[tennoworth-desktop]
-  Desktop --> Core[wfm-core]
+  Desktop --> Acq[game-acquisition]
+  Desktop --> Core[wfm-trading]
   Desktop --> Client[wfm-client]
   Desktop --> Market[market-domain]
   Desktop --> Feed[tennoworth-announcements]
@@ -235,16 +239,15 @@ including Wayland-specific rendering. Lifecycle state keeps capture exclusion
 separate from the identity of the currently displayed result: finishing a
 capture must not implicitly clear or replace that identity.
 
-`wfm-core` stays usable without terminal prompts or a Tauri dependency. Its
-acquisition and trading modules share narrowly named HTTP, identity, path, and
-time helpers. `wfm-client` shares transport primitives, not an abstraction that
+`game-acquisition` and `wfm-trading` stay usable without terminal prompts or a
+Tauri dependency, and acquisition never talks to warframe.market. `wfm-client` shares transport primitives, not an abstraction that
 combines anonymous scraping with authenticated order mutation. `market-domain`'s
 `math` module has no I/O or clock dependency, and the crate isolates decision contracts and computations from both Tauri and the network
 core, so shared fixtures and contract generation can run without the GUI stack.
 
-That is why `wfm-core` depends on `market-domain` rather than the reverse, and
+That is why `wfm-trading` depends on `market-domain` rather than the reverse, and
 only where a transport response has to become a typed contract. The
-market's own-orders response is decoded once, in `wfm-core::trading::orders`,
+market's own-orders response is decoded once, in `wfm_trading::orders::decode`,
 into the vendor-neutral `market-domain::orders` types; a response it cannot read
 whole is refused as a whole rather than partly reconciled. Listing reconciliation refuses any undecodable row. Trade auto-close uses the
 same decoder per row, logs refused rows, and leaves them untouched while

@@ -33,7 +33,8 @@ fn no_client_reads_the_published_report_prices() {
     for root in [
         "rust/tennoworth-desktop/src",
         "rust/wfm-scrape/src",
-        "rust/wfm-core/src",
+        "rust/game-acquisition/src",
+        "rust/wfm-trading/src",
         "rust/wfm-client/src",
         "frontend/src",
     ] {

@@ -6,8 +6,8 @@ use reqwest::blocking::Client;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use crate::acquisition::error::ScanError;
-use crate::acquisition::scan::{find_wf_pid, scan_session, SessionInfo};
+use crate::error::ScanError;
+use crate::scan::{find_wf_pid, scan_session, SessionInfo};
 
 const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 
@@ -76,7 +76,7 @@ fn get_inventory(url: &str, info: &SessionInfo, ct: &str) -> Result<Vec<u8>> {
 /// carries the live `accountId` and `nonce` in its query string - so an
 /// ordinary connection failure would otherwise put session credentials into the
 /// tray log and the webview. Removing it here keeps them out of the error chain
-/// entirely; [`crate::acquisition::error::redact_session_creds`] is the second
+/// entirely; [`crate::error::redact_session_creds`] is the second
 /// boundary for text that arrives some other way.
 fn without_url(e: reqwest::Error) -> anyhow::Error {
     anyhow::Error::from(e.without_url())
