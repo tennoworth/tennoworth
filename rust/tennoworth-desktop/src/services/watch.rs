@@ -9,7 +9,7 @@
 //! re-arms rather than nags. Evaluation is pure ([`evaluate`]) and tested;
 //! the loop is the thin shell around it.
 //!
-//! The user's own orders are excluded from the book (wfm-core does that by
+//! The user's own orders are excluded from the book (wfm-trading does that by
 //! username when logged in), so a 'sell' watch can't be satisfied by your own
 //! listing.
 
@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager};
-use wfm_core::trading::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
+use wfm_trading::market::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 
 use crate::persistence::{Db, Watch};
 use crate::services::wfm_session::WfmSession;

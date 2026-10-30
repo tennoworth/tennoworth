@@ -759,7 +759,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../contrac
   <PendingBatchBanner {listing} {marketAccess} onorders={() => filters.setView('orders')} />
 {/snippet}
 
-<!-- Desktop only (listing needs wfm-core's session). onauthrequired fires on
+<!-- Desktop only (listing needs wfm-trading's session). onauthrequired fires on
      typed needs_login/needs_unlock rejections. -->
 <ListingReviewModal
     {listingBlockReason} currentSnapshotId={inventory.nativeSnapshotId} onrecheck={checkListingRequirements} {listingActionLabel}

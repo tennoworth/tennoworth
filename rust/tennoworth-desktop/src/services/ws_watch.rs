@@ -18,9 +18,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
-use wfm_core::http::browser_client;
-use wfm_core::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
-use wfm_core::trading::ws::{order_matches_watch, run_new_orders_stream, NewOrder};
+use wfm_trading::http::browser_client;
+use wfm_trading::market::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
+use wfm_trading::presence::ws::{order_matches_watch, run_new_orders_stream, NewOrder};
 
 use crate::persistence::{Db, Watch};
 use crate::services::watch::{
@@ -299,12 +299,12 @@ mod tests {
             let frame = serde_json::json!({"route":"@wfm|event/subscriptions/newOrder", "payload":{
                 "id":"lot", "itemId":"i", "type":side, "platinum":36, "perTrade":5, "quantity":5
             }});
-            let wfm_core::trading::ws::WsEvent::NewOrder(order) =
-                wfm_core::trading::ws::parse_ws_event(&frame.to_string())
+            let wfm_trading::presence::ws::WsEvent::NewOrder(order) =
+                wfm_trading::presence::ws::parse_ws_event(&frame.to_string())
             else {
                 panic!("expected bulk order")
             };
-            let top = wfm_core::trading::live_top::LiveTop {
+            let top = wfm_trading::market::live_top::LiveTop {
                 slug: "item".into(),
                 rank: Some(0),
                 subtype: None,

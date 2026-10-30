@@ -7,7 +7,7 @@ pub(crate) fn capture_warframe() -> Result<CapturedFrame, String> {
         .iter()
         .map(|window| (window.pid().ok(), window.title().unwrap_or_default()))
         .collect();
-    let chosen = super::pick_game_window(&candidates, wfm_core::acquisition::scan::find_wf_pid());
+    let chosen = super::pick_game_window(&candidates, game_acquisition::scan::find_wf_pid());
     if let Some((index, rule)) = chosen {
         let title = candidates
             .get(index)

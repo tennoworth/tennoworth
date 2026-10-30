@@ -1693,6 +1693,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "game-acquisition"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "regex",
+ "regex-syntax",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "windows 0.58.0",
+]
+
+[[package]]
 name = "gbm"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5657,6 +5671,7 @@ dependencies = [
  "base64 0.22.1",
  "cairo-rs",
  "chrono",
+ "game-acquisition",
  "gtk",
  "hmac",
  "image",
@@ -5689,7 +5704,7 @@ dependencies = [
  "wayland-protocols",
  "wayland-protocols-wlr",
  "wfm-client",
- "wfm-core",
+ "wfm-trading",
  "windows 0.61.3",
  "xcap",
  "xcb",
@@ -6730,31 +6745,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wfm-core"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "anyhow",
- "base64 0.22.1",
- "directories",
- "hmac",
- "libc",
- "market-domain",
- "pbkdf2",
- "rand 0.10.2",
- "regex",
- "regex-syntax",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sha2",
- "sysinfo",
- "tungstenite",
- "wfm-client",
- "windows 0.58.0",
-]
-
-[[package]]
 name = "wfm-scrape"
 version = "0.1.0"
 dependencies = [
@@ -6766,6 +6756,27 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "wfm-client",
+]
+
+[[package]]
+name = "wfm-trading"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "base64 0.22.1",
+ "directories",
+ "hmac",
+ "libc",
+ "market-domain",
+ "pbkdf2",
+ "rand 0.10.2",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tungstenite",
  "wfm-client",
 ]
 

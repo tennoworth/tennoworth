@@ -33,7 +33,7 @@ pub async fn protection_state(
                 .map_err(|_| "Unlock WFM to account for your current listings.".to_string())
         })
         .and_then(|unlocked| {
-            wfm_core::trading::listing::list_user_orders(&unlocked).map_err(|e| e.to_string())
+            wfm_trading::orders::listing::list_user_orders(&unlocked).map_err(|e| e.to_string())
         });
         crate::services::protection::guidance_state(&app.state::<Db>(), &market, orders, inventory)
             .map_err(CmdError::internal)

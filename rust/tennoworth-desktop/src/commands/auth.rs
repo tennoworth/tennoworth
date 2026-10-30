@@ -75,7 +75,7 @@ pub async fn wfm_login_with_token(
     let generation = session.session_generation();
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        match wfm_core::trading::auth::jwt_is_signed_in(&jwt, &platform) {
+        match wfm_trading::auth::jwt_is_signed_in(&jwt, &platform) {
             Ok(true) => {}
             Ok(false) => {
                 return Err(CmdError::of(

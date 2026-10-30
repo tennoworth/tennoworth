@@ -1,5 +1,5 @@
 {
-  "description": "Scan failure text produced by rust/wfm-core/src/acquisition and the diagnostic category the SPA reports for it. Rust checks that each source still produces text starting with `message`; the frontend checks the category and HTTP status it derives from that text.",
+  "description": "Scan failure text produced by rust/game-acquisition/src and the diagnostic category the SPA reports for it. Rust checks that each source still produces text starting with `message`; the frontend checks the category and HTTP status it derives from that text.",
   "cases": [
     {
       "source": "game_not_running",

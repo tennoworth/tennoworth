@@ -127,12 +127,12 @@ impl MarketCache {
     }
 
     pub fn cached_announcements(&self) -> Option<String> {
-        wfm_core::poison::guard(&self.announcements).clone().or_else(|| read_cache(&self.dir, &ANNOUNCEMENTS))
+        crate::poison::guard(&self.announcements).clone().or_else(|| read_cache(&self.dir, &ANNOUNCEMENTS))
     }
 
     pub fn adopt_announcements(&self, body: &str) {
         let Some(next) = super::announcements::validated_stamp(body) else { return; };
-        let mut current = wfm_core::poison::guard(&self.announcements);
+        let mut current = crate::poison::guard(&self.announcements);
         let prior = current.as_deref().and_then(super::announcements::validated_stamp);
         if prior.is_none_or(|prior| next >= prior) { *current = Some(body.to_owned()); }
     }
@@ -263,7 +263,7 @@ pub(crate) fn artifact_client() -> Option<&'static reqwest::blocking::Client> {
     CLIENT
         .get_or_init(|| {
             reqwest::blocking::Client::builder()
-                .user_agent(wfm_core::user_agent())
+                .user_agent(wfm_trading::user_agent())
                 .timeout(TIMEOUT)
                 .redirect(reqwest::redirect::Policy::none())
                 .build()
@@ -304,7 +304,7 @@ fn keep_cache(dir: &Path, spec: &ArtifactSpec, etag: Option<String>) -> RefreshR
 /// not run on an async worker thread), the same pattern `scan_inventory` uses.
 pub fn refresh(dir: &Path) -> RefreshResult {
     static REFRESH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _lock = wfm_core::poison::guard(&REFRESH_LOCK);
+    let _lock = crate::poison::guard(&REFRESH_LOCK);
     refresh_artifact(dir, &MARKET, &MARKET.url())
 }
 
@@ -313,13 +313,13 @@ pub fn refresh(dir: &Path) -> RefreshResult {
 /// other is still writing would cache a truncated file.
 pub fn refresh_history(dir: &Path) -> RefreshResult {
     static REFRESH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _lock = wfm_core::poison::guard(&REFRESH_LOCK);
+    let _lock = crate::poison::guard(&REFRESH_LOCK);
     refresh_artifact(dir, &HISTORY, &HISTORY.url())
 }
 
 pub fn refresh_announcements(dir: &Path) -> RefreshResult {
     static REFRESH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _lock = wfm_core::poison::guard(&REFRESH_LOCK);
+    let _lock = crate::poison::guard(&REFRESH_LOCK);
     refresh_artifact(dir, &ANNOUNCEMENTS, &ANNOUNCEMENTS.url())
 }
 

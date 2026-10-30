@@ -9,7 +9,7 @@ use tauri::menu::{CheckMenuItem, Menu, MenuBuilder, MenuItem, PredefinedMenuItem
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 
-use wfm_core::poison::guard;
+use crate::poison::guard;
 
 use crate::services::acquisition::{publish_scan, scan_and_record};
 use crate::persistence::Db;

@@ -17,7 +17,7 @@ export interface MarketRefreshResult {
 }
 
 /**
- * The operations the app performs against wfm-core. The desktop shell provides these capabilities through Tauri IPC.
+ * The operations the app performs natively. The desktop shell provides these capabilities through Tauri IPC.
  */
 /**
  * Automatic-scan preferences and loop status. Generated from the Rust wire

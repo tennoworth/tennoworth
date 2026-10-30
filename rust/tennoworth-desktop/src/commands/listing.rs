@@ -1,6 +1,6 @@
 //! WFM listing/order commands - the desktop mirror of serve's listing
-//! routes: same wfm-core services (`wfm_core::trading::listing` for single-order
-//! CRUD, `wfm_core::trading::plan` for the bulk-plan executor), gated on
+//! routes: same wfm-trading services (`wfm_trading::orders::listing` for single-order
+//! CRUD, `wfm_trading::orders::plan` for the bulk-plan executor), gated on
 //! [`WfmSession`]'s unlock state instead of serve's lazy-JWT-unlock.
 #![allow(
     clippy::unreachable,
@@ -11,15 +11,15 @@ use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
-use wfm_core::trading::listing::{
+use wfm_trading::orders::listing::{
     bulk_set_visibility, delete_order as core_delete_order, list_user_orders,
     update_order as core_update_order, PerOrderResult, UpdateRequest, VisibilityRequest,
 };
 use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
-use wfm_core::trading::pending::{
+use wfm_trading::orders::pending::{
     clear_finished_pending, clear_pending, journal_state, load_pending, JournalState, PendingPlan,
 };
-use wfm_core::trading::plan::{
+use wfm_trading::orders::plan::{
     execute_plan as core_execute_plan, run_pending, ItemResult, PlanItem, PlanRequest, PlanResponse,
     PlanValidationError,
 };
@@ -175,10 +175,10 @@ fn validate_protected_contents(
 
 fn validate_session_contents(
     items: &[PlanItem],
-    context: &wfm_core::trading::plan::SessionConstraint,
+    context: &wfm_trading::orders::plan::SessionConstraint,
     remaining: Option<u32>,
     quantities: &std::collections::BTreeMap<String, u32>,
-    catalog: &std::collections::BTreeMap<String, wfm_core::trading::catalog::WfmCatalogItem>,
+    catalog: &std::collections::BTreeMap<String, wfm_trading::market::catalog::WfmCatalogItem>,
     recipes: &std::collections::BTreeMap<String, std::collections::BTreeMap<String, u32>>,
 ) -> Result<(), String> {
     if context.budget == 0
@@ -202,7 +202,7 @@ fn validate_session_contents(
         let lot = item
             .per_trade
             .ok_or("Trade Session requires explicit units per trade.")?;
-        wfm_core::trading::plan::validate_lot(item.quantity, Some(lot), cat.bulk_tradable)?;
+        wfm_trading::orders::plan::validate_lot(item.quantity, Some(lot), cat.bulk_tradable)?;
         if item.platinum.saturating_mul(lot) > MAX_PLATINUM {
             return Err(format!(
                 "Lot total exceeds {MAX_PLATINUM}p; reduce price or units per trade."
@@ -278,7 +278,7 @@ fn finished_plan_response(pending: &PendingPlan) -> PlanResponse {
 }
 
 /// Execute a listing batch - the desktop POST /plan. Pacing, caps, pending-file
-/// persistence, and per-item results all come from wfm-core's execute_plan.
+/// persistence, and per-item results all come from wfm-trading's execute_plan.
 #[tauri::command]
 pub async fn submit_plan(
     app: AppHandle,
@@ -409,7 +409,7 @@ pub struct OwnOrder {
 
 fn display_order(
     order: NormalizedOrder,
-    unlocked: &wfm_core::trading::listing::Unlocked,
+    unlocked: &wfm_trading::orders::listing::Unlocked,
 ) -> OwnOrder {
     let meta = unlocked.id_to_item.get(&order.item_id);
     OwnOrder {
@@ -435,8 +435,8 @@ pub async fn fetch_orders(
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
-        let body = wfm_core::trading::listing::cached_user_orders(&unlocked).map_err(CmdError::wfm)?;
-        let decoded = wfm_core::trading::listing::decode_user_orders(&unlocked, &body).map_err(CmdError::wfm)?;
+        let body = wfm_trading::orders::listing::cached_user_orders(&unlocked).map_err(CmdError::wfm)?;
+        let decoded = wfm_trading::orders::listing::decode_user_orders(&unlocked, &body).map_err(CmdError::wfm)?;
         decoded
             .orders
             .into_iter()
@@ -511,7 +511,7 @@ pub async fn delete_order(
 }
 
 /// Bulk-toggle listing visibility (POST /orders/visibility). Per-order results;
-/// pacing lives in wfm-core's bulk_set_visibility.
+/// pacing lives in wfm-trading's bulk_set_visibility.
 #[tauri::command]
 pub async fn bulk_visibility(
     session: State<'_, Arc<WfmSession>>,
@@ -535,9 +535,9 @@ pub async fn bulk_visibility(
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-    use wfm_core::trading::catalog::WfmCatalogItem;
-    use wfm_core::trading::pending::write_pending_atomic;
-    use wfm_core::trading::plan::SessionConstraint;
+    use wfm_trading::market::catalog::WfmCatalogItem;
+    use wfm_trading::orders::pending::write_pending_atomic;
+    use wfm_trading::orders::plan::SessionConstraint;
 
     #[test]
     fn finished_plan_clears_its_journal() {

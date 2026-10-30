@@ -1,6 +1,6 @@
 // Listing health - the state of each of YOUR live WFM listings against two
 // things the panel can know right now: the live top-of-book for that exact
-// tier (with your own order already excluded - see wfm-core `live_top`), and
+// tier (with your own order already excluded - see wfm-trading `market::live_top`), and
 // what your latest inventory scan says you still own.
 //
 // This is deliberately not the snapshot-based drift check in `order-drift.ts`

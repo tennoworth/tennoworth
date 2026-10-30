@@ -36,7 +36,7 @@ fn file_position(file: &mut std::fs::File) -> Option<LogPosition> {
         return None;
     }
     Some(LogPosition {
-        session: wfm_core::identity::local_fingerprint("tennoworth-eelog-v1", &prefix),
+        session: wfm_trading::identity::local_fingerprint("tennoworth-eelog-v1", &prefix),
         start: meta.len(),
         end: meta.len(),
         observed_after: crate::services::unix_now(),
@@ -264,7 +264,7 @@ pub fn locate_log() -> Option<PathBuf> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let home = wfm_core::platform::dirs_home();
+        let home = wfm_trading::platform::dirs_home();
         let roots = [
             home.join(".local/share/Steam"),
             home.join(".steam/steam"),
@@ -409,7 +409,7 @@ fn tail_with_ticks(
 ) {
     let mut machine = TradeMachine::new();
     let initial = log_position(path);
-    let mut fallback_session = wfm_core::identity::random_token(16);
+    let mut fallback_session = wfm_trading::identity::random_token(16);
     let mut offset = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let mut session = initial
         .map(|p| p.session)
@@ -453,7 +453,7 @@ fn tail_with_ticks(
                 identified = false;
                 let Ok(meta) = file.metadata() else { continue };
                 if meta.len() < offset {
-                    fallback_session = wfm_core::identity::random_token(16);
+                    fallback_session = wfm_trading::identity::random_token(16);
                 }
                 LogPosition {
                     session: fallback_session.clone(),
@@ -610,7 +610,7 @@ mod tests {
         use std::io::Write;
         let path = std::env::temp_dir().join(format!(
             "eelog-position-{}",
-            wfm_core::identity::random_token(12)
+            wfm_trading::identity::random_token(12)
         ));
         let header = "0.1 Sys [Diag]: Current time: Mon Sep 7 10:00:00 2026 [UTC: Mon Sep 7 09:00:00 2026]\n";
         let content = format!("{header}{}", "a".repeat(4096));
@@ -849,7 +849,7 @@ mod tests {
 
         let path = std::env::temp_dir().join(format!(
             "eelog-ack-{}",
-            wfm_core::identity::random_token(12)
+            wfm_trading::identity::random_token(12)
         ));
         let header =
             "0.1 Sys [Diag]: Current time: Mon Sep 7 10:00:00 2026 [UTC: Mon Sep 7 09:00:00 2026]\n";
@@ -961,7 +961,7 @@ mod tests {
 
         let path = std::env::temp_dir().join(format!(
             "eelog-stuck-{}",
-            wfm_core::identity::random_token(12)
+            wfm_trading::identity::random_token(12)
         ));
         let header =
             "0.1 Sys [Diag]: Current time: Mon Sep 7 10:00:00 2026 [UTC: Mon Sep 7 09:00:00 2026]\n";
@@ -1032,7 +1032,7 @@ mod tests {
 
         let path = std::env::temp_dir().join(format!(
             "eelog-readable-{}",
-            wfm_core::identity::random_token(12)
+            wfm_trading::identity::random_token(12)
         ));
         let tick = Cell::new(0usize);
         let mut gaps: Vec<GapKind> = Vec::new();
@@ -1074,7 +1074,7 @@ mod tests {
 
         let path = std::env::temp_dir().join(format!(
             "eelog-unidentified-{}",
-            wfm_core::identity::random_token(12)
+            wfm_trading::identity::random_token(12)
         ));
         std::fs::write(&path, "0.1 Sys [Info]: no startup header\n").unwrap();
         let tick = Cell::new(0usize);

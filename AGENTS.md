@@ -16,8 +16,10 @@ invalidates it:
   cross-crate invariants, Rust hygiene.
 - [`rust/wfm-scrape/AGENTS.md`](rust/wfm-scrape/AGENTS.md) - DE ingest and the
   host market pipeline.
-- [`rust/wfm-core/AGENTS.md`](rust/wfm-core/AGENTS.md) - authentication, order
-  semantics, pending-plan files, memory scan.
+- [`rust/wfm-trading/AGENTS.md`](rust/wfm-trading/AGENTS.md) - authentication,
+  order semantics, pending-plan files.
+- [`rust/game-acquisition/AGENTS.md`](rust/game-acquisition/AGENTS.md) - process
+  detection and the memory scan.
 - [`rust/wfm-client/AGENTS.md`](rust/wfm-client/AGENTS.md) - WFM transport:
   headers, user agent, request budgets, retry and backoff.
 - [`frontend/AGENTS.md`](frontend/AGENTS.md) - Svelte 5 + Vite frontend

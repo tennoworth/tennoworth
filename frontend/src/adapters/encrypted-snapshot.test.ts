@@ -32,7 +32,7 @@ describe('encryptPayload / decryptPayload (round-trip)', () => {
     expect(back).toEqual(SAMPLE);
   });
 
-  // Parity gate: rust/wfm-core/src/trading/auth.rs's JWT_KDF_ITERATIONS must match
+  // Parity gate: rust/wfm-trading/src/auth.rs's JWT_KDF_ITERATIONS must match
   // this module's KDF_ITERATIONS exactly - a mismatch bricks JWT decryption
   // with a false "wrong passphrase" error. Both sides read
   // tests/fixtures/jwt-kdf.json.

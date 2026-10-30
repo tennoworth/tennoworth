@@ -9,9 +9,9 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, State};
 
-use wfm_core::poison::guard;
-use wfm_core::trading::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
-use wfm_core::trading::rivens::{fetch_riven_comps, RivenAuction, RivenStatFilter};
+use crate::poison::guard;
+use wfm_trading::market::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
+use wfm_trading::market::rivens::{fetch_riven_comps, RivenAuction, RivenStatFilter};
 
 use crate::persistence::Db;
 use crate::services::market::{self, MarketCache, RefreshResult};
@@ -168,7 +168,7 @@ pub async fn live_top_prices(
 /// The ≤20 cheapest buyouts for one weapon's rivens, optionally narrowed to
 /// rolls sharing `stats`, straight from WFM's v1 `/auctions/search` (public
 /// endpoint - works logged out; a login only chooses the market platform). The
-/// shared 10/min auction cap is enforced inside `wfm_core::trading::rivens`, so
+/// shared 10/min auction cap is enforced inside `wfm_trading::market::rivens`, so
 /// rapid "Show comps" clicks pace themselves instead of tripping WFM's budget.
 #[tauri::command]
 pub async fn riven_comps(

@@ -6,6 +6,7 @@ mod game_events;
 mod notification_contract;
 mod overlay;
 mod persistence;
+mod poison;
 mod services;
 mod trading_contract;
 mod vision;

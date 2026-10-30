@@ -13,14 +13,15 @@ the native runtime, not from browser tests.
 The crate map is [docs/architecture.md](../docs/architecture.md#repository-map);
 build and check commands are in ../CONTRIBUTING.md. Crate-specific rules:
 [`wfm-scrape/AGENTS.md`](wfm-scrape/AGENTS.md) (DE ingest, host pipeline),
-[`wfm-core/AGENTS.md`](wfm-core/AGENTS.md) (auth, orders, pending plans, memory
-scan), [`wfm-client/AGENTS.md`](wfm-client/AGENTS.md) (WFM transport).
+[`wfm-trading/AGENTS.md`](wfm-trading/AGENTS.md) (auth, orders, pending plans),
+[`game-acquisition/AGENTS.md`](game-acquisition/AGENTS.md) (memory scan), [`wfm-client/AGENTS.md`](wfm-client/AGENTS.md) (WFM transport).
 
-- `wfm-core` stays usable without a terminal or Tauri: **no interactive
-  terminal I/O** - the passphrase arrives from the webview over IPC.
+- `game-acquisition` and `wfm-trading` stay usable without a terminal or
+  Tauri: **no interactive terminal I/O** - the passphrase arrives from the
+  webview over IPC. `game-acquisition` never talks to warframe.market.
 - `market-domain::math` stays pure: no I/O, nothing outside `std`, no clock.
 - `wfm-client` shares transport primitives only; authed order mutation and its
-  reconciliation stay in `wfm-core`'s trading services.
+  reconciliation stay in `wfm-trading`.
 - `wfm-scrape` is the ONLY market pipeline and runs only on the host.
 - `market-domain` holds the market heuristics, decision contracts and
   computations, free of Tauri and the network; `market-domain-wasm` exposes it to the browser preview and never
@@ -40,7 +41,7 @@ These bind every crate here, including callers:
   ambiguous create.
 - **The listing caps have one home.** `MAX_PLAN_ITEMS`, `MIN_PLATINUM` and
   `MAX_PLATINUM` are defined once in `market-domain/src/limits.rs` and imported
-  by every enforcement point (listing plans and order edits in `wfm-core`, the
+  by every enforcement point (listing plans and order edits in `wfm-trading`, the
   desktop's `commands/listing.rs`, trade-session selection). Never restate a
   value; the frontend's pre-flight copy is gated by `tests/fixtures/limits.json`.
 - **Nullable auxiliary market maps are not a broken snapshot.** Desktop cache

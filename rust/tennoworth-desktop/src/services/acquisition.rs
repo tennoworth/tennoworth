@@ -74,7 +74,7 @@ pub(crate) fn record_snapshot(
 fn record_game_scan(
     app: &AppHandle,
     bytes: &[u8],
-    info: &wfm_core::acquisition::scan::SessionInfo,
+    info: &game_acquisition::scan::SessionInfo,
     before: Option<crate::services::eelog::LogPosition>,
     started_at: i64,
 ) -> Option<i64> {
@@ -84,7 +84,7 @@ fn record_game_scan(
     let recorded = (|| -> Result<i64, String> {
         let id = record_snapshot(&db, "memory", info.build.as_deref(), bytes)?;
         let raw = serde_json::from_slice(bytes).map_err(|e| format!("read scan metadata: {e}"))?;
-        let account_key = wfm_core::identity::local_fingerprint(
+        let account_key = wfm_trading::identity::local_fingerprint(
             "tennoworth-account-v1",
             info.account_id.to_lowercase().as_bytes(),
         );
@@ -116,7 +116,7 @@ fn record_game_scan(
 ///
 /// Acquisition and its accounting boundary sit under the same single-flight
 /// guard, so a tray scan cannot persist newer data before an in-flight scan has
-/// been recorded. Returns the scan's error text verbatim - wfm-core's messages
+/// been recorded. Returns the scan's error text verbatim - game-acquisition's messages
 /// are written for the user ("Warframe doesn't appear to be running…") and the
 /// SPA shows them unchanged.
 pub(crate) fn scan_and_record(app: &AppHandle) -> Result<ScannedInventory, String> {
@@ -135,7 +135,7 @@ pub(crate) fn scan_and_record_unless(
     app: &AppHandle,
     discard: impl FnOnce() -> bool,
 ) -> Result<Option<ScannedInventory>, String> {
-    let _guard = wfm_core::trading::plan::PlanGuard::acquire(&SCAN_ACTIVE)
+    let _guard = wfm_trading::orders::plan::PlanGuard::acquire(&SCAN_ACTIVE)
         .ok_or("An inventory scan is already running.")?;
     let started_at = crate::services::unix_now();
     let before = scan_boundary(app);
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn the_scheduler_sees_the_same_single_flight_flag_the_scan_takes() {
         assert!(!scan_in_progress());
-        let held = wfm_core::trading::plan::PlanGuard::acquire(&SCAN_ACTIVE)
+        let held = wfm_trading::orders::plan::PlanGuard::acquire(&SCAN_ACTIVE)
             .expect("no other test holds the scan flag");
         assert!(
             scan_in_progress(),

@@ -11,8 +11,8 @@ use std::io::Write;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
-use wfm_core::poison::guard;
-use wfm_core::trading::listing::Unlocked;
+use crate::poison::guard;
+use wfm_trading::orders::listing::Unlocked;
 
 use crate::services::sellables::ScanNotification;
 use crate::command_error::CmdError;

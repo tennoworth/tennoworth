@@ -62,7 +62,7 @@ export function createDesktopSession({ inventory, listing, transport, store, ser
   // "no interrupted batch", and hiding it leaves a damaged saved batch with no
   // way for the user to learn about it or clear it.
   onMount(async () => {
-    // A best-effort `health` invoke confirms wfm-core is linked and records the
+    // A best-effort `health` invoke confirms the native crates are linked and records the
     // platform for display; failure is non-fatal.
     try {
       const h = await transport.health();

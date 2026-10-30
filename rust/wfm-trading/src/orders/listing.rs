@@ -1,7 +1,7 @@
 //! warframe.market order service: list / bulk-visibility / update / delete
 //! on a decrypted-JWT [`Unlocked`] credential bundle the adapter builds once
-//! (see the auth module). See [`crate::trading::plan`] for bulk-order creation via
-//! the crash-recoverable plan executor, and [`crate::trading::catalog`] for the WFM
+//! (see the auth module). See [`crate::orders::plan`] for bulk-order creation via
+//! the crash-recoverable plan executor, and [`crate::market::catalog`] for the WFM
 //! item catalog fetch both this module and the plan executor depend on.
 
 use wfm_client::transport::GovernedRequest;
@@ -13,10 +13,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::http::{browser_client, wfm_client};
-use crate::trading::auth::fetch_wfm_me;
-use crate::trading::outcome::MutationOutcome;
-use crate::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
-use crate::trading::orders::{decode_orders, DecodedOrders};
+use crate::auth::fetch_wfm_me;
+use crate::orders::outcome::MutationOutcome;
+use crate::market::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
+use crate::orders::decode::{decode_orders, DecodedOrders};
 
 
 /// Mutations are never replayed after an ambiguous transport or server failure.
@@ -47,7 +47,7 @@ pub struct Unlocked {
 /// Both adapters need exactly this and had drifted into keeping their own copy
 /// (serve's `build_unlocked` tail, desktop's `warm`) - the same four calls in
 /// the same order, differing only in how they map the error. Callers map;
-/// this stays anyhow so wfm-core owes nothing to either shell.
+/// this stays anyhow so wfm-trading owes nothing to either shell.
 ///
 /// The only network in the unlock path. 60 s rather than the listing routes'
 /// 30: the catalog is a multi-MB body and a user is watching a one-time warm,
@@ -272,7 +272,7 @@ fn orders_body(decoded: DecodedOrders, unlocked: &Unlocked) -> serde_json::Value
                 "rank": order.rank, "subtype": order.subtype, "perTrade": order.per_trade,
                 "visible": order.visible,
             });
-            crate::trading::catalog::attach_item_meta(&mut row, &unlocked.id_to_item);
+            crate::market::catalog::attach_item_meta(&mut row, &unlocked.id_to_item);
             Some(row)
         })
         .collect();
@@ -283,7 +283,7 @@ pub fn decode_user_order_rows(
     unlocked: &Unlocked,
     body: &serde_json::Value,
 ) -> Result<Vec<market_domain::orders::OrderRow>> {
-    crate::trading::orders::decode_order_rows(body, &CatalogConstraints(unlocked))
+    crate::orders::decode::decode_order_rows(body, &CatalogConstraints(unlocked))
 }
 
 #[cfg(test)]

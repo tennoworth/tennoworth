@@ -2,10 +2,10 @@
 
 Parent rules: [`../AGENTS.md`](../AGENTS.md). This crate owns how a request is
 built and sent; what the request means is
-[`../wfm-core/AGENTS.md`](../wfm-core/AGENTS.md)'s business.
+[`../wfm-trading/AGENTS.md`](../wfm-trading/AGENTS.md)'s business.
 
 Share primitives only. Do not grow this crate into an abstraction that swallows
-authed order mutation - the trading services stay in `wfm-core`.
+authed order mutation - the trading services stay in `wfm-trading`.
 
 ## Headers
 
@@ -41,10 +41,10 @@ limits or backoff.
   `wfm-scrape/src/http.rs` - long, budgeted waits that belong to an unattended
   sweep and must never reach an interactive caller - and it sends every attempt
   back through the transport. Do not add a third.
-- **Mutation reconciliation is not transport**: it stays in `wfm-core`'s
-  trading services, and an ambiguous create is never replayed.
-- Clients carry the descriptive `user_agent()`; in `wfm-core` they are built by
-  `wfm_core::http::wfm_client()`, so the user-agent and timeout policy applies
+- **Mutation reconciliation is not transport**: it stays in
+  `wfm-trading`, and an ambiguous create is never replayed.
+- Clients carry the descriptive `user_agent()`; in `wfm-trading` they are built by
+  `wfm_trading::http::wfm_client()`, so the user-agent and timeout policy applies
   uniformly there.
 - The pacing constants are gated by `tests/fixtures/pacing.json` on both sides,
   because the sleeper is stubbed in every test that exercises them.

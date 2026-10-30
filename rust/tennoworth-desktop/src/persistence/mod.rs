@@ -30,7 +30,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use rusqlite::{Connection, OptionalExtension};
-use wfm_core::poison::guard;
+use crate::poison::guard;
 
 /// The open database. `Connection` is not `Sync`, so it lives behind a `Mutex`;
 /// held as Tauri managed state (`State<'_, Db>`) and shared across commands.
@@ -61,7 +61,7 @@ impl Db {
         migrate(&conn)?;
         Ok(Db {
             conn: Mutex::new(conn),
-            run_id: wfm_core::identity::random_token(16),
+            run_id: wfm_trading::identity::random_token(16),
         })
     }
 

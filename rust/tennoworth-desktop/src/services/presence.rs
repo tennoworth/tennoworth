@@ -6,7 +6,7 @@
 //! game from login to quit, then the status chosen for when Warframe closes.
 //!
 //! Two facts from the live socket shape the rules below (see
-//! `wfm_core::trading::presence`):
+//! `wfm_trading::presence`):
 //!
 //! * The server is the source of truth, and any of the account's clients can
 //!   change the status. A change the app did not make wins: it stops what the
@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
-use wfm_core::trading::presence::{Presence, PresenceEvent, PresenceSocket, RichStatus, SignInError};
+use wfm_trading::presence::{Presence, PresenceEvent, PresenceSocket, RichStatus, SignInError};
 
 use crate::command_error::CmdError;
 use crate::persistence::Db;
@@ -443,11 +443,11 @@ impl PresenceState {
     }
 
     pub fn status(&self) -> PresenceStatus {
-        wfm_core::poison::guard(&self.status).clone()
+        crate::poison::guard(&self.status).clone()
     }
 
     fn send(&self, command: Command) -> bool {
-        wfm_core::poison::guard(&self.commands)
+        crate::poison::guard(&self.commands)
             .as_ref()
             .is_some_and(|tx| tx.send(command).is_ok())
     }
@@ -501,7 +501,7 @@ impl PresenceState {
 pub fn start(app: AppHandle, on_change: fn(&AppHandle)) {
     let (tx, rx) = mpsc::channel();
     if let Some(state) = app.try_state::<PresenceState>() {
-        *wfm_core::poison::guard(&state.commands) = Some(tx);
+        *crate::poison::guard(&state.commands) = Some(tx);
     }
     std::thread::Builder::new()
         .name("presence".into())
@@ -532,7 +532,7 @@ impl Loop {
     fn publish(&self, update: impl FnOnce(&mut PresenceStatus)) {
         let Some(state) = self.app.try_state::<PresenceState>() else { return };
         let (changed, tray_changed) = {
-            let mut status = wfm_core::poison::guard(&state.status);
+            let mut status = crate::poison::guard(&state.status);
             let before = status.clone();
             update(&mut status);
             status.managed = self.brain.managed();
@@ -556,12 +556,12 @@ impl Loop {
             return None;
         }
         self.last_game_check = Some(now);
-        let running = self.game.running(wfm_core::acquisition::scan::find_wf_pid());
+        let running = self.game.running(game_acquisition::scan::find_wf_pid());
         self.brain.game(running, now)
     }
 
     fn game_line(&mut self, started: bool, now: Instant) -> Option<Change> {
-        let pid = wfm_core::acquisition::scan::find_wf_pid();
+        let pid = game_acquisition::scan::find_wf_pid();
         if started {
             self.game.logged_in();
         } else {

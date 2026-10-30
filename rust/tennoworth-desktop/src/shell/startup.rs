@@ -19,7 +19,7 @@ struct Health {
     core_version: String,
 }
 
-/// IPC liveness + build info. Proves the SPA can reach a live wfm-core over the
+/// IPC liveness + build info. Proves the SPA can reach the native crates over the
 /// Tauri boundary.
 #[tauri::command]
 fn health() -> Health {
@@ -27,7 +27,7 @@ fn health() -> Health {
         ok: true,
         platform: std::env::consts::OS.to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
-        core_version: wfm_core::version().to_string(),
+        core_version: wfm_trading::version().to_string(),
     }
 }
 
@@ -46,7 +46,7 @@ fn install_definitions(dir: &std::path::Path) -> crate::services::definitions::D
 pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
     // Before any network call: every WFM request identifies as this app +
     // version (WFM's rules require a descriptive User-Agent).
-    wfm_core::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
+    wfm_trading::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
     // No WebKit env shims for AppImage runs: the historical EGL abort on
     // rolling Mesa was root-caused (2026-08-20) to the bundle carrying
     // ubuntu's libwayland-* - fixed by stripping them at bundle time in

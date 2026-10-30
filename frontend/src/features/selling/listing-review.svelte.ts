@@ -47,7 +47,7 @@ import type { DesktopServices } from '../../contracts/services';
   export interface ListingReviewInput {
     open: boolean;
     rows: InputRow[];
-    /** The app's boot-selected transport - Tauri IPC into wfm-core. */
+    /** The app's boot-selected transport - Tauri IPC into wfm-trading. */
     transport: DesktopCapabilities;
     /** Desktop only: a listing call came back `needs_login` / `needs_unlock`.
      *  The app opens the matching auth dialog on top of this modal; the user

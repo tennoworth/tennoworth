@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use wfm_core::trading::plan::{ItemResult, PlanItem};
+use wfm_trading::orders::plan::{ItemResult, PlanItem};
 
 use crate::persistence::{Db, ListedItem, ListingOrigin, TradeRow};
 
