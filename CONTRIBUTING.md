@@ -297,6 +297,7 @@ From `rust/`, run the native checks:
 ```sh
 cargo check --workspace
 cargo test --workspace
+cargo fmt --all --check
 cargo clippy --workspace --all-targets
 cargo shear
 cargo audit --deny warnings
