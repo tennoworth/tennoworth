@@ -14,6 +14,7 @@ jobs:
     uses: ./.github/workflows/collector-build.yml
     with:
       crate: tennoworth-reports
+      module: reports
       caller: build-reports.yml
       tag: reports-latest
       body: Rolling build of the opt-in price-report collector from main.

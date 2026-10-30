@@ -134,7 +134,7 @@ syn = { version = "2", features = ["full", "visit"] }
 # Isolated on-disk state for consent failure and restart regressions.
 tempfile = "3.27"
 # The service's own validator judges the payloads this app builds.
-tennoworth-reports = { path = "../tennoworth-reports" }
+tennoworth-collectors = { path = "../tennoworth-collectors" }
 axum = { workspace = true }
 
 [lints]

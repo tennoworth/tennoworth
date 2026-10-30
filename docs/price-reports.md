@@ -5,7 +5,7 @@ publishes them as weekly aggregates. It also collects riven fingerprint
 *shapes*: the names of keys the app cannot read yet, so a change in DE's
 riven format reaches the parser without anyone pasting raw data.
 
-The service is `rust/tennoworth-reports`. The desktop app sends sale reports
+The service is `rust/tennoworth-collectors/src/reports`. The desktop app sends sale reports
 once enabled in Settings → This app → Price sharing, or from the invitation
 the app shows above its views (at most three times, two weeks apart, and never
 once enabled); it does not send riven

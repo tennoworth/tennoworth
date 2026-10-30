@@ -53,9 +53,7 @@ rust/
   wfm-client/                shared request policy and transport primitives
   tennoworth-announcements/  pure curated announcement feed contract
   tennoworth-publisher/      private publisher API, SQLite history and feed export
-  tennoworth-usage/          opt-in installation-count service
-  tennoworth-reports/        opt-in anonymous price-report service
-  collector-gate/            quota and serve loop shared by the two collectors
+  tennoworth-collectors/     opt-in usage and price-report services, shared quota gate
 scripts/                     release, CSP, probe and deployment checks
 tests/fixtures/             shared parity and pipeline inputs/expectations
 deploy/                      live-data refresh and deployment operations
@@ -162,7 +160,7 @@ flowchart TD
   Desktop --> Client[wfm-client]
   Desktop --> Market[market-domain]
   Desktop --> Feed[tennoworth-announcements]
-  Desktop --> Reports[tennoworth-reports]
+  Desktop -.->|tests only| Collectors[tennoworth-collectors]
   Core --> Client
   Core --> Market
   Wasm[market-domain-wasm] --> Market
@@ -170,8 +168,6 @@ flowchart TD
   Scrape --> Client
   Publisher[tennoworth-publisher] --> Feed
   Publisher --> Market
-  Usage[tennoworth-usage] --> Gate[collector-gate]
-  Reports --> Gate
 ```
 
 Shells choose implementations and provide desktop services through Svelte

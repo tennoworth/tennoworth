@@ -1,12 +1,19 @@
 [package]
-name = "tennoworth-usage"
+name = "tennoworth-collectors"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Opt-in daily installation count collector"
+description = "The opt-in host collectors - installation counts and anonymous price reports - and the quota and serve loop they share. Each runs as its own process with its own database."
+
+[[bin]]
+name = "tennoworth-usage"
+path = "src/bin/tennoworth-usage.rs"
+
+[[bin]]
+name = "tennoworth-reports"
+path = "src/bin/tennoworth-reports.rs"
 
 [dependencies]
-collector-gate = { path = "../collector-gate" }
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }

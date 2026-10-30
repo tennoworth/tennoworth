@@ -184,10 +184,10 @@ pub const REQUESTS_PER_WINDOW: u32 = 20;
 
 pub struct Collector {
     store: Mutex<Store>,
-    gate: collector_gate::Gate,
+    gate: crate::gate::Gate,
 }
-impl collector_gate::Gated for Collector {
-    fn gate(&self) -> &collector_gate::Gate {
+impl crate::gate::Gated for Collector {
+    fn gate(&self) -> &crate::gate::Gate {
         &self.gate
     }
 }
@@ -200,7 +200,7 @@ impl Collector {
     pub fn with_limit(store: Store, limit_per_window: u32) -> Arc<Self> {
         Arc::new(Self {
             store: Mutex::new(store),
-            gate: collector_gate::Gate::new(limit_per_window),
+            gate: crate::gate::Gate::new(limit_per_window),
         })
     }
     pub fn tick(&self) -> anyhow::Result<()> {
@@ -222,7 +222,7 @@ pub fn router(state: Arc<Collector>) -> Router {
         .layer(DefaultBodyLimit::max(256))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            collector_gate::admit::<Collector>,
+            crate::gate::admit::<Collector>,
         ));
     let unmetered = Router::new().route("/health", get(health));
     public.merge(unmetered).with_state(state)
@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn aggregate_contract_matches_shared_fixture() {
         let fixture: Daily =
-            serde_json::from_str(include_str!("../../../tests/fixtures/usage/daily.json")).unwrap();
+            serde_json::from_str(include_str!("../../../../tests/fixtures/usage/daily.json")).unwrap();
         assert_eq!(fixture.days.len(), 3);
         assert_eq!(fixture.days[1].count, 0);
         assert!(!fixture.days[2].complete);

@@ -48,7 +48,7 @@ cannot detect every network or upstream outage. Aggregates are retained indefini
 
 Two public routes exist - `POST /api/usage/check-in` and `GET /api/usage/daily` -
 and they share one window of **20 requests per wall-clock second**, fixed in
-`REQUESTS_PER_WINDOW` (`rust/tennoworth-usage/src/lib.rs`). It is one counter for
+`REQUESTS_PER_WINDOW` (`rust/tennoworth-collectors/src/usage/mod.rs`). It is one counter for
 the whole service, not one per source: no client identifier is read or stored, so
 there is nothing to key it by, and that is deliberate (see "Data flow and
 consent"). The consequence worth knowing is that one sender can consume the window

@@ -757,15 +757,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "collector-gate"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "tokio",
-]
-
-[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5663,6 +5654,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tennoworth-collectors"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "tennoworth-desktop"
 version = "0.8.112"
 dependencies = [
@@ -5697,7 +5703,7 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tennoworth-announcements",
- "tennoworth-reports",
+ "tennoworth-collectors",
  "tokio",
  "ts-rs",
  "wayland-client",
@@ -5733,38 +5739,6 @@ dependencies = [
  "tower",
  "ts-rs",
  "url",
-]
-
-[[package]]
-name = "tennoworth-reports"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "chrono",
- "collector-gate",
- "reqwest 0.12.28",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
-]
-
-[[package]]
-name = "tennoworth-usage"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "chrono",
- "collector-gate",
- "reqwest 0.12.28",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
 ]
 
 [[package]]

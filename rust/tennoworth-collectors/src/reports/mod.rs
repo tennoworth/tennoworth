@@ -39,11 +39,11 @@ struct Published {
 pub struct Collector {
     store: Mutex<Store>,
     published: Mutex<Published>,
-    gate: collector_gate::Gate,
+    gate: crate::gate::Gate,
 }
 
-impl collector_gate::Gated for Collector {
-    fn gate(&self) -> &collector_gate::Gate {
+impl crate::gate::Gated for Collector {
+    fn gate(&self) -> &crate::gate::Gate {
         &self.gate
     }
 }
@@ -56,7 +56,7 @@ impl Collector {
         Arc::new(Self {
             store: Mutex::new(store),
             published: Mutex::new(Published::default()),
-            gate: collector_gate::Gate::new(limit_per_window),
+            gate: crate::gate::Gate::new(limit_per_window),
         })
     }
     pub fn tick(&self) -> anyhow::Result<()> {
@@ -79,7 +79,7 @@ pub fn router(state: Arc<Collector>) -> Router {
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
-            collector_gate::admit::<Collector>,
+            crate::gate::admit::<Collector>,
         ));
     let unmetered = Router::new().route("/health", get(health));
     public.merge(unmetered).with_state(state)
