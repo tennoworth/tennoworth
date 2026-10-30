@@ -39,6 +39,10 @@ for required checks and ../docs/releasing.md for release preparation.
   referenced from nowhere outside `docs/`. Run it from the repository root; it
   reads the git index only, so it needs no install step and runs on
   documentation-only changes. The rule it enforces is stated in ../AGENTS.md.
+- `check-attribution.ts` - refuses tool co-author trailers, generated-with
+  lines and assistant links in a pull request's commit messages and body
+  (`attribution-check` in audit.yml). Run it locally with a range:
+  `bun scripts/check-attribution.ts github/develop..HEAD`.
 - `check-lxc-backup.sh` - the workstation-side preservation job for the
   observation corpus, which the box's readiness check reports as
   `external-backup`. It copies the newest `vzdump-lxc-<vmid>-*.tar.zst`

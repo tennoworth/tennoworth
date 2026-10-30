@@ -571,6 +571,24 @@ jobs:
       - name: public surface
         run: bun scripts/check-public-surface.ts
 
+  # Runs on every pull request regardless of paths: attribution can arrive in a
+  # commit that touches nothing else.
+  attribution-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: commit messages and pull request body
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bun test scripts/check-attribution.test.ts
+          bun scripts/check-attribution.ts
+
   # This is the required audit status. It runs even when a prerequisite is
   # skipped and fails only when a relevant job failed or was cancelled.
   audit-gate:
@@ -588,6 +606,7 @@ jobs:
       - market-data
       - deploy-validation
       - instruction-check
+      - attribution-check
     runs-on: ubuntu-latest
     steps:
       - name: Require every applicable check to pass
