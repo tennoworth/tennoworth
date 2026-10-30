@@ -16,7 +16,10 @@
 //! never block app start, so callers run it in the background and swallow errors.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
+
+use crate::services::market::sellables::MarketData;
 
 /// The one remote origin the desktop app talks to. Overridable via
 /// `TENNOWORTH_MARKET_URL` so the verification probe can point the fetch at a
@@ -107,14 +110,43 @@ pub struct RefreshResult {
 pub struct MarketCache {
     dir: PathBuf,
     announcements: std::sync::Mutex<Option<String>>,
+    parsed: std::sync::Mutex<Option<(Option<FileStamp>, Arc<MarketData>)>>,
 }
+
+/// Size and modification time of the cached `market.json`. A refresh replaces
+/// the file by rename, so either changes when its contents do.
+type FileStamp = (u64, std::time::SystemTime);
 
 impl MarketCache {
     pub fn new(dir: PathBuf) -> Self {
         Self {
             dir,
             announcements: std::sync::Mutex::new(None),
+            parsed: std::sync::Mutex::new(None),
         }
+    }
+
+    /// The parsed market, parsed again only when `market.json` has changed on
+    /// disk. Native readers ask for it from timers, the tray and the overlay;
+    /// re-reading and parsing the multi-megabyte snapshot on each call was most
+    /// of the app's background memory churn. The lock is held while parsing,
+    /// so concurrent callers share one parse.
+    pub fn parsed_market(
+        &self,
+        parse: impl FnOnce(Option<String>) -> MarketData,
+    ) -> Arc<MarketData> {
+        let stamp = std::fs::metadata(cache_path(&self.dir, &MARKET))
+            .and_then(|meta| Ok((meta.len(), meta.modified()?)))
+            .ok();
+        let mut parsed = crate::poison::guard(&self.parsed);
+        if let Some((at, market)) = parsed.as_ref() {
+            if *at == stamp {
+                return Arc::clone(market);
+            }
+        }
+        let market = Arc::new(parse(self.cached()));
+        *parsed = Some((stamp, Arc::clone(&market)));
+        market
     }
 
     /// The cached snapshot body, or None on a first run / unreadable / empty

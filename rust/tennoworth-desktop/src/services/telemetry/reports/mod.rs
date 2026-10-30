@@ -440,7 +440,7 @@ async fn deliver(
 /// One pass over the ledger. Returns false when a batch must be retried.
 async fn pass(
     db: &Db,
-    market: &(dyn Fn() -> MarketData + Sync),
+    market: &(dyn Fn() -> std::sync::Arc<MarketData> + Sync),
     client: &reqwest::Client,
     endpoint: &str,
     consent: &mut watch::Receiver<bool>,

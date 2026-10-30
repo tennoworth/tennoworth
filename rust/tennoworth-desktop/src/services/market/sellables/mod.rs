@@ -569,6 +569,37 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// Native readers load the market from timers, the tray and the overlay, so
+    /// an unchanged file is parsed once and shared; a refresh that replaces it
+    /// is picked up on the next load.
+    #[test]
+    fn load_parses_once_until_the_cache_file_changes() {
+        let dir = temp_dir("memo");
+        let write = |slug: &str| {
+            std::fs::write(
+                dir.join("market.json"),
+                format!(r#"{{"updated_at":"2999-01-01T00:00:00Z","items":{{"{slug}":{{"vol":1,"low_sell":1}}}}}}"#),
+            )
+            .unwrap();
+        };
+        write("first");
+        let cache = MarketCache::new(dir.clone());
+
+        let a = MarketData::load(&cache);
+        let b = MarketData::load(&cache);
+        assert!(
+            std::sync::Arc::ptr_eq(&a, &b),
+            "an unchanged file was parsed again"
+        );
+
+        write("second_and_longer");
+        let c = MarketData::load(&cache);
+        assert!(c.items.contains_key("second_and_longer"));
+        assert!(!c.items.contains_key("first"));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     /// The other direction still holds: a cache newer than the bundle wins, which
     /// is the whole reason the cache exists.
     #[test]
