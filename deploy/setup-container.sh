@@ -7,7 +7,7 @@
 # Idempotent-ish: safe to re-run. Edit the CLOUDFLARED_TOKEN line or run the
 # `cloudflared service install` step by hand.
 #
-# The pipeline itself is not installed here: scripts/deploy-scrape-host.sh owns
+# The pipeline itself is not installed here: deploy/install-pipeline.sh owns
 # the scrape binary, its driver script and the wfm-scrape units, and installs
 # them from a reviewed revision. This script provisions the box around it.
 set -euo pipefail
@@ -47,16 +47,16 @@ if [ "$(getent passwd wfm | cut -d: -f6)" != /srv/wfm/data ]; then
   usermod -d /srv/wfm/data wfm
 fi
 mkdir -p /srv/wfm/data
-install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
-install -m 0755 "$DEPLOY/pull-policy.sh" /srv/wfm/pull-policy.sh
+install -m 0755 "$DEPLOY/bin/pull-web.sh" /srv/wfm/pull-web.sh
+install -m 0755 "$DEPLOY/bin/pull-policy.sh" /srv/wfm/pull-policy.sh
 mkdir -p /srv/wfm/policy
 # Without this the checkout at /srv/wfm/app only moves when a human moves it,
 # and the copies under /srv/wfm drift from the repo silently - the box ran a
 # retired pipeline 19 commits behind main for a week that way.
-install -m 0755 "$DEPLOY/pull-app.sh" /srv/wfm/pull-app.sh
+install -m 0755 "$DEPLOY/bin/pull-app.sh" /srv/wfm/pull-app.sh
 # OnFailure handler for every unit below. Optional webhook config lives in
 # /etc/wfm-alert.env (ALERT_WEBHOOK_URL=...); absent means log-only.
-install -m 0755 "$DEPLOY/alert.sh" /srv/wfm/alert.sh
+install -m 0755 "$DEPLOY/bin/alert.sh" /srv/wfm/alert.sh
 mkdir -p /srv/wfm/bin
 
 # Root owns the deployment root and every script a root unit executes. A
@@ -90,10 +90,10 @@ if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'frontend/dist' /etc/caddy/Caddyfile
   # Overwriting it would 502 every other hostname on reload. Skip + instruct.
   cp -n /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
   echo "    Existing /etc/caddy/Caddyfile detected (backed up to .bak) - NOT overwriting."
-  echo "    Paste the site block from $DEPLOY/Caddyfile into your config, pick a free"
+  echo "    Paste the site block from $DEPLOY/caddy/Caddyfile into your config, pick a free"
   echo "    localhost port, point a tunnel hostname at it, then: systemctl reload caddy"
 else
-  install -m 0644 "$DEPLOY/Caddyfile" /etc/caddy/Caddyfile
+  install -m 0644 "$DEPLOY/caddy/Caddyfile" /etc/caddy/Caddyfile
   caddy validate --config /etc/caddy/Caddyfile
   systemctl enable --now caddy
   systemctl reload caddy
@@ -109,8 +109,8 @@ rm -f /etc/systemd/system/wfm-policy-pull.service /etc/systemd/system/wfm-policy
   /etc/systemd/system/wfm-app-pull.service /etc/systemd/system/wfm-app-pull.timer \
   /etc/systemd/system/wfm-web-pull.service /etc/systemd/system/wfm-alert@.service
 
-install -m 0644 "$DEPLOY/tennoworth-policy-pull.service" /etc/systemd/system/tennoworth-policy-pull.service
-install -m 0644 "$DEPLOY/tennoworth-policy-pull.timer" /etc/systemd/system/tennoworth-policy-pull.timer
+install -m 0644 "$DEPLOY/systemd/tennoworth-policy-pull.service" /etc/systemd/system/tennoworth-policy-pull.service
+install -m 0644 "$DEPLOY/systemd/tennoworth-policy-pull.timer" /etc/systemd/system/tennoworth-policy-pull.timer
 # Enable after installing the verifier with the dedicated public key.
 if [ -x /srv/wfm/bin/wfm-policy ]; then
   systemctl daemon-reload
@@ -118,13 +118,13 @@ if [ -x /srv/wfm/bin/wfm-policy ]; then
 fi
 
 # The scrape units come with the binary they execute, from
-# scripts/deploy-scrape-host.sh; provisioning the box never creates half that
+# deploy/install-pipeline.sh; provisioning the box never creates half that
 # set on its own.
 echo "==> App-pull timer, on-demand web pull"
-install -m 0644 "$DEPLOY/tennoworth-alert@.service"      /etc/systemd/system/tennoworth-alert@.service
-install -m 0644 "$DEPLOY/tennoworth-app-pull.service"    /etc/systemd/system/tennoworth-app-pull.service
-install -m 0644 "$DEPLOY/tennoworth-app-pull.timer"      /etc/systemd/system/tennoworth-app-pull.timer
-install -m 0644 "$DEPLOY/tennoworth-web-pull.service"    /etc/systemd/system/tennoworth-web-pull.service
+install -m 0644 "$DEPLOY/systemd/tennoworth-alert@.service"      /etc/systemd/system/tennoworth-alert@.service
+install -m 0644 "$DEPLOY/systemd/tennoworth-app-pull.service"    /etc/systemd/system/tennoworth-app-pull.service
+install -m 0644 "$DEPLOY/systemd/tennoworth-app-pull.timer"      /etc/systemd/system/tennoworth-app-pull.timer
+install -m 0644 "$DEPLOY/systemd/tennoworth-web-pull.service"    /etc/systemd/system/tennoworth-web-pull.service
 systemctl daemon-reload
 systemctl enable --now tennoworth-app-pull.timer
 
@@ -154,7 +154,7 @@ cat <<'NEXT'
      systemctl start tennoworth-web-pull.service
 
 3. Deploy the scrape pipeline from the maintainer checkout
-   (scripts/deploy-scrape-host.sh). It installs the binary, its driver script
+   (deploy/install-pipeline.sh). It installs the binary, its driver script
    and the wfm-scrape units, enables the sweep timer, and refuses a revision
    that is not reviewed and clean. Kick a first sweep here:
      systemctl start tennoworth-scrape.service

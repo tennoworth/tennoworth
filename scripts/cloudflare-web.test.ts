@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 // live data and collector paths. Both halves are configured in this repository
 // and must describe the same site.
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const caddy = read('deploy/Caddyfile');
+const caddy = read('deploy/caddy/Caddyfile');
 const routes = JSON.parse(read('deploy/cloudflare-web/routes.json')) as { site: string; box: string[]; worker: string };
 const wrangler = JSON.parse(read('deploy/cloudflare-web/wrangler.jsonc').replace(/^\s*\/\/.*$/gm, ''));
 

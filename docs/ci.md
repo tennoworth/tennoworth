@@ -20,7 +20,7 @@ were prerendered from), and the on-demand
 `.github/actions/`: `setup-rust`, `setup-windows-ocr`, `stage-tessdata` and
 `publish-rolling-release`, which the workflows above call into. The host-only scrape pipeline has no workflow: it is
 deployed directly by
-[`scripts/deploy-scrape-host.sh`](../scripts/deploy-scrape-host.sh), which is
+[`deploy/install-pipeline.sh`](../deploy/install-pipeline.sh), which is
 its only installer.
 
 ## Toolkit decisions

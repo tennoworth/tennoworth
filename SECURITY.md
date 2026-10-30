@@ -84,7 +84,7 @@ The product crosses the following trust boundaries:
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
    by Caddy) pulls the CI-built web bundle and runs its own scrape
    timer, whose binary and units are installed directly from a reviewed
-   revision by `scripts/deploy-scrape-host.sh`. That box is a trust
+   revision by `deploy/install-pipeline.sh`. That box is a trust
    boundary the repo's public CI does not cover - compromising it would
    let an attacker serve malicious JS or a stale snapshot to visitors.
 

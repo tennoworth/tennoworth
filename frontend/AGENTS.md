@@ -197,7 +197,7 @@ Production serves the site's static files from **Cloudflare**
 (`deploy/cloudflare-web`), which applies the full header set (HSTS,
 `frame-ancestors` / X-Frame-Options, the CSP) from `public/_headers`; the
 box's **Caddy** serves the live data and collector paths with the same set
-from `deploy/Caddyfile`. `scripts/cloudflare-web.test.ts` keeps the two header
+from `deploy/caddy/Caddyfile`. `scripts/cloudflare-web.test.ts` keeps the two header
 sets equal, and `scripts/sync-csp.ts` keeps every CSP copy in step. The `<meta http-equiv="Content-Security-Policy">`
 in `index.html` still ships script/connect/style protection as a
 belt-and-suspenders fallback.
@@ -205,7 +205,7 @@ belt-and-suspenders fallback.
 Allowed `connect-src` (hosted): `self`. The hosted site makes no
 loopback or third-party calls - the loopback entries were for the removed
 companion CLI. The policy also has private-dashboard copies in `admin.html` and
-`deploy/Caddyfile-admin`. All copies are
+`deploy/caddy/Caddyfile-admin`. All copies are
 **edited in ONE**: `scripts/sync-csp.ts`. Change the directives there,
 run `bun run csp` to rewrite all copies; `bun run build` fails via its
 prebuild `--check` if any copy drifted. (The meta copies deliberately
