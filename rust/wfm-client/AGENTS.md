@@ -29,24 +29,22 @@ Always the descriptive project UA, built by
 and treat browser spoofing as block-worthy. A descriptive UA is accepted on
 every v1/v2 endpoint.
 
-## Budgets, pacing and retry
+## Budgets, retry and reconciliation
 
-- Every WFM HTTP attempt, including retries, goes through this crate's
-  transport. Callers must not add independent sleeps or retry loops.
-- The current request-budget, classification and reconciliation policy is in
-  [`../../docs/wfm-access.md`](../../docs/wfm-access.md). Read it before
-  changing limits or backoff.
-- Clients carry the descriptive `user_agent()`. In `wfm-core` they are built by
+The request-budget, classification, retry and reconciliation policy is
+[`../../docs/wfm-access.md`](../../docs/wfm-access.md); read it before changing
+limits or backoff.
+
+- Every WFM HTTP attempt goes through this crate's transport, which owns the
+  per-request retries (reads three attempts, a short `429` once for a mutation).
+  The only retry layered above it is the bulk reader's sweep recovery in
+  `wfm-scrape/src/http.rs` - long, budgeted waits that belong to an unattended
+  sweep and must never reach an interactive caller - and it sends every attempt
+  back through the transport. Do not add a third.
+- **Mutation reconciliation is not transport**: it stays in `wfm-core`'s
+  trading services, and an ambiguous create is never replayed.
+- Clients carry the descriptive `user_agent()`; in `wfm-core` they are built by
   `wfm_core::http::wfm_client()`, so the user-agent and timeout policy applies
   uniformly there.
-- The pacing constants are parity-gated by the shared
-  `tests/fixtures/pacing.json` fixture. A constant that lives inside the part of
-  a test that is stubbed out is unguarded no matter how thorough the suite
-  around it looks - that is why the fixture, not a comment, is the gate.
-
-## Retry and reconciliation boundary
-
-Retry/backoff and envelope unwrapping live here. **Mutation reconciliation does
-not**: it stays in the trading services, and an ambiguous create is never
-blindly retried. Classify outcomes using the policy in
-[`../../docs/wfm-access.md`](../../docs/wfm-access.md).
+- The pacing constants are gated by `tests/fixtures/pacing.json` on both sides,
+  because the sleeper is stubbed in every test that exercises them.

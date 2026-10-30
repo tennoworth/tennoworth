@@ -3,9 +3,14 @@
 //!
 //! The build stage's [`crate::ingest::Http`] collapses every non-2xx into an
 //! error string, which cannot express the 429-vs-5xx-vs-transport distinction
-//! the scrape's fetch path acts on. This trait keeps the status so the
-//! retry loop can reproduce that behavior exactly, and stays fixture-driven so
-//! backoff, pacing, and exhaustion are all testable with zero real sleeps.
+//! the scrape's fetch path acts on. This trait keeps the status for the retry
+//! loop, and stays fixture-driven so backoff, pacing, and exhaustion are all
+//! testable with zero real sleeps.
+//!
+//! That loop is the sweep's recovery layer, above `wfm_client::transport`'s own
+//! per-request retries: it waits out outages an unattended sweep can afford
+//! and an interactive caller cannot, so it stays here rather than in the shared
+//! transport, and every attempt it makes still goes through the transport.
 
 use std::sync::Mutex;
 use std::time::Duration;
