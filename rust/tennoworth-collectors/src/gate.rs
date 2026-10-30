@@ -16,8 +16,8 @@ use std::{
 /// One wall-clock second. Named because it decides the burst a caller can reach:
 /// a fixed window admits a full allowance on each side of a boundary.
 const WINDOW: Duration = Duration::from_secs(1);
-/// Public requests one collector works on at once.
-const SLOTS: usize = 32;
+/// Requests one lane of one collector works on at once.
+const SLOTS: usize = 16;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const MAINTENANCE_EVERY: Duration = Duration::from_secs(30);
 
@@ -41,23 +41,48 @@ impl Window {
     }
 }
 
-/// A fixed-window quota plus a bound on in-flight work for the public routes.
-/// It bounds work, it is not fairness: one source can spend the whole window.
-pub struct Gate {
+/// A fixed-window quota plus a bound on in-flight work.
+struct Lane {
     window: Mutex<Window>,
     slots: tokio::sync::Semaphore,
-    allowance: u32,
 }
 
-impl Gate {
-    pub fn new(allowance: u32) -> Self {
+impl Lane {
+    fn new() -> Self {
         Self {
             window: Mutex::new(Window {
                 started: Instant::now(),
                 requests: 0,
             }),
             slots: tokio::sync::Semaphore::new(SLOTS),
+        }
+    }
+}
+
+/// The public routes' quota, split by method. The aggregate reads are public
+/// and anonymous, so a read flood must not spend the allowance that desktop
+/// submissions need. It bounds work, it is not fairness between sources: the
+/// origin never sees client addresses, so per-source limits live at the edge.
+pub struct Gate {
+    reads: Lane,
+    writes: Lane,
+    allowance: u32,
+}
+
+impl Gate {
+    pub fn new(allowance: u32) -> Self {
+        Self {
+            reads: Lane::new(),
+            writes: Lane::new(),
             allowance,
+        }
+    }
+
+    fn lane(&self, method: &axum::http::Method) -> &Lane {
+        if matches!(*method, axum::http::Method::GET | axum::http::Method::HEAD) {
+            &self.reads
+        } else {
+            &self.writes
         }
     }
 }
@@ -76,15 +101,16 @@ pub async fn admit<S: Gated>(
     next: axum::middleware::Next,
 ) -> Response {
     let gate = state.gate();
+    let lane = gate.lane(request.method());
     {
-        let Ok(mut window) = gate.window.try_lock() else {
+        let Ok(mut window) = lane.window.try_lock() else {
             return StatusCode::TOO_MANY_REQUESTS.into_response();
         };
         if !window.charge(gate.allowance) {
             return StatusCode::TOO_MANY_REQUESTS.into_response();
         }
     }
-    let Ok(_slot) = gate.slots.try_acquire() else {
+    let Ok(_slot) = lane.slots.try_acquire() else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
     tokio::time::timeout(REQUEST_TIMEOUT, next.run(request))
