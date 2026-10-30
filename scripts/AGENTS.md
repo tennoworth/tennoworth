@@ -7,7 +7,9 @@ for release preparation.
 
 - `release.ts` (+ `release/`) - release preparation, snapshot validation and
   bundled app notes; keep its contracts covered by `release.test.ts`.
-- Deployment helpers and their tests must preserve live data. On the host it
+- `deploy-layout.test.ts` covers ../deploy/: `install-pipeline.sh`,
+  `setup-container.sh`, the box scripts in `bin/`, the units in `systemd/` and
+  the Caddy config in `caddy/`. Those must preserve live data. On the host it
   lives under `/srv/wfm/data`, never in the checkout (../docs/architecture.md,
   "Data and failure boundaries").
 - `sync-csp.ts` - generates every Content-Security-Policy copy. The copies, the

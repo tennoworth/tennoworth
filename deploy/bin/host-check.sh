@@ -4,7 +4,7 @@
 #
 # Two failures go unnoticed without it. A sweep timer that is disabled, stopped
 # or past its boundary never fails a unit, so OnFailure never fires. And the
-# pipeline is installed only by scripts/deploy-scrape-host.sh, by hand, while
+# pipeline is installed only by deploy/install-pipeline.sh, by hand, while
 # the checkout follows main on its own: on 2026-10-01 the box ran 03ff5b0 three
 # pipeline merges behind main and nothing said so. A failed or timed-out sweep
 # already alerts through tennoworth-scrape.service's own OnFailure.
@@ -225,10 +225,11 @@ fi
 # desktop package's own entry there, which says nothing about the pipeline.
 SCRAPER_SOURCES=(
   rust/wfm-scrape rust/wfm-client rust/market-domain rust/Cargo.toml
-  deploy/run-scrape.sh deploy/tennoworth-scrape.service deploy/tennoworth-scrape.timer
-  deploy/host-check.sh deploy/tennoworth-host-check.service deploy/tennoworth-host-check.timer
+  deploy/bin/run-scrape.sh deploy/systemd/tennoworth-scrape.service deploy/systemd/tennoworth-scrape.timer
+  deploy/bin/host-check.sh deploy/systemd/tennoworth-host-check.service deploy/systemd/tennoworth-host-check.timer
 )
-# Root reads a checkout owned by wfm, which git refuses without this.
+# The checkout is root's, but a box mid-migration still has a wfm-owned one,
+# which root cannot read through the version-control tool without this.
 app_git() { git -c safe.directory="$APP" -C "$APP" "$@"; }
 deploy_lag="unknown"
 pending_commits=0
@@ -314,7 +315,7 @@ else
     oldest_pending="$(printf '%s\n' "$pending" | sort -n | head -1)"
     lag_message="the deployed scraper ${revision:0:7} is $pending_commits scraper commit(s) behind the checkout's $checkout_head"
     if [ $((NOW_EPOCH - oldest_pending)) -gt $((DEPLOY_GRACE_HOURS * 3600)) ]; then
-      error "$lag_message; deploy it with scripts/deploy-scrape-host.sh"
+      error "$lag_message; deploy it with deploy/install-pipeline.sh"
     else
       warn "$lag_message"
     fi

@@ -108,12 +108,12 @@ entry, a reappearance after an absence, an empty book last time, or age at the
 interval. It caches the derived figures (`StatsStage`), not the daily rows,
 writes the file only after a completed sweep, and treats a missing or foreign
 file as a full refresh, never a failure. Production runs with a six-hour
-interval (`deploy/run-scrape.sh`); an empty `STATS_INTERVAL` restores fetching
+interval (`deploy/bin/run-scrape.sh`); an empty `STATS_INTERVAL` restores fetching
 everything every sweep.
 
-The host check is host-only, next to the pipeline: `deploy/host-check.sh`
+The host check is host-only, next to the pipeline: `deploy/bin/host-check.sh`
 (with `tennoworth-host-check.service`/`.timer`, installed by
-`scripts/deploy-scrape-host.sh`) runs hourly and fails when the sweep timer is
+`deploy/install-pipeline.sh`) runs hourly and fails when the sweep timer is
 not scheduled, the sweep unit failed, the sweep output is missing, disk is under
 its floor, the installed binary is not the recorded revision's, or pipeline
 changes in the box's checkout of `main` have waited past a 24-hour grace for a

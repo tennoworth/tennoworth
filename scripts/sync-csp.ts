@@ -78,7 +78,7 @@ if (desktopIdx !== -1) {
 
 const TARGETS = [
   {
-    path: 'deploy/Caddyfile-admin',
+    path: 'deploy/caddy/Caddyfile-admin',
     re: /^(\s*Content-Security-Policy ").*(")$/m,
     replacement: `$1${full}$2`,
   },
@@ -88,7 +88,7 @@ const TARGETS = [
     replacement: metaReplacement(metaDirectives),
   },
   {
-    path: 'deploy/Caddyfile',
+    path: 'deploy/caddy/Caddyfile',
     re: /^(\s*Content-Security-Policy ").*(")$/m,
     replacement: `$1${full}$2`,
   },

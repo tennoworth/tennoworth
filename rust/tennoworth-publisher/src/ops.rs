@@ -29,7 +29,7 @@ pub struct Job {
 }
 
 /// Every job the dashboard can start, each an instance of
-/// `deploy/tennoworth-job@.path` whose unit is `tennoworth-<id>.service`; a test
+/// `deploy/systemd/tennoworth-job@.path` whose unit is `tennoworth-<id>.service`; a test
 /// holds the names together.
 pub const JOBS: &[Job] = &[
     Job {
@@ -568,7 +568,7 @@ fn strings(value: &serde_json::Value, pointer: &str) -> Option<Vec<String>> {
     })
 }
 
-/// Reads the report `deploy/host-check.sh` writes. The verdict and its reasons
+/// Reads the report `deploy/bin/host-check.sh` writes. The verdict and its reasons
 /// are required; every measurement is optional, because the check itself
 /// writes null where it has no evidence.
 pub fn host_check(raw: &str) -> Option<HostCheck> {
@@ -598,7 +598,7 @@ fn read_tail(path: &Path, limit: u64) -> std::io::Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-/// Entries from `deploy/alert.sh`'s log newer than `since`, newest first. A
+/// Entries from `deploy/bin/alert.sh`'s log newer than `since`, newest first. A
 /// partial first entry from the tail cut has no header and is dropped.
 pub fn alerts(log: &str, since: i64) -> Vec<AlertEntry> {
     let mut entries: Vec<AlertEntry> = Vec::new();
@@ -707,7 +707,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let out = dir.path().join("report.json");
         let status = std::process::Command::new("bash")
-            .arg(root.join("deploy/host-check.sh"))
+            .arg(root.join("deploy/bin/host-check.sh"))
             .args(["--csv"])
             .arg(dir.path().join("results.csv"))
             .args(["--snapshot"])
@@ -773,7 +773,7 @@ mod tests {
     /// unit must be named after its id and the template may watch nothing else.
     #[test]
     fn every_job_has_exactly_one_matching_path_unit() {
-        let deploy = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../deploy");
+        let deploy = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../deploy/systemd");
         let template = fs::read_to_string(deploy.join("tennoworth-job@.path")).unwrap();
         let lines: Vec<&str> = template.lines().map(str::trim).collect();
         assert!(lines.contains(&"PathChanged=/srv/wfm/jobs/%i"));

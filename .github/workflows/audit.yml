@@ -143,7 +143,7 @@ jobs:
               - 'scripts/cloudflare-web.test.ts'
               - 'scripts/sync-csp.ts'
               # Cloudflare's copy of the site headers and upload exclusions,
-              # compared with deploy/Caddyfile by cloudflare-web.test.ts.
+              # compared with deploy/caddy/Caddyfile by cloudflare-web.test.ts.
               - 'frontend/public/_headers'
               - 'frontend/public/.assetsignore'
               # Generated desktop CSP copy, checked by sync-csp.ts --check.
@@ -513,7 +513,7 @@ jobs:
         # Parse each script with the shell its shebang names: bash -n accepts
         # bashisms that the box's /bin/sh (dash) rejects at run time.
         run: |
-          for script in deploy/*.sh scripts/*.sh; do
+          for script in deploy/*.sh deploy/bin/*.sh scripts/*.sh; do
             case "$(head -n1 "$script")" in
               '#!/bin/sh') dash -n "$script" ;;
               *bash*) bash -n "$script" ;;
@@ -523,11 +523,14 @@ jobs:
       - name: systemd unit syntax
         run: |
           sudo install -d -m 0755 /srv/wfm/app
-          sudo install -m 0755 deploy/*.sh /srv/wfm/
+          sudo install -m 0755 deploy/bin/*.sh /srv/wfm/
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-usage
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-reports
+          # verify instantiates templates as @test_instance, so the collector
+          # template's ExecStart names this binary.
+          sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-test_instance
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-publisher
-          systemd-analyze verify deploy/*.service deploy/*.timer
+          systemd-analyze verify deploy/systemd/*.service deploy/systemd/*.timer
       - name: CSP copies agree
         run: bun scripts/sync-csp.ts --check
       - name: Install Caddy
@@ -536,8 +539,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends caddy
       - name: Caddyfile syntax
         run: |
-          caddy validate --config deploy/Caddyfile --adapter caddyfile
-          caddy validate --config deploy/Caddyfile-admin --adapter caddyfile
+          caddy validate --config deploy/caddy/Caddyfile --adapter caddyfile
+          caddy validate --config deploy/caddy/Caddyfile-admin --adapter caddyfile
 
   # The instruction files and the public-surface rule are tracked policy with no
   # compiler behind them. This is the only job that runs both checks, so without

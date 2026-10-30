@@ -194,8 +194,8 @@ say "staging to $STAGING"
 $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
 $SCP -q "$ARTIFACT" "$HOST:$STAGING/tennoworth-pipeline"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
-$SCP -q deploy/run-scrape.sh deploy/tennoworth-scrape.service deploy/tennoworth-scrape.timer "$HOST:$STAGING/"
-$SCP -q deploy/host-check.sh deploy/tennoworth-host-check.service deploy/tennoworth-host-check.timer "$HOST:$STAGING/"
+$SCP -q deploy/bin/run-scrape.sh deploy/systemd/tennoworth-scrape.service deploy/systemd/tennoworth-scrape.timer "$HOST:$STAGING/"
+$SCP -q deploy/bin/host-check.sh deploy/systemd/tennoworth-host-check.service deploy/systemd/tennoworth-host-check.timer "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
 # The live paths keep running the previous release until this one is proven on

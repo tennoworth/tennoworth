@@ -6,7 +6,7 @@
 # on a phase-3 commit while main was many commits ahead.
 #
 # It also re-installs the deployed copies of the web, policy, usage and reports pieces.
-# The scrape pipeline is not one of them: scripts/deploy-scrape-host.sh is the
+# The scrape pipeline is not one of them: deploy/install-pipeline.sh is the
 # only installer of run-scrape.sh, the binary and the units.
 #
 # The checkout holds no live data: the pipeline writes under /srv/wfm/data. So
@@ -29,7 +29,7 @@ reconcile_deployed() {
   # cosmetic. Re-install anything that drifted.
   #
   # Scrape-owned files stay out of this list and out of the drift report below.
-  # scripts/deploy-scrape-host.sh is their only writer, and two writers is how the
+  # deploy/install-pipeline.sh is their only writer, and two writers is how the
   # box once ran a weeks-old run-scrape.sh for two weeks while the repo's copy
   # looked current.
   #
@@ -41,7 +41,7 @@ reconcile_deployed() {
   # rename over it: rename swaps
   # the inode, so the running shell keeps reading the copy it started with.
   for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-collector.sh monitor-collector.sh log-players.sh; do
-    src="deploy/$f"
+    src="deploy/bin/$f"
     [ -f "$src" ] || continue
     if ! cmp -s "$src" "$DEPLOY_ROOT/$f" 2>/dev/null; then
       install -m 0755 "$src" "$DEPLOY_ROOT/$f.new" \
@@ -57,19 +57,19 @@ reconcile_deployed() {
   # editing the file on the box changed nothing. That silently voids the whole
   # point of a remote-fix file. Report it for the same reason as the units.
   for f in Caddyfile Caddyfile-admin; do
-    [ -f "deploy/$f" ] && [ -f /etc/caddy/Caddyfile ] || continue
-    cmp -s "deploy/$f" "/etc/caddy/$f" \
-      || echo "  CADDY DRIFT: /etc/caddy/$f differs from deploy/$f - install it, 'caddy validate', then reload"
+    [ -f "deploy/caddy/$f" ] && [ -f /etc/caddy/Caddyfile ] || continue
+    cmp -s "deploy/caddy/$f" "/etc/caddy/$f" \
+      || echo "  CADDY DRIFT: /etc/caddy/$f differs from deploy/caddy/$f - install it, 'caddy validate', then reload"
   done
 
   # Units need root plus a daemon-reload, so report rather than act - a puller
   # that silently restarts systemd units is a different and larger promise.
   # Every unit file is covered, so a new one cannot be left out of a list; the
   # sweep and the host check are the pipeline deploy's, as above.
-  for src in deploy/*.service deploy/*.timer deploy/*.path; do
+  for src in deploy/systemd/*.service deploy/systemd/*.timer deploy/systemd/*.path; do
     [ -f "$src" ] || continue
-    case "${src#deploy/}" in tennoworth-scrape.*|tennoworth-host-check.*) continue;; esac
-    dst="/etc/systemd/system/${src#deploy/}"
+    case "${src#deploy/systemd/}" in tennoworth-scrape.*|tennoworth-host-check.*) continue;; esac
+    dst="/etc/systemd/system/${src#deploy/systemd/}"
     [ -f "$dst" ] || continue
     cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src - install it and daemon-reload"
   done

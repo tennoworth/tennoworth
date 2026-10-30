@@ -8,11 +8,13 @@ import { fileURLToPath } from 'node:url';
 
 const directories: string[] = [];
 afterEach(() => { for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
-const puller = fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url));
+const puller = fileURLToPath(new URL('../deploy/bin/pull-app.sh', import.meta.url));
 function write(path: string, body: string) { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, body); }
 function git(cwd: string, ...args: string[]) { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
 // An `undefined` entry means the variable is genuinely absent for the child, not
 // the string "undefined" - tests that exercise an unset variable depend on that.
+// Where a deploy/ file lives: box scripts in bin/, units in systemd/.
+function deployDir(name: string) { return name.endsWith('.sh') ? 'bin' : name.startsWith('Caddyfile') ? 'caddy' : 'systemd'; }
 function withoutUndefined(env: Record<string, string | undefined>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) if (value !== undefined) out[key] = value;
@@ -66,7 +68,7 @@ describe.skipIf(process.platform === 'win32')('checkout puller', () => {
     // An older puller fast-forwards with its own install list, so a script the
     // new commit adds is left uninstalled until a run that has nothing to pull.
     const f = fixture();
-    write(join(f.remote, 'deploy/pull-collector.sh'), '#!/bin/sh\necho collector\n');
+    write(join(f.remote, 'deploy/bin/pull-collector.sh'), '#!/bin/sh\necho collector\n');
     git(f.remote, 'add', '-A'); git(f.remote, 'commit', '-m', 'Add a deployed script');
     expect(f.run().status).toBe(0);
     rmSync(join(f.root, 'installed/pull-collector.sh'));
@@ -130,13 +132,13 @@ describe.each(collectors)('$name collector units', ({ name }) => {
   test('pass the collector name to the shared scripts', () => {
     // One template per role; the instance is the collector's name.
     for (const [unit, script] of [['pull', 'pull-collector.sh'], ['monitor', 'monitor-collector.sh']]) {
-      const body = readFileSync(new URL(`../deploy/tennoworth-collector-${unit}@.service`, import.meta.url), 'utf8');
+      const body = readFileSync(new URL(`../deploy/systemd/tennoworth-collector-${unit}@.service`, import.meta.url), 'utf8');
       expect(body).toContain(`ExecStart=/srv/wfm/${script} %i\n`);
     }
-    const service = readFileSync(new URL('../deploy/tennoworth-collector@.service', import.meta.url), 'utf8');
+    const service = readFileSync(new URL('../deploy/systemd/tennoworth-collector@.service', import.meta.url), 'utf8');
     expect(service).toContain('ExecStart=/srv/wfm/bin/tennoworth-%i\n');
     expect(service).toContain('User=tennoworth-%i\n');
-    expect(readFileSync(new URL('../deploy/pull-collector.sh', import.meta.url), 'utf8')).toContain(`binary="tennoworth-$name"`);
+    expect(readFileSync(new URL('../deploy/bin/pull-collector.sh', import.meta.url), 'utf8')).toContain(`binary="tennoworth-$name"`);
     expect(name).toMatch(/^[a-z]+$/);
   });
 });
@@ -153,7 +155,7 @@ describe.each(collectors)('$name collector rollback', ({ name, binary, failed })
       mkdirSync(join(deploy, 'bin'), { recursive: true });
       mkdirSync(mocks);
       writeFileSync(join(deploy, `bin/${binary}`), 'old-binary');
-      const source = readFileSync(new URL('../deploy/pull-collector.sh', import.meta.url), 'utf8');
+      const source = readFileSync(new URL('../deploy/bin/pull-collector.sh', import.meta.url), 'utf8');
       writeFileSync(join(root, 'pull.sh'), source.replaceAll('/srv/wfm', deploy));
       writeFileSync(join(mocks, 'curl'), `#!/bin/sh
 case "$*" in
@@ -189,8 +191,8 @@ exit 0
 });
 
 describe('live data roots', () => {
-  const caddy = readFileSync(fileURLToPath(new URL('../deploy/Caddyfile', import.meta.url)), 'utf8');
-  const admin = readFileSync(fileURLToPath(new URL('../deploy/Caddyfile-admin', import.meta.url)), 'utf8');
+  const caddy = readFileSync(fileURLToPath(new URL('../deploy/caddy/Caddyfile', import.meta.url)), 'utf8');
+  const admin = readFileSync(fileURLToPath(new URL('../deploy/caddy/Caddyfile-admin', import.meta.url)), 'utf8');
   const snapshot = readFileSync(fileURLToPath(new URL('./release/snapshot.ts', import.meta.url)), 'utf8');
   const handle = (source: string, matcher: string) => source.slice(source.indexOf(`handle ${matcher} {`), source.indexOf('}', source.indexOf(`handle ${matcher} {`)));
 
@@ -205,12 +207,12 @@ describe('live data roots', () => {
     // run-scrape.sh holds a flock on the publish directory for the whole sweep.
     expect(snapshot).toContain('PUBLISH=/srv/wfm/data/public\nexec 9<"$PUBLISH"');
     expect(snapshot).toContain('cd "$PUBLISH"');
-    expect(readFileSync(fileURLToPath(new URL('../deploy/run-scrape.sh', import.meta.url)), 'utf8')).toContain('exec 9<"$PUBLISH"');
+    expect(readFileSync(fileURLToPath(new URL('../deploy/bin/run-scrape.sh', import.meta.url)), 'utf8')).toContain('exec 9<"$PUBLISH"');
   });
 });
 
 describe('caddy listener boundary', () => {
-  const caddyfile = readFileSync(fileURLToPath(new URL('../deploy/Caddyfile', import.meta.url)), 'utf8');
+  const caddyfile = readFileSync(fileURLToPath(new URL('../deploy/caddy/Caddyfile', import.meta.url)), 'utf8');
 
   /** The body of the first site block addressed by a bare port (`:8081`). */
   function barePortSite(source: string): { address: string; lines: string[] } | null {
@@ -236,7 +238,7 @@ describe('caddy listener boundary', () => {
 });
 
 describe('host-direct scrape deploy script', () => {
-  const deploy = readFileSync(fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url)), 'utf8');
+  const deploy = readFileSync(fileURLToPath(new URL('../deploy/install-pipeline.sh', import.meta.url)), 'utf8');
 
   test('refuses anything but a reviewed, clean revision', () => {
     expect(deploy).toMatch(/git status --porcelain/);
@@ -392,13 +394,13 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   // from the repository root.
   for (const unit of ['run-scrape.sh', 'tennoworth-scrape.service', 'tennoworth-scrape.timer',
     'host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer']) {
-    write(join(root, 'deploy', unit), `# ${unit}\n`);
+    write(join(root, 'deploy', deployDir(unit), unit), `# ${unit}\n`);
   }
   if (options.runCheck) {
     // The real script and its unit travel to the box, so the stubbed systemd
     // runs what the deploy actually installed rather than a stand-in.
     for (const name of ['host-check.sh', 'tennoworth-host-check.service']) {
-      write(join(root, 'deploy', name), readFileSync(new URL(`../deploy/${name}`, import.meta.url), 'utf8'));
+      write(join(root, 'deploy', deployDir(name), name), readFileSync(new URL(`../deploy/${deployDir(name)}/${name}`, import.meta.url), 'utf8'));
     }
     write(join(box, 'policy/wfm-policy.json'), '{}');
     // The sweep output a healthy box holds, under the paths the check reads.
@@ -581,7 +583,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   write(join(bin, 'systemctl'), systemctl.join('\n'));
   for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl', 'curl']) chmodSync(join(bin, command), 0o755);
 
-  const run = (env: Record<string, string | undefined> = {}) => spawnSync('bash', [fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url))], {
+  const run = (env: Record<string, string | undefined> = {}) => spawnSync('bash', [fileURLToPath(new URL('../deploy/install-pipeline.sh', import.meta.url))], {
     cwd: root,
     encoding: 'utf8',
     env: withoutUndefined({
@@ -822,7 +824,7 @@ describe.skipIf(process.platform === 'win32').each(collectors)('$name monitor', 
       write(join(bin, tool), `#!/bin/sh\nexec ${real} "$@"\n`);
       chmodSync(join(bin, tool), 0o755);
     }
-    const run = () => spawnSync('/bin/sh', [fileURLToPath(new URL('../deploy/monitor-collector.sh', import.meta.url)), name], {
+    const run = () => spawnSync('/bin/sh', [fileURLToPath(new URL('../deploy/bin/monitor-collector.sh', import.meta.url)), name], {
       encoding: 'utf8', env: { PATH: bin },
     });
     const count = (endpoint: string) => (existsSync(calls) ? readFileSync(calls, 'utf8').split('\n').filter(line => line === endpoint).length : 0);
@@ -886,7 +888,7 @@ describe('deployment ownership boundary', () => {
     // The unit runs with ProtectSystem=strict, so the sweep can only write the
     // paths it is granted. A wfm-writable checkout was a route to code root
     // installs, so the checkout is root's and absent from the grant.
-    const unit = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-scrape.service', import.meta.url)), 'utf8');
+    const unit = readFileSync(fileURLToPath(new URL('../deploy/systemd/tennoworth-scrape.service', import.meta.url)), 'utf8');
     expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/scrape \/srv\/wfm\/data\/public$/m);
     expect(unit).toMatch(/^WorkingDirectory=\/srv\/wfm\/data\/scrape$/m);
     expect(unit).not.toContain('/srv/wfm/app');
@@ -908,10 +910,10 @@ describe('deployment ownership boundary', () => {
 });
 
 describe('scrape pipeline delivery boundary', () => {
-  const pullApp = readFileSync(fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url)), 'utf8');
+  const pullApp = readFileSync(fileURLToPath(new URL('../deploy/bin/pull-app.sh', import.meta.url)), 'utf8');
 
   test('the checkout puller never installs or drift-reports a scrape-owned file', () => {
-    // scripts/deploy-scrape-host.sh is the only writer of the pipeline. The box
+    // deploy/install-pipeline.sh is the only writer of the pipeline. The box
     // once ran a weeks-old copy because the checkout puller and setup-container
     // both installed one; a name reappearing in either list re-opens that.
     expect(pullApp).not.toMatch(/for f in [^;]*run-scrape\.sh/);
@@ -946,7 +948,7 @@ function runScrapeFixture(scrape: string) {
     ['#!/bin/sh', 'case "$1" in', `  scrape) ${scrape} ;;`, `  build) printf "%s\\n" "$*" > '${app}/build-args' ;;`, '  history) exit 0 ;;', 'esac', 'exit 0', ''].join('\n'),
   );
   chmodSync(bin, 0o755);
-  const run = () => spawnSync('bash', [fileURLToPath(new URL('../deploy/run-scrape.sh', import.meta.url))], {
+  const run = () => spawnSync('bash', [fileURLToPath(new URL('../deploy/bin/run-scrape.sh', import.meta.url))], {
     env: { ...process.env, DATA: app, PUBLISH: publish, SCRAPE_BIN: bin, HISTORY: '0' },
     encoding: 'utf8',
   });
@@ -977,15 +979,15 @@ describe('run-scrape publication guard', () => {
 
 // ---- host check ------------------------------------------------------------
 
-const checkScript = fileURLToPath(new URL('../deploy/host-check.sh', import.meta.url));
+const checkScript = fileURLToPath(new URL('../deploy/bin/host-check.sh', import.meta.url));
 
 describe('host check wiring', () => {
-  const deploy = readFileSync(fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url)), 'utf8');
+  const deploy = readFileSync(fileURLToPath(new URL('../deploy/install-pipeline.sh', import.meta.url)), 'utf8');
   const setup = readFileSync(fileURLToPath(new URL('../deploy/setup-container.sh', import.meta.url)), 'utf8');
-  const pullApp = readFileSync(fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url)), 'utf8');
-  const unit = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-host-check.service', import.meta.url)), 'utf8');
-  const timer = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-host-check.timer', import.meta.url)), 'utf8');
-  const job = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-job@.path', import.meta.url)), 'utf8');
+  const pullApp = readFileSync(fileURLToPath(new URL('../deploy/bin/pull-app.sh', import.meta.url)), 'utf8');
+  const unit = readFileSync(fileURLToPath(new URL('../deploy/systemd/tennoworth-host-check.service', import.meta.url)), 'utf8');
+  const timer = readFileSync(fileURLToPath(new URL('../deploy/systemd/tennoworth-host-check.timer', import.meta.url)), 'utf8');
+  const job = readFileSync(fileURLToPath(new URL('../deploy/systemd/tennoworth-job@.path', import.meta.url)), 'utf8');
 
   test('the deploy script is the only installer of the check and its units', () => {
     // The check judges the pipeline the deploy installs, so it travels with it.
@@ -1050,7 +1052,7 @@ describe('host check wiring', () => {
     // The check is installed by the pipeline deploy, so an undeployed change to
     // it is exactly the lag it exists to report.
     const check = readFileSync(checkScript, 'utf8');
-    for (const source of ['rust/wfm-scrape', 'rust/wfm-client', 'rust/market-domain', 'deploy/host-check.sh', 'deploy/tennoworth-host-check.service']) {
+    for (const source of ['rust/wfm-scrape', 'rust/wfm-client', 'rust/market-domain', 'deploy/bin/host-check.sh', 'deploy/systemd/tennoworth-host-check.service']) {
       expect(check).toContain(source);
     }
     expect(check, 'the retired crate must not be a lag source').not.toContain('market-math');
@@ -1204,7 +1206,7 @@ describe.skipIf(process.platform === 'win32')('host check', () => {
 
     test('a scraper change inside the grace is a warning', () => {
       const f = hostFixture();
-      withCheckout(f, [{ path: 'deploy/run-scrape.sh', hoursAgo: 3 }]);
+      withCheckout(f, [{ path: 'deploy/bin/run-scrape.sh', hoursAgo: 3 }]);
       const result = f.run();
       expect(result.status, result.stderr).toBe(0);
       expect(f.report().deployment.lag).toBe('behind');
@@ -1294,7 +1296,7 @@ describe.skipIf(process.platform === 'win32')('host check', () => {
 });
 
 describe.skipIf(process.platform === 'win32')('player-count logger', () => {
-  const script = fileURLToPath(new URL('../deploy/log-players.sh', import.meta.url));
+  const script = fileURLToPath(new URL('../deploy/bin/log-players.sh', import.meta.url));
 
   function playersFixture(curl: string) {
     const root = mkdtempSync(join(tmpdir(), 'players-')); directories.push(root);
@@ -1347,9 +1349,9 @@ describe.skipIf(process.platform === 'win32')('player-count logger', () => {
     const pullApp = readFileSync(puller, 'utf8');
     expect(pullApp).toMatch(/for f in [^;]*log-players\.sh/);
     // Drift covers every unit file but the pipeline deploy's own.
-    expect(pullApp).toContain('for src in deploy/*.service deploy/*.timer deploy/*.path; do');
-    expect(pullApp).toContain('case "${src#deploy/}" in tennoworth-scrape.*|tennoworth-host-check.*) continue;; esac');
-    const unit = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-players.service', import.meta.url)), 'utf8');
+    expect(pullApp).toContain('for src in deploy/systemd/*.service deploy/systemd/*.timer deploy/systemd/*.path; do');
+    expect(pullApp).toContain('case "${src#deploy/systemd/}" in tennoworth-scrape.*|tennoworth-host-check.*) continue;; esac');
+    const unit = readFileSync(fileURLToPath(new URL('../deploy/systemd/tennoworth-players.service', import.meta.url)), 'utf8');
     expect(unit).toContain('ExecStart=/srv/wfm/log-players.sh');
     expect(unit).toContain('ReadWritePaths=/srv/wfm/players');
   });

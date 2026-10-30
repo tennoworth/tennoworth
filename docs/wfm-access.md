@@ -53,8 +53,8 @@ of 2026-09-09, whose scraper restrictions are the compiled defaults above.
 | Requests per sweep | 6,438 | 1 catalog + 3,840 statistics + 2,597 orders, from the run's own summary |
 | Sweep wall time | 60-89 minutes that day | `journalctl -u tennoworth-scrape.service` |
 | Floor if nothing else were spent | 54 minutes | 6,438 x 500 ms |
-| Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/tennoworth-scrape.timer` |
-| Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the validated policy triggers; books every sweep | `deploy/run-scrape.sh`, `stats_cache.rs` |
+| Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/systemd/tennoworth-scrape.timer` |
+| Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the validated policy triggers; books every sweep | `deploy/bin/run-scrape.sh`, `stats_cache.rs` |
 | Mean over a day | ~0.9 request starts per second before statistics reuse; the offline replay of the 2026-09/10 corpus projected about 42% fewer requests with it | derived from the rows above |
 
 The item loop runs one worker per request the policy allows in flight, rather
@@ -154,7 +154,7 @@ the retired key would correctly pause every client whose cache it cannot verify;
 
 A rotation runs in this order: generate and back up the new key; set
 `TENNOWORTH_WFM_POLICY_PUBLIC_KEY` to it; sign and publish a policy with a higher
-revision; redeploy the scraper with `scripts/deploy-scrape-host.sh`, which also
+revision; redeploy the scraper with `deploy/install-pipeline.sh`, which also
 installs the matching verifier the box's policy puller uses; then release the
 desktop. The redeploy runs while the box still serves the retired key's policy,
 so its gate accepts that only when the published successor verifies with the new

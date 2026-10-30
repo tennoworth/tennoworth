@@ -65,7 +65,12 @@ rust/
   tennoworth-collectors/     opt-in usage and price-report services, shared quota gate
 scripts/                     release, CSP, probe and deployment checks
 tests/fixtures/             shared parity and pipeline inputs/expectations
-deploy/                      live-data refresh and deployment operations
+deploy/                      the host: setup-container.sh provisions it, install-pipeline.sh
+                             deploys the pipeline to it
+  bin/                       scripts the box runs (installed to /srv/wfm)
+  systemd/                   units, templates and tmpfiles rules
+  caddy/                     the box's site and private dashboard config
+  cloudflare-web/            the public site's Worker
 ```
 
 ## Public page generation
@@ -154,7 +159,7 @@ its own migration for data already on users' machines or the host.
 Host units and binaries are not frozen: they are `tennoworth-<role>`, and a
 dashboard job `<id>` is the instance `tennoworth-job@<id>.path` starting
 `tennoworth-<id>.service`. Renaming one means its installer retires the old
-name in the same change, as `scripts/deploy-scrape-host.sh` does for the sweep.
+name in the same change, as `deploy/install-pipeline.sh` does for the sweep.
 
 ## Dependency direction
 

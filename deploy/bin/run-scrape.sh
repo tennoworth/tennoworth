@@ -43,7 +43,7 @@ prior=0
 [ -f "$CSV" ] && prior=$(( $(wc -l < "$CSV") - 1 ))
 
 SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/tennoworth-pipeline}"
-[ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (scripts/deploy-scrape-host.sh installs it)." >&2; exit 1; }
+[ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (deploy/install-pipeline.sh installs it)." >&2; exit 1; }
 SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
 # Daily medians move once a day and the 48-hour figures drift slowly, while
 # the order book moves every sweep. A replay of the since-retired observation corpus
