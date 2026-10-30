@@ -5,6 +5,6 @@ Description=Record and notify that %i failed
 
 [Service]
 Type=oneshot
-# %i is the failed unit's name, passed by `OnFailure=wfm-alert@%n.service`.
+# %i is the failed unit's name, passed by `OnFailure=tennoworth-alert@%n.service`.
 ExecStart=/srv/wfm/alert.sh %i
 SyslogIdentifier=wfm-alert

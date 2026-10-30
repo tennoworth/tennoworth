@@ -32,8 +32,9 @@ healthy() {
   done
   return 1
 }
-if ! (systemctl restart "$binary.service" && healthy); then
-  if [ -f "$bin.previous" ]; then mv "$bin.previous" "$bin"; systemctl restart "$binary.service"; fi
+unit="tennoworth-collector@$name.service"
+if ! (systemctl restart "$unit" && healthy); then
+  if [ -f "$bin.previous" ]; then mv "$bin.previous" "$bin"; systemctl restart "$unit"; fi
   echo "$label collector health check failed" >&2
   exit 1
 fi

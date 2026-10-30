@@ -113,8 +113,8 @@ acquired by scanning the running game process; the hosted surface never sees it.
                             ▲
                             │ GET market.json
               ┌─────────────┴────────────────────────────┐
-              │  wfm-scrape scrape  (Rust)               │
-              │  → CSV → wfm-scrape build                │
+              │  tennoworth-pipeline scrape  (Rust)      │
+              │  → CSV → tennoworth-pipeline build       │
               └──────────────────────────────────────────┘
 ```
 
@@ -149,6 +149,12 @@ its own migration for data already on users' machines or the host.
 | IPC command and event names | `tauri::generate_handler!` registrations and the generated event constants |
 | `desktop-v*`, `*-latest` | release tags and rolling artifacts the updater and host pullers fetch |
 | `/srv/wfm`, user `wfm` | host layout and service account; live data under `/srv/wfm/data/{scrape,public}` |
+| `/etc/wfm-alert.env`, journal tag `wfm-alert` | the failure alert's credentials on the host, and what its readers grep for |
+
+Host units and binaries are not frozen: they are `tennoworth-<role>`, and a
+dashboard job `<id>` is the instance `tennoworth-job@<id>.path` starting
+`tennoworth-<id>.service`. Renaming one means its installer retires the old
+name in the same change, as `scripts/deploy-scrape-host.sh` does for the sweep.
 
 ## Dependency direction
 
@@ -408,7 +414,7 @@ that directory, sets it (tmpfiles cannot manage it below the `wfm`-owned
 `/srv/wfm/data`). The same page can start a
 fixed list of scheduled jobs early (`ops::JOBS`). The publisher never runs
 them: it writes a request file into that job's own directory under
-`/srv/wfm/jobs`, and a root-owned `tennoworth-job-<id>.path` unit watching only
+`/srv/wfm/jobs`, and a root-owned `tennoworth-job@<id>.path` unit watching only
 that directory starts the job's existing service, which systemd does not start
 twice. Requests carry only the job name, need the dashboard Origin, are refused
 while the job runs or within its pacing window, and are recorded with the

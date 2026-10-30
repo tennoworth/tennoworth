@@ -97,7 +97,7 @@ refresh from (the frontend checks they give the same page data), and
 `tests/fixtures/public-market/home.json`, which the hosted homepage reads.
 The fixture regression gates in `tests/` (`build_gate`, `scrape_gate`,
 `surfaces_gate`) shell the freshly built binary
-(`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen fixtures in
+(`env!("CARGO_BIN_EXE_tennoworth-pipeline")`) against the frozen fixtures in
 `tests/fixtures/{scrape,build}` - cargo rebuilds the binary first, so a stale
 one cannot green them.
 

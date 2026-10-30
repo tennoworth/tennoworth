@@ -183,10 +183,10 @@ if ! flock -n 9; then
   echo "ABORT: wfm-scrape currently owns the snapshot lock; retry after it finishes." >&2
   exit 75
 fi
-state=$(systemctl show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)
+state=$(systemctl show tennoworth-scrape.service -p ActiveState --value 2>/dev/null || true)
 case "\${state:-unknown}" in
   inactive|failed) ;;
-  *) echo "ABORT: wfm-scrape.service is \${state:-unknown}; retry after it finishes." >&2; exit 75 ;;
+  *) echo "ABORT: tennoworth-scrape.service is \${state:-unknown}; retry after it finishes." >&2; exit 75 ;;
 esac
 cd "$PUBLISH"
 market_size=$(stat -c %s market.json)

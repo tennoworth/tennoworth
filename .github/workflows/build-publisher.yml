@@ -34,8 +34,8 @@ jobs:
           cp rust/target/release/tennoworth-publisher dist/publisher/
           cp -a frontend/dist-admin dist/publisher/frontend/
           cp deploy/Caddyfile-admin deploy/tennoworth-publisher.service dist/publisher/
-          # The job units and host paths ship with the code that offers the jobs.
-          cp deploy/tennoworth-dashboard.conf deploy/tennoworth-job-*.path dist/publisher/
+          # The job path template and host paths ship with the code that offers the jobs.
+          cp deploy/tennoworth-dashboard.conf 'deploy/tennoworth-job@.path' dist/publisher/
           printf '%s\n' "$GITHUB_SHA" > dist/publisher/commit.txt
           tar -czf dist/tennoworth-publisher.tar.gz -C dist/publisher .
           cd dist

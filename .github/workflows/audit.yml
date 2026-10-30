@@ -526,6 +526,11 @@ jobs:
           sudo install -m 0755 deploy/*.sh /srv/wfm/
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-usage
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-reports
+          # verify instantiates a template under a placeholder name (@i on the
+          # runner's systemd, @test_instance on newer releases), and the
+          # collector template's ExecStart is /srv/wfm/bin/tennoworth-%i.
+          sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-i
+          sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-test_instance
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-publisher
           systemd-analyze verify deploy/*.service deploy/*.timer
       - name: CSP copies agree

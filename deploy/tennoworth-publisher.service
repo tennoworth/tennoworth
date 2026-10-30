@@ -1,7 +1,7 @@
 [Unit]
 Description=Private curated announcement publisher
 After=network.target
-OnFailure=wfm-alert@%n.service
+OnFailure=tennoworth-alert@%n.service
 
 [Service]
 User=tennoworth-publisher

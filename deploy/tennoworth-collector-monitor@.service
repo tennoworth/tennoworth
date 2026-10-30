@@ -1,0 +1,8 @@
+[Unit]
+Description=Check %i collector health and freshness
+OnFailure=tennoworth-alert@%n.service
+[Service]
+Type=oneshot
+User=tennoworth-%i
+ExecStart=/srv/wfm/monitor-collector.sh %i
+NoNewPrivileges=true

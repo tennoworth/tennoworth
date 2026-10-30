@@ -16,7 +16,7 @@ async function fetchMarket(response: Promise<Response>): Promise<Market> {
   if (!r.ok) {
     throw new Error(
       `Couldn't load market snapshot (HTTP ${r.status}). ` +
-        `In dev, run \`wfm-scrape build\` from the Rust workspace to bootstrap one.`
+        `In dev, run \`tennoworth-pipeline build\` from the Rust workspace to bootstrap one.`
     );
   }
   const body: unknown = await r.json();

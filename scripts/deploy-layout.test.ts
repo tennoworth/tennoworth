@@ -128,10 +128,16 @@ const collectors = [
 
 describe.each(collectors)('$name collector units', ({ name }) => {
   test('pass the collector name to the shared scripts', () => {
+    // One template per role; the instance is the collector's name.
     for (const [unit, script] of [['pull', 'pull-collector.sh'], ['monitor', 'monitor-collector.sh']]) {
-      const body = readFileSync(new URL(`../deploy/tennoworth-${name}-${unit}.service`, import.meta.url), 'utf8');
-      expect(body).toContain(`ExecStart=/srv/wfm/${script} ${name}\n`);
+      const body = readFileSync(new URL(`../deploy/tennoworth-collector-${unit}@.service`, import.meta.url), 'utf8');
+      expect(body).toContain(`ExecStart=/srv/wfm/${script} %i\n`);
     }
+    const service = readFileSync(new URL('../deploy/tennoworth-collector@.service', import.meta.url), 'utf8');
+    expect(service).toContain('ExecStart=/srv/wfm/bin/tennoworth-%i\n');
+    expect(service).toContain('User=tennoworth-%i\n');
+    expect(readFileSync(new URL('../deploy/pull-collector.sh', import.meta.url), 'utf8')).toContain(`binary="tennoworth-$name"`);
+    expect(name).toMatch(/^[a-z]+$/);
   });
 });
 
@@ -248,7 +254,7 @@ describe('host-direct scrape deploy script', () => {
     // window lets a single sweep run the `scrape` phase from one release and the
     // `build` phase from the next. The schedule has to be held for the whole
     // operation, not just checked before it.
-    const stop = deploy.indexOf('systemctl stop wfm-scrape.timer');
+    const stop = deploy.indexOf('systemctl stop tennoworth-scrape.timer');
     expect(stop, 'the timer must be stopped, not merely observed').toBeGreaterThan(-1);
     // Restoring only after the last check leaves the box with no schedule at all
     // whenever an earlier step fails - silent until someone notices the data is
@@ -258,17 +264,17 @@ describe('host-direct scrape deploy script', () => {
     expect(trap, 'the restore must be an EXIT trap').toBeGreaterThan(-1);
     expect(trap, 'the restore must be armed before the timer is stopped').toBeLessThan(stop);
     // Pin the call, not the warning text that names the same command.
-    expect(deploy, 'the trap must actually start the timer').toMatch(/\$SSH "\$HOST" "systemctl start wfm-scrape\.timer"/);
+    expect(deploy, 'the trap must actually start the timer').toMatch(/systemctl start tennoworth-scrape\.timer; else systemctl start wfm-scrape\.timer/);
     // `enable --now` re-arms the timer in the middle of the very window the hold
     // exists to protect; only `enable` may run inside it.
-    expect(deploy).toMatch(/systemctl enable wfm-scrape\.timer/);
-    expect(deploy).not.toMatch(/enable --now wfm-scrape\.timer/);
+    expect(deploy).toMatch(/systemctl enable tennoworth-scrape\.timer/);
+    expect(deploy).not.toMatch(/enable --now tennoworth-scrape\.timer/);
   });
 
   test('installs only after the schedule is held and a running sweep is drained', () => {
-    const stop = deploy.indexOf('systemctl stop wfm-scrape.timer');
-    const recheck = deploy.indexOf('systemctl is-active wfm-scrape.service');
-    const liveInstall = deploy.indexOf('install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"');
+    const stop = deploy.indexOf('systemctl stop tennoworth-scrape.timer');
+    const recheck = deploy.indexOf('systemctl is-active tennoworth-scrape.service');
+    const liveInstall = deploy.indexOf('install -m 0755 "$RELEASES/$REVISION/tennoworth-pipeline" "/srv/wfm/bin/tennoworth-pipeline"');
     expect(recheck, 'the service must be re-checked after the timer stop').toBeGreaterThan(stop);
     expect(liveInstall, 'live files must not be written before the re-check').toBeGreaterThan(recheck);
     // Stopping the timer does not stop a sweep a previous elapse already
@@ -281,7 +287,7 @@ describe('host-direct scrape deploy script', () => {
     expect(deploy, 'only a terminal state may end the wait').toMatch(/inactive\|failed\) break/);
     // An empty or unrecognised query result used to read as idle and install
     // over a live sweep.
-    expect(deploy, 'an unreadable state must abort').toMatch(/could not read wfm-scrape\.service state/);
+    expect(deploy, 'an unreadable state must abort').toMatch(/could not read tennoworth-scrape\.service state/);
   });
 
   test('proves the deployed revision itself against the live policy or aborts', () => {
@@ -307,7 +313,7 @@ describe('host-direct scrape deploy script', () => {
     // The proof runs against the release on the box, and the live paths move
     // only after it passes, so a rejection leaves the running release alone.
     const proof = deploy.indexOf("'$VERIFIER' '$HOST_ROOT/policy/wfm-policy.json'");
-    const liveInstall = deploy.indexOf('install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"');
+    const liveInstall = deploy.indexOf('install -m 0755 "$RELEASES/$REVISION/tennoworth-pipeline" "/srv/wfm/bin/tennoworth-pipeline"');
     expect(proof, 'the release verifier must run').toBeGreaterThan(-1);
     expect(liveInstall, 'the live paths must not move before the proof').toBeGreaterThan(proof);
   });
@@ -319,7 +325,7 @@ describe('host-direct scrape deploy script', () => {
   });
 
   test('checks the sweep service before installing and keeps the release', () => {
-    expect(deploy).toMatch(/systemctl is-active wfm-scrape\.service/);
+    expect(deploy).toMatch(/systemctl is-active tennoworth-scrape\.service/);
     expect(deploy).toMatch(/install -d -m 0755 -o root -g root \"\$RELEASES\/\$REVISION\"/);
   });
 
@@ -333,8 +339,8 @@ describe('host-direct scrape deploy script', () => {
     // pipeline cannot reach the box without passing the gates above. A second
     // installer is the regression: it can advance one piece on its own.
     expect(deploy).toMatch(/install -m 0755 "[^"]*\/run-scrape\.sh" "\/srv\/wfm\/run-scrape\.sh"/);
-    expect(deploy).toMatch(/install -m 0644 "[^"]*\/wfm-scrape\.service" \/etc\/systemd\/system\/wfm-scrape\.service/);
-    expect(deploy).toMatch(/install -m 0644 "[^"]*\/wfm-scrape\.timer" \/etc\/systemd\/system\/wfm-scrape\.timer/);
+    expect(deploy).toMatch(/install -m 0644 "[^"]*\/tennoworth-scrape\.service" \/etc\/systemd\/system\/tennoworth-scrape\.service/);
+    expect(deploy).toMatch(/install -m 0644 "[^"]*\/tennoworth-scrape\.timer" \/etc\/systemd\/system\/tennoworth-scrape\.timer/);
   });
 });
 
@@ -364,14 +370,17 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   const realInstall = execFileSync('sh', ['-c', 'command -v install'], { encoding: 'utf8' }).trim();
 
   // The box already runs a deployment; every failure path asserts it survives.
-  writeFileSync(join(live, 'srv/wfm/bin/wfm-scrape'), 'old-live-binary');
+  writeFileSync(join(live, 'srv/wfm/bin/tennoworth-pipeline'), 'old-live-binary');
+  writeFileSync(join(live, 'srv/wfm/bin/wfm-scrape'), 'pre-rename-binary');
   writeFileSync(join(live, 'srv/wfm/run-scrape.sh'), 'old-live-run-scrape');
   mkdirSync(join(live, 'etc/systemd/system'), { recursive: true });
   // And it still carries the retired on-box archive receipt path and the
   // retired observation corpus check, as the production box did, plus the
   // dashboard's job units.
   for (const unit of ['wfm-archive-receipt-pull.service', 'wfm-archive-receipt-pull.timer',
-    'wfm-observations-check.service', 'wfm-observations-check.timer', 'tennoworth-job-readiness.path', 'tennoworth-job-scrape.path']) {
+    'wfm-observations-check.service', 'wfm-observations-check.timer', 'tennoworth-job-readiness.path', 'tennoworth-job@.path',
+    // The sweep as it was named before the units took the project's name.
+    'wfm-scrape.service', 'wfm-scrape.timer', 'tennoworth-job-scrape.path', 'tennoworth-job-host-check.path']) {
     writeFileSync(join(live, 'etc/systemd/system', unit), `# ${unit}\n`);
   }
   write(join(live, 'etc/systemd/system/wfm-observations-check.service.d/preservation.conf'), '[Unit]\nWants=\nAfter=\n');
@@ -381,8 +390,8 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   mkdirSync(join(root, 'rust'), { recursive: true });
   // The script stages these from the checkout with relative paths, as it does
   // from the repository root.
-  for (const unit of ['run-scrape.sh', 'wfm-scrape.service', 'wfm-scrape.timer',
-    'host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer', 'tennoworth-job-host-check.path']) {
+  for (const unit of ['run-scrape.sh', 'tennoworth-scrape.service', 'tennoworth-scrape.timer',
+    'host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer']) {
     write(join(root, 'deploy', unit), `# ${unit}\n`);
   }
   if (options.runCheck) {
@@ -406,12 +415,12 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     writeFileSync(join(root, 'check-report.json'), '{"ready": true, "errors": []}');
   }
 
-  write(join(root, 'artifacts/wfm-scrape'), '#!/bin/sh\nprintf "usage: wfm-scrape\\n"\n');
+  write(join(root, 'artifacts/tennoworth-pipeline'), '#!/bin/sh\nprintf "usage: tennoworth-pipeline\\n"\n');
   // One argument checks the live policy; two check the published successor
   // against it, which is how a deploy across a key rotation proves its key.
   write(join(root, 'artifacts/wfm-policy'), '#!/bin/sh\n[ $# -ge 2 ] && exit "${FIXTURE_SUCCESSOR_EXIT:-1}"\nexit "${FIXTURE_POLICY_EXIT:-0}"\n');
   write(join(bin, 'curl'), '#!/bin/sh\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done\nprintf "{}" > "$out"\nexit "${FIXTURE_CURL_EXIT:-0}"\n');
-  chmodSync(join(root, 'artifacts/wfm-scrape'), 0o755);
+  chmodSync(join(root, 'artifacts/tennoworth-pipeline'), 0o755);
   chmodSync(join(root, 'artifacts/wfm-policy'), 0o755);
 
   write(join(bin, 'git'), [
@@ -432,9 +441,9 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     '#!/bin/sh',
     'if [ "$1" = "build" ]; then',
     '  mkdir -p "$CARGO_TARGET_DIR/release"',
-    '  cp "$FIXTURE_ROOT/artifacts/wfm-scrape" "$CARGO_TARGET_DIR/release/wfm-scrape"',
+    '  cp "$FIXTURE_ROOT/artifacts/tennoworth-pipeline" "$CARGO_TARGET_DIR/release/tennoworth-pipeline"',
     '  cp "$FIXTURE_ROOT/artifacts/wfm-policy" "$CARGO_TARGET_DIR/release/wfm-policy"',
-    '  chmod +x "$CARGO_TARGET_DIR/release/wfm-scrape" "$CARGO_TARGET_DIR/release/wfm-policy"',
+    '  chmod +x "$CARGO_TARGET_DIR/release/tennoworth-pipeline" "$CARGO_TARGET_DIR/release/wfm-policy"',
     'fi',
     'exit 0',
     '',
@@ -443,7 +452,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   write(join(bin, 'ldd'), '#!/bin/sh\nprintf "ldd (fixture GLIBC) 2.34\\n"\n');
   write(join(bin, 'sleep'), '#!/bin/sh\nexit 0\n');
   // Remote paths are remapped here as well as in `install`, so a remote
-  // `sha256sum /srv/wfm/bin/wfm-scrape` reads the copy the stub wrote.
+  // `sha256sum /srv/wfm/bin/tennoworth-pipeline` reads the copy the stub wrote.
   write(join(bin, 'ssh'), [
     '#!/bin/bash',
     'shift',
@@ -481,7 +490,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     '  args+=("$a")',
     'done',
     'for a in "${args[@]}"; do',
-    '  case "$a" in */bin/wfm-scrape) printf "live-install\\n" >> "$FIXTURE_ORDER";; esac',
+    '  case "$a" in */bin/tennoworth-pipeline) printf "live-install\\n" >> "$FIXTURE_ORDER";; esac',
     'done',
     `exec ${realInstall} "\${args[@]}"`,
     '',
@@ -494,14 +503,19 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     '  if [ "$1" = "--quiet" ]; then quiet=1; shift; fi',
     '  unit="$1"',
     '  case "$unit" in',
-    '    wfm-scrape.service)',
+    '    tennoworth-scrape.service)',
     '      if [ "${FIXTURE_QUERY_FAIL:-0}" = 1 ]; then exit 255; fi',
     '      next=$(sed -n 1p "$FIXTURE_STATES" 2>/dev/null)',
     '      if [ -n "$next" ]; then sed -i 1d "$FIXTURE_STATES"; else next="${FIXTURE_SWEEP_STATE:-inactive}"; fi',
     '      printf "is-active %s\\n" "$next" >> "$FIXTURE_ORDER"',
     '      printf "%s\\n" "$next"',
+    // The pre-rename name is asked about in the same call and is long gone.
+    '      [ "${2:-}" = wfm-scrape.service ] && printf "inactive\\n"',
     '      exit 0;;',
-    '    wfm-scrape.timer)',
+    // An absent unit is inactive, which is what the pre-rename timer is once
+    // the deploy retires it.
+    '    wfm-scrape.timer) [ "$quiet" = 1 ] && exit 3; printf "inactive\\n"; exit 3;;',
+    '    tennoworth-scrape.timer)',
     '      state="${FIXTURE_TIMER_STATE:-inactive}"',
     '      if [ "$quiet" = 1 ]; then [ "$state" = active ] && exit 0 || exit 3; fi',
     '      printf "%s\\n" "$state"',
@@ -527,11 +541,11 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
       'if [ "$1" = "show" ]; then',
       '  unit="$2"; prop="$4"',
       '  case "$unit:$prop" in',
-      '    wfm-scrape.service:ActiveState) printf "inactive\\n";;',
-      '    wfm-scrape.service:Result) printf "success\\n";;',
-      '    wfm-scrape.timer:UnitFileState) printf "enabled\\n";;',
-      '    wfm-scrape.timer:ActiveState) printf "active\\n";;',
-      '    wfm-scrape.timer:NextElapseUSecRealtime) LC_ALL=C date -u -d "+2 hours" "+%a %Y-%m-%d %H:%M:%S UTC";;',
+      '    tennoworth-scrape.service:ActiveState) printf "inactive\\n";;',
+      '    tennoworth-scrape.service:Result) printf "success\\n";;',
+      '    tennoworth-scrape.timer:UnitFileState) printf "enabled\\n";;',
+      '    tennoworth-scrape.timer:ActiveState) printf "active\\n";;',
+      '    tennoworth-scrape.timer:NextElapseUSecRealtime) LC_ALL=C date -u -d "+2 hours" "+%a %Y-%m-%d %H:%M:%S UTC";;',
       '  esac',
       '  exit 0',
       'fi',
@@ -544,7 +558,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
       '  unit="$FIXTURE_LIVE/etc/systemd/system/tennoworth-host-check.service"',
       '  exec_line="$(sed -n \'s/^ExecStart=//p\' "$unit" | head -1)"',
       '  exec_line="$(printf "%s" "$exec_line" | sed "s#/srv/#$FIXTURE_LIVE/srv/#g; s#/etc/#$FIXTURE_LIVE/etc/#g")"',
-      '  eval "$exec_line --csv $FIXTURE_LIVE/srv/wfm/data/scrape/wfm_results.csv --snapshot $FIXTURE_LIVE/srv/wfm/data/public/market.json --deployed $FIXTURE_LIVE/srv/wfm/deployed.json --binary $FIXTURE_LIVE/srv/wfm/bin/wfm-scrape --app $FIXTURE_LIVE/srv/wfm/app --disk-path $FIXTURE_LIVE/srv/wfm --disk-floor-bytes 1"',
+      '  eval "$exec_line --csv $FIXTURE_LIVE/srv/wfm/data/scrape/wfm_results.csv --snapshot $FIXTURE_LIVE/srv/wfm/data/public/market.json --deployed $FIXTURE_LIVE/srv/wfm/deployed.json --binary $FIXTURE_LIVE/srv/wfm/bin/tennoworth-pipeline --app $FIXTURE_LIVE/srv/wfm/app --disk-path $FIXTURE_LIVE/srv/wfm --disk-floor-bytes 1"',
       '  exit $?',
       'fi',
     );
@@ -587,7 +601,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
 }
 
 describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure paths', () => {
-  const liveBinary = (f: ReturnType<typeof scrapeDeployFixture>) => readFileSync(join(f.live, 'srv/wfm/bin/wfm-scrape'), 'utf8');
+  const liveBinary = (f: ReturnType<typeof scrapeDeployFixture>) => readFileSync(join(f.live, 'srv/wfm/bin/tennoworth-pipeline'), 'utf8');
 
   test('aborts before installing when the sweep state cannot be read', () => {
     // Wrapping the query in `|| true` turns a dead connection or a broken
@@ -596,7 +610,7 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     const f = scrapeDeployFixture();
     const result = f.run({ FIXTURE_QUERY_FAIL: '1' });
     expect(result.status, result.stderr).not.toBe(0);
-    expect(result.stderr).toContain('could not read wfm-scrape.service state');
+    expect(result.stderr).toContain('could not read tennoworth-scrape.service state');
     expect(liveBinary(f), 'the previous release must still be live').toBe('old-live-binary');
   });
 
@@ -604,7 +618,7 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     const f = scrapeDeployFixture({ states: ['maintenance'] });
     const result = f.run();
     expect(result.status, result.stderr).not.toBe(0);
-    expect(result.stderr).toContain('could not read wfm-scrape.service state');
+    expect(result.stderr).toContain('could not read tennoworth-scrape.service state');
     expect(liveBinary(f)).toBe('old-live-binary');
   });
 
@@ -700,33 +714,39 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     expect(calls).not.toContain('start wfm-archive-receipt-pull.service');
     expect(calls).toContain('disable --now wfm-observations-check.timer tennoworth-job-readiness.path');
     expect(calls).toContain('enable --now tennoworth-host-check.timer');
-    expect(calls).toContain('enable --now tennoworth-job-host-check.path');
+    expect(calls).toContain('enable --now tennoworth-job@scrape.path tennoworth-job@host-check.path');
     expect(calls).toContain('start tennoworth-host-check.service');
+    // A box from before the unit rename: its sweep schedule is held, then removed
+    // rather than left to run a second sweep beside the new one.
+    expect(calls).toContain('stop tennoworth-scrape.timer wfm-scrape.timer');
+    expect(calls).toContain('disable wfm-scrape.timer tennoworth-job-scrape.path tennoworth-job-host-check.path');
+    expect(calls).not.toContain('start wfm-scrape.timer');
+    expect(existsSync(join(f.live, 'srv/wfm/bin/wfm-scrape'))).toBe(false);
     const etc = join(f.live, 'etc/systemd/system');
     for (const retired of ['wfm-archive-receipt-pull.service', 'wfm-archive-receipt-pull.timer', 'wfm-observations-check.service',
-      'wfm-observations-check.timer', 'wfm-observations-check.service.d', 'tennoworth-job-readiness.path']) {
+      'wfm-observations-check.timer', 'wfm-observations-check.service.d', 'tennoworth-job-readiness.path',
+      'wfm-scrape.service', 'wfm-scrape.timer', 'tennoworth-job-scrape.path', 'tennoworth-job-host-check.path']) {
       expect(existsSync(join(etc, retired)), retired).toBe(false);
     }
     expect(existsSync(join(f.live, 'etc/wfm-observations-check.env'))).toBe(false);
     expect(existsSync(join(f.live, 'srv/wfm/pull-archive-receipt.sh'))).toBe(false);
     expect(existsSync(join(f.live, 'srv/wfm/observations-check.sh'))).toBe(false);
-    // The dashboard's job unit for the check replaces the retired one.
-    expect(existsSync(join(etc, 'tennoworth-job-host-check.path'))).toBe(true);
+    // The dashboard's template serves both jobs; nothing is copied per job.
+    expect(existsSync(join(etc, 'tennoworth-job@.path'))).toBe(true);
   });
 
   test('a box without the dashboard gets no job unit', () => {
     const f = scrapeDeployFixture();
-    rmSync(join(f.live, 'etc/systemd/system/tennoworth-job-scrape.path'));
+    rmSync(join(f.live, 'etc/systemd/system/tennoworth-job@.path'));
     expect(f.run().status).toBe(0);
-    expect(existsSync(join(f.live, 'etc/systemd/system/tennoworth-job-host-check.path'))).toBe(false);
-    expect(readFileSync(f.systemctlLog, 'utf8')).not.toContain('tennoworth-job-host-check.path');
+    expect(readFileSync(f.systemctlLog, 'utf8')).not.toContain('tennoworth-job@');
   });
 
   test('a first check that is not healthy fails the deploy', () => {
     // The installer is where the host check is enforced, so it cannot be
     // passed by ignoring it.
     const f = scrapeDeployFixture();
-    writeFileSync(join(f.root, 'check-report.json'), '{"ready": false, "errors": ["wfm-scrape.timer is disabled, not enabled"]}');
+    writeFileSync(join(f.root, 'check-report.json'), '{"ready": false, "errors": ["tennoworth-scrape.timer is disabled, not enabled"]}');
     const result = f.run();
     expect(result.status, result.stderr).not.toBe(0);
     expect(result.stderr).toContain('does not pass on the box');
@@ -866,7 +886,7 @@ describe('deployment ownership boundary', () => {
     // The unit runs with ProtectSystem=strict, so the sweep can only write the
     // paths it is granted. A wfm-writable checkout was a route to code root
     // installs, so the checkout is root's and absent from the grant.
-    const unit = readFileSync(fileURLToPath(new URL('../deploy/wfm-scrape.service', import.meta.url)), 'utf8');
+    const unit = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-scrape.service', import.meta.url)), 'utf8');
     expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/scrape \/srv\/wfm\/data\/public$/m);
     expect(unit).toMatch(/^WorkingDirectory=\/srv\/wfm\/data\/scrape$/m);
     expect(unit).not.toContain('/srv/wfm/app');
@@ -881,7 +901,7 @@ describe('deployment ownership boundary', () => {
     // The pipeline has exactly one installer now. The box ran a weeks-old
     // run-scrape.sh because setup-container.sh installed a copy of its own and
     // nothing reconciled it with the checkout.
-    for (const file of ['run-scrape.sh', 'pull-scrape.sh', 'wfm-scrape.service', 'wfm-scrape.timer', 'wfm-scrape-pull.service', 'wfm-scrape-pull.timer']) {
+    for (const file of ['run-scrape.sh', 'pull-scrape.sh', 'tennoworth-scrape.service', 'tennoworth-scrape.timer', 'wfm-scrape-pull.service', 'wfm-scrape-pull.timer']) {
       expect(setup, `${file} must not be installed here`).not.toMatch(new RegExp(`install[^\\n]*${file.replace(/\./g, '\\.')}`));
     }
   });
@@ -965,12 +985,14 @@ describe('host check wiring', () => {
   const pullApp = readFileSync(fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url)), 'utf8');
   const unit = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-host-check.service', import.meta.url)), 'utf8');
   const timer = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-host-check.timer', import.meta.url)), 'utf8');
-  const job = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-job-host-check.path', import.meta.url)), 'utf8');
+  const job = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-job@.path', import.meta.url)), 'utf8');
 
   test('the deploy script is the only installer of the check and its units', () => {
     // The check judges the pipeline the deploy installs, so it travels with it.
     // A second installer could advance the check on its own.
-    const owned = ['host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer', 'tennoworth-job-host-check.path'];
+    // The job path template is the dashboard's and ships with it; the deploy only
+    // enables this job's instance.
+    const owned = ['host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer'];
     for (const file of owned) {
       expect(deploy, `${file} must be staged`).toContain(`$STAGING/${file}`);
       expect(deploy, `${file} must land in the release`).toContain(`$RELEASES/$REVISION/${file}`);
@@ -1009,7 +1031,7 @@ describe('host check wiring', () => {
 
   test('the check unit fails closed and can write only its report', () => {
     expect(unit).toMatch(/^Type=oneshot$/m);
-    expect(unit).toMatch(/^OnFailure=wfm-alert@%n\.service$/m);
+    expect(unit).toMatch(/^OnFailure=tennoworth-alert@%n\.service$/m);
     expect(unit).toMatch(/^ProtectSystem=strict$/m);
     expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/host-check$/m);
     expect(unit).toMatch(/^ExecStart=\/srv\/wfm\/host-check\.sh --out \/srv\/wfm\/data\/host-check\/report\.json$/m);
@@ -1020,8 +1042,8 @@ describe('host check wiring', () => {
     expect(unit).not.toMatch(/archive-receipt/);
     expect(timer).toMatch(/^OnCalendar=\*-\*-\* \*:30:00 UTC$/m);
     expect(timer).toMatch(/^WantedBy=timers\.target$/m);
-    expect(job).toMatch(/^PathChanged=\/srv\/wfm\/jobs\/host-check$/m);
-    expect(job).toMatch(/^Unit=tennoworth-host-check\.service$/m);
+    expect(job).toMatch(/^PathChanged=\/srv\/wfm\/jobs\/%i$/m);
+    expect(job).toMatch(/^Unit=tennoworth-%i\.service$/m);
   });
 
   test('a change to the check itself counts as pipeline lag', () => {
@@ -1048,7 +1070,7 @@ function hostFixture() {
   const snapshot = join(box, 'app/frontend/public/market.json');
   writeFileSync(snapshot, '{"catalog":{}}');
   utimesSync(snapshot, FIXTURE_NOW - 1700, FIXTURE_NOW - 1700);
-  const binary = join(box, 'bin/wfm-scrape');
+  const binary = join(box, 'bin/tennoworth-pipeline');
   writeFileSync(binary, '#!/bin/sh\necho wfm-scrape\n');
   const sha256 = createHash('sha256').update(readFileSync(binary)).digest('hex');
   writeFileSync(join(box, 'deployed.json'), `{\n  "revision": "fixture-rev",\n  "sha256": "${sha256}"\n}\n`);
@@ -1058,11 +1080,11 @@ function hostFixture() {
     'if [ "$1" = "is-enabled" ]; then printf "%s\\n" "${FIXTURE_RETIRED:-disabled}"; exit 0; fi',
     'unit="$2"; prop="$4"',
     'case "$unit:$prop" in',
-    '  wfm-scrape.service:ActiveState) printf "%s\\n" "${FIXTURE_SERVICE_STATE:-inactive}";;',
-    '  wfm-scrape.service:Result) printf "%s\\n" "${FIXTURE_SERVICE_RESULT:-success}";;',
-    '  wfm-scrape.timer:UnitFileState) printf "%s\\n" "${FIXTURE_TIMER_ENABLED:-enabled}";;',
-    '  wfm-scrape.timer:ActiveState) printf "active\\n";;',
-    '  wfm-scrape.timer:NextElapseUSecRealtime) printf "%s\\n" "${FIXTURE_NEXT_ELAPSE-Wed 2026-09-16 18:30:00 UTC}";;',
+    '  tennoworth-scrape.service:ActiveState) printf "%s\\n" "${FIXTURE_SERVICE_STATE:-inactive}";;',
+    '  tennoworth-scrape.service:Result) printf "%s\\n" "${FIXTURE_SERVICE_RESULT:-success}";;',
+    '  tennoworth-scrape.timer:UnitFileState) printf "%s\\n" "${FIXTURE_TIMER_ENABLED:-enabled}";;',
+    '  tennoworth-scrape.timer:ActiveState) printf "active\\n";;',
+    '  tennoworth-scrape.timer:NextElapseUSecRealtime) printf "%s\\n" "${FIXTURE_NEXT_ELAPSE-Wed 2026-09-16 18:30:00 UTC}";;',
     'esac',
     'exit 0',
     '',
@@ -1106,7 +1128,7 @@ describe.skipIf(process.platform === 'win32')('host check', () => {
   test('a disabled sweep timer is not healthy', () => {
     const f = hostFixture();
     expect(f.run({ FIXTURE_TIMER_ENABLED: 'disabled' }).status).not.toBe(0);
-    expect(f.report().errors.join('\n')).toContain('wfm-scrape.timer is disabled, not enabled');
+    expect(f.report().errors.join('\n')).toContain('tennoworth-scrape.timer is disabled, not enabled');
   });
 
   test('a timer past its boundary is not healthy', () => {
@@ -1261,7 +1283,7 @@ describe.skipIf(process.platform === 'win32')('host check', () => {
 
   test('a binary that is not the recorded revision is not healthy', () => {
     const f = hostFixture();
-    writeFileSync(join(f.box, 'bin/wfm-scrape'), '#!/bin/sh\necho tampered\n');
+    writeFileSync(join(f.box, 'bin/tennoworth-pipeline'), '#!/bin/sh\necho tampered\n');
     const result = f.run();
     expect(result.status).not.toBe(0);
     const report = f.report();
@@ -1324,8 +1346,10 @@ describe.skipIf(process.platform === 'win32')('player-count logger', () => {
   test('the checkout puller keeps the script current and reports unit drift', () => {
     const pullApp = readFileSync(puller, 'utf8');
     expect(pullApp).toMatch(/for f in [^;]*log-players\.sh/);
-    expect(pullApp).toMatch(/for u in [^;]*wfm-players /);
-    const unit = readFileSync(fileURLToPath(new URL('../deploy/wfm-players.service', import.meta.url)), 'utf8');
+    // Drift covers every unit file but the pipeline deploy's own.
+    expect(pullApp).toContain('for src in deploy/*.service deploy/*.timer deploy/*.path; do');
+    expect(pullApp).toContain('case "${src#deploy/}" in tennoworth-scrape.*|tennoworth-host-check.*) continue;; esac');
+    const unit = readFileSync(fileURLToPath(new URL('../deploy/tennoworth-players.service', import.meta.url)), 'utf8');
     expect(unit).toContain('ExecStart=/srv/wfm/log-players.sh');
     expect(unit).toContain('ReadWritePaths=/srv/wfm/players');
   });

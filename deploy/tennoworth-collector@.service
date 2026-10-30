@@ -1,0 +1,33 @@
+# One opt-in collector, named by the instance: tennoworth-collector@usage
+# (daily installation counter, health on :8082) and tennoworth-collector@reports
+# (anonymous price reports, :8083). Each runs as its own user from its own binary
+# and keeps its state in /var/lib/tennoworth-<instance>.
+[Unit]
+Description=Opt-in %i collector
+After=network.target
+OnFailure=tennoworth-alert@%n.service
+
+[Service]
+User=tennoworth-%i
+Group=tennoworth-%i
+StateDirectory=tennoworth-%i
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/srv/wfm/bin/tennoworth-%i
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+TasksMax=64
+LimitNOFILE=256
+
+[Install]
+WantedBy=multi-user.target

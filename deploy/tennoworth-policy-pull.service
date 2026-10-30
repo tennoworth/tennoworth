@@ -2,7 +2,7 @@
 Description=Verify and publish the latest signed WFM access policy
 After=network-online.target
 Wants=network-online.target
-OnFailure=wfm-alert@%n.service
+OnFailure=tennoworth-alert@%n.service
 
 [Service]
 Type=oneshot

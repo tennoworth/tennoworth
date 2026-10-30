@@ -45,7 +45,7 @@ test('a sweep in progress still shows when the last one finished', async ({ page
   const checkedAt = new Date(Date.now() - 10 * 60_000);
   const unit = (name: string, extra: object = {}) => ({ unit: name, installed: true, active_state: 'inactive', sub_state: 'dead', result: 'success', started_at: null, finished_at: null, ...extra });
   // systemd reports no exit time for a sweep while the next one runs.
-  const sweep = unit('wfm-scrape.service', { active_state: 'activating', sub_state: 'start', started_at: new Date(Date.now() - 30 * 60_000).toISOString() });
+  const sweep = unit('tennoworth-scrape.service', { active_state: 'activating', sub_state: 'start', started_at: new Date(Date.now() - 30 * 60_000).toISOString() });
   await page.route('**/api/status', route => route.fulfill({ json: {
     actor: 'local-preview@example.invalid',
     status: {

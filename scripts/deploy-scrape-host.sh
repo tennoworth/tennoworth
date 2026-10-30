@@ -82,7 +82,7 @@ say "build: release, locked, policy key compiled in"
 # Honor CARGO_TARGET_DIR: CI and sandboxes set it, and the artifact is not under
 # rust/target when they do.
 TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/rust/target}"
-ARTIFACT="$TARGET_DIR/release/wfm-scrape"
+ARTIFACT="$TARGET_DIR/release/tennoworth-pipeline"
 VERIFIER_ARTIFACT="$TARGET_DIR/release/wfm-policy"
 [ -x "$ARTIFACT" ] || die "no artifact at $ARTIFACT"
 [ -x "$VERIFIER_ARTIFACT" ] || die "no verifier at $VERIFIER_ARTIFACT"
@@ -128,8 +128,8 @@ $SSH "$HOST" "test -f '$HOST_ROOT/data/public/market.json' && test -d '$HOST_ROO
 # exits through it - but a connection lost after the stop and before the start
 # takes effect leaves the timer stopped with nobody left to notice, so that state
 # has to be detectable by hand:
-#   systemctl list-timers wfm-scrape.timer
-#   systemctl start wfm-scrape.timer
+#   systemctl list-timers tennoworth-scrape.timer
+#   systemctl start tennoworth-scrape.timer
 # A SIGKILL or a host power loss runs none of this; the unit stays enabled, so a
 # reboot re-arms it through timers.target even then.
 TIMER_HELD=1
@@ -139,14 +139,16 @@ restore_timer() {
   # Return non-zero when the restore does not take effect. In the EXIT trap the
   # status is discarded, but the success path calls this explicitly and a deploy
   # that leaves the box with no schedule must not report success.
-  $SSH "$HOST" "systemctl start wfm-scrape.timer" && return 0
-  say "WARNING: restore the timer by hand and confirm it: systemctl list-timers wfm-scrape.timer; systemctl start wfm-scrape.timer"
+  # Until activation installs it, a box from before the unit rename has only
+  # the old wfm-scrape.timer, and that is the schedule the hold stopped.
+  $SSH "$HOST" "if [ -f /etc/systemd/system/tennoworth-scrape.timer ]; then systemctl start tennoworth-scrape.timer; else systemctl start wfm-scrape.timer; fi" && return 0
+  say "WARNING: restore the timer by hand and confirm it: systemctl list-timers tennoworth-scrape.timer; systemctl start tennoworth-scrape.timer"
   return 1
 }
 trap restore_timer EXIT
 
-$SSH "$HOST" "systemctl stop wfm-scrape.timer >/dev/null 2>&1 || true; ! systemctl is-active --quiet wfm-scrape.timer" \
-  || die "could not stop wfm-scrape.timer; refusing to install under a live schedule"
+$SSH "$HOST" "systemctl stop tennoworth-scrape.timer wfm-scrape.timer >/dev/null 2>&1 || true; ! systemctl is-active --quiet tennoworth-scrape.timer && ! systemctl is-active --quiet wfm-scrape.timer" \
+  || die "could not stop tennoworth-scrape.timer; refusing to install under a live schedule"
 
 # Stopping the timer does not stop a sweep a previous elapse already started.
 # `systemctl is-active` exits non-zero for inactive and failed, so its exit
@@ -154,15 +156,24 @@ $SSH "$HOST" "systemctl stop wfm-scrape.timer >/dev/null 2>&1 || true; ! systemc
 # Read the state string and accept only what systemd can report for a oneshot: an
 # empty or unrecognised result is a dead connection or a missing systemctl, and
 # treating that as idle is how this check fails open.
+# The sweep is also asked about under its pre-rename name, wfm-scrape.service,
+# which a box not yet deployed past the rename still runs; systemd reports an
+# absent unit as inactive.
 sweep_state() {
-  local state
-  if ! state="$($SSH "$HOST" "systemctl is-active wfm-scrape.service" 2>/dev/null)"; then
-    : # inactive and failed exit non-zero; the state string below decides
+  local states state running=""
+  if ! states="$($SSH "$HOST" "systemctl is-active tennoworth-scrape.service wfm-scrape.service" 2>/dev/null)"; then
+    : # inactive and failed exit non-zero; the state strings below decide
   fi
-  case "$state" in
-    active|activating|deactivating|inactive|failed) printf '%s\n' "$state" ;;
-    *) die "could not read wfm-scrape.service state (got '${state:-nothing}'); refusing to install" ;;
-  esac
+  [ "$(printf '%s\n' "$states" | grep -c .)" = 2 ] \
+    || die "could not read tennoworth-scrape.service state (got '${states:-nothing}'); refusing to install"
+  while IFS= read -r state; do
+    case "$state" in
+      active|activating|deactivating) running="$state" ;;
+      inactive|failed) ;;
+      *) die "could not read tennoworth-scrape.service state (got '$state'); refusing to install" ;;
+    esac
+  done <<<"$states"
+  printf '%s\n' "${running:-inactive}"
 }
 
 # Wait the sweep out before writing anything. A transitional state means the
@@ -181,10 +192,10 @@ done
 # ---- 5. stage the whole release -------------------------------------------
 say "staging to $STAGING"
 $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
-$SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
+$SCP -q "$ARTIFACT" "$HOST:$STAGING/tennoworth-pipeline"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
-$SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
-$SCP -q deploy/host-check.sh deploy/tennoworth-host-check.service deploy/tennoworth-host-check.timer deploy/tennoworth-job-host-check.path "$HOST:$STAGING/"
+$SCP -q deploy/run-scrape.sh deploy/tennoworth-scrape.service deploy/tennoworth-scrape.timer "$HOST:$STAGING/"
+$SCP -q deploy/host-check.sh deploy/tennoworth-host-check.service deploy/tennoworth-host-check.timer "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
 # The live paths keep running the previous release until this one is proven on
@@ -193,21 +204,20 @@ $SCP -q deploy/host-check.sh deploy/tennoworth-host-check.service deploy/tennowo
 $SSH "$HOST" bash -s <<REMOTE_RELEASE
 set -euo pipefail
 install -d -m 0755 -o root -g root "$RELEASES/$REVISION"
-install -m 0755 "$STAGING/wfm-scrape" "$RELEASES/$REVISION/wfm-scrape"
+install -m 0755 "$STAGING/tennoworth-pipeline" "$RELEASES/$REVISION/tennoworth-pipeline"
 install -m 0755 "$STAGING/wfm-policy" "$RELEASES/$REVISION/wfm-policy"
 install -m 0755 "$STAGING/run-scrape.sh" "$RELEASES/$REVISION/run-scrape.sh"
-install -m 0644 "$STAGING/wfm-scrape.service" "$RELEASES/$REVISION/wfm-scrape.service"
-install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.timer"
+install -m 0644 "$STAGING/tennoworth-scrape.service" "$RELEASES/$REVISION/tennoworth-scrape.service"
+install -m 0644 "$STAGING/tennoworth-scrape.timer" "$RELEASES/$REVISION/tennoworth-scrape.timer"
 install -m 0755 "$STAGING/host-check.sh" "$RELEASES/$REVISION/host-check.sh"
 install -m 0644 "$STAGING/tennoworth-host-check.service" "$RELEASES/$REVISION/tennoworth-host-check.service"
 install -m 0644 "$STAGING/tennoworth-host-check.timer" "$RELEASES/$REVISION/tennoworth-host-check.timer"
-install -m 0644 "$STAGING/tennoworth-job-host-check.path" "$RELEASES/$REVISION/tennoworth-job-host-check.path"
 REMOTE_RELEASE
 
-SCRAPER="$RELEASES/$REVISION/wfm-scrape"
+SCRAPER="$RELEASES/$REVISION/tennoworth-pipeline"
 VERIFIER="$RELEASES/$REVISION/wfm-policy"
 
-$SSH "$HOST" "'$SCRAPER' 2>&1 | grep -q 'usage: wfm-scrape'" \
+$SSH "$HOST" "'$SCRAPER' 2>&1 | grep -q 'usage: tennoworth-pipeline'" \
   || die "the built binary does not run on the box"
 [ "$($SSH "$HOST" "sha256sum '$SCRAPER' | cut -d' ' -f1")" = "$CHECKSUM" ] \
   || die "the release binary is not the one that was built"
@@ -237,14 +247,14 @@ $SSH "$HOST" bash -s <<REMOTE_ACTIVATE
 set -euo pipefail
 # The running paths stay where the units expect them; the release directory is
 # the rollback unit, not a new layout.
-install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"
+install -m 0755 "$RELEASES/$REVISION/tennoworth-pipeline" "/srv/wfm/bin/tennoworth-pipeline"
 # The policy puller verifies each download with this binary, so it has to carry
 # the same public key as the scraper it serves. It was once installed by hand and
 # never updated; after a key rotation that copy would refuse every new policy.
 install -m 0755 "$RELEASES/$REVISION/wfm-policy" "/srv/wfm/bin/wfm-policy"
 install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
-install -m 0644 "$RELEASES/$REVISION/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
-install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-scrape.timer
+install -m 0644 "$RELEASES/$REVISION/tennoworth-scrape.service" /etc/systemd/system/tennoworth-scrape.service
+install -m 0644 "$RELEASES/$REVISION/tennoworth-scrape.timer" /etc/systemd/system/tennoworth-scrape.timer
 install -m 0755 "$RELEASES/$REVISION/host-check.sh" "/srv/wfm/host-check.sh"
 install -m 0644 "$RELEASES/$REVISION/tennoworth-host-check.service" /etc/systemd/system/tennoworth-host-check.service
 install -m 0644 "$RELEASES/$REVISION/tennoworth-host-check.timer" /etc/systemd/system/tennoworth-host-check.timer
@@ -259,10 +269,10 @@ systemctl daemon-reload
 # Arming the timer here with enable --now would reopen the window the hold above
 # exists to close; the EXIT trap starts it once every check has passed, and the
 # monitoring timers are deliberately armed after that.
-systemctl enable wfm-scrape.timer
+systemctl enable tennoworth-scrape.timer
 REMOTE_ACTIVATE
 
-[ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
+[ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/tennoworth-pipeline | cut -d' ' -f1")" = "$CHECKSUM" ] \
   || die "the live binary is not the one that was built"
 
 # The on-box archive receipt path is retired. A box deployed before that still
@@ -272,8 +282,12 @@ REMOTE_ACTIVATE
 # every hour and alerted each time. Removing the units is what ends that.
 $SSH "$HOST" "systemctl disable --now wfm-archive-receipt-pull.timer >/dev/null 2>&1 || true"
 $SSH "$HOST" "rm -f /etc/systemd/system/wfm-archive-receipt-pull.service /etc/systemd/system/wfm-archive-receipt-pull.timer /srv/wfm/pull-archive-receipt.sh"
-# The dashboard's "Check the host" job; only a box with the dashboard has job units.
-$SSH "$HOST" "if [ -f /etc/systemd/system/tennoworth-job-scrape.path ]; then install -m 0644 '$RELEASES/$REVISION/tennoworth-job-host-check.path' /etc/systemd/system/tennoworth-job-host-check.path; fi"
+# The sweep's units, binary and job path units were named wfm-scrape and
+# tennoworth-job-<id>.path before the units took the project's name. The hold
+# stopped the old timer; left enabled it would schedule a second, binary-less
+# sweep beside this one after the next reboot.
+$SSH "$HOST" "systemctl disable wfm-scrape.timer tennoworth-job-scrape.path tennoworth-job-host-check.path >/dev/null 2>&1 || true"
+$SSH "$HOST" "rm -f /etc/systemd/system/wfm-scrape.service /etc/systemd/system/wfm-scrape.timer /srv/wfm/bin/wfm-scrape /etc/systemd/system/tennoworth-job-scrape.path /etc/systemd/system/tennoworth-job-host-check.path"
 # The observation corpus and its readiness check are retired. The corpus
 # directory is left in place: removing it waits for a final backup.
 $SSH "$HOST" "systemctl disable --now wfm-observations-check.timer tennoworth-job-readiness.path >/dev/null 2>&1 || true"
@@ -302,7 +316,9 @@ RECORD
 restore_timer
 
 $SSH "$HOST" "systemctl enable --now tennoworth-host-check.timer"
-$SSH "$HOST" "if [ -f /etc/systemd/system/tennoworth-job-host-check.path ]; then systemctl enable --now tennoworth-job-host-check.path; fi"
+# The dashboard's pipeline jobs. The job path template ships with the
+# dashboard, so only a box that has it gets the instances.
+$SSH "$HOST" "if [ -f /etc/systemd/system/tennoworth-job@.path ]; then systemctl enable --now tennoworth-job@scrape.path tennoworth-job@host-check.path; fi"
 
 # ---- 10. run the check once ------------------------------------------------
 # A check that leaves no report at all means the installed units are broken, and

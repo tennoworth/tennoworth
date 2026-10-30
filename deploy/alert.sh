@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# OnFailure handler. Invoked by systemd as `wfm-alert@<failed-unit>.service`,
+# OnFailure handler. Invoked by systemd as `tennoworth-alert@<failed-unit>.service`,
 # so $1 is the unit that failed.
 #
 # Exists because two separate outages ran for days without anyone noticing:
-# a release publisher failed for 9 days, and wfm-app-pull failed on its first
+# a release publisher failed for 9 days, and tennoworth-app-pull failed on its first
 # timer firing. Both sat in `systemctl --failed`, which nothing looks at. A
 # cron box with no alerting is a box whose failures are discovered by accident.
 #

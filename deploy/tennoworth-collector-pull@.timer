@@ -1,5 +1,5 @@
 [Unit]
-Description=Check for usage collector updates
+Description=Check for %i collector updates
 [Timer]
 OnBootSec=5min
 OnUnitActiveSec=15min

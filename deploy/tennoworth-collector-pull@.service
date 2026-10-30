@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull the verified %i collector build
+After=network-online.target
+Wants=network-online.target
+OnFailure=tennoworth-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/wfm/pull-collector.sh %i
