@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { ProtectionController } from './protection.svelte';
+import { ProtectionController, PROTECTION_BACKSTOP_MS, PROTECTION_REFRESH_EVENTS, type ProtectionSchedule } from './protection.svelte';
 import type { OwnedRecord } from '../../contracts/data';
 import type { ProtectionState } from '../../contracts/protection';
 
@@ -58,4 +58,67 @@ it('a failed quantity refresh retains saved keep rules for editing without retai
   expect(c.state).toBeNull();
   expect(c.savedPlan).toEqual({ reserves: { part: 2 }, goal: null });
   expect(c.error).toContain('invalid');
+});
+
+function schedule(hidden: boolean) {
+  const listeners = new Map<string, () => void>();
+  const docListeners = new Map<string, () => void>();
+  let tick: (() => void) | null = null;
+  const doc = {
+    hidden,
+    addEventListener: vi.fn((type: string, cb: () => void) => { docListeners.set(type, cb); }),
+    removeEventListener: vi.fn((type: string) => { docListeners.delete(type); }),
+  };
+  const env = {
+    listen: vi.fn((event: string, cb: () => void) => { listeners.set(event, cb); return () => { listeners.delete(event); }; }),
+    document: doc as unknown as ProtectionSchedule['document'],
+    setInterval: vi.fn((fn: () => void, ms: number) => { expect(ms).toBe(PROTECTION_BACKSTOP_MS); tick = fn; return 7; }),
+    clearInterval: vi.fn(() => { tick = null; }),
+  };
+  return { env, doc, listeners, docListeners, tick: () => tick?.() };
+}
+
+async function started(hidden: boolean) {
+  const port = { desktopProtectionState: vi.fn().mockResolvedValue(allocation(1)), desktopSaveProtectionPlan: vi.fn() };
+  const c = new ProtectionController(port);
+  await c.setInventory(inventory(1), 1);
+  port.desktopProtectionState.mockClear();
+  const s = schedule(hidden);
+  const stop = c.start(s.env);
+  return { c, port, s, stop };
+}
+
+it('native changes refresh the quantities whether or not the window is shown', async () => {
+  const { port, s } = await started(true);
+  expect([...s.listeners.keys()].sort()).toEqual(['trade-allowance-changed', 'trade-detected', 'wfm-access-changed']);
+  for (const cb of s.listeners.values()) cb();
+  await Promise.resolve();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(PROTECTION_REFRESH_EVENTS.length);
+});
+
+it('the backstop does not read orders while the window is hidden', async () => {
+  const { port, s } = await started(true);
+  s.tick();
+  expect(port.desktopProtectionState).not.toHaveBeenCalled();
+  s.doc.hidden = false;
+  s.tick();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
+});
+
+it('showing the window again refreshes once', async () => {
+  const { port, s } = await started(true);
+  s.docListeners.get('visibilitychange')?.();
+  expect(port.desktopProtectionState).not.toHaveBeenCalled();
+  s.doc.hidden = false;
+  s.docListeners.get('visibilitychange')?.();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
+});
+
+it('stopping removes every trigger', async () => {
+  const { port, s, stop } = await started(false);
+  stop();
+  expect(s.listeners.size).toBe(0);
+  expect(s.docListeners.size).toBe(0);
+  s.tick();
+  expect(port.desktopProtectionState).not.toHaveBeenCalled();
 });
