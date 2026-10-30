@@ -1,6 +1,6 @@
 // @ts-nocheck - vitest fixtures; the module's TS contract is exercised by tsc.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { installTauri, removeTauri } from '../dev/test-utils.js';
+import { installTauri, removeTauri } from '../dev/testing/test-utils.js';
 import updateSupportFixture from '../../../tests/fixtures/update-support.json';
 import { updateStatus, checkUpdate, installUpdate, restartApp, onUpdateAvailable } from './desktop-update';
 import { UPDATE_CHECK_INTERVAL_MS, UPDATE_SUPPORT } from '../contracts/update';

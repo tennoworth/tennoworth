@@ -11,15 +11,22 @@ no user-account backend and the site never receives inventory.
 frontend/
   src/
     main.ts                  runtime selection and dynamic entry loading
-    shells/                  desktop and hosted composition; shared shell CSS
-    features/                inventory, selling, orders, relics, rivens,
-                             market-context, watches, ledger, presence,
-                             routines, community, settings
+    shell.css                layout shared by both shells
+    desktop/                 needs the desktop's capabilities: shell/ (composition,
+                             status strip, desktop context), inventory, selling,
+                             orders, watches, ledger, presence, relics, rivens,
+                             routines, baro, settings, account (WFM sign-in),
+                             notifications, updates, prompts, community
+    site/                    the hosted surface: shell/, pages/ (prerendered
+                             public pages), showcase/
+    features/                feature UI either surface mounts: market, calendar,
+                             announcements, feedback, faq
     domain/                  deterministic calculations and resolution
     contracts/               wire shapes, capabilities, errors, state interfaces
     adapters/                Tauri IPC, same-origin loading, persistence
-    ui/                      shared visual primitives and capability context
-    dev/                     sample transport, styleguide, architecture gates
+    ui/                      visual primitives only
+    dev/                     gates/, preview/ (sample transport, wasm planners),
+                             styleguide/, testing/
   admin.html                 separate private dashboard entry (dist-admin)
   src/admin/                 box status, scheduled-job requests, announcements
   public/                    published market/catalog data and static assets
@@ -78,8 +85,8 @@ deploy/                      the host: setup-container.sh provisions it, install
 `frontend/scripts/prerender.ts` runs after the hosted Vite build. It renders
 shared Svelte public content into the homepage and physical guide, tool,
 desktop and selected item directories, with route-specific metadata and a
-generated sitemap. `src/public-site/pages.ts` owns the route/pilot selection;
-`src/public-site/model.ts` projects bounded snapshot data for initial HTML.
+generated sitemap. `src/features/market/pages.ts` owns the route/pilot selection;
+`src/site/pages/model.ts` projects bounded snapshot data for initial HTML.
 Generation uses a production SSR build so server and client markup and style
 hashes agree. Hosted builds emit a Vite manifest to collect dedicated pages’
 shared component styles, then remove the manifest from the public artifact. Public item history remains an on-demand same-origin enhancement;
@@ -201,10 +208,16 @@ pretend to support scanning, authentication, or orders through no-op methods.
 Desktop services and the standalone overlay are dynamically loaded. Overlay
 document styles are surface-scoped so they cannot disable hosted-page scrolling.
 
-`frontend/src/dev/architecture.test.ts` checks static imports and re-exports in
-both component script blocks, direct feature/adapter separation, pure-domain
-runtime access, hosted transitive imports, and the ban on component type-check
-suppression. Type-only edges constrain ownership but do not create runtime
+`frontend/src/dev/gates/architecture.test.ts` checks static imports and re-exports in
+both component script blocks. Its rules are the folders, with no feature lists:
+- `features/`, `site/` and `ui/` never import `desktop/` or the desktop adapters
+- `features/` and `ui/` never import `site/`
+- `domain/` imports only `domain/` and `contracts/`
+- only `main.ts`, the two shells and `admin/` import adapters
+- nothing reachable from a hosted root reaches desktop code; the hosted roots
+  are what `main.ts` loads from `site/`, plus the prerender entry
+
+It also bans component type-check suppression. Type-only edges constrain ownership but do not create runtime
 cycles. Svelte diagnostics run separately. This bounded gate does not establish
 runtime lifecycle correctness or inspect arbitrary dynamic imports; behavior
 and browser tests cover those concerns.
@@ -344,7 +357,7 @@ TypeScript sell-priority scoring and history; these are not production desktop
 fallbacks when native computation fails. The `?preview-desktop` development host
 has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
 `DomainRequest::execute`, compiled to wasm32 by `scripts/build-domain-wasm.ts`
-and loaded by `frontend/src/dev/domain-wasm.ts`. The preview therefore shows
+and loaded by `frontend/src/dev/preview/domain-wasm.ts`. The preview therefore shows
 native results and there is no TypeScript copy of the planners to keep in step.
 The dev server alone grants the page `'wasm-unsafe-eval'`; the shipped CSP
 copies do not.

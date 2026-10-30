@@ -58,7 +58,7 @@ lookup).
 ### The desktop preview runs native calculations
 `?preview-desktop` answers `evaluate_domain` from `rust/market-domain-wasm`
 compiled to wasm32 (`bun run build:domain-wasm`; loader in
-`src/dev/domain-wasm.ts`), so do not add TypeScript copies of native planners
+`src/dev/preview/domain-wasm.ts`), so do not add TypeScript copies of native planners
 for the preview's sake. The browser suite builds it fresh in CI.
 
 ### Market intelligence must preserve unknowns

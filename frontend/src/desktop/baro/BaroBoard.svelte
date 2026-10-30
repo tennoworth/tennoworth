@@ -1,0 +1,383 @@
+<script lang="ts">
+  // Baro's manifest, priced.
+  //
+  // The stock comes from DE's worldState, which publishes it when the visit is
+  // ANNOUNCED - days before he lands. That is the whole reason this exists:
+  // the previous source only knew his stock during the 48h he was standing in
+  // the relay, by which point the decision has already been made for you.
+  //
+  // Sorted by plat-per-ducat, because "what are my ducats worth this rotation"
+  // is the question, and his shelf order answers a different one.
+  import { ducatBasket, stockIsCurrent } from '../../domain/baro-board';
+  import type { BaroValue, BaroVerdict } from '../../contracts/generated/domain';
+  import { DomainResult } from '../selling/domain-result.svelte';
+  import type { DucatPlan, ScrapCandidate } from '../../contracts/generated/domain';
+  import { useDesktopServices } from '../shell/desktop-context';
+  const { ducatPlan, baroValue } = useDesktopServices();
+  import { glyphFor } from '../../ui/glyphs';
+  import { plat } from '../../ui/format';
+  import type { Market, OwnedRecord } from '../../contracts/data';
+  import Glyph from '../../ui/Glyph.svelte';
+  import Meter from '../../ui/Meter.svelte';
+
+  let {
+    market,
+    baro,
+    owned = null,
+    availability, unavailableItems = 0, quantitiesUnavailable = false,
+  }: {
+    market: Market | null;
+    baro: NonNullable<Market['baro']> | null;
+    /** Scanned inventory. Absent on the web app, where the board still prices
+     *  his stock but can say nothing about what the reader can afford.
+     *
+     *  There is deliberately no `ducatsHeld`: ducats are account state and an
+     *  inventory scan cannot see them. The only honest figure is what the
+     *  user's spare parts would YIELD, derived below - and it must never be
+     *  presented as a balance, or the scrap plan double-counts it. */
+    owned?: Map<string, OwnedRecord> | null;
+    availability?: ReadonlyMap<string, number>;
+    unavailableItems?: number;
+    quantitiesUnavailable?: boolean;
+  } = $props();
+
+  let showAll = $state(false);
+
+  let current = $derived(stockIsCurrent(baro?.inventory_for, baro?.activation));
+  const valueResult = new DomainResult<BaroValue | null>(() => null);
+  $effect(() => {
+    const stock = baro?.inventory ?? [];
+    const snapshot = market;
+    return valueResult.start(() => baroValue(stock, snapshot, null));
+  });
+  let rows = $derived(valueResult.value?.rows ?? []);
+  // Everything the user could feed the kiosk, and what that would yield. This
+  // is a POTENTIAL, not a balance.
+  let candidates = $state<ScrapCandidate[]>([]);
+  let scrapPlan = $state<DucatPlan | null>(null);
+  let scrapError = $state('');
+  let scrapLoading = $state(false);
+  const basketTarget = $derived(ducatBasket(rows, 0).needed);
+  $effect(() => {
+    const inventory = owned;
+    const available = availability;
+    const snapshot = market;
+    const target = basketTarget;
+    let active = true;
+    candidates = [];
+    scrapPlan = null;
+    scrapError = '';
+    scrapLoading = !!inventory && !quantitiesUnavailable;
+    if (quantitiesUnavailable) return () => { active = false; };
+    // The target comes from the stock valuation; a plan made before it arrives is thrown away.
+    if (valueResult.phase === 'loading') return () => { active = false; };
+    if (inventory) ducatPlan(inventory, snapshot, target, 15, available).then((result) => {
+      if (active) { candidates = result.candidates; scrapPlan = target > 0 ? result.plan : null; scrapLoading = false; }
+    }).catch(() => { if (active) { scrapError = 'Scrap planning unavailable. Try reopening the Baro board.'; scrapLoading = false; } });
+    return () => { active = false; };
+  });
+  let scrapPotential = $derived(candidates.reduce((sum, c) => sum + c.totalDucats, 0));
+  let basket = $derived(ducatBasket(rows, scrapPotential));
+  // What to scrap to pay for the basket. Sized against the basket itself, not
+  // against a shortfall computed from a balance we do not have.
+
+
+  // Skip and unpriced rows are collapsed by default. They are not hidden -
+  // "he is selling it and it isn't worth your ducats" is information - but
+  // they should not be the first thing in the list.
+  let shown = $derived(
+    showAll ? rows : rows.filter((r) => r.verdict === 'flip' || r.verdict === 'hold' || r.verdict === 'thin'),
+  );
+  let hiddenCount = $derived(rows.length - shown.length);
+
+  const VERDICT_LABEL: Record<BaroVerdict, string> = {
+    flip: 'buy · flip',
+    hold: 'buy · hold',
+    thin: 'thin market',
+    skip: 'poor value',
+    unpriced: 'not tradeable',
+  };
+
+  const VERDICT_HINT: Record<BaroVerdict, string> = {
+    flip: 'Priced above its own 90-day baseline, with enough trades to sell into.',
+    hold: "At or below baseline - his arrival is why. The profit is in holding for the recovery.",
+    thin: 'Too few trades for the price to mean much. Treat it as a guess.',
+    skip: 'The plat it returns does not justify the ducats.',
+    unpriced: 'Cosmetic or bundle - it has no market listing, so there is no price to show.',
+  };
+
+  function ratio(n: number | null): string {
+    return n == null ? '-' : n.toFixed(2);
+  }
+  function credits(n: number | null | undefined): string {
+    if (!n) return '-';
+    return n >= 999_500 ?`${Number((n / 1_000_000).toFixed(1))}M` : `${Math.round(n / 1000)}k`;
+  }
+</script>
+
+<section class="wrap tw board">
+  <div class="rail"><h3>What he is selling</h3></div>
+  <div class="board-body">
+  {#if valueResult.phase === 'loading'}<p role="status">Pricing Baro's stock…</p>{/if}
+  {#if valueResult.phase === 'error'}<p class="ui-notice" data-tone="bad" role="alert">Stock pricing unavailable. Try reopening the Baro board.</p>{/if}
+  {#if unavailableItems}<p class="ui-notice" data-tone="warn">Scrap quantities unavailable for {unavailableItems} {unavailableItems === 1 ? 'item' : 'items'}. {quantitiesUnavailable ? 'Recheck protection to calculate scrap potential.' : 'Scrap totals include only items with known quantities.'}</p>{/if}
+  {#if scrapLoading}<p role="status">Calculating scrap plan…</p>{/if}
+  {#if scrapError}<p class="ui-notice" data-tone="bad" role="alert">{scrapError}</p>{/if}
+  {#if valueResult.phase === 'done'}
+  <header class="board-head">
+    <p class="sub">
+      {rows.length} {rows.length === 1 ? 'item' : 'items'} · ranked by plat returned per ducat spent.
+      {#if !current}
+        <span class="stale">Stock is from a previous visit - treat it as a preview.</span>
+      {/if}
+    </p>
+  </header>
+  {/if}
+
+  {#if basket.needed > 0}
+    {@const scrapKnown = owned && !quantitiesUnavailable && !scrapLoading && !scrapError}
+    {#if scrapKnown}
+      <div class="budget">
+        <Meter
+          label={unavailableItems ? 'Ducats from known spares' : 'Ducats from your spares'}
+          value={scrapPotential}
+          max={basket.needed}
+          text={`${scrapPotential.toLocaleString()} of ${basket.needed.toLocaleString()}`}
+        />
+      </div>
+    {/if}
+    <p class="gap">
+      <strong>{basket.needed.toLocaleString()}</strong> ducats buys the <strong>{basket.count}</strong>
+      worth-buying {basket.count === 1 ? 'item' : 'items'}, about <strong>{plat(basket.resale)}p</strong> resale at 90-day medians.
+      {#if scrapKnown}Your spares cover <strong>{basket.coveredByScrapping}</strong> of {basket.count === 1 ? 'it' : 'them'}.{/if}
+    </p>
+    {#if owned}
+      <p class="sub">
+        We can't see your ducat balance - it's account state, not an item - so this is what
+        your spares are worth, not what you can afford today.
+      </p>
+    {/if}
+  {/if}
+
+  {#if valueResult.phase === 'done'}
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Item</th>
+          <th scope="col" class="num">Ducats</th>
+          <th scope="col" class="num">Credits</th>
+          <th scope="col" class="num">Now</th>
+          <th scope="col" class="num">90d</th>
+          <th scope="col" class="num">p/ducat</th>
+          <th scope="col">Verdict</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each shown as row (row.unique ?? row.item)}
+          <tr class:top={row.verdict === 'flip'}>
+            <th scope="row" class="name">
+              <span class="name-in">
+                <Glyph name={glyphFor(market?.path_to_info?.[row.unique ?? '']?.category)} />
+                {row.item}
+              </span>
+            </th>
+            <td class="num ducat">{row.ducats?.toLocaleString() ?? '-'}</td>
+            <td class="num muted">{credits(row.credits)}</td>
+            <td class="num">{row.price == null ? '-' : `${plat(row.price, { useGrouping: false })}p`}</td>
+            <td class="num muted">{row.baseline == null ? '-' : `${plat(row.baseline, { useGrouping: false })}p`}</td>
+            <td class="num">{ratio(row.platPerDucat)}</td>
+            <td>
+              <span class="tag {row.verdict}" title={VERDICT_HINT[row.verdict]}>
+                {VERDICT_LABEL[row.verdict]}
+              </span>
+            </td>
+          </tr>
+        {/each}
+        {#if shown.length === 0 && valueResult.phase === 'done'}<tr><td colspan="7" class="empty">No items in the current value filter. Use the button below to include poor-value or untradeable stock.</td></tr>{/if}
+      </tbody>
+    </table>
+  </div>
+  {/if}
+
+  {#if scrapPlan && scrapPlan.picks.length}
+    <details class="scrap">
+      <summary>what to scrap for {basket.needed.toLocaleString()} ducats</summary>
+      <p class="sub">
+        Ranked by ducats gained per plat given up - scrapping a 65-ducat part
+        worth 18p to save a 45-ducat part worth 3p is the trade to avoid.
+      </p>
+      <ul class="picks">
+        {#each scrapPlan.picks as pick (pick.slug)}
+          <li>
+            <span class="pick-n">{pick.spare}×</span>
+            <span class="pick-name">{pick.name}</span>
+            <span class="pick-d">{pick.totalDucats}d</span>
+            <span class="pick-p">{pick.totalPlat > 0 ? `${Math.round(pick.totalPlat)}p given up` : 'unsold anyway'}</span>
+          </li>
+        {/each}
+      </ul>
+      <p class="sub">
+        <strong>{scrapPlan.ducats.toLocaleString()}</strong> ducats for
+        <strong>{Math.round(scrapPlan.platGivenUp)}p</strong> of market value.
+        {#if scrapPlan.short > 0}
+          <span class="short">Still {scrapPlan.short.toLocaleString()} short.</span>
+        {/if}
+      </p>
+      {#if scrapPlan.heldBack.length}
+        <p class="sub">
+          Held back as worth more sold than scrapped:
+          {scrapPlan.heldBack
+            .slice(0, 4)
+            .map((h) => `${h.name} (${h.ducats}d / ${Math.round(h.plat)}p)`)
+            .join(', ')}.
+        </p>
+      {/if}
+    </details>
+  {/if}
+
+  {#if hiddenCount > 0 || showAll}
+    <button type="button" class="more" onclick={() => (showAll = !showAll)}>
+      {showAll ? 'Hide poor-value and untradeable lines' : `Show ${hiddenCount} more (poor value or not tradeable)`}
+    </button>
+  {/if}
+  </div>
+</section>
+
+<style>
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .sub,
+  .gap {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .gap strong {
+    color: var(--fg);
+  }
+  .budget {
+    max-width: 32rem;
+  }
+  .short {
+    color: var(--warn);
+  }
+  .stale {
+    color: var(--warn);
+  }
+
+  .scroll {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    background: var(--panel);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 42rem;
+  }
+  th,
+  td {
+    padding: 0.35rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 0.9rem;
+  }
+  thead th {
+    background: var(--panel-2);
+    color: var(--muted);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  tbody tr:last-child th,
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+  tbody tr.top {
+    background: color-mix(in srgb, var(--good) 8%, transparent);
+  }
+  /* The row header stays a table cell: as a flex box it left the row's
+     divider and drew its own, offset from the other cells. Item names are
+     reading text, not labels, so they drop the header face and tracking. */
+  .name {
+    font-family: var(--font-body);
+    font-weight: 500;
+    letter-spacing: normal;
+    color: var(--fg);
+  }
+  .name-in {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  /* Digits line up in a column so a scan down the ducat cost is readable. */
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .ducat {
+    color: var(--ducat);
+  }
+
+  .tag {
+    margin-inline-start: 0;
+    /* The verdict is also the row's only opinion, so it gets a cursor hint
+       that there is a reason behind it. */
+    cursor: help;
+  }
+
+  .more {
+    align-self: flex-start;
+  }
+  .scrap > summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .scrap[open] > summary {
+    margin-bottom: 0.5rem;
+  }
+  .picks {
+    margin: 0.4rem 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .picks li {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    font-size: 0.88rem;
+  }
+  .pick-n {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    min-width: 2rem;
+    text-align: right;
+  }
+  .pick-name {
+    flex: 1 1 auto;
+  }
+  .pick-d {
+    color: var(--ducat);
+    font-variant-numeric: tabular-nums;
+  }
+  .pick-p {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .board-body { padding: var(--s4) var(--inset); display: flex; flex-direction: column; gap: var(--s3); }
+  .board { gap: 0; }
+  .empty { padding: var(--s4); color: var(--muted); }
+</style>

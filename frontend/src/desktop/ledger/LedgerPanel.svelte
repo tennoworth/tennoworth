@@ -1,0 +1,361 @@
+<script lang="ts">
+  import { useDesktopServices } from '../shell/desktop-context';
+  const { desktopEelogStatus, desktopListTrades, desktopListingOutcomes, desktopSetListingOutcomes, listenForTauriEvent } = useDesktopServices();
+  import { onMount, onDestroy } from 'svelte';
+
+import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
+import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeRow } from '../../contracts/desktop';
+
+  import { totals, since, soldByItem, describeItems, outcomeRows, outcomeHeadline, topSellers, weeklySales, medianWeek } from '../../domain/ledger';
+  import { humanError } from '../../contracts/errors';
+  import Toast from '../../ui/Toast.svelte';
+  import Pager from '../../ui/Pager.svelte';
+  import Meter from '../../ui/Meter.svelte';
+  import { pageWindow } from '../../ui/paging';
+  import { plat, shortStamp } from '../../ui/format';
+  import { createToastQueue } from '../../ui/toast-queue.svelte';
+
+  interface Props {
+    /** Persist the auto-close preference (App writes the `auto-close-sold`
+     *  setting the Rust tailer reads). */
+    onsetautoclose?: (on: boolean) => Promise<void> | void;
+  }
+  let { onsetautoclose }: Props = $props();
+
+  let trades = $state<TradeRow[]>([]);
+  let status = $state<EeLogStatus | null>(null);
+  let loadError = $state<string | null>(null);
+  let autoClose = $state(true);
+  let savingAutoClose = $state(false);
+  /** Null until read, and when the read failed: the ledger must not fail with it. */
+  let outcomes = $state<ListingOutcomes | null>(null);
+  let savingOutcomes = $state(false);
+  let loadGeneration = 0;
+  let disposed = false;
+
+  const toastQueue = createToastQueue(5000);
+  const pushToast = toastQueue.push;
+
+  /**
+   * Recording health, so a pause is visible to someone who opens this surface
+   * after it happened - the notification is sent once and cannot answer for the
+   * present. Never a toast: a pause lasts until it is fixed, and a toast would
+   * expire while the condition did not.
+   */
+  const paused = $derived(
+    status && typeof status.recording === 'object' ? status.recording.paused : null,
+  );
+  const ledgerPaused = $derived(paused !== null && 'ledger' in paused);
+  const pausedReason = $derived(
+    paused === null ? '' : 'ledger' in paused ? paused.ledger.error : paused.log.error,
+  );
+  onDestroy(() => {
+    disposed = true;
+    toastQueue.dispose();
+  });
+
+  async function load(): Promise<void> {
+    const generation = ++loadGeneration;
+    try {
+      const [rows, st, listed] = await Promise.all([
+        desktopListTrades(500),
+        desktopEelogStatus(),
+        desktopListingOutcomes().catch(() => null),
+      ]);
+      if (disposed || generation !== loadGeneration) return;
+      trades = rows;
+      status = st;
+      outcomes = listed;
+      autoClose = st.auto_close;
+      loadError = null;
+    } catch (e) {
+      if (disposed || generation !== loadGeneration) return;
+      loadError = humanError(e);
+    }
+  }
+
+  onMount(() => {
+    void load();
+    const offTrade = listenForTauriEvent<TradeDetected>(TRADE_DETECTED_EVENT, (d) => {
+      const kind = d.trade.kind;
+      const head = kind === 'sale' ? `Sold for ${d.trade.plat}p` : kind === 'purchase' ? `Bought for ${d.trade.plat}p` : 'Trade completed';
+      const adj = d.adjusted.length ? ` · ${d.adjusted.length} listing${d.adjusted.length === 1 ? '' : 's'} updated` : '';
+      pushToast(`${head}: ${describeItems(d.trade)} - ${d.trade.partner}${adj}`);
+      void load();
+    });
+    // A pause emits no trade event, so without this the notice would only appear
+    // on the next mount - after the user had already completed trades it missed.
+    const offRecording = listenForTauriEvent(RECORDING_CHANGED_EVENT, () => void load());
+    return () => {
+      disposed = true;
+      offTrade();
+      offRecording();
+    };
+  });
+
+  async function toggleAutoClose(): Promise<void> {
+    if (!onsetautoclose || savingAutoClose) return;
+    savingAutoClose = true;
+    const next = !autoClose;
+    try {
+      await onsetautoclose(next);
+      autoClose = next;
+    } catch (e) {
+      pushToast(`Couldn't save: ${humanError(e)}`, 'error');
+    } finally {
+      savingAutoClose = false;
+    }
+  }
+
+  async function toggleOutcomes(): Promise<void> {
+    if (!outcomes || savingOutcomes) return;
+    savingOutcomes = true;
+    try {
+      await desktopSetListingOutcomes(!outcomes.enabled);
+      outcomes = await desktopListingOutcomes();
+    } catch (e) {
+      pushToast(`Couldn't save: ${humanError(e)}`, 'error');
+    } finally {
+      savingOutcomes = false;
+    }
+  }
+
+  let outcomeTable = $derived(outcomes ? outcomeRows(outcomes) : []);
+
+  const nowSecs = () => Math.floor(Date.now() / 1000);
+  let all = $derived(totals(trades));
+  let week = $derived(totals(since(trades, 7, nowSecs())));
+  let weeks = $derived(weeklySales(trades, 12, Date.now()));
+  let weekMedian = $derived(medianWeek(weeks));
+  let weekMax = $derived(Math.max(1, ...weeks.map((w) => w.plat)));
+  let sellers = $derived(topSellers(soldByItem(trades), 8));
+  let sellerMax = $derived(Math.max(1, sellers.top[0]?.plat ?? 0));
+  const weekLabel = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const weekTitle = (w: (typeof weeks)[number]) =>
+    `Week of ${weekLabel(w.start)}${w.partial ? ' (so far)' : ''}: ${plat(w.plat)}p from ${w.sales} sale${w.sales === 1 ? '' : 's'}`;
+  let page = $state(0);
+  let historyEl = $state<HTMLElement>();
+  let win = $derived(pageWindow(trades.length, page));
+  let shown = $derived(trades.slice(win.start, win.end));
+
+  const when = (unixSecs: number) => shortStamp(unixSecs * 1000);
+  function kindLabel(k: TradeRow['kind']): string {
+    return k === 'sale' ? 'Sold' : k === 'purchase' ? 'Bought' : 'Traded';
+  }
+  function platCell(t: TradeRow): string {
+    if (t.kind === 'sale') return `+${plat(t.plat)}p`;
+    if (t.kind === 'purchase') return `−${plat(t.plat)}p`;
+    return '-';
+  }
+  const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${plat(Math.abs(n))}p`;
+</script>
+
+<section class="ui-stack ledger" data-testid="ledger">
+  <!-- Totals sit in the header strip like every other view's; the sold and
+       bought counts behind them are on the history rail. -->
+  <header class="view-header">
+    <h2>Ledger</h2>
+    <p class="lede">Every trade the game confirmed, read from its own log — realised plat, not estimates.</p>
+    <div class="vh-end">
+      {#if !loadError && trades.length}
+        <div class="ui-totals" role="group" aria-label="Ledger summary">
+          <div class="cell" title="{all.sales} sold · {all.purchases} bought"><span class="k">Net, all time</span><span class="v" class:good={all.net > 0} class:bad={all.net < 0}>{signed(all.net)}</span></div>
+          <div class="cell" title="{week.sales} sold · {week.purchases} bought"><span class="k">Last 7 days</span><span class="v" class:good={week.net > 0} class:bad={week.net < 0}>{signed(week.net)}</span></div>
+          <div class="cell" title="Sales / purchases"><span class="k">Plat in / out</span><span class="v">{plat(all.platIn)}p / {plat(all.platOut)}p</span></div>
+        </div>
+      {/if}
+      <button class="btn ghost" onclick={load}>Refresh</button>
+    </div>
+  </header>
+  {#if status}
+    {#if !status.path}
+      <p class="ui-notice" data-tone="warn">
+        <strong>Game log not found</strong> - trade detection is off. TennoWorth looks in <code>%LOCALAPPDATA%\Warframe\EE.log</code> (Windows) and every Steam library's <code>compatdata/230410/…/Warframe/EE.log</code> (Linux). Run Warframe once, then restart TennoWorth; for an unusual install set <code>TENNOWORTH_EELOG=/path/to/EE.log</code> before launching.
+      </p>
+    {/if}
+    {#if paused}
+      <p class="ui-notice" data-tone="warn" role="status">
+        {#if ledgerPaused}
+          <strong>Trade recording paused</strong> - a completed trade could not be saved, so it is being retried and everything behind it waits. Trades completed now are not in the history below yet, and listings are not being adjusted. Remaining-trade counts may be behind. <span class="muted">({pausedReason})</span>
+        {:else}
+          <strong>Trade recording paused</strong> - {pausedReason}. Trades completed now may not be recorded, and listings are not being adjusted. <span class="muted">Restarting TennoWorth usually restores the log read.</span>
+        {/if}
+      </p>
+    {/if}
+    <!-- One setting, so one line rather than a titled panel. -->
+    <div class="setting-line" role="group" aria-label="Listing automation">
+      <label class="check" for="ledger-auto-close"><input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} /> After a sale, reduce or remove the matching warframe.market listing</label>
+      <span class="muted">Only ever lowers a quantity by what you sold; never touches price or visibility.</span>
+    </div>
+  {/if}
+
+
+  <!-- Answers "is selling working?" without opening anything. Bars start at
+       zero on one scale; the running week is dimmed so a partial week does
+       not read as a drop. The table view carries the exact values. -->
+  {#if !loadError && trades.length}
+    <div class="dash">
+      <section class="wrap tw" aria-labelledby="ledger-weeks-title">
+        <div class="rail"><h3 id="ledger-weeks-title">Realised plat by week</h3><span class="exp">{weeks.length === 1 ? 'this week' : `last ${weeks.length} weeks`} · sales only</span></div>
+        <div class="dash-body">
+          <div class="weeks" role="img" aria-label="Plat from sales in each of the last {weeks.length} weeks. Exact values are in the table view below.">
+            {#if weekMedian !== null && weekMedian > 0}<div class="median" style:bottom="{(weekMedian / weekMax) * 100}%"></div>{/if}
+            {#each weeks as w (w.start)}
+              <div class="slot" title={weekTitle(w)}><div class="wbar" class:partial={w.partial} style:height="{(w.plat / weekMax) * 100}%"></div></div>
+            {/each}
+          </div>
+          <div class="axis" aria-hidden="true">{#if weeks.length > 1}<span>{weekLabel(weeks[0]!.start)}</span>{/if}<span class="now">this week so far</span></div>
+          {#if weekMedian !== null && weekMedian > 0}<p class="caption">Dotted line: the median finished week, {plat(weekMedian)}p.</p>{/if}
+          <details class="table-view">
+            <summary>Show as table</summary>
+            <div class="scroll">
+              <table class="tw week-table">
+                <thead><tr><th class="l" scope="col">Week of</th><th class="r" scope="col">Realised</th><th class="r" scope="col">Sales</th></tr></thead>
+                <tbody>
+                  {#each weeks as w (w.start)}
+                    <tr><td class="l">{weekLabel(w.start)}{w.partial ? ' (so far)' : ''}</td><td class="mono r">{plat(w.plat)}p</td><td class="mono r">{w.sales}</td></tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </section>
+      <section class="wrap tw" aria-labelledby="ledger-sellers-title">
+        <div class="rail"><h3 id="ledger-sellers-title">Top sellers</h3><span class="exp">realised plat · multi-item sales split by quantity</span></div>
+        {#if sellers.top.length}
+          <ol class="sellers">
+            {#each sellers.top as r (r.name)}
+              <li>
+                <span class="sname">{r.name}</span>
+                <span class="sbar" aria-hidden="true"><span style:width="{(r.plat / sellerMax) * 100}%"></span></span>
+                <span class="mono sval">{plat(r.plat)}p</span>
+                <span class="mono muted sqty">×{r.qty}</span>
+              </li>
+            {/each}
+            {#if sellers.other}
+              <li class="other">
+                <span class="sname">Other · {sellers.other.items} {sellers.other.items === 1 ? 'item' : 'items'}</span>
+                <span class="sbar" aria-hidden="true"><span style:width="{Math.min(100, (sellers.other.plat / sellerMax) * 100)}%"></span></span>
+                <span class="mono sval">{plat(sellers.other.plat)}p</span>
+                <span class="sqty"></span>
+              </li>
+            {/if}
+          </ol>
+        {:else}
+          <p class="dash-body caption">No sales recorded yet.</p>
+        {/if}
+      </section>
+    </div>
+  {/if}
+
+  <section class="wrap tw" aria-labelledby="ledger-history-title">
+    <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}{#if trades.length}{` · ${all.sales} sold · ${all.purchases} bought`}{/if}</span></div>
+  <!-- Open, as meters: it answers "did listing through TennoWorth work?" at a
+       glance. Never announced; an empty or disabled record stays one line. -->
+  {#if outcomes && !loadError}
+    <details class="byitem outcomes" data-testid="listing-outcomes" open={outcomes.enabled && outcomeTable.length > 0}>
+      <summary>Listing outcomes <span class="muted">· {outcomeHeadline(outcomes)}</span></summary>
+      {#if outcomes.enabled && outcomeTable.length}
+        <p class="muted note">From listings TennoWorth sent on this device in the last {outcomes.window_days} days, and the sales the game logged while TennoWorth was running. Sales are matched by item name, so a rank or refinement is not told apart.</p>
+        <div class="outcome-groups">
+          {#each outcomeTable as row (row.label)}
+            <div class="og">
+              <h4>{row.label} <span class="muted">· {row.listings} {row.listings === '1' ? 'listing' : 'listings'}</span></h4>
+              {#each row.meters as m (m.label)}<Meter label={m.label} value={m.value} max={m.max} text={m.text} />{/each}
+              <p class="facts"><span>First sale <b class="mono">{row.wait}</b></span><span title={row.priceTitle}>Price vs listed <b class="mono">{row.price}</b></span></p>
+            </div>
+          {/each}
+        </div>
+      {/if}
+      <div class="setting-line">
+        <label class="check" for="ledger-outcomes"><input id="ledger-outcomes" type="checkbox" checked={outcomes.enabled} onchange={toggleOutcomes} disabled={savingOutcomes} /> Keep a record of listings sent from TennoWorth</label>
+        <span class="muted">Stays on this device. Turning it off deletes the record.</span>
+      </div>
+    </details>
+  {/if}
+  {#if loadError}
+    <div class="ui-notice" data-tone="bad" role="alert">Couldn't load the ledger: {loadError}</div>
+  {:else if trades.length === 0}
+    <div class="ui-notice">No trades recorded yet. Complete a trade in-game with TennoWorth running and it appears here.</div>
+  {:else}
+    <div class="scroll" bind:this={historyEl}>
+      <table class="tw fixed trade-history">
+        <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:17rem" /><col style="width:7rem" /><col style="width:11rem" /></colgroup>
+        <thead><tr><th>When</th><th>Trade</th><th class="l">Items</th><th>With</th><th class="r">Plat</th><th>Listing</th></tr></thead>
+        <tbody>
+          {#each shown as t (t.id)}
+            <tr>
+              <td class="mono muted">{when(t.at)}</td>
+              <td><span class="kind {t.kind}">{kindLabel(t.kind)}</span></td>
+              <td class="l">{describeItems(t)}</td>
+              <td class="l muted">{t.partner}</td>
+              <td class="mono r" class:good={t.kind === 'sale'} class:bad={t.kind === 'purchase'}>{platCell(t)}</td>
+              <td>{#if t.wfm_closed}<span class="muted" title="A warframe.market listing was reduced or removed after this sale">listing updated</span>{/if}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+    <Pager window={win} total={trades.length} label="Trade history pages" target={historyEl} onpage={(p) => (page = p)} />
+  {/if}
+
+  </section>
+  <Toast toasts={toastQueue.toasts} ondismiss={toastQueue.dismiss} />
+</section>
+
+<style>
+  .setting-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding: var(--s1) 0; border-block: 1px var(--rule) var(--hairline); font-size: var(--text-control); }
+  .setting-line .check { display: inline-flex; align-items: flex-start; gap: var(--s2); color: var(--fg); font-weight: 500; }
+  .setting-line .muted { color: var(--muted); }
+  .ledger { gap: var(--s4); }
+  .ui-notice { margin: var(--s4) var(--inset); }
+  .byitem { padding: var(--s3) var(--inset); }
+  code { font-family: var(--font-mono); font-size: var(--text-caption); }
+  .byitem summary { cursor: pointer; font-size: var(--text-control); }
+  /* minmax(0, …): the wide table scrolls in its own region instead of widening
+     the column, which clipped the note and the toggle in narrow windows. */
+  .outcomes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+  .outcomes .note { margin: var(--s2) 0 0; font-size: var(--text-control); max-width: 70ch; }
+  .outcomes .setting-line { border-block-end: 0; }
+  table.trade-history { min-width: 70rem; }
+  .outcome-groups { margin-top: var(--s2); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--s3) var(--s5); }
+  .og { display: grid; gap: var(--s2); align-content: start; min-width: 0; }
+  .og h4 { margin: 0; font-size: var(--text-control); font-weight: 600; color: var(--fg); }
+  .og .facts { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); margin: 0; font-size: var(--text-caption); color: var(--muted); }
+  .og .facts b { color: var(--fg); font-weight: 600; }
+  .dash { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s4); align-items: start; }
+  @media (max-width: 47.5rem) { .dash { grid-template-columns: minmax(0, 1fr); } }
+  .dash > section { margin: 0; }
+  .dash-body { padding: var(--s3) var(--inset); display: grid; gap: var(--s2); }
+  .weeks { position: relative; height: 9rem; display: flex; align-items: stretch; gap: 2px; border-bottom: 1px solid var(--border); }
+  .weeks .slot { flex: 1; min-width: 0; display: flex; align-items: end; }
+  .weeks .wbar { width: 100%; background: var(--ink-bar); }
+  .weeks .wbar.partial { background: var(--muted); opacity: 0.55; }
+  /* Same dotted --faint rule as Sparkline's 90-day median. */
+  .weeks .median { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dotted var(--faint); pointer-events: none; z-index: 1; }
+  .axis .now { margin-left: auto; }
+  .axis { display: flex; justify-content: space-between; gap: var(--s2); font: var(--text-caption)/1rem var(--font-mono); color: var(--muted); }
+  .caption { margin: 0; font-size: var(--text-caption); color: var(--muted); }
+  .table-view summary { cursor: pointer; font-size: var(--text-control); }
+  .week-table { margin-top: var(--s2); }
+  .sellers { list-style: none; margin: 0; padding: var(--s3) var(--inset); display: grid; gap: 6px; font-size: var(--text-control); }
+  .sellers li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(3rem, 6rem) auto 2.5rem; align-items: center; gap: var(--s2); }
+  .sellers .sname { min-width: 0; overflow-wrap: anywhere; color: var(--fg); }
+  .sellers .sbar { height: 8px; background: var(--panel-2); }
+  .sellers .sbar > span { display: block; height: 100%; background: var(--ink-bar); }
+  .sellers .other .sname { color: var(--muted); }
+  .sellers .other .sbar > span { background: var(--muted); }
+  .sellers .sval { text-align: right; color: var(--fg); }
+  .sellers .sqty { text-align: right; }
+  .r { text-align: right; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kind { font-size: var(--text-caption); padding: 1px 7px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--muted); }
+  .kind.sale { color: var(--good); border-color: var(--good); }
+  .kind.purchase { color: var(--warn); border-color: var(--warn); }
+  .good, .v.good { color: var(--good); }
+  .bad, .v.bad { color: var(--bad); }
+  .muted { color: var(--muted); font-family: var(--font-body); }
+  .empty { padding: 10px 0; }
+  .scroll { overflow: auto; }
+</style>

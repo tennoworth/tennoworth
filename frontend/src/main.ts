@@ -2,7 +2,7 @@ import { DESKTOP_CONTEXT } from './contracts/services';
 import { mount, hydrate } from 'svelte';
 // Shared theme rules follow shell layout rules so existing specificity ties
 // retain the production cascade.
-import './shells/shell.css';
+import './shell.css';
 import './app.css';
 import { createStateStore } from './adapters/state-store';
 import { initTheme } from './ui/theme';
@@ -16,7 +16,7 @@ import { installDesktopExternalLinkHandler } from './adapters/runtime';
 // `vite build` (import.meta.env.DEV is false), and the desktop webview ships
 // its real runtime long before this line runs.
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-desktop')) {
-  await (await import('./dev/install-preview')).installPreview();
+  await (await import('./dev/preview/install-preview')).installPreview();
 }
 
 const target = document.getElementById('app');
@@ -37,9 +37,9 @@ const store = createStateStore();
 // component CSS: Svelte still emits it globally even when that branch never runs.
 const styleguideSurface = import.meta.env.DEV && new URLSearchParams(location.search).has('styleguide');
 const app = styleguideSurface && !overlaySurface
-  ? import('./dev/Styleguide.svelte').then(({ default: Styleguide }) => mount(Styleguide, { target }))
+  ? import('./dev/styleguide/Styleguide.svelte').then(({ default: Styleguide }) => mount(Styleguide, { target }))
   : overlaySurface
-  ? Promise.all([import('./features/relics/RelicOverlay.svelte'), import('./adapters/services')]).then(([{ default: RelicOverlay }, { createDesktopServices }]) => mount(RelicOverlay, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
+  ? Promise.all([import('./desktop/relics/RelicOverlay.svelte'), import('./adapters/services')]).then(([{ default: RelicOverlay }, { createDesktopServices }]) => mount(RelicOverlay, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
   : store.hydrate().then(() => {
     // public/theme-boot.js already stamped the browser's stored theme before
     // first paint; this re-applies from the store (the desktop build keeps
@@ -49,17 +49,17 @@ const app = styleguideSurface && !overlaySurface
     // createStateStore picked the store by the same runtime sniff, so its mode
     // decides the shell, and only the desktop store carries a snapshot.
     if (publicPayload && store.mode !== 'tauri') {
-      return import('./shells/PublicPage.svelte').then(({ default: PublicPage }) => hydrate(PublicPage, { target, props: { ...JSON.parse(publicPayload.textContent ?? '{}'), theme } }));
+      return import('./site/shell/PublicPage.svelte').then(({ default: PublicPage }) => hydrate(PublicPage, { target, props: { ...JSON.parse(publicPayload.textContent ?? '{}'), theme } }));
     }
     // mount() appends to #app instead of replacing its children. The hosted
     // build prerenders content there, so drop it only once the shell chunk has
     // loaded: a chunk that fails to load must leave the readable page intact.
     return store.mode === 'tauri'
-      ? Promise.all([import('./shells/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => {
+      ? Promise.all([import('./desktop/shell/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => {
           target.replaceChildren();
           return mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) });
         })
-      : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => {
+      : import('./site/shell/HostedShell.svelte').then(({ default: HostedShell }) => {
           target.replaceChildren();
           return mount(HostedShell, { target, props: { theme, store } });
         });

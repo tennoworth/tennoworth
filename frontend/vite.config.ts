@@ -31,7 +31,7 @@ try {
 // matched nothing on WFM). We never talk to warframe.market from the browser.
 // Don't reintroduce a runtime fetch to either.
 // The `?preview-desktop` host runs the native calculations from WebAssembly
-// (src/dev/domain-wasm.ts), which a CSP may only allow with 'wasm-unsafe-eval'.
+// (src/dev/preview/domain-wasm.ts), which a CSP may only allow with 'wasm-unsafe-eval'.
 // Granted on the dev server alone: production and the desktop build never load
 // wasm, and their CSP copies (scripts/sync-csp.ts) stay exactly as written.
 const devServerWasm: Plugin = {

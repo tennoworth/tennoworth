@@ -4,7 +4,7 @@
   import type { Change, Content, DashboardState, Message, PublicFeedCheck } from '../contracts/generated/publisher';
   import type { ThemeController } from '../ui/theme';
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
-  import AnnouncementBanner from '../features/market-context/AnnouncementBanner.svelte';
+  import AnnouncementBanner from '../features/announcements/AnnouncementBanner.svelte';
   import { parseAnnouncements } from '../domain/announcements';
   import { calendarSuggestions, type Suggestion } from './suggestions';
   import EventsPanel from './EventsPanel.svelte';
