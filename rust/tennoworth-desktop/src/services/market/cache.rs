@@ -27,6 +27,19 @@ const HISTORY_URL: &str = "https://tennoworth.app/history.json";
 /// copy is already on screen; this is a background top-up.
 const TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Public key for the box-signed live data, set at release build time. The box
+/// signs each artifact after every scrape; a build carrying this key accepts a
+/// fetched market.json or history.json only when its `.minisig` verifies, so
+/// whoever can change what tennoworth.app serves (the Worker, the tunnel, the
+/// CDN) cannot feed the app prices. A failure keeps the cached copy, exactly as
+/// a truncated body does. Development builds without the key do not check.
+const ARTIFACT_PUBLIC_KEY: Option<&str> = option_env!("TENNOWORTH_ARTIFACT_PUBLIC_KEY");
+/// The box writes `<prefix> <file name>` as the trusted comment, which the
+/// signature covers, so a valid signature for one file cannot vouch for another.
+/// Shared with the box in `tests/fixtures/artifact-signature/cases.json`.
+const SIGNATURE_COMMENT_PREFIX: &str = "tennoworth-artifact";
+const MAX_SIGNATURE_BYTES: usize = 4096;
+
 /// One cached live-data artifact: where it comes from, what it's called on
 /// disk, and which top-level field proves a 200 body is a whole, valid file.
 #[derive(Debug, Clone, Copy)]
@@ -44,6 +57,8 @@ pub struct ArtifactSpec {
     /// refused rather than buffered whole. Set well above the published size.
     pub max_bytes: usize,
     pub validate: Option<fn(&str) -> Option<String>>,
+    /// The file name the box's signature must name, for artifacts the box signs.
+    pub signed_as: Option<&'static str>,
 }
 
 impl ArtifactSpec {
@@ -62,6 +77,7 @@ pub const MARKET: ArtifactSpec = ArtifactSpec {
     // ~3 MB published.
     max_bytes: 32 * 1024 * 1024,
     validate: Some(validated_market_stamp),
+    signed_as: Some("market.json"),
 };
 
 /// The year-long daily price history (relics.run-derived, built on the box -
@@ -76,6 +92,7 @@ pub const HISTORY: ArtifactSpec = ArtifactSpec {
     // ~10 MB published.
     max_bytes: 64 * 1024 * 1024,
     validate: None,
+    signed_as: Some("history.json"),
 };
 
 pub const ANNOUNCEMENTS: ArtifactSpec = ArtifactSpec {
@@ -86,6 +103,7 @@ pub const ANNOUNCEMENTS: ArtifactSpec = ArtifactSpec {
     default_url: "https://tennoworth.app/announcements.json",
     max_bytes: 65536,
     validate: Some(crate::services::announcements::validated_stamp),
+    signed_as: None,
 };
 
 /// The result the SPA acts on. `updated` is true only when a validated 200
@@ -340,7 +358,55 @@ pub fn refresh_announcements(dir: &Path) -> RefreshResult {
     refresh_artifact(dir, &ANNOUNCEMENTS, &ANNOUNCEMENTS.url())
 }
 
+/// True when `signature` is the box's signature of `body` under `name`.
+fn signature_vouches(body: &[u8], signature: &str, key: &str, name: &str) -> bool {
+    let (Ok(key), Ok(signature)) = (
+        minisign_verify::PublicKey::from_base64(key.trim()),
+        minisign_verify::Signature::decode(signature),
+    ) else {
+        return false;
+    };
+    let mut comment = signature.trusted_comment().split_whitespace();
+    comment.next() == Some(SIGNATURE_COMMENT_PREFIX)
+        && comment.next() == Some(name)
+        && key.verify(body, &signature, false).is_ok()
+}
+
+/// Fetch `<url>.minisig` and check it against `body`. Any failure - network,
+/// status, size, a signature for another file - reads as unverified.
+fn fetch_and_verify(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    body: &str,
+    key: &str,
+    name: &str,
+) -> bool {
+    let Ok(response) = client
+        .get(format!("{url}.minisig"))
+        .header(reqwest::header::CACHE_CONTROL, "no-cache")
+        .send()
+    else {
+        return false;
+    };
+    response.status().is_success()
+        && read_bounded(response, MAX_SIGNATURE_BYTES)
+            .is_ok_and(|signature| signature_vouches(body.as_bytes(), &signature, key, name))
+}
+
+/// The production key applies to the production URL only. The URL override is
+/// how the release probe points the app at a local mock, and setting it already
+/// requires control of the user's environment.
 fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult {
+    let key = ARTIFACT_PUBLIC_KEY.filter(|_| url == spec.default_url);
+    refresh_artifact_with(dir, spec, url, key)
+}
+
+fn refresh_artifact_with(
+    dir: &Path,
+    spec: &ArtifactSpec,
+    url: &str,
+    key: Option<&str>,
+) -> RefreshResult {
     let prior_etag = std::fs::read_to_string(etag_path(dir, spec))
         .ok()
         .map(|s| s.trim().to_string())
@@ -402,6 +468,18 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
             return keep_cache(dir, spec, prior_etag);
         }
     };
+
+    if let (Some(name), Some(key)) = (spec.signed_as, key) {
+        if !fetch_and_verify(client, url, &body, key, name) {
+            // Also the normal outcome of fetching between the box replacing a
+            // file and its signature; the next refresh picks up the pair.
+            eprintln!(
+                "tennoworth: {} refresh has no valid signature; keeping cache",
+                spec.cache_file
+            );
+            return keep_cache(dir, spec, prior_etag);
+        }
+    }
 
     // Validate before caching: a truncated or non-JSON 200 must not overwrite a
     // good cache. parse_stamp is the gate AND gives us the timestamp.
@@ -944,6 +1022,139 @@ mod tests {
         assert!(!r.updated, "a market with no items must not replace prices");
         assert_eq!(r.body, None);
         assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
+        let _ = handle.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn signature_fixture() -> serde_json::Value {
+        serde_json::from_str(include_str!(
+            "../../../../../tests/fixtures/artifact-signature/cases.json"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_signature_vouches_only_for_its_own_file_body_and_key() {
+        let f = signature_fixture();
+        assert_eq!(f["comment_prefix"], SIGNATURE_COMMENT_PREFIX);
+        let key = f["public_key"].as_str().unwrap();
+        let body = f["body"].as_str().unwrap().as_bytes();
+        let good = f["signatures"]["market_json"].as_str().unwrap();
+        let other = f["signatures"]["labelled_history_json"].as_str().unwrap();
+
+        assert!(signature_vouches(body, good, key, "market.json"));
+        assert!(
+            !signature_vouches(body, other, key, "market.json"),
+            "a signature naming history.json must not vouch for market.json"
+        );
+        assert!(signature_vouches(body, other, key, "history.json"));
+        let mut tampered = body.to_vec();
+        tampered.extend_from_slice(b" ");
+        assert!(!signature_vouches(&tampered, good, key, "market.json"));
+        let wrong_key: String = key
+            .chars()
+            .enumerate()
+            .map(|(i, c)| match (i, c) {
+                (20, 'A') => 'B',
+                (20, _) => 'A',
+                _ => c,
+            })
+            .collect();
+        assert!(!signature_vouches(body, good, &wrong_key, "market.json"));
+        assert!(!signature_vouches(
+            body,
+            "not a signature",
+            key,
+            "market.json"
+        ));
+    }
+
+    /// Serves `body` at /market.json and `signature` (or a 404 when `None`) at
+    /// /market.json.minisig, one connection per request. Gives up after a few
+    /// seconds, so a refresh that skips the signature fails the test, not hangs it.
+    fn spawn_signed_mock(
+        requests: usize,
+        body: String,
+        signature: Option<String>,
+    ) -> (String, std::thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}/market.json", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            let mut served = 0;
+            while served < requests && std::time::Instant::now() < deadline {
+                let mut stream = match listener.accept() {
+                    Ok((stream, _)) => stream,
+                    Err(_) => {
+                        std::thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                };
+                served += 1;
+                stream.set_nonblocking(false).unwrap();
+                let mut buf = Vec::new();
+                let mut tmp = [0u8; 1024];
+                while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match stream.read(&mut tmp) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => buf.extend_from_slice(&tmp[..n]),
+                    }
+                }
+                let request = String::from_utf8_lossy(&buf);
+                let (status, payload) = if request.starts_with("GET /market.json.minisig ") {
+                    match &signature {
+                        Some(s) => ("200 OK", s.clone()),
+                        None => ("404 Not Found", String::new()),
+                    }
+                } else {
+                    ("200 OK", body.clone())
+                };
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+                    payload.len()
+                );
+            }
+        });
+        (url, handle)
+    }
+
+    #[test]
+    fn a_keyed_build_adopts_only_a_signed_snapshot() {
+        let f = signature_fixture();
+        let key = f["public_key"].as_str().unwrap();
+        let body = f["body"].as_str().unwrap().to_string();
+        let sig = |name: &str| Some(f["signatures"][name].as_str().unwrap().to_string());
+
+        for (signature, why) in [
+            (None, "a missing signature"),
+            (sig("labelled_history_json"), "a signature for another file"),
+        ] {
+            let dir = temp_dir();
+            let (url, handle) = spawn_signed_mock(2, body.clone(), signature);
+            let r = refresh_artifact_with(&dir, &MARKET, &url, Some(key));
+            handle.join().unwrap();
+            assert!(!r.updated, "{why} must not replace the cache");
+            assert_eq!(read_cache(&dir, &MARKET), None);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        let dir = temp_dir();
+        let (url, handle) = spawn_signed_mock(2, body.clone(), sig("market_json"));
+        let r = refresh_artifact_with(&dir, &MARKET, &url, Some(key));
+        handle.join().unwrap();
+        assert!(r.updated, "a correctly signed snapshot is adopted");
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(body.as_str()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_production_key_never_applies_to_an_overridden_url() {
+        // The release probe points the app at a local mock with no signature.
+        let dir = temp_dir();
+        let (url, handle) = spawn_mock(1);
+        assert!(refresh_artifact(&dir, &MARKET, &url).updated);
         let _ = handle.join();
         let _ = std::fs::remove_dir_all(&dir);
     }

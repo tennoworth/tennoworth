@@ -129,6 +129,10 @@ jobs:
     # ubuntu-22.04 for its glibc 2.35 - same rationale as release-desktop.yml's
     # linux-binary job (backward- but no forward-compat).
     runs-on: ubuntu-22.04
+    # The box installs this binary as root only when it carries the collector
+    # key's signature. The key is a secret of this main-only environment, so a
+    # token that can edit release assets cannot produce one.
+    environment: collector-release
     defaults:
       run:
         working-directory: rust
@@ -150,6 +154,22 @@ jobs:
           sha256sum "$CRATE" > "$CRATE.sha256"
           cat "$CRATE.sha256"
 
+      # deploy/bin/pull-collector.sh requires the trusted comment to start with
+      # "tennoworth-collector <binary> ", so a signature for one collector cannot
+      # install as the other.
+      - name: Sign
+        env:
+          COLLECTOR_SIGNING_KEY: ${{ secrets.COLLECTOR_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$COLLECTOR_SIGNING_KEY" || { echo "Configure COLLECTOR_SIGNING_KEY in the collector-release environment." >&2; exit 1; }
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          key="$RUNNER_TEMP/collector-signing.key"
+          (umask 077 && printf '%s\n' "$COLLECTOR_SIGNING_KEY" > "$key")
+          minisign -S -s "$key" -m "../dist/$CRATE" -x "../dist/$CRATE.minisig" \
+            -t "tennoworth-collector $CRATE $GITHUB_SHA" </dev/null
+          rm -f "$key"
+
       - name: Publish rolling release
         uses: ./.github/actions/publish-rolling-release
         with:
@@ -158,4 +178,5 @@ jobs:
           files: |
             dist/${{ inputs.crate }}
             dist/${{ inputs.crate }}.sha256
+            dist/${{ inputs.crate }}.minisig
           body: ${{ inputs.body }}

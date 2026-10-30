@@ -5686,6 +5686,7 @@ dependencies = [
  "leptess",
  "market-domain",
  "memmap2",
+ "minisign-verify",
  "rand 0.10.2",
  "reqwest 0.12.28",
  "rusqlite",

@@ -122,8 +122,8 @@ delivery infrastructure can see.
 ## Running it
 
 `build-reports` publishes the binary to the `reports-latest` rolling release
-from `main`. On the host, `deploy/bin/pull-collector.sh reports` installs a checksum-verified
-build and rolls back when `/health` does not answer after a restart, and
+from `main`. On the host, `deploy/bin/pull-collector.sh reports` installs a checksum- and
+signature-verified build (see SECURITY.md) and rolls back when `/health` does not answer after a restart, and
 `deploy/bin/monitor-collector.sh reports` alerts when the published aggregates stop
 updating. Caddy proxies `/api/reports/*` to the service with client headers
 stripped and access logging off for those routes.

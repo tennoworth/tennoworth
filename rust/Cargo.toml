@@ -34,6 +34,8 @@ resolver = "2"
 # (a member declaring a smaller subset never actually got a smaller build -
 # see tennoworth-desktop's Cargo.toml).
 [workspace.dependencies]
+# Signature checks for the offline-signed policy and the box-signed live data.
+minisign-verify = "0.2.5"
 url = "2.5"
 # RS256 verification for private Cloudflare Access requests; AWS-LC avoids system OpenSSL and the RSA timing advisory.
 jsonwebtoken = { version = "11.1", default-features = false, features = ["aws_lc_rs"] }
