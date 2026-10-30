@@ -1,6 +1,6 @@
 // @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import freshnessCases from '../../../tests/fixtures/surface-freshness/cases.json';
+import freshnessCases from '../../../tests/fixtures/surface-freshness.json';
 
 // We import inside each test so we can reset module state (cached promise).
 async function freshMarket() {

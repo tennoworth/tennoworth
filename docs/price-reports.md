@@ -59,7 +59,7 @@ of each value, the key names nested inside it, and unrecognised stat tags
 (only `/Lotus/...` game paths). It never contains a value, an item id or a
 weapon.
 
-[`tests/fixtures/reports/contract.json`](../tests/fixtures/reports/contract.json)
+[`tests/fixtures/reports.json`](../tests/fixtures/reports.json)
 holds accepted and refused examples of each.
 
 ## Contributor ids

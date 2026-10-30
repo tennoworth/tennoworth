@@ -1,5 +1,4 @@
-//! `wfm-scrape` binary - host-only market pipeline (the only one; Python
-//! retired 2026-08).
+//! `wfm-scrape` binary - the host-only market pipeline.
 //!
 //! Subcommands:
 //! - `build`: reads `wfm_results.csv`, fetches upstreams, reconciles with the

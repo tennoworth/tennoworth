@@ -6,8 +6,7 @@
 //! fresh: it conditionally GETs `https://tennoworth.app/market.json` with an
 //! `If-None-Match` header and caches the body + ETag next to the SQLite DB in the
 //! app-data dir. The webview never makes this third-party request - egress lives
-//! in Rust, exactly the rule the loopback companion follows ("no third-party
-//! fetches from the browser").
+//! in Rust: no third-party fetches from the webview.
 //!
 //! Freshness precedence the SPA relies on: cached file > bundled file. The cache
 //! is written only from a validated 200, so once present it is the last

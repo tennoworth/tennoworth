@@ -4,8 +4,7 @@
 //! first POST, marked uncertain before each send, rewritten after each result,
 //! and deleted on clean completion. The
 //! browser polls it on (re)connect and offers Resume / Discard. Writes are
-//! atomic (tmp + rename) so a concurrent read never sees a torn file - same
-//! convention as `os.replace` in the retired Python pipeline - and the tmp
+//! atomic (tmp + rename) so a concurrent read never sees a torn file, and the tmp
 //! file is created at 0600 (it holds unsubmitted listing details).
 
 use anyhow::{Context, Result};

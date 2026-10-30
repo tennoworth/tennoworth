@@ -11,7 +11,7 @@ beforeAll(() => {
 });
 
 import { encryptPayload, decryptPayload, isEncrypted } from './encrypted-snapshot';
-import passphraseCases from '../../../tests/fixtures/passphrase-floor/cases.json';
+import passphraseCases from '../../../tests/fixtures/passphrase-floor.json';
 import kdfFixture from '../../../tests/fixtures/jwt-kdf.json';
 
 const SAMPLE = {

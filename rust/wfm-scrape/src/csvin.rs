@@ -1,8 +1,8 @@
-//! CSV input - mirrors Python's `csv.DictReader` over `wfm_results.csv`.
+//! CSV input - reads `wfm_results.csv` by header name.
 //!
 //! Each row carries the fields the render stage reads. Old CSVs lack
 //! several columns (the scraper grew fields over time); every accessor
-//! defaults are contract from the Python converter.
+//! defaults are part of the frozen fixtures' contract.
 
 use std::collections::HashMap;
 use std::io::Read;
@@ -92,10 +92,10 @@ pub fn read_csv(content: &str) -> Result<Vec<CsvRow>, String> {
 
 /// Parse the `medians_7d` field from a CSV row.
 ///
-/// CSV stores the 7-day median series as the Python `repr` of a list
-/// (`str()` on the list, which uses single quotes for strings).
+/// CSV stores the 7-day median series as a bracketed list literal
+/// (`[33, 36, 42]`; strings in single quotes).
 /// Parse defensively: `""` → `[]`, old CSV with no column → `[]`,
-/// malformed → `[]`. Mirror of Python's `_parse_medians`.
+/// malformed → `[]`.
 pub fn parse_medians_7d(raw: &str) -> Vec<f64> {
     if raw.is_empty() || raw == "[]" {
         return vec![];
@@ -133,7 +133,7 @@ mod tests {
     fn malformed_returns_empty_or_partial() {
         let empty: Vec<f64> = vec![];
         assert_eq!(parse_medians_7d("garbage"), empty);
-        // numeric entries survive, non-numeric filtered (mirrors Python)
+        // numeric entries survive, non-numeric filtered
         assert_eq!(parse_medians_7d("[1, 3]"), vec![1.0, 3.0]);
     }
 

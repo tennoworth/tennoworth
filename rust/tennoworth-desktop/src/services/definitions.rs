@@ -317,7 +317,7 @@ mod tests {
         static FIXTURE: std::sync::OnceLock<serde_json::Value> = std::sync::OnceLock::new();
         FIXTURE.get_or_init(|| {
             serde_json::from_str(include_str!(
-                "../../../../tests/fixtures/scan-definitions/signed.json"
+                "../../../../tests/fixtures/scan-definitions.json"
             ))
             .unwrap()
         })

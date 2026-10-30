@@ -218,7 +218,7 @@ mod tests {
     fn tray_composes_the_shared_scan_with_local_protection_and_trade_history() {
         let raw = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/tray-table-composition/cases.json"
+            "/../../tests/fixtures/tray-table-composition.json"
         ));
         let fixture: CompositionFixture = serde_json::from_str(raw).unwrap();
         let mut market_json = fixture.market;
@@ -415,7 +415,7 @@ mod tests {
     fn weighted_score_matches_ts_on_shared_fixture() {
         let raw = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/usage-weighted-score/cases.json"
+            "/../../tests/fixtures/usage-weighted-score.json"
         ));
         let fixture: WeightedFixture = serde_json::from_str(raw).unwrap();
         let mut ranked = Vec::new();
@@ -466,7 +466,7 @@ mod tests {
     fn usage_resolution_matches_ts_on_shared_fixture() {
         let raw = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/usage-resolution/cases.json"
+            "/../../tests/fixtures/usage-resolution.json"
         ));
         let mut market: MarketData = serde_json::from_str(raw).unwrap();
         let fixture: ResolutionFixture = serde_json::from_str(raw).unwrap();
@@ -610,7 +610,7 @@ mod tests {
     }
 
     // ---- name guesses ------------------------------------------------------
-    // tests/fixtures/name-guess/cases.json pins market_domain::inventory's
+    // tests/fixtures/name-guess.json pins market_domain::inventory's
     // guesses, the only implementation since the browser resolver was retired.
     // A 2026-07 drift between two copies of these was a live, if narrow, bug.
     #[derive(Deserialize)]
@@ -639,7 +639,7 @@ mod tests {
     fn name_guesses_match_the_shared_fixture() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/name-guess/cases.json"
+            "/../../tests/fixtures/name-guess.json"
         );
         let raw = std::fs::read_to_string(path).expect("read the shared name-guess fixture");
         let fx: NameGuessFixture =

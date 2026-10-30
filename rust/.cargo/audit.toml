@@ -1,4 +1,4 @@
-# cargo-audit policy for the companion workspace.
+# cargo-audit policy for the Rust workspace.
 #
 # Exceptions below cover upstream maintenance notices and the pinned glib
 # unsoundness advisory in the Linux desktop dependency stack.

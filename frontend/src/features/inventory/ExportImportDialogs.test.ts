@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
-import passphraseCases from '../../../../tests/fixtures/passphrase-floor/cases.json';
+import passphraseCases from '../../../../tests/fixtures/passphrase-floor.json';
 import ExportImportDialogs from './ExportImportDialogs.svelte';
 import { encryptPayload, decryptPayload } from '../../adapters/encrypted-snapshot';
 

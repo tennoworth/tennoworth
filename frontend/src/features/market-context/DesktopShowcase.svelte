@@ -1,6 +1,6 @@
 <script lang="ts">
   import FeatureRail from './FeatureRail.svelte';
-  import CopyBtn from '../../ui/CopyBtn.svelte';
+  import CopyButton from '../../ui/CopyButton.svelte';
   import { plat, wfmItemUrl } from '../../ui/format';
   import Sparkline from '../../ui/Sparkline.svelte';
   import { hasSparkline } from '../../ui/sparkline';
@@ -226,7 +226,7 @@
         <div class="snippet-row">
           <pre class="snippet"><code>{install[activeOs].cmd}</code></pre>
           {#if install[activeOs].copiable}
-            <CopyBtn text={install[activeOs].cmd} />
+            <CopyButton text={install[activeOs].cmd} />
           {:else}
             <a class="btn" href={RELEASES} target="_blank" rel="noopener noreferrer">Open releases ↗</a>
           {/if}
@@ -246,7 +246,7 @@
                 <p class="note">{PTRACE_NOTE}</p>
                 <div class="snippet-row inline">
                   <pre class="snippet"><code>{PTRACE_CMD}</code></pre>
-                  <CopyBtn text={PTRACE_CMD} />
+                  <CopyButton text={PTRACE_CMD} />
                 </div>
               {/if}
             </div>

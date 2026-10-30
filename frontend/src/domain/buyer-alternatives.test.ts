@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareBuyers } from './buyer-alternatives';
 import type { BuyerOrder, LiveTop } from '../contracts/desktop';
-import fixture from '../../../tests/fixtures/buyer-alternatives/book.json';
+import fixture from '../../../tests/fixtures/buyer-alternatives.json';
 
 const now = Date.parse('2026-09-08T12:00:00Z');
 const buyer = (id: string, quantity: number, platinum: number, per_trade = 1): BuyerOrder => ({

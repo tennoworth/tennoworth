@@ -1,7 +1,7 @@
 //! Scrape transport: a status-aware GET trait, retry/backoff, and injectable
 //! pacing.
 //!
-//! The converter's [`crate::ingest::Http`] collapses every non-2xx into an
+//! The build stage's [`crate::ingest::Http`] collapses every non-2xx into an
 //! error string, which cannot express the 429-vs-5xx-vs-transport distinction
 //! the scrape's fetch path acts on. This trait keeps the status so the
 //! retry loop can reproduce that behavior exactly, and stays fixture-driven so
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-/// Number of attempts per request - Python's `fetch_json(retries=3)`.
+/// Number of attempts per read request.
 pub const RETRIES: u32 = 3;
 
 /// Longest single cooldown the sweep waits out instead of abandoning the run. A
@@ -34,7 +34,7 @@ const RECOVERY_BACKOFF_MS: [u64; 2] = [30_000, 90_000];
 const MAX_RECOVERY_WAIT_TOTAL_MS: u64 = 300_000;
 const MAX_RECOVERY_WAITS: u64 = 6;
 
-/// Outcome of a single GET, preserving enough status to drive Python's retry.
+/// Outcome of a single GET, preserving enough status to drive the retry.
 pub enum HttpOutcome {
     /// 2xx with a successfully-parsed JSON body.
     Ok(Value),
@@ -43,10 +43,10 @@ pub enum HttpOutcome {
     /// waits out a short one; an unknown one stops the sweep, because retrying a
     /// throttle with no deadline is how a client gets blocked.
     RateLimited { cooldown_until_ms: u64 },
-    /// Any other non-2xx (4xx/5xx). Python's `raise_for_status()` path.
+    /// Any other non-2xx (4xx/5xx).
     HttpError(u16),
-    /// Connection/timeout/read/parse failure. Python's other
-    /// `RequestException` path (a `r.json()` decode error lands here too).
+    /// Connection/timeout/read/parse failure (a JSON decode error lands here
+    /// too).
     Transport(String),
     Access(String),
 }
@@ -117,7 +117,7 @@ fn recovery_backoff_ms(attempt: u32) -> Option<u64> {
     RECOVERY_BACKOFF_MS.get(attempt as usize).copied()
 }
 
-/// WFM's envelope, unwrapped Python-order: `payload` first, then `data`, else
+/// WFM's envelope, unwrapped `payload` first, then `data`, else
 /// the bare body. `wfm_client::unwrap_envelope` prefers `data`, so it is
 /// intentionally not reused; `fetch_json` in the scraper checks `payload`
 /// first.

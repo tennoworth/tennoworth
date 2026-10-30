@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import fixture from '../../../tests/fixtures/tray-table-composition/cases.json';
+import fixture from '../../../tests/fixtures/tray-table-composition.json';
 import { computeResults, type FilterState } from './filter-engine';
 import type { Market, OwnedRecord } from '../contracts/data';
 

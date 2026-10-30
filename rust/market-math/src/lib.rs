@@ -1,18 +1,16 @@
-//! Pure market-data heuristics (originally ported 1:1 from the retired Python
-//! pipeline, `wfm_demand.py` + `scripts/csv_to_market_json.py`).
+//! Pure market-data heuristics behind the published snapshot.
 //!
 //! RULES FOR THIS CRATE:
 //! - No I/O, no HTTP, no clocks, no dependencies. Pure functions only -
 //!   that's what lets every function be pinned against the shared fixtures.
-//! - Where Python semantics are quirky (ties-to-even rounding, upper-middle
-//!   baseline, insertion-order tie-breaks), we preserve them DELIBERATELY
-//!   and say so at the site. Divergence is a decision, not an accident.
+//! - Quirky semantics (ties-to-even rounding, upper-middle baseline,
+//!   insertion-order tie-breaks) are part of the frozen fixtures' contract and
+//!   are kept DELIBERATELY; each site says so. Changing one is a decision.
 //!
-//! The [`sell_priority`] submodule is the ONE exception to "1:1 with Python":
-//! it mirrors the CLIENT scoring in `frontend/src/domain/sell-priority.ts`
-//! instead (there is no Python counterpart), so the desktop tray + notification
-//! rank with the same formula the SPA table uses. It obeys the same purity
-//! rules and is parity-tested against the TS on a shared fixture.
+//! The [`sell_priority`] submodule is the client scoring shared with
+//! `frontend/src/domain/sell-priority.ts`, so the desktop tray and notification
+//! rank with the formula the SPA table uses; it is parity-tested against the
+//! TypeScript on a shared fixture.
 
 pub mod sell_priority;
 
@@ -34,11 +32,10 @@ pub struct StatsDay {
     pub volume: f64,
     pub avg_price: f64,
     pub subtype: Option<String>,
-    /// Tri-state, faithfully mirroring the Python dict semantics:
+    /// Tri-state, because absent and null mean different things:
     /// - `None`          - key absent: an untiered item (weapon/set/relic)
     /// - `Some(None)`    - key present but null: counts as rank-0 AND marks
-    ///   the item as tiered (Python: `"mod_rank" in d` is true,
-    ///   `(d.get("mod_rank") or 0) == 0` keeps it)
+    ///   the item as tiered
     /// - `Some(Some(n))` - a real rank tier
     pub mod_rank: Option<Option<i64>>,
 }
@@ -54,7 +51,7 @@ pub struct LiveOrder {
 }
 
 /// Anything that can be narrowed to one subtype tier (stats days and live
-/// orders both carry a subtype; Python reuses one function for both).
+/// orders both carry a subtype, and one function narrows both).
 pub trait HasSubtype {
     fn subtype(&self) -> Option<&str>;
 }
@@ -110,8 +107,8 @@ pub fn rank0_orders(orders: &[LiveOrder]) -> Vec<LiveOrder> {
 /// trend on meso_l1_relic. Prefer `intact`; for items whose subtypes don't
 /// include intact (gems, fish), use the dominant-by-volume tier.
 ///
-/// Tie-break preserved from Python: `max(dict, key=…)` returns the
-/// FIRST-INSERTED max, so equal-volume tiers resolve to the one seen first.
+/// Ties resolve to the FIRST-INSERTED tier, so equal-volume tiers pick the one
+/// seen first.
 pub fn canonical_subtype<T: HasSubtype>(rows: &[T], volume_of: impl Fn(&T) -> f64) -> Option<String> {
     let mut vols: Vec<(String, f64)> = Vec::new();
     for r in rows {
@@ -131,7 +128,7 @@ pub fn canonical_subtype<T: HasSubtype>(rows: &[T], volume_of: impl Fn(&T) -> f6
     let mut best = vols.first()?;
     for kv in vols.iter().skip(1) {
         if kv.1 > best.1 {
-            best = kv; // strictly greater → first-seen wins ties, like Python
+            best = kv; // strictly greater → first-seen wins ties
         }
     }
     Some(best.0.clone())
@@ -155,7 +152,7 @@ pub fn subtype_rows<T: HasSubtype + Clone>(rows: &[T], pick: Option<&str>) -> Ve
 /// `low_sell` alone is ONE number any account can set for free (a 1p troll
 /// listing); the mean of the cheapest five is what the sell wall actually
 /// looks like. 0.0 when there are no live asks. Rounded to 1 decimal with
-/// ties-to-even, matching Python's `round(x, 1)`.
+/// ties-to-even ([`round_dp`]).
 pub fn avg_lowest_asks(orders: &[LiveOrder], n: usize) -> f64 {
     let mut prices: Vec<f64> = orders.iter().map(|o| o.platinum).filter(|&p| p > 0.0).collect();
     prices.sort_by(f64::total_cmp);
@@ -167,8 +164,7 @@ pub fn avg_lowest_asks(orders: &[LiveOrder], n: usize) -> f64 {
     (mean * 10.0).round_ties_even() / 10.0
 }
 
-/// Python's `statistics.median`: sort, odd length → middle, even length →
-/// mean of the two middles.
+/// Median: sort, odd length → middle, even length → mean of the two middles.
 pub fn stat_median(values: &[f64]) -> f64 {
     let mut v = values.to_vec();
     v.sort_by(f64::total_cmp);
@@ -214,8 +210,8 @@ pub fn series_stats(nineties: &[StatsDay]) -> (f64, f64, Vec<f64>, f64, f64) {
 /// When the cap filter removes EVERYTHING, the item's only activity is
 /// manipulation - return the empty list so volume sums to 0 (an earlier
 /// `or rows` fallback handed the fabricated 99,999p average back in exactly
-/// that case). Baseline preserved from Python: `meds[len // 2]` - the UPPER
-/// middle of the sorted positive medians, not statistics.median.
+/// that case). The baseline is `meds[len / 2]` - the UPPER middle of the sorted
+/// positive medians, not [`stat_median`]; the fixtures pin it.
 pub fn drop_poisoned_rows(rows: &[StatsDay]) -> Vec<StatsDay> {
     let clean: Vec<StatsDay> = rows
         .iter()
@@ -283,20 +279,17 @@ pub fn clamp_low5(low5: f64, median_90d: f64, low_sell: f64) -> f64 {
     }
 }
 
-/// Highest live buy price, or 0 when there are no buys - Python's
-/// `max((o["platinum"] for o in live_buys), default=0)`.
+/// Highest live buy price, or 0 when there are no buys.
 pub fn top_buy(buys: &[LiveOrder]) -> f64 {
     buys.iter().map(|o| o.platinum).reduce(f64::max).unwrap_or(0.0)
 }
 
-/// Lowest live sell price, or 0 when there are no sells - Python's
-/// `min((o["platinum"] for o in live_sells), default=0)`.
+/// Lowest live sell price, or 0 when there are no sells.
 pub fn low_sell(sells: &[LiveOrder]) -> f64 {
     sells.iter().map(|o| o.platinum).reduce(f64::min).unwrap_or(0.0)
 }
 
-/// Bid/ask spread, mirroring Python's truthy guard:
-/// `(low_sell - top_buy) if (low_sell and top_buy) else 0`. A zero on either
+/// Bid/ask spread when both sides exist. A zero on either
 /// side (no book) yields 0, not a negative "spread" against a phantom price.
 pub fn spread(low_sell: f64, top_buy: f64) -> f64 {
     if low_sell != 0.0 && top_buy != 0.0 {
@@ -307,7 +300,7 @@ pub fn spread(low_sell: f64, top_buy: f64) -> f64 {
 }
 
 /// Live buy/sell pressure ratio. With sellers present it's `buys / sells`;
-/// with buyers but no sellers Python treats it as very high demand pressure
+/// with buyers but no sellers it reports very high demand pressure
 /// (`buys * 10`), an arbitrary boost for "no competition". No sellers AND no
 /// buyers → 0.
 pub fn demand_ratio(buys: usize, sells: usize) -> f64 {
@@ -324,13 +317,12 @@ pub fn score(volume_48h: f64, avg_price_48h: f64, ratio: f64) -> f64 {
     volume_48h * avg_price_48h * (1.0 + ratio)
 }
 
-/// Python's `round(x, dp)` - round half to EVEN (banker's rounding) on the
-/// *true* value of the float. A naive `(x * 10^dp).round_ties_even()` would
+/// Round half to EVEN (banker's rounding) on the *true* value of the float. A naive `(x * 10^dp).round_ties_even()` would
 /// diverge whenever the scaling multiply lands the value exactly on a tie the
-/// unscaled value wasn't on (2.675 → 267.5, rounding up to 2.68 where Python
-/// keeps 2.67). Rust's `{:.dp}` formatter is correctly-rounded to the true
-/// value with the same ties-to-even rule CPython uses, so round-trip through it
-/// matches Python bit-for-bit across the pipeline's value range. Non-finite
+/// unscaled value wasn't on (2.675 → 267.5 would round up to 2.68; the true
+/// value 2.67499… keeps 2.67). Rust's `{:.dp}` formatter is correctly rounded
+/// to the true value with ties-to-even, so a round trip through it is exact
+/// across the pipeline's value range. Non-finite
 /// passes through unchanged.
 pub fn round_dp(x: f64, dp: usize) -> f64 {
     if !x.is_finite() {
@@ -490,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn subtype_tie_resolves_to_first_seen_like_python() {
+    fn subtype_tie_resolves_to_first_seen() {
         let rows = [day_sub(3.0, 10.0, "raw"), day_sub(9.0, 10.0, "cut")];
         assert_eq!(canonical_subtype(&rows, |d| d.volume).as_deref(), Some("raw"));
     }
@@ -524,8 +516,8 @@ mod tests {
     }
 
     #[test]
-    fn avg_lowest_asks_rounds_ties_to_even_like_python() {
-        // mean 2.25 (exactly representable) → 2.2 under Python's round(x, 1).
+    fn avg_lowest_asks_rounds_ties_to_even() {
+        // mean 2.25 (exactly representable) → 2.2 under ties-to-even.
         assert_eq!(avg_lowest_asks(&[ask(2.0), ask(2.5)], 5), 2.2);
     }
 
@@ -625,14 +617,14 @@ mod tests {
     fn top_buy_is_the_dearest_bid_or_zero() {
         let book = [ask(10.0), ask(35.0), ask(22.0)];
         assert_eq!(top_buy(&book), 35.0);
-        assert_eq!(top_buy(&[]), 0.0); // Python's max(..., default=0)
+        assert_eq!(top_buy(&[]), 0.0);
     }
 
     #[test]
     fn low_sell_is_the_cheapest_ask_or_zero() {
         let book = [ask(42.0), ask(40.0), ask(55.0)];
         assert_eq!(low_sell(&book), 40.0);
-        assert_eq!(low_sell(&[]), 0.0); // Python's min(..., default=0)
+        assert_eq!(low_sell(&[]), 0.0);
     }
 
     #[test]
@@ -662,9 +654,9 @@ mod tests {
         assert_eq!(score(0.0, 43.2, 2.0), 0.0);
     }
 
-    // ---- round_dp (Python round, ties-to-even) ----------------------------
+    // ---- round_dp (ties-to-even) -------------------------------------------
     #[test]
-    fn round_dp_matches_python_banker_rounding() {
+    fn round_dp_uses_banker_rounding() {
         assert_eq!(round_dp(0.6666666, 2), 0.67);
         assert_eq!(round_dp(2.25, 1), 2.2); // ties to even (down)
         assert_eq!(round_dp(2.35, 1), 2.4); // ties to even (up)

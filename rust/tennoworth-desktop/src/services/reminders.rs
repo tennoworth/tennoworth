@@ -495,7 +495,7 @@ mod tests {
     #[test]
     fn freshness_dispositions_follow_shared_consumer_cases() {
         let fixture: Value = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/surface-freshness/cases.json"
+            "../../../../tests/fixtures/surface-freshness.json"
         ))
         .unwrap();
         let now = stamp(fixture["now"].as_str().unwrap()).unwrap();

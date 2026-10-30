@@ -701,7 +701,7 @@ mod tests {
     #[test]
     fn lzma_alone_round_trips_a_real_stream() {
         // Byte-for-byte the alone-format container DE serves: 5-byte props,
-        // 8-byte unknown size, then the stream. Produced by python's
+        // 8-byte unknown size, then the stream. Produced by
         // lzma.compress(b"ExportWeapons_en.json!00_abc\n", format=FORMAT_ALONE).
         let b64 = "XQAAgAD//////////wAingoHEY9IBeul/igQedVd/DS3zFnbU+I+EEtzpT/OZLg//9DKEAA=";
         use base64::Engine as _;

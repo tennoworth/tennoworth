@@ -1,13 +1,11 @@
 //! Order-book parsing - the v2 `/v2/orders/item/{slug}` list.
 //!
-//! Python filters liveness FIRST (`[o for o in orders if live(o, kind)]`) and
-//! only ever reads `platinum` on the survivors - it never touches the field on
-//! an offline/invisible/other-side order. We mirror that order exactly: the
+//! Liveness is filtered FIRST and `platinum` is read only on the survivors -
+//! never on an offline/invisible/other-side order: the
 //! liveness predicate runs on the raw order objects, and only a live order's
 //! `platinum` flows through [`crate::coerce`]. Junk (`{}` / `true` / a
 //! numeric-string) in a dead order is therefore never coerced, so it can
-//! neither consume the coercion budget nor abort the run - precisely because
-//! Python never reads it either.
+//! neither consume the coercion budget nor abort the run.
 
 use serde_json::Value;
 
@@ -24,16 +22,15 @@ pub struct ParsedOrder {
     pub order: LiveOrder,
 }
 
-/// Python's `live(o, kind)` minus the side test: an in-game/online seller whose
+/// Liveness minus the side test: an in-game/online seller whose
 /// listing is visible. The side (`type`) is matched separately in
 /// [`parse_orders`], so one pass keeps both buy and sell survivors.
 fn is_live(o: &Value) -> bool {
-    // Python: (o.get("user") or {}).get("status") in ("ingame", "online")
     let status_ok = matches!(
         o.get("user").and_then(|u| u.get("status")).and_then(|s| s.as_str()),
         Some("ingame") | Some("online")
     );
-    // Python: o.get("visible", True) - absent → visible; a present value is
+    // Absent → visible; a present value is
     // truth-tested, so an explicit false/null is NOT live.
     let visible = match o.get("visible") {
         None => true,
@@ -43,12 +40,11 @@ fn is_live(o: &Value) -> bool {
 }
 
 /// Parse the (already envelope-unwrapped) order list into its LIVE buy/sell
-/// orders. Non-array input and non-object entries are skipped - the same shape
-/// tolerance Python's `for o in orders` has once `data` is a list.
+/// orders. Non-array input and non-object entries are skipped.
 ///
 /// FIELD-READ PARITY: the liveness filter (side ∈ {buy, sell}, status, visible)
-/// runs BEFORE any coercion, so `platinum` is coerced only on the exact orders
-/// Python reads it on - never on a dead one.
+/// runs BEFORE any coercion, so `platinum` is coerced only on orders that
+/// count - never on a dead one.
 pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Result<Vec<ParsedOrder>, String> {
     let arr = match orders.as_array() {
         Some(a) => a,
@@ -59,10 +55,10 @@ pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Resul
         if !o.is_object() {
             continue;
         }
-        // Python reads platinum only inside live_buys / live_sells, i.e. only on
-        // orders whose type is the side being scanned. An other-typed order is
+        // Platinum matters only on orders whose type is the side being
+        // scanned. An other-typed order is
         // in neither list, so its fields are never touched - drop it before the
-        // coercion, matching that.
+        // coercion.
         let otype = o.get("type").and_then(|t| t.as_str()).unwrap_or("");
         if otype != "buy" && otype != "sell" {
             continue;
@@ -86,8 +82,7 @@ pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Resul
 }
 
 /// v2 order `rank`: absent OR null → `None` (untiered); a number → `Some(n)`.
-/// Both absent and explicit-null collapse to `None`, matching Python's
-/// `o.get("rank") is not None` liveness of the tier check.
+/// Both absent and explicit-null collapse to `None` for the tier check.
 fn parse_rank(v: Option<&Value>) -> Option<i64> {
     match v {
         None | Some(Value::Null) => None,
@@ -96,8 +91,7 @@ fn parse_rank(v: Option<&Value>) -> Option<i64> {
 }
 
 /// Split out the live orders of one side (`"buy"` / `"sell"`). Liveness was
-/// already applied in [`parse_orders`]; here we only partition by side - the
-/// last piece of Python's `[o for o in orders if live(o, kind)]`. Returns the
+/// already applied in [`parse_orders`]; here we only partition by side. Returns the
 /// bare [`LiveOrder`]s the market-math tier filters operate on.
 pub fn live_orders(parsed: &[ParsedOrder], kind: &str) -> Vec<LiveOrder> {
     parsed
@@ -192,8 +186,8 @@ mod tests {
 
     #[test]
     fn junk_platinum_in_dead_or_wrong_side_orders_is_never_coerced() {
-        // The blocking bug this guards: Python filters liveness FIRST, so it
-        // never reads `platinum` on an offline / invisible / other-side order.
+        // The blocking bug this guards: liveness is filtered FIRST, so
+        // `platinum` is never read on an offline / invisible / other-side order.
         // A junk platinum there (object → hard error, numeric-string → counted)
         // must NOT abort the run or move the coercion budget - only the one live
         // survivor's platinum is read.

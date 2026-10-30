@@ -77,7 +77,7 @@ pub struct AnalyzedRow {
 }
 
 /// Parse the `/v2/items` master list into [`CatalogItem`]s. Entries without a
-/// slug are skipped (Python indexes `item["slug"]`, so a slug is mandatory).
+/// slug are skipped: every later stage keys on it.
 pub fn parse_items(items: &Value) -> Vec<CatalogItem> {
     let arr = match items.as_array() {
         Some(a) => a,
@@ -103,7 +103,7 @@ pub fn parse_items(items: &Value) -> Vec<CatalogItem> {
     out
 }
 
-/// Python's `_item_name`: `i18n.en.name`, else the slug.
+/// `i18n.en.name`, else the slug.
 fn item_name(it: &Value, slug: &str) -> String {
     it.get("i18n")
         .and_then(|i| i.get("en"))
@@ -114,8 +114,8 @@ fn item_name(it: &Value, slug: &str) -> String {
         .to_string()
 }
 
-/// JSON truthiness - Python's `not stats_payload` test (an empty object is
-/// falsy, so a stats payload with no content skips the item).
+/// JSON truthiness (an empty object is falsy, so a stats payload with no
+/// content skips the item).
 fn json_truthy(v: &Value) -> bool {
     match v {
         Value::Null => false,
@@ -149,8 +149,7 @@ pub struct StatsStage {
     pub avg_price_48h: f64,
 }
 
-/// Parse the stats payload, or `None` to skip the item (empty payload -
-/// Python's `not stats_payload`). A hard coercion error propagates as `Err`.
+/// Parse the stats payload, or `None` to skip the item (empty payload). A hard coercion error propagates as `Err`.
 pub fn analyze_stats(
     item: &CatalogItem,
     stats: Option<Value>,
@@ -186,7 +185,7 @@ pub fn analyze_stats(
 }
 
 /// Finish an item: join the live order book onto its [`StatsStage`], or
-/// `Ok(None)` when the orders fetch failed (Python's `orders is None`).
+/// `Ok(None)` when the orders fetch failed.
 pub fn analyze_orders(
     item: &CatalogItem,
     stage: &StatsStage,
@@ -241,7 +240,7 @@ pub fn analyze_orders(
 }
 
 /// Analyze one item into a row, or `Ok(None)` to skip it (missing orders or an
-/// empty stats payload - Python's `if orders is None or not stats_payload`).
+/// empty stats payload).
 /// A hard coercion error (object/bool/non-finite field) propagates as `Err`.
 /// Both stages in one call, for tests that hold both payloads; the sweep runs
 /// the stages separately so it can skip the book fetch.
@@ -264,19 +263,19 @@ pub fn analyze_item(
 }
 
 /// Format a numeric CSV cell. Rust's `Display` already drops a trailing `.0`
-/// (8.0 → "8"), matching the int/float split Python's `csv` writer produces;
-/// the parity comparator parses numerically regardless.
+/// (8.0 → "8"), the int/float split the frozen CSVs carry; the fixture
+/// comparator parses numerically regardless.
 fn fmt_num(x: f64) -> String {
     format!("{x}")
 }
 
-/// Python `str()` of a list of strings: `['a', 'b']`, `[]` when empty.
+/// A list of strings as `['a', 'b']`, `[]` when empty.
 fn fmt_str_list(items: &[String]) -> String {
     let inner: Vec<String> = items.iter().map(|s| format!("'{s}'")).collect();
     format!("[{}]", inner.join(", "))
 }
 
-/// Python `str()` of a numeric list: `[33, 36, 42]`, `[]` when empty.
+/// A numeric list as `[33, 36, 42]`, `[]` when empty.
 fn fmt_num_list(items: &[f64]) -> String {
     let inner: Vec<String> = items.iter().map(|x| fmt_num(*x)).collect();
     format!("[{}]", inner.join(", "))
@@ -310,7 +309,7 @@ impl AnalyzedRow {
 }
 
 /// Serialize rows to CSV bytes, sorted by score descending (stable, so score
-/// ties keep insertion order - Python's `sorted(..., reverse=True)`).
+/// ties keep insertion order).
 pub fn rows_to_csv(rows: &[AnalyzedRow]) -> Result<Vec<u8>, String> {
     let mut sorted: Vec<&AnalyzedRow> = rows.iter().collect();
     sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
@@ -322,10 +321,9 @@ pub fn rows_to_csv(rows: &[AnalyzedRow]) -> Result<Vec<u8>, String> {
     wtr.into_inner().map_err(|e| format!("CSV flush: {e}"))
 }
 
-/// Write the CSV atomically to `path` - `path.tmp` then rename, Python's
-/// `os.replace`. Callers pass either the mid-run `<out>.partial` checkpoint path
+/// Write the CSV atomically to `path` - `path.tmp` then rename. Callers pass either the mid-run `<out>.partial` checkpoint path
 /// or the final `--out` path; each write is torn-file-free on its own path.
-/// Empty results write nothing (Python's `write_snapshot` returns early), so a
+/// Empty results write nothing, so a
 /// throttled run never overwrites a healthy CSV with a header-only file.
 pub fn write_csv(rows: &[AnalyzedRow], path: &Path) -> Result<(), String> {
     if rows.is_empty() {
@@ -717,7 +715,7 @@ pub fn run_scrape(
         return Err("Failed to fetch item list. Network problem?".to_string());
     }
 
-    // Empty filter/exclude are no-ops (Python guards them with `if args.filter`).
+    // Empty filter/exclude are no-ops.
     if !cfg.filter.is_empty() {
         let f = cfg.filter.to_lowercase();
         items.retain(|i| i.slug.to_lowercase().contains(&f));
@@ -737,9 +735,8 @@ pub fn run_scrape(
         .concurrency;
     let workers = worker_count(concurrency, total);
 
-    // CHECKPOINT SAFETY - a DELIBERATE DIVERGENCE from Python: Python's
-    // checkpoints atomic-replace `--out` itself mid-run, so an abort past a
-    // checkpoint leaves `--out` as a partial file. Here checkpoints write to
+    // CHECKPOINT SAFETY: replacing `--out` itself mid-run would leave a
+    // partial file after an abort past a checkpoint. Checkpoints write to
     // `<out>.partial` and `--out` is replaced exactly ONCE, at successful
     // completion. On ANY failure `--out` is untouched and `<out>.partial`
     // survives for post-mortem. Strictly safer; run-scrape.sh's row-count floor
@@ -764,8 +761,8 @@ pub fn run_scrape(
         )
     });
 
-    // The permissive-parsing budget is checked INCREMENTALLY (Python only
-    // checks equivalently at the end) against the sum of the workers' tallies. A
+    // The permissive-parsing budget is checked INCREMENTALLY against the sum
+    // of the workers' tallies. A
     // systemic upstream shape drift (WFM sending numeric fields as strings)
     // trips the budget within the first fraction of items; stopping here - before
     // the final write and any further fetch - fails the run loudly and promptly,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import scoring from '../../../tests/fixtures/inventory-scoring/cases.json';
+import scoring from '../../../tests/fixtures/inventory-scoring.json';
 import { computeResults, type FilterState } from './filter-engine';
 import type { Market, OwnedRecord } from '../contracts/data';
 

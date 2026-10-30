@@ -5,7 +5,7 @@
 # rebuild the full-shape snapshot. This is the ONE production scrape entrypoint,
 # driven by the self-hosted systemd timer.
 #
-# Rust-only since 2026-08 (Python retired): `wfm-scrape scrape` produces
+# `wfm-scrape scrape` produces
 # wfm_results.csv and `wfm-scrape build` renders BOTH frontend/public/market.json
 # and frontend/public/wfstat-catalog.json from it.
 #

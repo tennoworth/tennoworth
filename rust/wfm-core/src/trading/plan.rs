@@ -196,7 +196,7 @@ fn execute_plan_with(
                 slug: "<batch>".into(),
                 status: "error".into(),
                 message: Some(format!(
-                    "Batch has {} items; companion cap is {MAX_PLAN_ITEMS}.",
+                    "Batch has {} items; the cap is {MAX_PLAN_ITEMS}.",
                     plan.items.len()
                 )),
                 order_id: None,

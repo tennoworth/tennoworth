@@ -1346,7 +1346,7 @@ mod tests {
     #[test]
     fn live_shape_fixture_preserves_goal_reward_groups() {
         let world: Value = serde_json::from_str(include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/de-events/world-shapes.json"
+            env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/de-events.json"
         ))).unwrap();
         let p2i = HashMap::from([
             ("/Lotus/Weapons/TestFinalWeapon".into(), serde_json::json!({"name":"Test Final Weapon","slug":"test_final_weapon"})),

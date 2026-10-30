@@ -155,7 +155,7 @@ mod tests {
                 _ => assert_eq!(actual, expected),
             }
         }
-        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../tests/fixtures/domain-ipc/cases.json")).unwrap();
+        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../tests/fixtures/domain-ipc.json")).unwrap();
         for case in cases {
             let request: DomainRequest = serde_json::from_value(serde_json::json!({"operation":case["operation"],"input":case["input"]})).unwrap();
             let response = serde_json::to_value(request.execute().unwrap()).unwrap();

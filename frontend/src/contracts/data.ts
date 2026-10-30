@@ -371,7 +371,7 @@ export interface InventoryStackEntry {
   XP?: number;
 }
 
-/** Top-level inventory shape. The companion / DE's API emits ~200 keys;
+/** Top-level inventory shape. DE's inventory emits ~200 keys;
  *  we only assert on the ones we read. */
 export interface Inventory {
   Upgrades?: InventoryUpgrade[];
@@ -540,14 +540,14 @@ export interface OrderPatch {
   rank?: number;
 }
 
-/** Single per-item result echoed by the companion's POST /plan / PATCH /order. */
+/** Single per-item result of a listing plan or order edit. */
 export interface ItemResult {
   slug: string;
   status: 'ok' | 'skipped' | 'error' | 'pending' | 'uncertain_mutation';
   message?: string | null;
   order_id?: string | null;
   /** 'created' | 'updated' - how an ok row landed on WFM (absent on errors
-   *  and on pre-reconcile companions). */
+   *  and on results recorded before reconciliation). */
   action?: 'created' | 'updated' | null;
 }
 

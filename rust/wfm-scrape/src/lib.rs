@@ -1,5 +1,4 @@
-//! The host market pipeline - the only implementation (Python retired
-//! 2026-08): `scrape` sweeps WFM to CSV and an observation log, `build`
+//! The host market pipeline - the only implementation: `scrape` sweeps WFM to CSV and an observation log, `build`
 //! renders `market.json` and `wfstat-catalog.json`.
 //!
 //! GROUND RULES:
@@ -12,7 +11,7 @@
 //!   are only reproducible if no code path calls the system clock directly.
 //! - Heuristics live in `market-math`; this crate never re-implements them.
 //! - Fixture regression tests (tests/ dir) shell the real binary against the
-//!   frozen inputs in tests/fixtures/{scrape,convert}/ - never
+//!   frozen inputs in tests/fixtures/{scrape,build}/ - never
 //!   byte-diff, never live endpoints outside the one opt-in liveness test.
 
 pub mod clock;
