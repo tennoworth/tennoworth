@@ -28,7 +28,9 @@ fn render(tokens: TokenStream, out: &mut String) {
     let trees: Vec<TokenTree> = tokens.into_iter().collect();
     let mut index = 0;
     while let Some(tree) = trees.get(index) {
-        if matches!(tree, TokenTree::Punct(p) if p.as_char() == '#') && is_cfg_test(trees.get(index + 1)) {
+        if matches!(tree, TokenTree::Punct(p) if p.as_char() == '#')
+            && is_cfg_test(trees.get(index + 1))
+        {
             // The gated item ends at its body, or at a `;` or `,` on this level.
             // A top-level comma inside generics ends it early, which only keeps
             // more code in view - the gate can over-count, never under-count.
@@ -68,7 +70,8 @@ fn render(tokens: TokenStream, out: &mut String) {
 /// unnoticed. An imported `get` is counted at the import, because its call site
 /// reads like any `client.get(url)`.
 fn free_function_sends(compact: &str) -> usize {
-    let calls = compact.matches("reqwest::get(").count() + compact.matches("blocking::get(").count();
+    let calls =
+        compact.matches("reqwest::get(").count() + compact.matches("blocking::get(").count();
     let imports = compact
         .split("usereqwest::")
         .skip(1)
@@ -99,7 +102,9 @@ fn free_function_requests_count_as_send_sites() {
     let compact = production(source);
     assert_eq!(free_function_sends(&compact), 5, "{compact}");
     assert_eq!(
-        free_function_sends(&production("use reqwest::blocking::{RequestBuilder, Response};")),
+        free_function_sends(&production(
+            "use reqwest::blocking::{RequestBuilder, Response};"
+        )),
         0
     );
 }
@@ -165,7 +170,13 @@ fn raw_http_send_sites_are_classified() {
             }
         }
     }
-    for member in ["game-acquisition", "wfm-trading", "wfm-client", "wfm-scrape", "tennoworth-desktop"] {
+    for member in [
+        "game-acquisition",
+        "wfm-trading",
+        "wfm-client",
+        "wfm-scrape",
+        "tennoworth-desktop",
+    ] {
         check(&root.join(member).join("src"), root, &allowed);
     }
 }

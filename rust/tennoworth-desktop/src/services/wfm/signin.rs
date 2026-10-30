@@ -168,8 +168,12 @@ async fn read_cookies(
     });
     match tokio::time::timeout(COOKIE_READ_LIMIT, read).await {
         Ok(Ok(Ok(cookies))) => Ok(cookies),
-        Ok(Ok(Err(e))) => Err(CmdError::internal(format!("reading the sign-in cookies: {e}"))),
-        Ok(Err(e)) => Err(CmdError::internal(format!("cookie read failed to run: {e}"))),
+        Ok(Ok(Err(e))) => Err(CmdError::internal(format!(
+            "reading the sign-in cookies: {e}"
+        ))),
+        Ok(Err(e)) => Err(CmdError::internal(format!(
+            "cookie read failed to run: {e}"
+        ))),
         Err(_) => Err(CmdError::internal(
             "The sign-in window did not answer when asked for its cookies.",
         )),
@@ -203,7 +207,12 @@ impl Progress {
 pub fn normalize_pasted_jwt(pasted: &str) -> Result<String, CmdError> {
     let value = pasted.trim();
     let value = value.strip_prefix("JWT=").unwrap_or(value);
-    let value = value.split(';').next().unwrap_or("").trim().trim_matches('"');
+    let value = value
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .trim_matches('"');
     let parts: Vec<&str> = value.split('.').collect();
     let shaped = parts.len() == 3
         && parts.iter().all(|p| {
@@ -254,16 +263,36 @@ mod tests {
     fn pasted_tokens_are_cleaned_up_or_refused() {
         let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzaWQiOiJ4In0.c2lnbmF0dXJl";
         assert_eq!(normalize_pasted_jwt(jwt).unwrap(), jwt);
-        assert_eq!(normalize_pasted_jwt(&format!("  \"{jwt}\"\n")).unwrap(), jwt);
-        assert_eq!(normalize_pasted_jwt(&format!("JWT={jwt}; Path=/; HttpOnly")).unwrap(), jwt);
-        for bad in ["", "JWT=", "not a token", "a.b", "a..c", "a.b.c d", "a.b.c.d"] {
-            assert_eq!(normalize_pasted_jwt(bad).unwrap_err().code, "bad_token", "{bad:?}");
+        assert_eq!(
+            normalize_pasted_jwt(&format!("  \"{jwt}\"\n")).unwrap(),
+            jwt
+        );
+        assert_eq!(
+            normalize_pasted_jwt(&format!("JWT={jwt}; Path=/; HttpOnly")).unwrap(),
+            jwt
+        );
+        for bad in [
+            "",
+            "JWT=",
+            "not a token",
+            "a.b",
+            "a..c",
+            "a.b.c d",
+            "a.b.c.d",
+        ] {
+            assert_eq!(
+                normalize_pasted_jwt(bad).unwrap_err().code,
+                "bad_token",
+                "{bad:?}"
+            );
         }
     }
 
     #[test]
     fn page_label_drops_the_query_string() {
-        let url: tauri::Url = "https://warframe.market/auth/signin?token=secret".parse().unwrap();
+        let url: tauri::Url = "https://warframe.market/auth/signin?token=secret"
+            .parse()
+            .unwrap();
         assert_eq!(page_label(&url), "warframe.market/auth/signin");
     }
 }

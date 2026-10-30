@@ -385,7 +385,10 @@ mod tests {
         let out = run(&dir, &url);
         // Fell back to the good cache rather than caching the junk.
         assert!(out.installed && !out.fetched, "{out:?}");
-        assert_eq!(std::fs::read_to_string(cache_path(&dir)).unwrap(), body("good"));
+        assert_eq!(
+            std::fs::read_to_string(cache_path(&dir)).unwrap(),
+            body("good")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -420,7 +423,10 @@ mod tests {
         // known-good fallback that every future offline start re-installs.
         let url = serve_once(body("bad_pattern"), "200 OK", None);
         let out = run(&dir, &url);
-        assert!(out.installed, "this run still gets the usable fields: {out:?}");
+        assert!(
+            out.installed,
+            "this run still gets the usable fields: {out:?}"
+        );
         assert_eq!(out.rejected.len(), 1, "{out:?}");
         assert!(
             !cache_path(&dir).exists(),
@@ -461,7 +467,12 @@ mod tests {
 
     #[test]
     fn only_a_signed_definitions_file_installs() {
-        for case in ["unsigned", "wrong_purpose", "missing_purpose", "good_by_previous_key"] {
+        for case in [
+            "unsigned",
+            "wrong_purpose",
+            "missing_purpose",
+            "good_by_previous_key",
+        ] {
             let dir = temp_dir();
             let url = serve_once(body(case), "200 OK", None);
             let out = run(&dir, &url);
@@ -472,7 +483,11 @@ mod tests {
         let mut tampered = fixture()["good"].clone();
         tampered["payload"] = fixture()["bad_pattern"]["payload"].clone();
         let dir = temp_dir();
-        let url = serve_once(Box::leak(tampered.to_string().into_boxed_str()), "200 OK", None);
+        let url = serve_once(
+            Box::leak(tampered.to_string().into_boxed_str()),
+            "200 OK",
+            None,
+        );
         assert_eq!(run(&dir, &url), DefinitionsOutcome::default());
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -486,7 +501,10 @@ mod tests {
         std::fs::write(cache_path(&dir), body("unsigned")).unwrap();
         let out = run(&dir, "http://127.0.0.1:1/definitions.json");
         assert_eq!(out, DefinitionsOutcome::default());
-        assert!(!cache_path(&dir).exists(), "an unsigned cache is not a fallback");
+        assert!(
+            !cache_path(&dir).exists(),
+            "an unsigned cache is not a fallback"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

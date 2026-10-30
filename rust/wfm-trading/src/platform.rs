@@ -36,8 +36,7 @@ pub fn write_restricted(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     }
     #[cfg(not(unix))]
     {
-        fs::write(path, bytes)
-            .with_context(|| format!("writing {}", path.display()))
+        fs::write(path, bytes).with_context(|| format!("writing {}", path.display()))
     }
 }
 
@@ -85,9 +84,15 @@ pub fn chown_to_real_user(path: &std::path::Path) {
     if unsafe { libc::geteuid() } != 0 {
         return;
     }
-    let Ok(user) = std::env::var("SUDO_USER") else { return };
-    let Ok(c_user) = std::ffi::CString::new(user) else { return };
-    let Ok(c_path) = std::ffi::CString::new(path.to_string_lossy().into_owned()) else { return };
+    let Ok(user) = std::env::var("SUDO_USER") else {
+        return;
+    };
+    let Ok(c_user) = std::ffi::CString::new(user) else {
+        return;
+    };
+    let Ok(c_path) = std::ffi::CString::new(path.to_string_lossy().into_owned()) else {
+        return;
+    };
     unsafe {
         let pw = libc::getpwnam(c_user.as_ptr());
         if !pw.is_null() {
@@ -117,7 +122,10 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         write_restricted(&path, b"hello").unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600, "file must be created at 0600, not chmod'd later");
+        assert_eq!(
+            mode, 0o600,
+            "file must be created at 0600, not chmod'd later"
+        );
         let _ = std::fs::remove_file(&path);
     }
 }

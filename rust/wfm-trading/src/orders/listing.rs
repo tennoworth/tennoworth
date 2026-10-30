@@ -4,23 +4,24 @@
 //! the crash-recoverable plan executor, and [`crate::market::catalog`] for the WFM
 //! item catalog fetch both this module and the plan executor depend on.
 
-use wfm_client::transport::GovernedRequest;
-use wfm_client::governor::Kind;
 use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use wfm_client::governor::Kind;
+use wfm_client::transport::GovernedRequest;
 
-use crate::http::{browser_client, wfm_client};
 use crate::auth::fetch_wfm_me;
-use crate::orders::outcome::MutationOutcome;
+use crate::http::{browser_client, wfm_client};
 use crate::market::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
 use crate::orders::decode::{decode_orders, DecodedOrders};
-
+use crate::orders::outcome::MutationOutcome;
 
 /// Mutations are never replayed after an ambiguous transport or server failure.
-pub(crate) fn send_mutation(builder: reqwest::blocking::RequestBuilder) -> Result<wfm_client::transport::GovernedResponse, wfm_client::governor::AccessError> {
+pub(crate) fn send_mutation(
+    builder: reqwest::blocking::RequestBuilder,
+) -> Result<wfm_client::transport::GovernedResponse, wfm_client::governor::AccessError> {
     builder.send_governed(Kind::Mutation)
 }
 
@@ -106,11 +107,20 @@ pub fn list_user_order_rows(unlocked: &Unlocked) -> Result<serde_json::Value> {
 
 fn read_user_order_rows(unlocked: &Unlocked, fresh: bool) -> Result<serde_json::Value> {
     let client = wfm_client()?;
-    let url = format!("https://api.warframe.market/v2/orders/user/{}", unlocked.username);
+    let url = format!(
+        "https://api.warframe.market/v2/orders/user/{}",
+        unlocked.username
+    );
     let body = wfm_client::transport::read_json(
-        wfm_client::wfm_authed_headers(client.get(&url), &unlocked.platform, &unlocked.jwt), Kind::Read,
-        wfm_client::transport::ReadKey { url, platform: unlocked.platform.clone(), account: Some(unlocked.username.clone()) },
-        std::time::Duration::from_secs(5), fresh,
+        wfm_client::wfm_authed_headers(client.get(&url), &unlocked.platform, &unlocked.jwt),
+        Kind::Read,
+        wfm_client::transport::ReadKey {
+            url,
+            platform: unlocked.platform.clone(),
+            account: Some(unlocked.username.clone()),
+        },
+        std::time::Duration::from_secs(5),
+        fresh,
     )?;
     Ok(body)
 }
@@ -213,9 +223,11 @@ pub(crate) fn patch_one_order(
 pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
     let client = wfm_client()?;
     let url = format!("https://api.warframe.market/v2/order/{id}");
-    let resp = send_mutation(
-        wfm_client::wfm_authed_headers(client.delete(&url), &unlocked.platform, &unlocked.jwt),
-    )
+    let resp = send_mutation(wfm_client::wfm_authed_headers(
+        client.delete(&url),
+        &unlocked.platform,
+        &unlocked.jwt,
+    ))
     .context("DELETE request failed")?;
     let status = resp.status();
     if !status.is_success() {
@@ -295,26 +307,50 @@ fn validate_orders_body(body: &serde_json::Value, unlocked: &Unlocked) -> Result
 mod response_tests {
     use super::*;
     fn unlocked() -> Unlocked {
-        Unlocked { jwt: String::new(), username: "fixture".into(), platform: "pc".into(), catalog: Arc::new(BTreeMap::new()), id_to_item: Arc::new(BTreeMap::new()) }
+        Unlocked {
+            jwt: String::new(),
+            username: "fixture".into(),
+            platform: "pc".into(),
+            catalog: Arc::new(BTreeMap::new()),
+            id_to_item: Arc::new(BTreeMap::new()),
+        }
     }
     #[test]
     fn decoded_orders_resolve_metadata_by_catalogue_identity() {
         let mut session = unlocked();
-        session.id_to_item = Arc::new(BTreeMap::from([("item".into(), ItemMeta { name: "Part".into(), slug: "part".into() })]));
+        session.id_to_item = Arc::new(BTreeMap::from([(
+            "item".into(),
+            ItemMeta {
+                name: "Part".into(),
+                slug: "part".into(),
+            },
+        )]));
         let body = serde_json::json!({"data":{"sell":[{"id":"a","itemId":"item","platinum":10,"quantity":2}],"buy":[]}});
         let result = orders_body(decode_user_orders(&session, &body).unwrap(), &session);
-        assert_eq!(result["data"][0]["item"], serde_json::json!({"name":"Part","slug":"part"}));
+        assert_eq!(
+            result["data"][0]["item"],
+            serde_json::json!({"name":"Part","slug":"part"})
+        );
         assert_eq!(result["data"][0]["type"], "sell");
         assert_eq!(result["data"][0]["quantity"], 2);
     }
 
     #[test]
     fn malformed_orders_cannot_be_interpreted_as_an_empty_account() {
-        for body in [serde_json::json!({}), serde_json::json!({"data": null}), serde_json::json!({"data": {"sell": []}}), serde_json::json!({"data": [{"id": "a"}]})] {
+        for body in [
+            serde_json::json!({}),
+            serde_json::json!({"data": null}),
+            serde_json::json!({"data": {"sell": []}}),
+            serde_json::json!({"data": [{"id": "a"}]}),
+        ] {
             assert!(validate_orders_body(&body, &unlocked()).is_err());
         }
         assert!(validate_orders_body(&serde_json::json!({"data": []}), &unlocked()).is_ok());
-        assert!(validate_orders_body(&serde_json::json!({"data": {"sell": [], "buy": []}}), &unlocked()).is_ok());
+        assert!(validate_orders_body(
+            &serde_json::json!({"data": {"sell": [], "buy": []}}),
+            &unlocked()
+        )
+        .is_ok());
     }
 
     /// A row may take its side from its bucket or state it explicitly - but not
@@ -342,10 +378,26 @@ mod response_tests {
     #[test]
     fn missing_variant_metadata_cannot_hide_an_existing_order() {
         let mut session = unlocked();
-        session.catalog = Arc::new(BTreeMap::from([("fixture".into(), WfmCatalogItem { item_id: "item".into(), display_name: "Fixture".into(), bulk_tradable: false, session_supported: true, max_rank: Some(10), subtypes: vec!["revealed".into()] })]));
+        session.catalog = Arc::new(BTreeMap::from([(
+            "fixture".into(),
+            WfmCatalogItem {
+                item_id: "item".into(),
+                display_name: "Fixture".into(),
+                bulk_tradable: false,
+                session_supported: true,
+                max_rank: Some(10),
+                subtypes: vec!["revealed".into()],
+            },
+        )]));
         // The row an orders response carries names its item by itemId, so the
         // session's own itemId→slug index is what reaches the catalogue.
-        session.id_to_item = Arc::new(BTreeMap::from([("item".into(), ItemMeta { name: "Fixture".into(), slug: "fixture".into() })]));
+        session.id_to_item = Arc::new(BTreeMap::from([(
+            "item".into(),
+            ItemMeta {
+                name: "Fixture".into(),
+                slug: "fixture".into(),
+            },
+        )]));
         let mut body = serde_json::json!({"data": [{"id": "order", "itemId": "item", "type": "sell", "quantity": 1, "platinum": 10}]});
         assert!(validate_orders_body(&body, &session).is_err());
         body["data"][0]["rank"] = serde_json::json!(0);

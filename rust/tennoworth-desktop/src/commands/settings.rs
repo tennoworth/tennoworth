@@ -6,9 +6,9 @@
 
 use tauri::{AppHandle, Manager, State};
 
+use crate::contracts::command_error::CmdError;
 use crate::persistence::{Db, SnapshotSummary};
 use crate::services::trading::protection::{GuidanceInventory, ProtectionPlan, ProtectionState};
-use crate::contracts::command_error::CmdError;
 use crate::services::wfm::session::WfmSession;
 use std::sync::Arc;
 
@@ -35,8 +35,13 @@ pub async fn protection_state(
         .and_then(|unlocked| {
             wfm_trading::orders::listing::list_user_orders(&unlocked).map_err(|e| e.to_string())
         });
-        crate::services::trading::protection::guidance_state(&app.state::<Db>(), &market, orders, inventory)
-            .map_err(CmdError::internal)
+        crate::services::trading::protection::guidance_state(
+            &app.state::<Db>(),
+            &market,
+            orders,
+            inventory,
+        )
+        .map_err(CmdError::internal)
     })
     .await
     .map_err(|e| CmdError::internal(e.to_string()))?
@@ -116,7 +121,13 @@ mod tests {
         ] {
             assert!(reserved_for_typed_commands(key).is_err(), "{key}");
         }
-        for key in ["theme.mode", "prompts", "app-icon", "auto-close-sold", "reportsx"] {
+        for key in [
+            "theme.mode",
+            "prompts",
+            "app-icon",
+            "auto-close-sold",
+            "reportsx",
+        ] {
             assert!(reserved_for_typed_commands(key).is_ok(), "{key}");
         }
     }

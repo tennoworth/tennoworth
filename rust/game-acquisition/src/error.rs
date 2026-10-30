@@ -102,7 +102,8 @@ mod tests {
 
     #[test]
     fn an_echoed_body_is_redacted_too() {
-        let out = redact_session_creds(r#"{"accountId":"0123456789abcdef01234567","nonce":"918273645"}"#);
+        let out =
+            redact_session_creds(r#"{"accountId":"0123456789abcdef01234567","nonce":"918273645"}"#);
         assert!(!out.contains("0123456789abcdef01234567"), "{out}");
         assert!(!out.contains("918273645"), "{out}");
     }

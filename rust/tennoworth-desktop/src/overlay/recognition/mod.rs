@@ -1,6 +1,3 @@
-use crate::vision::capture::CapturedFrame;
-use crate::vision::frame::{encode_crop, encode_frame, NormalizedRect};
-use crate::vision::ocr::{parse_tsv_lines, OcrMode, OcrWorker, TsvLine};
 use super::{diagnostics_attempt_dir, elapsed_ms, unix_millis, OverlayStageTimings};
 use super::{
     OverlayBox, OverlaySettings, RelicOverlayResult, RelicOverlaySlot,
@@ -8,6 +5,9 @@ use super::{
     WARFRAME_DESIGN_ASPECT,
 };
 use crate::services::market::sellables::{OverlayCatalogItem, OverlayMarketFacts};
+use crate::vision::capture::CapturedFrame;
+use crate::vision::frame::{encode_crop, encode_frame, NormalizedRect};
+use crate::vision::ocr::{parse_tsv_lines, OcrMode, OcrWorker, TsvLine};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;

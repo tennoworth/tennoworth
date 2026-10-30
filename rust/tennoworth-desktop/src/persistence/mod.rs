@@ -8,10 +8,10 @@ mod settings;
 pub(crate) mod snapshot;
 mod trades;
 mod watches;
+pub(crate) use outcomes::RETENTION_SECS as LISTING_RETENTION_SECS;
 pub(crate) use records::{
     ListedItem, ListingOrigin, NewWatch, SnapshotItem, SnapshotSummary, TradeRow, Watch,
 };
-pub(crate) use outcomes::RETENTION_SECS as LISTING_RETENTION_SECS;
 use schema::MIGRATIONS;
 
 // Canonical desktop state store (SQLite via rusqlite `bundled`). This is the
@@ -29,8 +29,8 @@ use schema::MIGRATIONS;
 use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::{Connection, OptionalExtension};
 use crate::poison::guard;
+use rusqlite::{Connection, OptionalExtension};
 
 /// The open database. `Connection` is not `Sync`, so it lives behind a `Mutex`;
 /// held as Tauri managed state (`State<'_, Db>`) and shared across commands.
@@ -262,8 +262,12 @@ mod tests {
         let path = temp_db_path();
         let db = Db::open(&path).unwrap();
         let conn = guard(&db.conn);
-        let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
-        let sync: i64 = conn.query_row("PRAGMA synchronous", [], |r| r.get(0)).unwrap();
+        let mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        let sync: i64 = conn
+            .query_row("PRAGMA synchronous", [], |r| r.get(0))
+            .unwrap();
         assert_eq!((mode.as_str(), sync), ("wal", 1));
         drop(conn);
         drop(db);
@@ -288,7 +292,8 @@ mod tests {
         for sql in MIGRATIONS.iter().take(previous) {
             conn.execute_batch(sql).unwrap();
         }
-        conn.pragma_update(None, "user_version", previous as i64).unwrap();
+        conn.pragma_update(None, "user_version", previous as i64)
+            .unwrap();
         conn.execute_batch(seed).unwrap();
         Db::init(conn).unwrap()
     }
@@ -306,11 +311,17 @@ mod tests {
 
     fn set_plan_reserve(db: &Db, slug: &str, keep: u32) {
         let plan = serde_json::json!({"reserves": {slug: keep}, "goal": null});
-        db.set_setting("protected-selling-plan-v1", &plan.to_string()).unwrap();
+        db.set_setting("protected-selling-plan-v1", &plan.to_string())
+            .unwrap();
     }
 
     fn plan(db: &Db) -> serde_json::Value {
-        serde_json::from_str(&db.get_setting("protected-selling-plan-v1").unwrap().unwrap()).unwrap()
+        serde_json::from_str(
+            &db.get_setting("protected-selling-plan-v1")
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -335,7 +346,10 @@ mod tests {
     #[test]
     fn the_fold_creates_a_plan_only_when_there_is_something_to_keep() {
         let db = folded("INSERT INTO reserve VALUES ('vitality', 2);");
-        assert_eq!(plan(&db), serde_json::json!({"reserves":{"vitality":2},"goal":null}));
+        assert_eq!(
+            plan(&db),
+            serde_json::json!({"reserves":{"vitality":2},"goal":null})
+        );
         let db = folded("INSERT INTO reserve VALUES ('zero', 0);");
         assert_eq!(db.get_setting("protected-selling-plan-v1").unwrap(), None);
         assert!(!table_exists(&db, "reserve"));
@@ -347,7 +361,12 @@ mod tests {
             "INSERT INTO reserve VALUES ('vitality', 2);
              INSERT INTO setting VALUES ('protected-selling-plan-v1', 'not json');",
         );
-        assert_eq!(db.get_setting("protected-selling-plan-v1").unwrap().as_deref(), Some("not json"));
+        assert_eq!(
+            db.get_setting("protected-selling-plan-v1")
+                .unwrap()
+                .as_deref(),
+            Some("not json")
+        );
         assert!(!table_exists(&db, "reserve"));
     }
 
@@ -398,9 +417,15 @@ mod tests {
 
     #[test]
     fn a_repeated_inventory_reuses_its_snapshot_and_a_change_records_a_new_one() {
-        let item = |slug: &str, count| SnapshotItem { slug: slug.into(), count, leveled: 0 };
+        let item = |slug: &str, count| SnapshotItem {
+            slug: slug.into(),
+            count,
+            leveled: 0,
+        };
         let db = Db::open_in_memory().unwrap();
-        let first = db.record_snapshot("memory", None, &[item("/Lotus/A", 2), item("/Lotus/B", 1)]).unwrap();
+        let first = db
+            .record_snapshot("memory", None, &[item("/Lotus/A", 2), item("/Lotus/B", 1)])
+            .unwrap();
         db.conn
             .lock()
             .unwrap()
@@ -408,17 +433,30 @@ mod tests {
             .unwrap();
 
         // Same items in another order: the same snapshot, confirmed now.
-        let repeat = db.record_snapshot("memory", Some("41.0"), &[item("/Lotus/B", 1), item("/Lotus/A", 2)]).unwrap();
+        let repeat = db
+            .record_snapshot(
+                "memory",
+                Some("41.0"),
+                &[item("/Lotus/B", 1), item("/Lotus/A", 2)],
+            )
+            .unwrap();
         assert_eq!(repeat, first);
         let list = db.list_snapshots(10).unwrap();
         assert_eq!(list.len(), 1);
-        assert_ne!(list[0].taken_at, "2020-01-01T00:00:00Z", "a repeat is a fresh confirmation");
+        assert_ne!(
+            list[0].taken_at, "2020-01-01T00:00:00Z",
+            "a repeat is a fresh confirmation"
+        );
 
         // One count differs: a new snapshot, which becomes the latest.
-        let changed = db.record_snapshot("memory", None, &[item("/Lotus/A", 1), item("/Lotus/B", 1)]).unwrap();
+        let changed = db
+            .record_snapshot("memory", None, &[item("/Lotus/A", 1), item("/Lotus/B", 1)])
+            .unwrap();
         assert!(changed > first);
         // The same items from another source are not a repeat of it.
-        let imported = db.record_snapshot("import", None, &[item("/Lotus/A", 1), item("/Lotus/B", 1)]).unwrap();
+        let imported = db
+            .record_snapshot("import", None, &[item("/Lotus/A", 1), item("/Lotus/B", 1)])
+            .unwrap();
         assert!(imported > changed);
         assert_eq!(db.list_snapshots(10).unwrap().len(), 3);
     }
@@ -521,7 +559,8 @@ mod tests {
             for sql in MIGRATIONS.iter().take(previous) {
                 conn.execute_batch(sql).unwrap();
             }
-            conn.pragma_update(None, "user_version", previous as i64).unwrap();
+            conn.pragma_update(None, "user_version", previous as i64)
+                .unwrap();
             conn.execute(
                 "INSERT INTO listing_log (plan_id, plan_index, slug, listed_at, price, qty, status)
                  VALUES ('plan-a', 0, 'mag_prime_set', '2026-09-01T00:00:00Z', 40, 1, 'ok')",
@@ -694,12 +733,17 @@ mod tests {
         assert_eq!(rows[0].sellable_qty, 3);
         assert_eq!(market.session_quantities(&db).unwrap()["test_part"], 3);
         let prices = serde_json::json!({"updated_at":stamp});
-        assert!(
-            crate::services::notifications::reminders::digest(&prices, &rows, stamp, 110, "1970-01-01", 18)
-                .unwrap()
-                .body
-                .contains("Test Part ×3")
-        );
+        assert!(crate::services::notifications::reminders::digest(
+            &prices,
+            &rows,
+            stamp,
+            110,
+            "1970-01-01",
+            18
+        )
+        .unwrap()
+        .body
+        .contains("Test Part ×3"));
         db.set_setting("reserve-copies", "4").unwrap();
         assert_eq!(
             crate::services::market::sellables::rank_sellables(&db, &market)[0].sellable_qty,
@@ -733,10 +777,15 @@ mod tests {
             .session_quantities(&db)
             .unwrap()
             .contains_key("test_part"));
-        assert!(
-            crate::services::notifications::reminders::digest(&prices, &rows, stamp, 111, "1970-01-01", 18)
-                .is_none()
-        );
+        assert!(crate::services::notifications::reminders::digest(
+            &prices,
+            &rows,
+            stamp,
+            111,
+            "1970-01-01",
+            18
+        )
+        .is_none());
         let id = db
             .insert_snapshot(
                 "memory",
@@ -966,20 +1015,35 @@ mod notification_tests {
     }
     #[test]
     fn structured_notification_survives_restart_and_bad_details_keep_the_body() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/notifications/baro.json")).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/notifications/baro.json"
+        ))
+        .unwrap();
         let path = tests::temp_db_path();
         let id;
         {
             let db = Db::open(&path).unwrap();
             let mut notice = candidate();
-            notice.content = Some(serde_json::from_value(fixture["expected_content"].clone()).unwrap());
-            id = db.insert_notification(&notice, 1000, false, true).unwrap().unwrap();
+            notice.content =
+                Some(serde_json::from_value(fixture["expected_content"].clone()).unwrap());
+            id = db
+                .insert_notification(&notice, 1000, false, true)
+                .unwrap()
+                .unwrap();
         }
         let db = Db::open(&path).unwrap();
         let rows = db.list_notifications().unwrap();
-        assert_eq!(serde_json::to_value(&rows[0].content).unwrap(), fixture["expected_content"]);
+        assert_eq!(
+            serde_json::to_value(&rows[0].content).unwrap(),
+            fixture["expected_content"]
+        );
         for bad in ["{", r#"{"kind":"unknown"}"#] {
-            guard(&db.conn).execute("UPDATE notification SET content=?1 WHERE id=?2", rusqlite::params![bad, id]).unwrap();
+            guard(&db.conn)
+                .execute(
+                    "UPDATE notification SET content=?1 WHERE id=?2",
+                    rusqlite::params![bad, id],
+                )
+                .unwrap();
             let rows = db.list_notifications().unwrap();
             assert_eq!(rows.len(), 1);
             assert_eq!(rows[0].body, "Relay");
@@ -995,8 +1059,11 @@ mod notification_tests {
         let previous = 8;
         {
             let conn = Connection::open(&path).unwrap();
-            for sql in MIGRATIONS.iter().take(previous) { conn.execute_batch(sql).unwrap(); }
-            conn.pragma_update(None, "user_version", previous as i64).unwrap();
+            for sql in MIGRATIONS.iter().take(previous) {
+                conn.execute_batch(sql).unwrap();
+            }
+            conn.pragma_update(None, "user_version", previous as i64)
+                .unwrap();
             conn.execute("INSERT INTO notification(category,title,body,target,created_at,read,delivery) VALUES ('baro','Saved arrival','Full saved text','baro',1000,1,'failed')", []).unwrap();
             conn.execute("INSERT INTO notification_checkpoint(key,stage,at,expires_at) VALUES ('baro:visit',2,1000,5000)", []).unwrap();
             conn.execute("INSERT INTO setting(key,value) VALUES ('notifications-v1','{\"popups\":false,\"categories\":{\"baro\":{\"enabled\":false,\"native\":false}}}')", []).unwrap();
@@ -1009,7 +1076,10 @@ mod notification_tests {
         assert_eq!(rows[0].delivery, "failed");
         assert!(!db.notification_preferences().unwrap().categories["baro"].enabled);
         assert!(!db.notification_preferences().unwrap().popups);
-        assert!(db.insert_notification(&candidate(), 1001, true, true).unwrap().is_none());
+        assert!(db
+            .insert_notification(&candidate(), 1001, true, true)
+            .unwrap()
+            .is_none());
         drop(db);
         std::fs::remove_file(path).unwrap();
     }

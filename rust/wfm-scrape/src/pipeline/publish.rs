@@ -27,9 +27,10 @@ pub(super) fn home_snapshot(snapshot: &Snapshot, out: &Path) -> Result<(), Strin
 }
 
 fn home_projection(mut market: Value) -> Result<Value, String> {
-    let home: Value =
-        serde_json::from_str(include_str!("../../../../tests/fixtures/public-market/home.json"))
-            .map_err(|e| format!("home-market fields: {e}"))?;
+    let home: Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/public-market/home.json"
+    ))
+    .map_err(|e| format!("home-market fields: {e}"))?;
     let omit = home
         .get("omit")
         .and_then(Value::as_array)

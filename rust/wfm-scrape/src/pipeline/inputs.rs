@@ -11,7 +11,10 @@ pub(super) struct BuildInputs {
     pub(super) prior: serde_json::Value,
 }
 
-pub(super) fn prepare(fixtures_dir: Option<&Path>, dirs: Option<&Dirs>) -> Result<BuildInputs, String> {
+pub(super) fn prepare(
+    fixtures_dir: Option<&Path>,
+    dirs: Option<&Dirs>,
+) -> Result<BuildInputs, String> {
     let (http, csv_path, json_out, catalog_out, prior): (
         Box<dyn Http>,
         PathBuf,

@@ -2,6 +2,7 @@ use crate::contracts::{
     Change, Content, EventChange, EventContent, EventOperation, History, Message, Operation,
     Snapshot,
 };
+use announcement_feed::{parse, stamp, AnnouncementFeed};
 use chrono::{SecondsFormat, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
@@ -10,7 +11,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-use announcement_feed::{parse, stamp, AnnouncementFeed};
 
 #[derive(Debug)]
 pub enum Error {

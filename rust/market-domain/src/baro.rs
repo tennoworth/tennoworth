@@ -1,6 +1,6 @@
 //! Baro stock decisions and inventory yield use the same snapshot on every surface.
-use crate::planners::{validate_owned, PlannerOwned};
 use crate::math::sell_priority::LIQUID_VOL;
+use crate::planners::{validate_owned, PlannerOwned};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;

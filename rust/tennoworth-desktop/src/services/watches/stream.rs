@@ -103,7 +103,15 @@ fn stream_catalog(
 pub fn start_stream(app: AppHandle) {
     std::thread::Builder::new()
         .name("watch-stream".into())
-        .spawn(move || wfm_client::governor::with_context(wfm_client::governor::Context { background: true, ..Default::default() }, || run(app)))
+        .spawn(move || {
+            wfm_client::governor::with_context(
+                wfm_client::governor::Context {
+                    background: true,
+                    ..Default::default()
+                },
+                || run(app),
+            )
+        })
         .map(|_| ())
         .unwrap_or_else(|e| eprintln!("tennoworth: watch stream thread failed to start: {e}"));
 }
@@ -111,7 +119,13 @@ pub fn start_stream(app: AppHandle) {
 fn run(app: AppHandle) {
     let mut backoff = BACKOFF_MIN;
     loop {
-        if wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context()).is_err() {
+        if wfm_client::governor::process()
+            .check(
+                wfm_client::governor::Kind::WebSocket,
+                &wfm_client::governor::context(),
+            )
+            .is_err()
+        {
             std::thread::sleep(Duration::from_secs(5));
             continue;
         }
@@ -315,7 +329,7 @@ mod tests {
                 own_ask: None,
                 own_bid: None,
                 error: None,
-            buyer_book: None,
+                buyer_book: None,
             };
             let polled = crate::services::watches::poll::evaluate(&w, Some(&top), 1000);
             assert_eq!(

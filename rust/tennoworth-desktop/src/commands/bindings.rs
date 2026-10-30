@@ -22,7 +22,10 @@ fn desktop_bindings_match_rust() {
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",
         crate::services::watches::poll::EVENT_WATCH_FIRED
     ));
-    expected.push_str(&format!("\nexport const WFM_ACCESS_EVENT = {:?} as const;\n", crate::commands::auth::WFM_ACCESS_EVENT));
+    expected.push_str(&format!(
+        "\nexport const WFM_ACCESS_EVENT = {:?} as const;\n",
+        crate::commands::auth::WFM_ACCESS_EVENT
+    ));
     expected.push_str(&format!(
         "\nexport const INVENTORY_SCANNED_EVENT = {:?} as const;\n",
         crate::services::inventory::acquisition::EVENT_INVENTORY_SCANNED
@@ -30,18 +33,42 @@ fn desktop_bindings_match_rust() {
     // Every other Rust-emitted event name the webview listens for. A name typed
     // on each side compiled and type-checked while the listener never fired.
     for (name, value) in [
-        ("TRADE_DETECTED_EVENT", crate::services::trading::trades::EVENT_TRADE_DETECTED),
-        ("RECORDING_CHANGED_EVENT", crate::services::trading::trades::EVENT_RECORDING_CHANGED),
-        ("ALLOWANCE_CHANGED_EVENT", crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED),
+        (
+            "TRADE_DETECTED_EVENT",
+            crate::services::trading::trades::EVENT_TRADE_DETECTED,
+        ),
+        (
+            "RECORDING_CHANGED_EVENT",
+            crate::services::trading::trades::EVENT_RECORDING_CHANGED,
+        ),
+        (
+            "ALLOWANCE_CHANGED_EVENT",
+            crate::services::game_log::allowance::EVENT_ALLOWANCE_CHANGED,
+        ),
         ("NOTIFICATIONS_EVENT", crate::services::notifications::EVENT),
-        ("MARKET_REFRESHED_EVENT", crate::services::notifications::reminders::MARKET_EVENT),
-        ("ANNOUNCEMENTS_CHANGED_EVENT", crate::services::announcements::EVENT),
-        ("LIVE_TOP_PROGRESS_EVENT", super::market::EVENT_LIVE_TOP_PROGRESS),
+        (
+            "MARKET_REFRESHED_EVENT",
+            crate::services::notifications::reminders::MARKET_EVENT,
+        ),
+        (
+            "ANNOUNCEMENTS_CHANGED_EVENT",
+            crate::services::announcements::EVENT,
+        ),
+        (
+            "LIVE_TOP_PROGRESS_EVENT",
+            super::market::EVENT_LIVE_TOP_PROGRESS,
+        ),
         ("TRAY_HINT_EVENT", crate::shell::tray::EVENT_TRAY_HINT),
-        ("UPDATE_AVAILABLE_EVENT", crate::shell::update::EVENT_UPDATE_AVAILABLE),
+        (
+            "UPDATE_AVAILABLE_EVENT",
+            crate::shell::update::EVENT_UPDATE_AVAILABLE,
+        ),
         ("RELIC_OVERLAY_UPDATE_EVENT", crate::overlay::EVENT_UPDATE),
         ("RELIC_OVERLAY_HIDE_EVENT", crate::overlay::EVENT_HIDE),
-        ("PRESENCE_CHANGED_EVENT", crate::services::wfm::presence::EVENT_PRESENCE_CHANGED),
+        (
+            "PRESENCE_CHANGED_EVENT",
+            crate::services::wfm::presence::EVENT_PRESENCE_CHANGED,
+        ),
     ] {
         expected.push_str(&format!("\nexport const {name} = {value:?} as const;\n"));
     }

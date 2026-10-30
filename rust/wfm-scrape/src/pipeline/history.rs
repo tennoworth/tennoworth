@@ -20,7 +20,9 @@
 use std::collections::HashMap;
 
 use chrono::{Duration, NaiveDate};
-use market_domain::math::{canonical_subtype, drop_poisoned_rows, rank0_rows, subtype_rows, StatsDay};
+use market_domain::math::{
+    canonical_subtype, drop_poisoned_rows, rank0_rows, subtype_rows, StatsDay,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::ingest::Http;
@@ -453,7 +455,11 @@ mod tests {
         let slept = std::cell::RefCell::new(Vec::new());
         let record = |ms: u64| slept.borrow_mut().push(ms);
         update_history(&h, None, &catalog(), d("2026-08-15"), "t0", 3, 3, &record);
-        assert_eq!(*slept.borrow(), vec![1000, 1000], "between fetches, not before the first");
+        assert_eq!(
+            *slept.borrow(),
+            vec![1000, 1000],
+            "between fetches, not before the first"
+        );
     }
 
     #[test]
@@ -483,9 +489,13 @@ mod tests {
         // tier, the float row's trades joined the rank-0 day.
         let mut maxed = closed(80.0, 57.0, None, None);
         maxed["mod_rank"] = serde_json::json!(10.0);
-        let body = serde_json::json!({"Primed Flow": [maxed, closed(20.0, 86.0, Some(Some(0)), None)]});
+        let body =
+            serde_json::json!({"Primed Flow": [maxed, closed(20.0, 86.0, Some(Some(0)), None)]});
         let (rows, _) = parse_day_file(&body, &catalog());
-        assert_eq!(reduce_day(&rows["primed_flow"].rows, None), (Some(20.0), 86));
+        assert_eq!(
+            reduce_day(&rows["primed_flow"].rows, None),
+            (Some(20.0), 86)
+        );
     }
 
     #[test]

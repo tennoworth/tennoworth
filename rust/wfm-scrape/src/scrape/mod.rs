@@ -15,7 +15,6 @@ pub mod orders;
 pub mod stats;
 pub mod stats_cache;
 
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -41,9 +40,25 @@ const API_ROOT: &str = "https://api.warframe.market";
 /// The CSV column order - the keys of `analyze_item`'s dict, in insertion
 /// order, which is also what `csv_input::CsvRow` reads back.
 const HEADER: [&str; 20] = [
-    "url_name", "name", "tags", "ducats", "live_buys", "live_sells", "buy_sell_ratio",
-    "top_buy_price", "low_sell_price", "low5_avg", "spread", "volume_48h", "avg_price_48h",
-    "median_now", "median_90d", "medians_7d", "donch_top_90d", "donch_bot_90d", "score",
+    "url_name",
+    "name",
+    "tags",
+    "ducats",
+    "live_buys",
+    "live_sells",
+    "buy_sell_ratio",
+    "top_buy_price",
+    "low_sell_price",
+    "low5_avg",
+    "spread",
+    "volume_48h",
+    "avg_price_48h",
+    "median_now",
+    "median_90d",
+    "medians_7d",
+    "donch_top_90d",
+    "donch_bot_90d",
+    "score",
     "price_basis",
 ];
 
@@ -100,7 +115,11 @@ pub fn parse_items(items: &Value) -> Vec<CatalogItem> {
             tags: it
                 .get("tags")
                 .and_then(|t| t.as_array())
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
                 .unwrap_or_default(),
             ducats: it.get("ducats").and_then(|d| d.as_i64()),
         });
@@ -174,7 +193,8 @@ pub fn analyze_stats(
     let recent = drop_poisoned_rows(&subtype_rows(&rank0_rows(&recent_all), pick.as_deref()));
     let nineties = drop_poisoned_rows(&subtype_rows(&rank0_rows(&nineties_all), pick.as_deref()));
     let volume_48h: f64 = recent.iter().map(|d| d.volume).sum();
-    let (median_now, median_90d, medians_7d, donch_top_90d, donch_bot_90d) = series_stats(&nineties);
+    let (median_now, median_90d, medians_7d, donch_top_90d, donch_bot_90d) =
+        series_stats(&nineties);
     let avg_price_48h = weighted_avg_48h(&recent, median_90d);
 
     Ok(Some(StatsStage {
@@ -219,25 +239,25 @@ pub fn analyze_orders(
 
     Ok(Some(Analyzed {
         row: AnalyzedRow {
-        url_name: item.slug.clone(),
-        name: item.name.clone(),
-        tags: item.tags.clone(),
-        ducats: item.ducats,
-        live_buys: live_buys.len() as i64,
-        live_sells: live_sells.len() as i64,
-        buy_sell_ratio: round_dp(ratio, 2),
-        top_buy_price: top,
-        low_sell_price: low,
-        low5_avg: low5,
-        spread: spread(low, top),
-        volume_48h,
-        avg_price_48h: round_dp(avg_price_48h, 1),
-        median_now: round_dp(stage.median_now, 1),
-        median_90d: round_dp(median_90d, 1),
-        medians_7d: stage.medians_7d.clone(),
-        donch_top_90d: stage.donch_top_90d,
-        donch_bot_90d: stage.donch_bot_90d,
-        score: round_dp(sc, 1),
+            url_name: item.slug.clone(),
+            name: item.name.clone(),
+            tags: item.tags.clone(),
+            ducats: item.ducats,
+            live_buys: live_buys.len() as i64,
+            live_sells: live_sells.len() as i64,
+            buy_sell_ratio: round_dp(ratio, 2),
+            top_buy_price: top,
+            low_sell_price: low,
+            low5_avg: low5,
+            spread: spread(low, top),
+            volume_48h,
+            avg_price_48h: round_dp(avg_price_48h, 1),
+            median_now: round_dp(stage.median_now, 1),
+            median_90d: round_dp(median_90d, 1),
+            medians_7d: stage.medians_7d.clone(),
+            donch_top_90d: stage.donch_top_90d,
+            donch_bot_90d: stage.donch_bot_90d,
+            score: round_dp(sc, 1),
         },
     }))
 }
@@ -315,11 +335,17 @@ impl AnalyzedRow {
 /// ties keep insertion order).
 pub fn rows_to_csv(rows: &[AnalyzedRow]) -> Result<Vec<u8>, String> {
     let mut sorted: Vec<&AnalyzedRow> = rows.iter().collect();
-    sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    sorted.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     let mut wtr = csv::WriterBuilder::new().from_writer(Vec::new());
-    wtr.write_record(HEADER).map_err(|e| format!("CSV header: {e}"))?;
+    wtr.write_record(HEADER)
+        .map_err(|e| format!("CSV header: {e}"))?;
     for r in &sorted {
-        wtr.write_record(r.to_fields()).map_err(|e| format!("CSV row: {e}"))?;
+        wtr.write_record(r.to_fields())
+            .map_err(|e| format!("CSV row: {e}"))?;
     }
     wtr.into_inner().map_err(|e| format!("CSV flush: {e}"))
 }
@@ -444,7 +470,9 @@ fn scan_item(
     co: &mut Coercions,
 ) -> Result<Scanned, String> {
     let reuse = match (cache, &cfg.stats_cache) {
-        (Some(cache), Some(policy)) if cache.due(&item.slug, cfg.now, policy.interval).is_none() => {
+        (Some(cache), Some(policy))
+            if cache.due(&item.slug, cfg.now, policy.interval).is_none() =>
+        {
             cache.entries.get(&item.slug).cloned()
         }
         _ => None,
@@ -453,20 +481,49 @@ fn scan_item(
     let mut entry = match reuse {
         Some(entry) => entry,
         None => {
-            let stats = fetch_json(http, sleeper, &format!("{API_ROOT}/v1/items/{}/statistics", item.slug)).ok_or_else(|| format!("WFM statistics failed for {}; publication aborted", item.slug))?;
-            stats_cache::Entry { stage: analyze_stats(item, Some(stats), co)?, fetched_at: crate::clock::iso_z(cfg.now), empty_book: false }
+            let stats = fetch_json(
+                http,
+                sleeper,
+                &format!("{API_ROOT}/v1/items/{}/statistics", item.slug),
+            )
+            .ok_or_else(|| {
+                format!(
+                    "WFM statistics failed for {}; publication aborted",
+                    item.slug
+                )
+            })?;
+            stats_cache::Entry {
+                stage: analyze_stats(item, Some(stats), co)?,
+                fetched_at: crate::clock::iso_z(cfg.now),
+                empty_book: false,
+            }
         }
     };
     let stage = match entry.stage.clone() {
         Some(stage) => stage,
-        None => return Ok(Scanned { row: None, entry, fetched }),
+        None => {
+            return Ok(Scanned {
+                row: None,
+                entry,
+                fetched,
+            })
+        }
     };
 
     if stage.volume_48h < cfg.min_volume as f64 {
-        return Ok(Scanned { row: None, entry, fetched });
+        return Ok(Scanned {
+            row: None,
+            entry,
+            fetched,
+        });
     }
 
-    let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug)).ok_or_else(|| format!("WFM orders failed for {}; publication aborted", item.slug))?;
+    let orders = fetch_json(
+        http,
+        sleeper,
+        &format!("{API_ROOT}/v2/orders/item/{}", item.slug),
+    )
+    .ok_or_else(|| format!("WFM orders failed for {}; publication aborted", item.slug))?;
     let analyzed = analyze_orders(item, &stage, Some(orders), co)?;
     if let Some(analyzed) = &analyzed {
         // The book was actually read, so its emptiness is evidence the next
@@ -511,7 +568,12 @@ fn sweep_items(
     cfg: &ScrapeConfig,
     input: SweepInput<'_>,
 ) -> Result<Swept, String> {
-    let SweepInput { items, partial, workers, cache } = input;
+    let SweepInput {
+        items,
+        partial,
+        workers,
+        cache,
+    } = input;
     let next = AtomicUsize::new(0);
     let abort = AtomicBool::new(false);
     let failure: Mutex<Option<String>> = Mutex::new(None);
@@ -521,7 +583,9 @@ fn sweep_items(
     // Declared outside the scope: a spawned thread may outlive any local
     // declared inside the scope closure.
     let report = |message: String| {
-        let mut slot = failure.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut slot = failure
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if slot.is_none() {
             *slot = Some(message);
         }
@@ -612,7 +676,10 @@ fn sweep_items(
     if let Some(e) = write_error {
         return Err(e);
     }
-    if let Some(message) = failure.into_inner().unwrap_or_else(|poisoned| poisoned.into_inner()) {
+    if let Some(message) = failure
+        .into_inner()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+    {
         return Err(message);
     }
     Ok(Swept {
@@ -681,11 +748,21 @@ pub fn run_scrape(
         }
         cache
     });
-    let Swept { rows, coercions, entries, statistics_fetched } = sweep_items(
+    let Swept {
+        rows,
+        coercions,
+        entries,
+        statistics_fetched,
+    } = sweep_items(
         http,
         sleeper,
         cfg,
-        SweepInput { items: &items, partial: &partial, workers, cache: cache.as_ref() },
+        SweepInput {
+            items: &items,
+            partial: &partial,
+            workers,
+            cache: cache.as_ref(),
+        },
     )?;
 
     // A run that kept nothing must not report success: `--out` is never
@@ -731,9 +808,9 @@ pub fn run_scrape(
 mod tests {
     use super::*;
     use crate::scrape::http::{FixtureScrapeHttp, HttpOutcome, NoopSleeper, RecordingSleeper};
-    use std::time::Duration;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::time::Duration;
 
     fn ing(kind: &str, plat: i64) -> Value {
         json!({"type": kind, "platinum": plat, "visible": true, "user": {"status": "ingame"}})
@@ -760,7 +837,10 @@ mod tests {
         );
         r.insert(
             format!("{API_ROOT}/v1/items/volt_prime_barrel/statistics"),
-            stats_days("48hours", json!([{"median": 26, "max_price": 30, "volume": 8, "avg_price": 26.0}])),
+            stats_days(
+                "48hours",
+                json!([{"median": 26, "max_price": 30, "volume": 8, "avg_price": 26.0}]),
+            ),
         );
         // Thin item: only 0 volume in 48h → dropped by min_volume gate.
         r.insert(
@@ -769,7 +849,10 @@ mod tests {
         );
         r.insert(
             format!("{API_ROOT}/v1/items/thin_item/statistics"),
-            stats_days("48hours", json!([{"median": 5, "volume": 0, "avg_price": 5.0}])),
+            stats_days(
+                "48hours",
+                json!([{"median": 5, "volume": 0, "avg_price": 5.0}]),
+            ),
         );
         FixtureScrapeHttp::new(r)
     }
@@ -861,7 +944,10 @@ mod tests {
             // stable sort preserves whatever order the sweep produced.
             responses.insert(
                 format!("{API_ROOT}/v1/items/{slug}/statistics"),
-                stats_days("48hours", json!([{"median": 25, "max_price": 30, "volume": 5, "avg_price": 25.0}])),
+                stats_days(
+                    "48hours",
+                    json!([{"median": 25, "max_price": 30, "volume": 5, "avg_price": 25.0}]),
+                ),
             );
         }
         responses.insert(format!("{API_ROOT}/v2/items"), json!({"data": items}));
@@ -883,8 +969,16 @@ mod tests {
             "the compiled policy allows two requests in flight"
         );
 
-        let completed = http.completed.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        assert_eq!(completed.len(), n * 2 + 1, "catalog + statistics + orders per item");
+        let completed = http
+            .completed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        assert_eq!(
+            completed.len(),
+            n * 2 + 1,
+            "catalog + statistics + orders per item"
+        );
         assert_ne!(
             completed.first().map(String::as_str),
             Some(gate_url.as_str()),
@@ -899,7 +993,9 @@ mod tests {
             .collect();
         assert_eq!(
             slugs,
-            (0..n).map(|i| format!("item_{i:04}")).collect::<Vec<String>>(),
+            (0..n)
+                .map(|i| format!("item_{i:04}"))
+                .collect::<Vec<String>>(),
             "the CSV must be in catalog order, not completion order"
         );
         std::fs::remove_dir_all(&dir).ok();
@@ -923,7 +1019,10 @@ mod tests {
         let http = fixture();
         let summary = run_scrape(&http, &sl, &cfg(&out)).unwrap();
         assert_eq!(summary.scanned, 2);
-        assert!(sl.recorded().is_empty(), "Fixture requests need no real pacing");
+        assert!(
+            sl.recorded().is_empty(),
+            "Fixture requests need no real pacing"
+        );
         assert!(
             !http.was_fetched(&format!("{API_ROOT}/v2/orders/item/thin_item")),
             "orders must not be fetched for an item under the volume gate"
@@ -943,14 +1042,19 @@ mod tests {
         let mut items = Vec::new();
         for i in 0..n {
             let slug = format!("item_{i:04}");
-            items.push(json!({"slug": slug, "i18n": {"en": {"name": slug}}, "tags": [], "ducats": null}));
+            items.push(
+                json!({"slug": slug, "i18n": {"en": {"name": slug}}, "tags": [], "ducats": null}),
+            );
             r.insert(
                 format!("{API_ROOT}/v2/orders/item/{slug}"),
                 json!({"data": [ing("buy", 20), ing("sell", 25)]}),
             );
             r.insert(
                 format!("{API_ROOT}/v1/items/{slug}/statistics"),
-                stats_days("48hours", json!([{"median": 25, "max_price": 30, "volume": 5, "avg_price": 25.0}])),
+                stats_days(
+                    "48hours",
+                    json!([{"median": 25, "max_price": 30, "volume": 5, "avg_price": 25.0}]),
+                ),
             );
         }
         r.insert(format!("{API_ROOT}/v2/items"), json!({"data": items}));
@@ -970,12 +1074,21 @@ mod tests {
         assert_eq!(summary.kept, n);
 
         let partial = out.with_extension("csv.partial");
-        assert!(partial.exists(), "a checkpoint must have written <out>.partial");
+        assert!(
+            partial.exists(),
+            "a checkpoint must have written <out>.partial"
+        );
         let partial_rows = std::fs::read_to_string(&partial).unwrap().lines().count() - 1; // minus header
-        assert_eq!(partial_rows, 100, "the checkpoint captured the first 100 items");
+        assert_eq!(
+            partial_rows, 100,
+            "the checkpoint captured the first 100 items"
+        );
 
         let out_rows = std::fs::read_to_string(&out).unwrap().lines().count() - 1;
-        assert_eq!(out_rows, n, "--out holds the full result set, written once at completion");
+        assert_eq!(
+            out_rows, n,
+            "--out holds the full result set, written once at completion"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -989,12 +1102,18 @@ mod tests {
         for i in 0..n {
             let slug = format!("drift_{i:04}");
             items.push(json!({"slug": slug, "i18n": {"en": {"name": slug}}}));
-            r.insert(format!("{API_ROOT}/v2/orders/item/{slug}"), json!({"data": []}));
+            r.insert(
+                format!("{API_ROOT}/v2/orders/item/{slug}"),
+                json!({"data": []}),
+            );
             // Numeric-string fields - every item adds coercions, so the budget
             // trips well before the scan finishes.
             r.insert(
                 format!("{API_ROOT}/v1/items/{slug}/statistics"),
-                stats_days("48hours", json!([{"median": "5", "volume": "5", "avg_price": "5", "max_price": "9"}])),
+                stats_days(
+                    "48hours",
+                    json!([{"median": "5", "volume": "5", "avg_price": "5", "max_price": "9"}]),
+                ),
             );
         }
         r.insert(format!("{API_ROOT}/v2/items"), json!({"data": items}));
@@ -1015,20 +1134,27 @@ mod tests {
         let err = run_scrape(&FixtureScrapeHttp::new(r), &NoopSleeper, &c).unwrap_err();
         assert!(err.contains("coercions exceed the budget"), "{err}");
         assert!(!out.exists(), "--out is never replaced on an aborted run");
-        assert!(out.with_extension("csv.partial").exists(), ".partial checkpoint survives for post-mortem");
+        assert!(
+            out.with_extension("csv.partial").exists(),
+            ".partial checkpoint survives for post-mortem"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn missing_stats_aborts_without_replacing_previous_csv() {
         let mut fx = fixture();
-        fx.responses.remove(&format!("{API_ROOT}/v1/items/volt_prime_barrel/statistics"));
+        fx.responses
+            .remove(&format!("{API_ROOT}/v1/items/volt_prime_barrel/statistics"));
         let dir = std::env::temp_dir().join(format!("wfmscrape_trunc_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let out = dir.join("run.csv");
         std::fs::write(&out, "previous published CSV").unwrap();
         assert!(run_scrape(&fx, &NoopSleeper, &cfg(&out)).is_err());
-        assert_eq!(std::fs::read_to_string(&out).unwrap(), "previous published CSV");
+        assert_eq!(
+            std::fs::read_to_string(&out).unwrap(),
+            "previous published CSV"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1059,7 +1185,10 @@ mod tests {
         r.insert(format!("{API_ROOT}/v2/orders/item/s"), json!({"data": []}));
         r.insert(
             format!("{API_ROOT}/v1/items/s/statistics"),
-            stats_days("48hours", json!([{"median": "1", "volume": "2", "avg_price": "3", "max_price": "4"}])),
+            stats_days(
+                "48hours",
+                json!([{"median": "1", "volume": "2", "avg_price": "3", "max_price": "4"}]),
+            ),
         );
         let http = FixtureScrapeHttp::new(r);
         let dir = std::env::temp_dir().join(format!("wfmscrape_coerce_{}", std::process::id()));
@@ -1073,7 +1202,12 @@ mod tests {
 
     #[test]
     fn object_valued_field_aborts_with_field_path() {
-        let item = CatalogItem { slug: "goopolla".into(), name: "Goopolla".into(), tags: vec![], ducats: None };
+        let item = CatalogItem {
+            slug: "goopolla".into(),
+            name: "Goopolla".into(),
+            tags: vec![],
+            ducats: None,
+        };
         // analyze_item receives the already-unwrapped payload (fetch_json strips
         // the `payload` envelope before handing it over).
         let stats = json!({"statistics_closed": {"90days": [{"median": {"x": 1}}]}});
@@ -1084,12 +1218,25 @@ mod tests {
 
     #[test]
     fn skips_item_when_orders_missing_or_stats_empty() {
-        let item = CatalogItem { slug: "s".into(), name: "S".into(), tags: vec![], ducats: None };
+        let item = CatalogItem {
+            slug: "s".into(),
+            name: "S".into(),
+            tags: vec![],
+            ducats: None,
+        };
         let mut co = Coercions::new();
         // orders None
-        assert!(analyze_item(&item, None, Some(json!({"statistics_closed": {}})), &mut co).unwrap().is_none());
+        assert!(
+            analyze_item(&item, None, Some(json!({"statistics_closed": {}})), &mut co)
+                .unwrap()
+                .is_none()
+        );
         // stats empty object (falsy)
-        assert!(analyze_item(&item, Some(json!([])), Some(json!({})), &mut co).unwrap().is_none());
+        assert!(
+            analyze_item(&item, Some(json!([])), Some(json!({})), &mut co)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -1124,7 +1271,10 @@ mod tests {
 
     fn cached_cfg(out: &Path, cache: &Path, hours: i64) -> ScrapeConfig {
         ScrapeConfig {
-            stats_cache: Some(StatsCacheConfig { path: cache.to_path_buf(), interval: chrono::Duration::hours(6) }),
+            stats_cache: Some(StatsCacheConfig {
+                path: cache.to_path_buf(),
+                interval: chrono::Duration::hours(6),
+            }),
             now: chrono::DateTime::UNIX_EPOCH + chrono::Duration::hours(hours),
             ..cfg(out)
         }
@@ -1133,7 +1283,10 @@ mod tests {
 
     #[test]
     fn cached_statistics_skip_the_request_and_write_the_same_rows() {
-        assert_eq!(VOLT_STATS, format!("{API_ROOT}/v1/items/volt_prime_barrel/statistics"));
+        assert_eq!(
+            VOLT_STATS,
+            format!("{API_ROOT}/v1/items/volt_prime_barrel/statistics")
+        );
         let dir = std::env::temp_dir().join(format!("wfmscrape_cache_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -1141,13 +1294,19 @@ mod tests {
 
         let first = fixture();
         let summary = run_scrape(&first, &NoopSleeper, &cached_cfg(&out, &cache, 0)).unwrap();
-        assert_eq!((summary.statistics_fetched, summary.statistics_reused), (2, 0));
+        assert_eq!(
+            (summary.statistics_fetched, summary.statistics_reused),
+            (2, 0)
+        );
         let fresh_rows = std::fs::read_to_string(&out).unwrap();
 
         // Two hours later: the book is read again, the statistics are not.
         let second = fixture();
         let summary = run_scrape(&second, &NoopSleeper, &cached_cfg(&out, &cache, 2)).unwrap();
-        assert_eq!((summary.statistics_fetched, summary.statistics_reused), (0, 2));
+        assert_eq!(
+            (summary.statistics_fetched, summary.statistics_reused),
+            (0, 2)
+        );
         assert!(!second.was_fetched(VOLT_STATS));
         assert!(second.was_fetched(&format!("{API_ROOT}/v2/orders/item/volt_prime_barrel")));
         assert_eq!(std::fs::read_to_string(&out).unwrap(), fresh_rows);
@@ -1162,7 +1321,8 @@ mod tests {
 
     #[test]
     fn an_empty_book_or_a_reappearance_refreshes_early_and_a_bad_cache_refreshes_all() {
-        let dir = std::env::temp_dir().join(format!("wfmscrape_cache_triggers_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("wfmscrape_cache_triggers_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let (out, cache) = (dir.join("run.csv"), dir.join("stats-cache.json"));
@@ -1170,14 +1330,20 @@ mod tests {
 
         // The book comes back empty: the next sweep refetches statistics.
         let mut empty = fixture();
-        empty.responses.insert(format!("{API_ROOT}/v2/orders/item/volt_prime_barrel"), json!({"data": []}));
+        empty.responses.insert(
+            format!("{API_ROOT}/v2/orders/item/volt_prime_barrel"),
+            json!({"data": []}),
+        );
         run_scrape(&empty, &NoopSleeper, &cached_cfg(&out, &cache, 2)).unwrap();
         let after_empty = fixture();
         run_scrape(&after_empty, &NoopSleeper, &cached_cfg(&out, &cache, 4)).unwrap();
         assert!(after_empty.was_fetched(VOLT_STATS));
 
         // Absent from one sweep, then back: refetched even though it is fresh.
-        let only_volt = ScrapeConfig { filter: "volt".into(), ..cached_cfg(&out, &cache, 5) };
+        let only_volt = ScrapeConfig {
+            filter: "volt".into(),
+            ..cached_cfg(&out, &cache, 5)
+        };
         run_scrape(&fixture(), &NoopSleeper, &only_volt).unwrap();
         let back = fixture();
         run_scrape(&back, &NoopSleeper, &cached_cfg(&out, &cache, 5)).unwrap();
@@ -1186,7 +1352,12 @@ mod tests {
 
         std::fs::write(&cache, "{not json").unwrap();
         let after_corruption = fixture();
-        let summary = run_scrape(&after_corruption, &NoopSleeper, &cached_cfg(&out, &cache, 5)).unwrap();
+        let summary = run_scrape(
+            &after_corruption,
+            &NoopSleeper,
+            &cached_cfg(&out, &cache, 5),
+        )
+        .unwrap();
         assert_eq!(summary.statistics_fetched, 2);
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -1200,10 +1371,11 @@ mod tests {
         run_scrape(&fixture(), &NoopSleeper, &cached_cfg(&out, &cache, 0)).unwrap();
         let saved = std::fs::read_to_string(&cache).unwrap();
         let mut broken = fixture();
-        broken.responses.remove(&format!("{API_ROOT}/v2/orders/item/volt_prime_barrel"));
+        broken
+            .responses
+            .remove(&format!("{API_ROOT}/v2/orders/item/volt_prime_barrel"));
         assert!(run_scrape(&broken, &NoopSleeper, &cached_cfg(&out, &cache, 7)).is_err());
         assert_eq!(std::fs::read_to_string(&cache).unwrap(), saved);
         std::fs::remove_dir_all(&dir).ok();
     }
-
 }

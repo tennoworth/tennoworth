@@ -109,7 +109,10 @@ pub fn rank0_orders(orders: &[LiveOrder]) -> Vec<LiveOrder> {
 ///
 /// Ties resolve to the FIRST-INSERTED tier, so equal-volume tiers pick the one
 /// seen first.
-pub fn canonical_subtype<T: HasSubtype>(rows: &[T], volume_of: impl Fn(&T) -> f64) -> Option<String> {
+pub fn canonical_subtype<T: HasSubtype>(
+    rows: &[T],
+    volume_of: impl Fn(&T) -> f64,
+) -> Option<String> {
     let mut vols: Vec<(String, f64)> = Vec::new();
     for r in rows {
         if let Some(s) = r.subtype() {
@@ -154,7 +157,11 @@ pub fn subtype_rows<T: HasSubtype + Clone>(rows: &[T], pick: Option<&str>) -> Ve
 /// looks like. 0.0 when there are no live asks. Rounded to 1 decimal with
 /// ties-to-even ([`round_dp`]).
 pub fn avg_lowest_asks(orders: &[LiveOrder], n: usize) -> f64 {
-    let mut prices: Vec<f64> = orders.iter().map(|o| o.platinum).filter(|&p| p > 0.0).collect();
+    let mut prices: Vec<f64> = orders
+        .iter()
+        .map(|o| o.platinum)
+        .filter(|&p| p > 0.0)
+        .collect();
     prices.sort_by(f64::total_cmp);
     prices.truncate(n);
     if prices.is_empty() {
@@ -198,8 +205,16 @@ pub fn series_stats(nineties: &[StatsDay]) -> (f64, f64, Vec<f64>, f64, f64) {
     }
     let median_now = nineties.last().map(|d| d.median).unwrap_or(0.0);
     let nonzero: Vec<f64> = daily.iter().copied().filter(|&m| m > 0.0).collect();
-    let median_90d = if nonzero.is_empty() { median_now } else { stat_median(&nonzero) };
-    let band: &[f64] = if nonzero.is_empty() { &[median_now] } else { &nonzero };
+    let median_90d = if nonzero.is_empty() {
+        median_now
+    } else {
+        stat_median(&nonzero)
+    };
+    let band: &[f64] = if nonzero.is_empty() {
+        &[median_now]
+    } else {
+        &nonzero
+    };
     let top = band.iter().copied().fold(f64::NEG_INFINITY, f64::max);
     let bot = band.iter().copied().fold(f64::INFINITY, f64::min);
     (median_now, median_90d, medians_7d, top, bot)
@@ -218,7 +233,11 @@ pub fn drop_poisoned_rows(rows: &[StatsDay]) -> Vec<StatsDay> {
         .filter(|d| d.median < PLAT_CAP * 0.9 && d.max_price < PLAT_CAP * 0.9)
         .cloned()
         .collect();
-    let mut meds: Vec<f64> = clean.iter().map(|d| d.median).filter(|&m| m > 0.0).collect();
+    let mut meds: Vec<f64> = clean
+        .iter()
+        .map(|d| d.median)
+        .filter(|&m| m > 0.0)
+        .collect();
     meds.sort_by(f64::total_cmp);
     if let Some(&baseline) = meds.get(meds.len() / 2) {
         if baseline > 0.0 {
@@ -281,12 +300,19 @@ pub fn clamp_low5(low5: f64, median_90d: f64, low_sell: f64) -> f64 {
 
 /// Highest live buy price, or 0 when there are no buys.
 pub fn top_buy(buys: &[LiveOrder]) -> f64 {
-    buys.iter().map(|o| o.platinum).reduce(f64::max).unwrap_or(0.0)
+    buys.iter()
+        .map(|o| o.platinum)
+        .reduce(f64::max)
+        .unwrap_or(0.0)
 }
 
 /// Lowest live sell price, or 0 when there are no sells.
 pub fn low_sell(sells: &[LiveOrder]) -> f64 {
-    sells.iter().map(|o| o.platinum).reduce(f64::min).unwrap_or(0.0)
+    sells
+        .iter()
+        .map(|o| o.platinum)
+        .reduce(f64::min)
+        .unwrap_or(0.0)
 }
 
 /// Bid/ask spread when both sides exist. A zero on either
@@ -346,19 +372,38 @@ mod tests {
     }
 
     fn day(median: f64) -> StatsDay {
-        StatsDay { median, ..Default::default() }
+        StatsDay {
+            median,
+            ..Default::default()
+        }
     }
     fn day_rank(median: f64, rank: Option<Option<i64>>) -> StatsDay {
-        StatsDay { median, mod_rank: rank, ..Default::default() }
+        StatsDay {
+            median,
+            mod_rank: rank,
+            ..Default::default()
+        }
     }
     fn day_sub(median: f64, volume: f64, subtype: &str) -> StatsDay {
-        StatsDay { median, volume, subtype: Some(subtype.into()), ..Default::default() }
+        StatsDay {
+            median,
+            volume,
+            subtype: Some(subtype.into()),
+            ..Default::default()
+        }
     }
     fn ask(platinum: f64) -> LiveOrder {
-        LiveOrder { platinum, ..Default::default() }
+        LiveOrder {
+            platinum,
+            ..Default::default()
+        }
     }
     fn ask_rank(platinum: f64, rank: Option<i64>) -> LiveOrder {
-        LiveOrder { platinum, rank, ..Default::default() }
+        LiveOrder {
+            platinum,
+            rank,
+            ..Default::default()
+        }
     }
 
     // ---- drop_poisoned_rows -------------------------------------------
@@ -370,7 +415,11 @@ mod tests {
 
     #[test]
     fn poison_drops_cap_pinned_max_price_even_with_sane_median() {
-        let bad = StatsDay { median: 12.0, max_price: PLAT_CAP, ..Default::default() };
+        let bad = StatsDay {
+            median: 12.0,
+            max_price: PLAT_CAP,
+            ..Default::default()
+        };
         let rows = [day(10.0), bad];
         assert_eq!(drop_poisoned_rows(&rows), vec![rows[0].clone()]);
     }
@@ -415,7 +464,10 @@ mod tests {
 
     #[test]
     fn rank0_filters_max_rank_tier() {
-        let rows = [day_rank(60.0, Some(Some(0))), day_rank(160.0, Some(Some(10)))];
+        let rows = [
+            day_rank(60.0, Some(Some(0))),
+            day_rank(160.0, Some(Some(10))),
+        ];
         assert_eq!(rank0_rows(&rows), vec![rows[0].clone()]);
     }
 
@@ -423,7 +475,10 @@ mod tests {
     fn rank0_all_max_rank_returns_empty_not_inflated() {
         // The Primed-mod regression: only-max-rank window = "no rank-0
         // activity", not max-rank prices wearing a rank-0 label.
-        let rows = [day_rank(160.0, Some(Some(10))), day_rank(179.0, Some(Some(10)))];
+        let rows = [
+            day_rank(160.0, Some(Some(10))),
+            day_rank(179.0, Some(Some(10))),
+        ];
         assert_eq!(rank0_rows(&rows), vec![]);
     }
 
@@ -436,7 +491,11 @@ mod tests {
     // ---- rank0_orders --------------------------------------------------
     #[test]
     fn rank0_orders_drops_ranked_tiers() {
-        let book = [ask_rank(30.0, Some(3)), ask_rank(35.0, Some(0)), ask_rank(40.0, Some(0))];
+        let book = [
+            ask_rank(30.0, Some(3)),
+            ask_rank(35.0, Some(0)),
+            ask_rank(40.0, Some(0)),
+        ];
         let kept: Vec<f64> = rank0_orders(&book).iter().map(|o| o.platinum).collect();
         assert_eq!(kept, vec![35.0, 40.0]);
     }
@@ -478,13 +537,19 @@ mod tests {
     #[test]
     fn subtype_falls_back_to_dominant_volume_without_intact() {
         let rows = [day_sub(3.0, 40.0, "raw"), day_sub(9.0, 2.0, "cut")];
-        assert_eq!(canonical_subtype(&rows, |d| d.volume).as_deref(), Some("raw"));
+        assert_eq!(
+            canonical_subtype(&rows, |d| d.volume).as_deref(),
+            Some("raw")
+        );
     }
 
     #[test]
     fn subtype_tie_resolves_to_first_seen() {
         let rows = [day_sub(3.0, 10.0, "raw"), day_sub(9.0, 10.0, "cut")];
-        assert_eq!(canonical_subtype(&rows, |d| d.volume).as_deref(), Some("raw"));
+        assert_eq!(
+            canonical_subtype(&rows, |d| d.volume).as_deref(),
+            Some("raw")
+        );
     }
 
     #[test]
@@ -496,8 +561,10 @@ mod tests {
     // ---- avg_lowest_asks -------------------------------------------------
     #[test]
     fn avg_lowest_asks_takes_cheapest_n() {
-        let orders: Vec<LiveOrder> =
-            [30.0, 12.0, 50.0, 14.0, 11.0, 200.0, 13.0].iter().map(|&p| ask(p)).collect();
+        let orders: Vec<LiveOrder> = [30.0, 12.0, 50.0, 14.0, 11.0, 200.0, 13.0]
+            .iter()
+            .map(|&p| ask(p))
+            .collect();
         assert_eq!(avg_lowest_asks(&orders, 5), 16.0); // 11,12,13,14,30
     }
 
@@ -529,7 +596,10 @@ mod tests {
 
     #[test]
     fn series_stats_splits_now_from_baseline_and_recomputes_band() {
-        let rows: Vec<StatsDay> = [10.0, 12.0, 8.0, 14.0, 11.0].iter().map(|&m| day(m)).collect();
+        let rows: Vec<StatsDay> = [10.0, 12.0, 8.0, 14.0, 11.0]
+            .iter()
+            .map(|&m| day(m))
+            .collect();
         let (now, base, sevens, top, bot) = series_stats(&rows);
         assert_eq!(now, 11.0); // latest day, not the baseline
         assert_eq!(base, 11.0); // median of [8,10,11,12,14]
@@ -551,23 +621,43 @@ mod tests {
     fn weighted_avg_ignores_outlier_days() {
         // deimos_heart_scene: one 500p sale against a 9p baseline.
         let recent = [
-            StatsDay { avg_price: 500.0, volume: 1.0, ..Default::default() },
-            StatsDay { avg_price: 10.0, volume: 4.0, ..Default::default() },
+            StatsDay {
+                avg_price: 500.0,
+                volume: 1.0,
+                ..Default::default()
+            },
+            StatsDay {
+                avg_price: 10.0,
+                volume: 4.0,
+                ..Default::default()
+            },
         ];
         assert_eq!(weighted_avg_48h(&recent, 9.0), 10.0);
     }
 
     #[test]
     fn weighted_avg_falls_back_to_median_when_all_outliers() {
-        let recent = [StatsDay { avg_price: 500.0, volume: 1.0, ..Default::default() }];
+        let recent = [StatsDay {
+            avg_price: 500.0,
+            volume: 1.0,
+            ..Default::default()
+        }];
         assert_eq!(weighted_avg_48h(&recent, 9.0), 9.0);
     }
 
     #[test]
     fn weighted_avg_no_baseline_weights_everything() {
         let recent = [
-            StatsDay { avg_price: 10.0, volume: 1.0, ..Default::default() },
-            StatsDay { avg_price: 20.0, volume: 3.0, ..Default::default() },
+            StatsDay {
+                avg_price: 10.0,
+                volume: 1.0,
+                ..Default::default()
+            },
+            StatsDay {
+                avg_price: 20.0,
+                volume: 3.0,
+                ..Default::default()
+            },
         ];
         assert_eq!(weighted_avg_48h(&recent, 0.0), 17.5);
     }

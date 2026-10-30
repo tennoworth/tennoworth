@@ -70,4 +70,3 @@ pub fn run(args: &[&str], cwd: &Path) -> std::process::Output {
         .output()
         .expect("run wfm-scrape")
 }
-

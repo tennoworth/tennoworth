@@ -1,7 +1,7 @@
 use super::recognition::*;
-use crate::vision::ocr::TsvLine;
 use super::*;
 use crate::services::market::sellables::{OverlayCatalogItem, OverlayMarketFacts};
+use crate::vision::ocr::TsvLine;
 use image::{imageops::FilterType, RgbaImage};
 use std::collections::HashMap;
 
@@ -60,20 +60,31 @@ fn exact_and_guarded_fuzzy_matches_resolve_but_noise_does_not() {
 #[test]
 fn a_reward_is_not_read_as_a_shorter_name_hidden_inside_it() {
     let names = [
-        "Bo Prime Blueprint", "Limbo Prime Blueprint",
-        "Fang Prime Blade", "Sarofang Prime Blade",
-        "Lex Prime Blueprint", "Aklex Prime Blueprint",
-        "Bronco Prime Blueprint", "Akbronco Prime Blueprint",
+        "Bo Prime Blueprint",
+        "Limbo Prime Blueprint",
+        "Fang Prime Blade",
+        "Sarofang Prime Blade",
+        "Lex Prime Blueprint",
+        "Aklex Prime Blueprint",
+        "Bronco Prime Blueprint",
+        "Akbronco Prime Blueprint",
     ];
     let catalog: Vec<OverlayCatalogItem> = names
         .iter()
-        .map(|name| OverlayCatalogItem { name: (*name).into(), slug: None })
+        .map(|name| OverlayCatalogItem {
+            name: (*name).into(),
+            slug: None,
+        })
         .collect();
     for name in names {
         // As the reward screen wraps it: the last word on its own line.
         let (head, tail) = name.rsplit_once(' ').unwrap();
         let got = match_ocr_lines(&format!("{head}\n{tail}"), &catalog);
-        assert_eq!(got.first().map(|m| m.item.name.as_str()), Some(name), "{got:?}");
+        assert_eq!(
+            got.first().map(|m| m.item.name.as_str()),
+            Some(name),
+            "{got:?}"
+        );
     }
 }
 
@@ -989,7 +1000,12 @@ fn real_three_reward_capture_survives_common_display_shapes() {
         let mut timings = OverlayStageTimings::default();
         let started = std::time::Instant::now();
         let expected = read_expected_layout(&ocr, &frame, &candidates, 3, None, &mut timings)
-            .unwrap_or_else(|error| panic!("{label} expected path after {:?}: {error}; timings={timings:?}", started.elapsed()));
+            .unwrap_or_else(|error| {
+                panic!(
+                    "{label} expected path after {:?}: {error}; timings={timings:?}",
+                    started.elapsed()
+                )
+            });
         assert!(
             layout_read_is_complete(&expected, 3),
             "{label} expected path"
@@ -1003,6 +1019,9 @@ fn real_three_reward_capture_survives_common_display_shapes() {
             consensus.resolve(3, true).is_some(),
             "{label} centered path"
         );
-        eprintln!("{label}: elapsed={:?}; timings={timings:?}", started.elapsed());
+        eprintln!(
+            "{label}: elapsed={:?}; timings={timings:?}",
+            started.elapsed()
+        );
     }
 }

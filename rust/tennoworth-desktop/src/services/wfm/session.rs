@@ -14,20 +14,20 @@
 //! `needs_login` (no login file on this machine) or `needs_unlock` (login file
 //! present, session locked) so the SPA can raise the login or passphrase modal -
 //! the desktop analogue of serve's 401 `needs_login:true` vs 503 split.
+use crate::poison::guard;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use crate::poison::guard;
 
-use wfm_trading::paths::{config_dir_for, default_jwt_path};
-use wfm_trading::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_trading::auth::{
     decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, validate_passphrase, validate_platform,
     EncryptedJwt,
 };
 use wfm_trading::orders::listing::{warm_unlocked, Unlocked};
 use wfm_trading::orders::plan::PlanGuard;
+use wfm_trading::paths::{config_dir_for, default_jwt_path};
+use wfm_trading::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use zeroize::Zeroize;
 
 use crate::contracts::command_error::CmdError;
@@ -128,14 +128,19 @@ pub struct PlanRequestScope {
 }
 impl PlanRequestScope {
     pub fn context(&self) -> wfm_client::governor::Context {
-        wfm_client::governor::Context { cancelled: Some(self.cancelled.clone()), ..Default::default() }
+        wfm_client::governor::Context {
+            cancelled: Some(self.cancelled.clone()),
+            ..Default::default()
+        }
     }
 }
 impl Drop for PlanRequestScope {
     fn drop(&mut self) {
         let mut requests = guard(&self.requests);
         requests.pending.remove(&self.id);
-        if requests.completed.len() >= wfm_client::governor::MAX_QUEUE { requests.completed.pop_front(); }
+        if requests.completed.len() >= wfm_client::governor::MAX_QUEUE {
+            requests.completed.pop_front();
+        }
         requests.completed.push_back(self.id.clone());
     }
 }
@@ -363,27 +368,55 @@ impl WfmSession {
     }
 
     fn request_token(&self, id: &str, claim: bool) -> Result<Option<Arc<AtomicBool>>, CmdError> {
-        if id.is_empty() || id.len() > 64 || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
+        if id.is_empty()
+            || id.len() > 64
+            || !id
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        {
             return Err(CmdError::of("wfm", "Invalid listing request identity."));
         }
         let mut requests = guard(&self.plan_requests);
-        if requests.completed.iter().any(|completed| completed == id) { return Ok(None); }
-        if requests.pending.len() >= wfm_client::governor::MAX_QUEUE && !requests.pending.contains_key(id) {
-            return Err(CmdError::of("busy", "Too many listing requests are waiting."));
+        if requests.completed.iter().any(|completed| completed == id) {
+            return Ok(None);
         }
-        let entry = requests.pending.entry(id.into()).or_insert_with(|| (Arc::new(AtomicBool::new(false)), false));
+        if requests.pending.len() >= wfm_client::governor::MAX_QUEUE
+            && !requests.pending.contains_key(id)
+        {
+            return Err(CmdError::of(
+                "busy",
+                "Too many listing requests are waiting.",
+            ));
+        }
+        let entry = requests
+            .pending
+            .entry(id.into())
+            .or_insert_with(|| (Arc::new(AtomicBool::new(false)), false));
         if claim {
-            if entry.1 { return Err(CmdError::of("busy", "This listing request is already running.")); }
+            if entry.1 {
+                return Err(CmdError::of(
+                    "busy",
+                    "This listing request is already running.",
+                ));
+            }
             entry.1 = true;
         }
         Ok(Some(entry.0.clone()))
     }
     pub fn claim_plan_request(&self, id: String) -> Result<PlanRequestScope, CmdError> {
-        let cancelled = self.request_token(&id, true)?.ok_or_else(|| CmdError::of("busy", "This listing request already finished."))?;
-        Ok(PlanRequestScope { requests: self.plan_requests.clone(), id, cancelled })
+        let cancelled = self
+            .request_token(&id, true)?
+            .ok_or_else(|| CmdError::of("busy", "This listing request already finished."))?;
+        Ok(PlanRequestScope {
+            requests: self.plan_requests.clone(),
+            id,
+            cancelled,
+        })
     }
     pub fn cancel_plan(&self, id: &str) -> Result<(), CmdError> {
-        if let Some(token) = self.request_token(id, false)? { token.store(true, std::sync::atomic::Ordering::Release); }
+        if let Some(token) = self.request_token(id, false)? {
+            token.store(true, std::sync::atomic::Ordering::Release);
+        }
         Ok(())
     }
 
@@ -453,7 +486,10 @@ impl WfmSession {
         // replaced file; neither may overwrite the newer sign-in's keyring entry.
         // Sign-in leaves the generation alone, so only the file shows it.
         // The re-read stays outside the session lock, as the keyring call does.
-        if self.read_blob().is_ok_and(|current| current.kdf.salt == salt) {
+        if self
+            .read_blob()
+            .is_ok_and(|current| current.kdf.salt == salt)
+        {
             let intent = if remember {
                 KeyringIntent::Remember(&key)
             } else {
@@ -749,7 +785,8 @@ mod tests {
         // The logout runs first, then the interrupted unlock reaches the keyring
         // with the generation it captured before its session was discarded.
         let read_generation = s.session_generation();
-        s.logout().expect("logout lands while the unlock is still in flight");
+        s.logout()
+            .expect("logout lands while the unlock is still in flight");
         s.apply_keyring(read_generation, KeyringIntent::Remember(&[7_u8; 32]));
 
         // The logout's own forget is permitted; the straggler's store is not.
@@ -782,7 +819,9 @@ mod tests {
         let mut s = keyring_session("keyring-unlock-vs-sign-in");
         s.warm_hook = Some(|session, _jwt, _platform| {
             let signed_in = encrypt_jwt("jwt.newer.sig", PASSPHRASE, "pc").expect("encrypt");
-            session.persist(&signed_in).expect("sign-in writes its login file");
+            session
+                .persist(&signed_in)
+                .expect("sign-in writes its login file");
             Ok(dummy_unlocked())
         });
 
@@ -798,7 +837,9 @@ mod tests {
         let mut s = keyring_session("keyring-forget-vs-sign-in");
         s.warm_hook = Some(|session, _jwt, _platform| {
             let signed_in = encrypt_jwt("jwt.newer.sig", PASSPHRASE, "pc").expect("encrypt");
-            session.persist(&signed_in).expect("sign-in writes its login file");
+            session
+                .persist(&signed_in)
+                .expect("sign-in writes its login file");
             let key = derive_jwt_key(&signed_in, PASSPHRASE).expect("sign-in key");
             session.apply_keyring(session.session_generation(), KeyringIntent::Remember(&key));
             Ok(dummy_unlocked())
@@ -806,7 +847,11 @@ mod tests {
 
         s.unlock(PASSPHRASE, false).expect("unlock publishes");
 
-        assert_eq!(keyring_log(), vec![(true, true)], "the newer sign-in's key must survive");
+        assert_eq!(
+            keyring_log(),
+            vec![(true, true)],
+            "the newer sign-in's key must survive"
+        );
         fs::remove_file(&s.jwt_path).expect("remove login fixture");
     }
 
@@ -868,7 +913,10 @@ mod tests {
         let mut s = keyring_session("keyring-silent-forget");
         s.key_read_hook = Some(next_key_read);
 
-        assert!(!s.try_silent_unlock(), "the key does not open the login file");
+        assert!(
+            !s.try_silent_unlock(),
+            "the key does not open the login file"
+        );
         keyring_log()
     }
 
@@ -885,7 +933,10 @@ mod tests {
     /// and is removed.
     #[test]
     fn a_silent_unlock_forgets_a_key_that_no_longer_opens_the_login() {
-        assert_eq!(silent_unlock_forgets([[1; 32], [1; 32]]), vec![(false, true)]);
+        assert_eq!(
+            silent_unlock_forgets([[1; 32], [1; 32]]),
+            vec![(false, true)]
+        );
     }
 
     #[test]
@@ -1068,7 +1119,13 @@ mod tests {
         let s = session_with(path.clone());
         let generation = s.session_generation();
         let err = s
-            .login(generation, "header.payload.sig".into(), "short", "pc", false)
+            .login(
+                generation,
+                "header.payload.sig".into(),
+                "short",
+                "pc",
+                false,
+            )
             .unwrap_err();
         assert!(err.message.contains("12 characters"));
         assert!(!path.exists());
@@ -1098,14 +1155,21 @@ mod tests {
         session.cancel_plan("first").unwrap();
         let first = session.claim_plan_request("first".into()).unwrap();
         let running = session.begin_plan().unwrap();
-        assert!(matches!(wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &first.context()), Err(wfm_client::governor::AccessError::Cancelled)));
+        assert!(matches!(
+            wfm_client::governor::process()
+                .check(wfm_client::governor::Kind::Mutation, &first.context()),
+            Err(wfm_client::governor::AccessError::Cancelled)
+        ));
         assert!(session.claim_plan_request("first".into()).is_err());
-        drop(running); drop(first);
+        drop(running);
+        drop(first);
         session.cancel_plan("first").unwrap();
         assert!(guard(&session.plan_requests).pending.is_empty());
         let resumed = session.claim_plan_request("resume".into()).unwrap();
         let _running = session.begin_plan().unwrap();
-        assert!(wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &resumed.context()).is_ok());
+        assert!(wfm_client::governor::process()
+            .check(wfm_client::governor::Kind::Mutation, &resumed.context())
+            .is_ok());
     }
 
     #[test]
@@ -1198,7 +1262,9 @@ mod tests {
         let path = tmp_path("logout-during-unlock");
         let mut session = session_with(path.clone());
         session.warm_hook = Some(logout_during_warm);
-        session.debug_write_login("probe-pass-123456").expect("login is written");
+        session
+            .debug_write_login("probe-pass-123456")
+            .expect("login is written");
 
         let _ = session.unlock("probe-pass-123456", false);
 
@@ -1207,7 +1273,10 @@ mod tests {
             (false, false),
             "a logout that completed during the unlock must win"
         );
-        assert!(session.require_unlocked().is_err(), "no usable credentials remain");
+        assert!(
+            session.require_unlocked().is_err(),
+            "no usable credentials remain"
+        );
         let _ = fs::remove_file(&path);
     }
 
@@ -1229,7 +1298,9 @@ mod tests {
         let path = tmp_path("unlock-without-logout");
         let mut session = session_with(path.clone());
         session.warm_hook = Some(successful_warm);
-        session.debug_write_login("probe-pass-123456").expect("login is written");
+        session
+            .debug_write_login("probe-pass-123456")
+            .expect("login is written");
 
         let result = session.unlock("probe-pass-123456", false);
 
@@ -1254,7 +1325,11 @@ mod tests {
             *guard(&LOGOUT) = Some(std::thread::spawn(move || session.logout()));
             std::thread::sleep(std::time::Duration::from_millis(300));
         }
-        fn successful_warm(_: &WfmSession, jwt: String, platform: String) -> Result<Unlocked, CmdError> {
+        fn successful_warm(
+            _: &WfmSession,
+            jwt: String,
+            platform: String,
+        ) -> Result<Unlocked, CmdError> {
             let mut prepared = dummy_unlocked();
             prepared.jwt = jwt;
             prepared.platform = platform;
@@ -1268,11 +1343,23 @@ mod tests {
         let session = SESSION.get_or_init(|| Arc::new(session));
         let generation = session.session_generation();
 
-        let _ = session.login(generation, "header.payload.sig".into(), "a-long-enough-passphrase", "pc", false);
+        let _ = session.login(
+            generation,
+            "header.payload.sig".into(),
+            "a-long-enough-passphrase",
+            "pc",
+            false,
+        );
         let logout = guard(&LOGOUT).take().expect("the hook started a logout");
-        logout.join().expect("logout thread").expect("logout succeeds");
+        logout
+            .join()
+            .expect("logout thread")
+            .expect("logout succeeds");
 
-        assert!(!path.exists(), "the logout's removal must not be undone by the login");
+        assert!(
+            !path.exists(),
+            "the logout's removal must not be undone by the login"
+        );
         assert_eq!(session.auth_status(), (false, false));
     }
 }

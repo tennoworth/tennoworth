@@ -27,7 +27,9 @@ pub struct ParsedOrder {
 /// [`parse_orders`], so one pass keeps both buy and sell survivors.
 fn is_live(o: &Value) -> bool {
     let status_ok = matches!(
-        o.get("user").and_then(|u| u.get("status")).and_then(|s| s.as_str()),
+        o.get("user")
+            .and_then(|u| u.get("status"))
+            .and_then(|s| s.as_str()),
         Some("ingame") | Some("online")
     );
     // Absent → visible; a present value is
@@ -45,7 +47,11 @@ fn is_live(o: &Value) -> bool {
 /// FIELD-READ PARITY: the liveness filter (side ∈ {buy, sell}, status, visible)
 /// runs BEFORE any coercion, so `platinum` is coerced only on orders that
 /// count - never on a dead one.
-pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Result<Vec<ParsedOrder>, String> {
+pub fn parse_orders(
+    orders: &Value,
+    url_name: &str,
+    co: &mut Coercions,
+) -> Result<Vec<ParsedOrder>, String> {
     let arr = match orders.as_array() {
         Some(a) => a,
         None => return Ok(vec![]),
@@ -68,13 +74,18 @@ pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Resul
         }
         let path = format!("{url_name}.orders[{i}]");
         let platinum = coerce_field(o, "platinum", &format!("{path}.platinum"), co)?;
-        let Some(platinum) = wfm_client::unit_price(platinum, o.get("perTrade")) else { continue };
+        let Some(platinum) = wfm_client::unit_price(platinum, o.get("perTrade")) else {
+            continue;
+        };
         out.push(ParsedOrder {
             otype: otype.to_string(),
             order: LiveOrder {
                 platinum,
                 rank: parse_rank(o.get("rank")),
-                subtype: o.get("subtype").and_then(|s| s.as_str()).map(|s| s.to_string()),
+                subtype: o
+                    .get("subtype")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.to_string()),
             },
         });
     }
@@ -122,9 +133,15 @@ mod tests {
         ]);
         let parsed = parse(&v);
         let buys = live_orders(&parsed, "buy");
-        assert_eq!(buys.iter().map(|o| o.platinum).collect::<Vec<_>>(), vec![30.0, 25.0]);
+        assert_eq!(
+            buys.iter().map(|o| o.platinum).collect::<Vec<_>>(),
+            vec![30.0, 25.0]
+        );
         let sells = live_orders(&parsed, "sell");
-        assert_eq!(sells.iter().map(|o| o.platinum).collect::<Vec<_>>(), vec![40.0]);
+        assert_eq!(
+            sells.iter().map(|o| o.platinum).collect::<Vec<_>>(),
+            vec![40.0]
+        );
     }
 
     #[test]
@@ -140,7 +157,13 @@ mod tests {
             {"type":"sell", "platinum":36, "perTrade":5, "user":{"status":"online"}},
             {"type":"sell", "platinum":1, "perTrade":0, "user":{"status":"online"}}
         ]);
-        assert_eq!(live_orders(&parse(&v), "sell").iter().map(|o| o.platinum).collect::<Vec<_>>(), vec![8.0, 7.2]);
+        assert_eq!(
+            live_orders(&parse(&v), "sell")
+                .iter()
+                .map(|o| o.platinum)
+                .collect::<Vec<_>>(),
+            vec![8.0, 7.2]
+        );
     }
 
     #[test]
@@ -174,7 +197,10 @@ mod tests {
     #[test]
     fn subtype_is_carried_through() {
         let v = json!([{"type": "sell", "platinum": 10, "subtype": "intact", "user": {"status": "ingame"}}]);
-        assert_eq!(live_orders(&parse(&v), "sell")[0].subtype.as_deref(), Some("intact"));
+        assert_eq!(
+            live_orders(&parse(&v), "sell")[0].subtype.as_deref(),
+            Some("intact")
+        );
     }
 
     #[test]
@@ -201,7 +227,10 @@ mod tests {
         ]);
         let parsed = parse_orders(&v, "slug", &mut co).unwrap();
         assert_eq!(
-            live_orders(&parsed, "sell").iter().map(|o| o.platinum).collect::<Vec<_>>(),
+            live_orders(&parsed, "sell")
+                .iter()
+                .map(|o| o.platinum)
+                .collect::<Vec<_>>(),
             vec![25.0]
         );
         // The "77" numeric-string sat in an invisible (dead) order → uncounted.

@@ -397,7 +397,8 @@ mod tests {
     #[test]
     fn aggregate_contract_matches_shared_fixture() {
         let fixture: Daily =
-            serde_json::from_str(include_str!("../../../../tests/fixtures/usage/daily.json")).unwrap();
+            serde_json::from_str(include_str!("../../../../tests/fixtures/usage/daily.json"))
+                .unwrap();
         assert_eq!(fixture.days.len(), 3);
         assert_eq!(fixture.days[1].count, 0);
         assert!(!fixture.days[2].complete);
@@ -466,7 +467,10 @@ mod tests {
         store.tick(day, true).unwrap();
         store
             .conn
-            .execute("INSERT INTO seen VALUES (?1, ?2)", ("2026-09-14", vec![0u8; 32]))
+            .execute(
+                "INSERT INTO seen VALUES (?1, ?2)",
+                ("2026-09-14", vec![0u8; 32]),
+            )
             .unwrap();
         store
             .accept(&format!("2026-09-15.{}", "a".repeat(64)), day)
@@ -486,7 +490,8 @@ mod tests {
     }
 
     #[test]
-    fn a_new_day_clears_the_previous_days_dedup_rows() {        // The prune still has to happen - just once, at the rollover.
+    fn a_new_day_clears_the_previous_days_dedup_rows() {
+        // The prune still has to happen - just once, at the rollover.
         let mut store = Store::new(Connection::open_in_memory().unwrap()).unwrap();
         let day1 = at("2026-09-14T12:00:00Z");
         store.tick(day1, true).unwrap();

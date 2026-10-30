@@ -120,7 +120,10 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(EVENT, v["event"]);
-        assert_eq!(crate::services::notifications::reminders::MARKET_EVENT, v["market_event"]);
+        assert_eq!(
+            crate::services::notifications::reminders::MARKET_EVENT,
+            v["market_event"]
+        );
         assert_eq!(
             serde_json::to_value(crate::contracts::notification::CATEGORIES).unwrap(),
             v["categories"]

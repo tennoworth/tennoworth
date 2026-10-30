@@ -6,8 +6,8 @@ pub const EVENT_ALLOWANCE_CHANGED: &str = "trade-allowance-changed";
 
 #[cfg(test)]
 mod tests {
-    use crate::contracts::trading::{Confidence, LogPosition};
     use super::*;
+    use crate::contracts::trading::{Confidence, LogPosition};
 
     #[test]
     fn event_name_matches_the_frontend_fixture() {

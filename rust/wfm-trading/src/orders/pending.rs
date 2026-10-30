@@ -96,13 +96,18 @@ pub fn write_pending_atomic(path: &Path, plan: &PendingPlan) -> Result<()> {
     // contain unsubmitted listing details, not OK to leak to other local
     // users even briefly.
     write_restricted(&tmp, &bytes)?;
-    fs::OpenOptions::new().write(true).open(&tmp)?.sync_all()
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&tmp)?
+        .sync_all()
         .context("syncing pending-plan contents")?;
     fs::rename(&tmp, path)
         .with_context(|| format!("renaming {} → {}", tmp.display(), path.display()))?;
     #[cfg(unix)]
     if let Some(parent) = path.parent() {
-        fs::File::open(parent)?.sync_all().context("syncing pending-plan directory")?;
+        fs::File::open(parent)?
+            .sync_all()
+            .context("syncing pending-plan directory")?;
     }
     // chown the final path back to the real user so a sudo invocation of
     // `serve` doesn't leave a root-owned file in their config dir.
@@ -127,7 +132,9 @@ impl std::fmt::Display for PendingStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unreadable(detail) => write!(f, "the saved batch could not be read: {detail}"),
-            Self::Undeletable(detail) => write!(f, "the saved batch could not be removed: {detail}"),
+            Self::Undeletable(detail) => {
+                write!(f, "the saved batch could not be removed: {detail}")
+            }
         }
     }
 }
@@ -167,7 +174,10 @@ pub fn journal_state(path: &Path) -> JournalState {
 pub fn load_pending(path: &Path) -> Result<Option<PendingPlan>, PendingStoreError> {
     match fs::read(path) {
         Ok(data) => serde_json::from_slice(&data).map(Some).map_err(|e| {
-            PendingStoreError::Unreadable(format!("{} is not a readable batch: {e}", path.display()))
+            PendingStoreError::Unreadable(format!(
+                "{} is not a readable batch: {e}",
+                path.display()
+            ))
         }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(PendingStoreError::Unreadable(format!(
@@ -271,7 +281,10 @@ mod tests {
         let plan = sample_plan();
         let bytes = serde_json::to_vec(&plan).unwrap();
         let restored: PendingPlan = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(crate::orders::plan::PlanItem::from(&restored.items[0]).inventory_snapshot_id, Some(7));
+        assert_eq!(
+            crate::orders::plan::PlanItem::from(&restored.items[0]).inventory_snapshot_id,
+            Some(7)
+        );
     }
 
     #[test]

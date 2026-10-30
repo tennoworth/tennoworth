@@ -25,23 +25,42 @@ fn main() -> std::process::ExitCode {
     };
     let live = extract_flag(&args, "--fixtures-dir").is_none();
     let dirs = if live && command == "build" {
-        match Dirs::resolve(extract_flag(&args, "--data-dir").map(PathBuf::from), extract_flag(&args, "--publish-dir").map(PathBuf::from)) {
+        match Dirs::resolve(
+            extract_flag(&args, "--data-dir").map(PathBuf::from),
+            extract_flag(&args, "--publish-dir").map(PathBuf::from),
+        ) {
             Ok(dirs) => Some(dirs),
-            Err(error) => { eprintln!("error: {error}"); return std::process::ExitCode::FAILURE; }
+            Err(error) => {
+                eprintln!("error: {error}");
+                return std::process::ExitCode::FAILURE;
+            }
         }
-    } else { None };
+    } else {
+        None
+    };
     // The lock directory also holds the WFM cooldown and policy state, so
     // `scrape` and `build` must name the same one: the CSV's directory.
     let _output_lock = if live && matches!(command.as_str(), "scrape" | "build") {
         let directory = match &dirs {
             Some(dirs) => dirs.data.clone(),
-            None => PathBuf::from(extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())).parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new(".")).to_path_buf(),
+            None => PathBuf::from(
+                extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into()),
+            )
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."))
+            .to_path_buf(),
         };
         match acquire_output(&directory) {
             Ok(file) => Some(file),
-            Err(error) => { eprintln!("{error}"); return std::process::ExitCode::FAILURE; }
+            Err(error) => {
+                eprintln!("{error}");
+                return std::process::ExitCode::FAILURE;
+            }
         }
-    } else { None };
+    } else {
+        None
+    };
     let result = match command.as_str() {
         "history" => run_history_cmd(&args),
         "build" => {
@@ -63,12 +82,16 @@ fn main() -> std::process::ExitCode {
         let published = if command == "scrape" {
             extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())
         } else {
-            dirs.as_ref().map_or_else(|| "frontend/public/market.json".to_string(), |dirs| dirs.publish.join("market.json").display().to_string())
+            dirs.as_ref().map_or_else(
+                || "frontend/public/market.json".to_string(),
+                |dirs| dirs.publish.join("market.json").display().to_string(),
+            )
         };
         eprintln!(
             "{}",
-            wfm_scrape::scrape::http::metrics()
-                .line(wfm_scrape::scrape::http::snapshot_age_s(std::path::Path::new(&published)))
+            wfm_scrape::scrape::http::metrics().line(wfm_scrape::scrape::http::snapshot_age_s(
+                std::path::Path::new(&published)
+            ))
         );
     }
     match result {
@@ -81,9 +104,16 @@ fn main() -> std::process::ExitCode {
 }
 
 fn acquire_output(directory: &Path) -> Result<std::fs::File, String> {
-    let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(directory.join(".wfm-output.lock")).map_err(|e| format!("Opening scrape lock: {e}"))?;
-    file.try_lock().map_err(|_| "Another scraper is using this output directory.".to_string())?;
-    wfm_client::policy::start(directory, wfm_client::policy::Component::Scraper).map_err(|e| e.to_string())?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(directory.join(".wfm-output.lock"))
+        .map_err(|e| format!("Opening scrape lock: {e}"))?;
+    file.try_lock()
+        .map_err(|_| "Another scraper is using this output directory.".to_string())?;
+    wfm_client::policy::start(directory, wfm_client::policy::Component::Scraper)
+        .map_err(|e| e.to_string())?;
     Ok(file)
 }
 
@@ -138,7 +168,10 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
             .transpose()?
             .unwrap_or(100),
         max_coercions: wfm_scrape::coerce::DEFAULT_MAX_COERCIONS,
-        stats_cache: match (extract_flag(args, "--stats-cache"), extract_flag(args, "--stats-interval")) {
+        stats_cache: match (
+            extract_flag(args, "--stats-cache"),
+            extract_flag(args, "--stats-interval"),
+        ) {
             (Some(path), Some(interval)) => Some(StatsCacheConfig {
                 path: PathBuf::from(path),
                 interval: wfm_scrape::scrape::stats_cache::parse_interval(&interval)?,
@@ -147,7 +180,10 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
             _ => return Err("--stats-cache and --stats-interval go together".into()),
         },
         now: extract_flag(args, "--now")
-            .map(|s| wfm_scrape::clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
+            .map(|s| {
+                wfm_scrape::clock::parse_stamp(&s)
+                    .ok_or_else(|| format!("invalid --now stamp: {s}"))
+            })
             .transpose()?
             .unwrap_or_else(Utc::now),
     };
@@ -206,7 +242,9 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         .unwrap_or_else(|| Ok(Utc::now()))?;
     let public = match extract_flag(args, "--publish-dir") {
         Some(dir) => Some(PathBuf::from(dir)),
-        None => find_root().ok().map(|root| root.join("frontend").join("public")),
+        None => find_root()
+            .ok()
+            .map(|root| root.join("frontend").join("public")),
     };
     let out = extract_flag(args, "--out")
         .map(PathBuf::from)

@@ -110,11 +110,9 @@ impl PollOutcome {
                 error: error.clone(),
             });
         }
-        self.log_error
-            .as_ref()
-            .map(|error| RecordingStop::Log {
-                error: error.clone(),
-            })
+        self.log_error.as_ref().map(|error| RecordingStop::Log {
+            error: error.clone(),
+        })
     }
 
     /// Record that the ledger accepted a trade. That clears a held trade, and
@@ -131,9 +129,7 @@ impl PollOutcome {
 /// Fold a poll outcome into the recorder, reporting the new state when it
 /// changed.
 pub fn observe(recorder: &Recorder, outcome: &PollOutcome) -> Option<RecordingState> {
-    recorder
-        .set_stop(outcome.stop())
-        .then(|| recorder.state())
+    recorder.set_stop(outcome.stop()).then(|| recorder.state())
 }
 
 #[cfg(test)]

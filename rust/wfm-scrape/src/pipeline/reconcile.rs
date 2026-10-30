@@ -52,11 +52,17 @@ pub enum Observation<T> {
 
 impl<T> Observation<T> {
     pub fn usable(data: T) -> Self {
-        Self::Usable { data, complete: true }
+        Self::Usable {
+            data,
+            complete: true,
+        }
     }
 
     pub fn partial(data: T) -> Self {
-        Self::Usable { data, complete: false }
+        Self::Usable {
+            data,
+            complete: false,
+        }
     }
 }
 
@@ -133,11 +139,17 @@ impl<K: Clone + Eq + Hash, V: Clone> Mergeable for HashMap<K, V> {
 }
 
 impl<K: Clone + Ord, V: Clone> Mergeable for std::collections::BTreeMap<K, V> {
-    fn is_empty(&self) -> bool { self.is_empty() }
-    fn len(&self) -> usize { self.len() }
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+    fn len(&self) -> usize {
+        self.len()
+    }
     fn merge(old: &Self, fresh: &Self) -> Self {
         let mut merged = old.clone();
-        for (key, value) in fresh { merged.insert(key.clone(), value.clone()); }
+        for (key, value) in fresh {
+            merged.insert(key.clone(), value.clone());
+        }
         merged
     }
 }
@@ -175,9 +187,15 @@ impl Mergeable for serde_json::Value {
 }
 
 impl<T: Clone> Mergeable for Vec<T> {
-    fn is_empty(&self) -> bool { self.is_empty() }
-    fn len(&self) -> usize { self.len() }
-    fn merge(_old: &Self, fresh: &Self) -> Self { fresh.clone() }
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+    fn len(&self) -> usize {
+        self.len()
+    }
+    fn merge(_old: &Self, fresh: &Self) -> Self {
+        fresh.clone()
+    }
 }
 
 /// Reconcile a single surface, returning the outcome including the
@@ -260,45 +278,53 @@ pub fn reconcile<T: Mergeable + Default>(
             stale_warning: None,
             recovered: 0,
         },
-        Observation::Usable { data: fresh, complete: false } if fresh.is_empty() => {
-            preserve(Disposition::PreservedInvalid)
-        }
-        Observation::Usable { data: fresh, complete: true } if fresh.is_empty() => {
-            preserve(Disposition::PreservedInvalid)
-        }
-        Observation::Usable { data: fresh, complete: false } => {
-          if let Some(old) = prior {
-            let merged = T::merge(old, &fresh);
-            let recovered = merged.len().saturating_sub(fresh.len());
-            Reconciled {
-                data: merged,
-                // Only `fresh`'s keys were re-observed, so a surface holding
-                // carried rows is exactly as old as the oldest of them. Stamping
-                // it NOW is what let a partition that stopped updating report
-                // itself as current, which is the case the age warning exists to
-                // reveal. A merge that carried nothing takes the current time.
-                fetched_at: if recovered > 0 {
-                    prior_stamp.unwrap_or("").to_string()
-                } else {
-                    clock::iso_z(now)
-                },
-                attempted_at,
-                disposition: Disposition::MergedPartial,
-                stale_warning: None,
-                recovered,
+        Observation::Usable {
+            data: fresh,
+            complete: false,
+        } if fresh.is_empty() => preserve(Disposition::PreservedInvalid),
+        Observation::Usable {
+            data: fresh,
+            complete: true,
+        } if fresh.is_empty() => preserve(Disposition::PreservedInvalid),
+        Observation::Usable {
+            data: fresh,
+            complete: false,
+        } => {
+            if let Some(old) = prior {
+                let merged = T::merge(old, &fresh);
+                let recovered = merged.len().saturating_sub(fresh.len());
+                Reconciled {
+                    data: merged,
+                    // Only `fresh`'s keys were re-observed, so a surface holding
+                    // carried rows is exactly as old as the oldest of them. Stamping
+                    // it NOW is what let a partition that stopped updating report
+                    // itself as current, which is the case the age warning exists to
+                    // reveal. A merge that carried nothing takes the current time.
+                    fetched_at: if recovered > 0 {
+                        prior_stamp.unwrap_or("").to_string()
+                    } else {
+                        clock::iso_z(now)
+                    },
+                    attempted_at,
+                    disposition: Disposition::MergedPartial,
+                    stale_warning: None,
+                    recovered,
+                }
+            } else {
+                Reconciled {
+                    data: fresh,
+                    fetched_at: clock::iso_z(now),
+                    attempted_at,
+                    disposition: Disposition::MergedPartial,
+                    stale_warning: None,
+                    recovered: 0,
+                }
             }
-          } else {
-            Reconciled {
-                data: fresh,
-                fetched_at: clock::iso_z(now),
-                attempted_at,
-                disposition: Disposition::MergedPartial,
-                stale_warning: None,
-                recovered: 0,
-            }
-          }
         }
-        Observation::Usable { data, complete: true } => Reconciled {
+        Observation::Usable {
+            data,
+            complete: true,
+        } => Reconciled {
             fetched_at: clock::iso_z(now),
             attempted_at,
             disposition: Disposition::PublishedFresh,
@@ -325,7 +351,9 @@ pub struct KeyStamps {
 
 impl KeyStamps {
     fn of(&self, key: &str) -> &str {
-        self.carried.get(key).map_or(self.fresh_at.as_str(), String::as_str)
+        self.carried
+            .get(key)
+            .map_or(self.fresh_at.as_str(), String::as_str)
     }
 }
 
@@ -347,9 +375,13 @@ pub fn reconcile_keyed<V: Clone>(
     stale_days: i64,
 ) -> (Reconciled<HashMap<String, V>>, KeyStamps) {
     let (mut data, prior_map) = match (observation, prior) {
-        (Observation::Usable { data, complete: false }, Some(prior)) if !data.is_empty() => {
-            (data, prior)
-        }
+        (
+            Observation::Usable {
+                data,
+                complete: false,
+            },
+            Some(prior),
+        ) if !data.is_empty() => (data, prior),
         (observation, prior) => {
             let r = reconcile(name, observation, prior, prior_stamp, now, stale_days);
             let stamps = match (r.disposition, prior_keys) {
@@ -425,7 +457,10 @@ mod tests {
     }
 
     fn hm<V: Clone>(pairs: &[(&str, V)]) -> HashMap<String, V> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect()
     }
 
     fn reconcile<T: Mergeable + Default>(
@@ -456,7 +491,15 @@ mod tests {
         let now = utc(2026, 7, 1, 12, 0, 0);
         let prior_stamp = "2026-06-01T00:00:00Z";
 
-        let r = reconcile("test_surface", fresh, Some(&prior), Some(prior_stamp), now, true, 7);
+        let r = reconcile(
+            "test_surface",
+            fresh,
+            Some(&prior),
+            Some(prior_stamp),
+            now,
+            true,
+            7,
+        );
 
         assert_eq!(r.data, prior);
         assert_eq!(r.fetched_at, "2026-06-01T00:00:00Z");
@@ -506,7 +549,15 @@ mod tests {
         let now = utc(2026, 7, 1, 0, 0, 0);
         let prior_stamp = "2026-06-20T00:00:00Z";
 
-        let r = reconcile("test", fresh, Some(&prior), Some(prior_stamp), now, false, 7);
+        let r = reconcile(
+            "test",
+            fresh,
+            Some(&prior),
+            Some(prior_stamp),
+            now,
+            false,
+            7,
+        );
 
         assert_eq!(r.data, hm(&[("a", 10), ("b", 2), ("c", 3), ("d", 40)]));
         assert_eq!(
@@ -606,7 +657,15 @@ mod tests {
         prior_keys: Option<&KeyStamps>,
         now: DateTime<Utc>,
     ) -> (Reconciled<HashMap<String, i32>>, KeyStamps) {
-        reconcile_keyed("set_to_parts", observation, prior, prior_stamp, prior_keys, now, 7)
+        reconcile_keyed(
+            "set_to_parts",
+            observation,
+            prior,
+            prior_stamp,
+            prior_keys,
+            now,
+            7,
+        )
     }
 
     /// Different endpoints failing on successive runs is the ordinary case. Every
@@ -618,7 +677,13 @@ mod tests {
         let t1 = utc(2026, 7, 1, 2, 0, 0);
         let t2 = utc(2026, 7, 1, 4, 0, 0);
 
-        let (first, stamps) = keyed(Observation::usable(hm(&[("a", 1), ("b", 2)])), None, None, None, t0);
+        let (first, stamps) = keyed(
+            Observation::usable(hm(&[("a", 1), ("b", 2)])),
+            None,
+            None,
+            None,
+            t0,
+        );
         assert_eq!(first.disposition, Disposition::PublishedFresh);
 
         let (second, stamps) = keyed(
@@ -629,7 +694,11 @@ mod tests {
             t1,
         );
         assert_eq!(second.data, hm(&[("a", 10), ("b", 2)]));
-        assert_eq!(second.fetched_at, clock::iso_z(t0), "b was last fetched at t0");
+        assert_eq!(
+            second.fetched_at,
+            clock::iso_z(t0),
+            "b was last fetched at t0"
+        );
 
         let (third, stamps) = keyed(
             Observation::partial(hm(&[("b", 20)])),
@@ -680,7 +749,10 @@ mod tests {
         assert_eq!(r.disposition, Disposition::MergedPartial);
         assert_eq!(
             r.stale_warning,
-            Some(StaleWarning { surface: "set_to_parts".into(), days: 20 })
+            Some(StaleWarning {
+                surface: "set_to_parts".into(),
+                days: 20
+            })
         );
         assert!(stamps.carried.is_empty());
     }
@@ -716,7 +788,13 @@ mod tests {
         let now = utc(2026, 7, 21, 0, 0, 0);
         let partial = || Observation::partial(hm(&[("live", 10)]));
 
-        let (dated, _) = keyed(partial(), Some(&prior), Some("2026-07-19T00:00:00Z"), None, now);
+        let (dated, _) = keyed(
+            partial(),
+            Some(&prior),
+            Some("2026-07-19T00:00:00Z"),
+            None,
+            now,
+        );
         assert_eq!(dated.data.get("carried"), Some(&2));
         assert_eq!(dated.fetched_at, "2026-07-19T00:00:00Z");
 
@@ -780,7 +858,15 @@ mod tests {
         let fresh = serde_json::Value::Object(serde_json::Map::new());
         let now = utc(2026, 7, 1, 0, 0, 0);
 
-        let r = reconcile("baro", fresh, Some(&prior), Some("2026-06-30T00:00:00Z"), now, true, 7);
+        let r = reconcile(
+            "baro",
+            fresh,
+            Some(&prior),
+            Some("2026-06-30T00:00:00Z"),
+            now,
+            true,
+            7,
+        );
         assert_eq!(r.data, prior);
     }
 
@@ -816,13 +902,26 @@ mod tests {
         let prior = hm(&[("old", 1)]);
         let now = utc(2026, 7, 1, 0, 0, 0);
         let cases = [
-            (Observation::Unavailable, Disposition::PreservedUnavailable, true),
-            (Observation::Unchanged, Disposition::PreservedUnchanged, false),
+            (
+                Observation::Unavailable,
+                Disposition::PreservedUnavailable,
+                true,
+            ),
+            (
+                Observation::Unchanged,
+                Disposition::PreservedUnchanged,
+                false,
+            ),
             (Observation::Invalid, Disposition::PreservedInvalid, true),
         ];
         for (observation, expected, warns) in cases {
             let r = super::reconcile(
-                "surface", observation, Some(&prior), Some("2026-06-01T00:00:00Z"), now, 7,
+                "surface",
+                observation,
+                Some(&prior),
+                Some("2026-06-01T00:00:00Z"),
+                now,
+                7,
             );
             assert_eq!(r.data, prior);
             assert_eq!(r.fetched_at, "2026-06-01T00:00:00Z");
@@ -836,7 +935,10 @@ mod tests {
     fn usable_empty_is_invalid_and_cannot_clear_prior() {
         let prior = hm(&[("old", 1)]);
         let now = utc(2026, 7, 1, 0, 0, 0);
-        for observation in [Observation::usable(HashMap::new()), Observation::partial(HashMap::new())] {
+        for observation in [
+            Observation::usable(HashMap::new()),
+            Observation::partial(HashMap::new()),
+        ] {
             let r = super::reconcile("surface", observation, Some(&prior), None, now, 7);
             assert_eq!(r.data, prior);
             assert_eq!(r.disposition, Disposition::PreservedInvalid);

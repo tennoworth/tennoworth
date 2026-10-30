@@ -42,7 +42,13 @@ impl OrderMutations {
     /// discarded between this check and the caller's send.
     pub fn begin(
         &self,
-    ) -> Result<(AccountGuard<'_>, Arc<wfm_trading::orders::listing::Unlocked>), CmdError> {
+    ) -> Result<
+        (
+            AccountGuard<'_>,
+            Arc<wfm_trading::orders::listing::Unlocked>,
+        ),
+        CmdError,
+    > {
         let guard = self.begin_only()?;
         let unlocked = self.session.require_unlocked()?;
         Ok((guard, unlocked))
@@ -52,9 +58,10 @@ impl OrderMutations {
     /// do its own error mapping - the batch plan resumes from an account it
     /// decrypted earlier, and the tailer has no account until it reads one.
     pub fn begin_only(&self) -> Result<AccountGuard<'_>, CmdError> {
-        let guard = self.session.begin_plan().ok_or_else(|| {
-            CmdError::of("busy", "Another order change is already running.")
-        })?;
+        let guard = self
+            .session
+            .begin_plan()
+            .ok_or_else(|| CmdError::of("busy", "Another order change is already running."))?;
         Ok(AccountGuard { _guard: guard })
     }
 }
@@ -89,9 +96,7 @@ mod tests {
         let session = Arc::new(WfmSession::for_test(tmp_path("serialize")));
         let mutations = OrderMutations::new(Arc::clone(&session));
 
-        let first = mutations
-            .begin_only()
-            .expect("the batch takes the account");
+        let first = mutations.begin_only().expect("the batch takes the account");
 
         let refused = mutations
             .begin_only()
@@ -118,18 +123,22 @@ mod tests {
         let automatic = OrderMutations::new(Arc::clone(&session));
         let batch = listing.begin_only().unwrap();
 
-        let refused = automatic
-            .begin_only()
-            .err()
-            .unwrap();
+        let refused = automatic.begin_only().err().unwrap();
         assert_eq!(refused.code, "busy");
-        assert!(!refused.message.contains("automatic listing update"), "{}", refused.message);
-        assert!(refused.message.contains("order change"), "{}", refused.message);
+        assert!(
+            !refused.message.contains("automatic listing update"),
+            "{}",
+            refused.message
+        );
+        assert!(
+            refused.message.contains("order change"),
+            "{}",
+            refused.message
+        );
 
         drop(batch);
         assert!(automatic.begin_only().is_ok());
     }
-
 
     /// Authorizing without a session is a typed refusal, not a panic - the
     /// caller surfaces `needs_login`/`needs_unlock` and the SPA opens its
@@ -138,10 +147,7 @@ mod tests {
     fn authorizing_without_an_unlocked_session_is_typed() {
         let session = Arc::new(WfmSession::for_test(tmp_path("locked")));
         let mutations = OrderMutations::new(session);
-        let error = mutations
-            .begin()
-            .err()
-            .expect("no account to mutate with");
+        let error = mutations.begin().err().expect("no account to mutate with");
         assert!(
             matches!(error.code, "needs_login" | "needs_unlock"),
             "got {}",

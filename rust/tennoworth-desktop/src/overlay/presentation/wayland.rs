@@ -728,7 +728,11 @@ fn draw_overlay(
         let box_y = slot.box_.y * logical_height as f64 + 8.0;
         let box_width = slot.box_.width * logical_width as f64;
         let card_width = (250.0 * result.scale).min((box_width - 16.0).max(80.0));
-        let card_height = (if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE { 78.0 } else { 66.0 }) * result.scale;
+        let card_height = (if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE {
+            78.0
+        } else {
+            66.0
+        }) * result.scale;
         let x = box_x + (box_width - card_width) / 2.0;
         let y = box_y;
         let border = if slot.best_platinum {

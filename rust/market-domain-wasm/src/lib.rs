@@ -57,7 +57,9 @@ pub unsafe extern "C" fn domain_evaluate(ptr: *const u8, len: usize) -> *mut u8 
     let input = std::slice::from_raw_parts(ptr, len);
     let answer = match std::str::from_utf8(input) {
         Ok(request) => evaluate_json(request),
-        Err(_) => serde_json::json!({ "error": "The calculation request is not UTF-8." }).to_string(),
+        Err(_) => {
+            serde_json::json!({ "error": "The calculation request is not UTF-8." }).to_string()
+        }
     };
     let bytes = answer.into_bytes().into_boxed_slice();
     RESULT_LEN.store(bytes.len(), Ordering::SeqCst);
@@ -80,9 +82,11 @@ mod tests {
         match value {
             Value::Number(n) => n.as_f64().map_or(Value::Number(n), |f| json!(f)),
             Value::Array(items) => Value::Array(items.into_iter().map(numbers_as_f64).collect()),
-            Value::Object(map) => {
-                Value::Object(map.into_iter().map(|(k, v)| (k, numbers_as_f64(v))).collect())
-            }
+            Value::Object(map) => Value::Object(
+                map.into_iter()
+                    .map(|(k, v)| (k, numbers_as_f64(v)))
+                    .collect(),
+            ),
             other => other,
         }
     }
@@ -100,8 +104,14 @@ mod tests {
         // dispatch validates first and rejects some of those inputs. The
         // preview must reject exactly what the desktop rejects.
         if let Some(error) = answer.get("error") {
-            let native = serde_json::from_str::<DomainRequest>(&request).unwrap().execute();
-            assert_eq!(native.err().as_deref(), error.as_str(), "{operation}: {name}");
+            let native = serde_json::from_str::<DomainRequest>(&request)
+                .unwrap()
+                .execute();
+            assert_eq!(
+                native.err().as_deref(),
+                error.as_str(),
+                "{operation}: {name}"
+            );
             return false;
         }
         assert_eq!(
@@ -118,13 +128,27 @@ mod tests {
             ("advisor", "advisor/verdicts.json", None),
             ("history", "advisor/history.json", None),
             ("trade_session", "trade-session/selector.json", None),
-            ("normalize_inventory", "inventory-normalization.json", Some("cases")),
+            (
+                "normalize_inventory",
+                "inventory-normalization.json",
+                Some("cases"),
+            ),
             ("score_inventory", "inventory-scoring.json", Some("cases")),
         ] {
             let cases = fixture(path);
             let cases = list.map_or(&cases, |key| &cases[key]);
-            let answered = cases.as_array().unwrap().iter()
-                .filter(|case| assert_answers(operation, &case["request"], &case["expected"], &case["name"]))
+            let answered = cases
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|case| {
+                    assert_answers(
+                        operation,
+                        &case["request"],
+                        &case["expected"],
+                        &case["name"],
+                    )
+                })
                 .count();
             assert!(answered > 0, "{operation}: every case was rejected");
         }
@@ -137,19 +161,31 @@ mod tests {
                 "build" => "build_plan",
                 other => panic!("unmapped planner operation {other}"),
             };
-            answered += usize::from(assert_answers(operation, &case["input"], &case["expected"], &case["name"]));
+            answered += usize::from(assert_answers(
+                operation,
+                &case["input"],
+                &case["expected"],
+                &case["name"],
+            ));
         }
         assert!(answered > 0, "every planner case was rejected");
     }
 
     #[test]
     fn a_rejected_request_answers_with_the_native_error() {
-        let answer: Value = serde_json::from_str(&evaluate_json("{\"operation\":\"nope\",\"input\":{}}")).unwrap();
-        assert!(answer["error"].as_str().unwrap().starts_with("Invalid calculation request"));
+        let answer: Value =
+            serde_json::from_str(&evaluate_json("{\"operation\":\"nope\",\"input\":{}}")).unwrap();
+        assert!(answer["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("Invalid calculation request"));
         let too_far = json!({ "operation": "history", "input": {
             "series": { "start": "2026-01-01", "median": [1.0] }, "buckets": 10_001 } });
         let answer: Value = serde_json::from_str(&evaluate_json(&too_far.to_string())).unwrap();
-        assert_eq!(answer, json!({ "error": "History bucket count is too large." }));
+        assert_eq!(
+            answer,
+            json!({ "error": "History bucket count is too large." })
+        );
     }
 
     #[test]
@@ -162,7 +198,9 @@ mod tests {
             std::ptr::copy_nonoverlapping(request.as_ptr(), buffer, request.len());
             let answer = domain_evaluate(buffer, request.len());
             let len = domain_result_len();
-            let text = std::str::from_utf8(std::slice::from_raw_parts(answer, len)).unwrap().to_owned();
+            let text = std::str::from_utf8(std::slice::from_raw_parts(answer, len))
+                .unwrap()
+                .to_owned();
             domain_free(buffer, request.len());
             domain_free(answer, len);
             assert_eq!(text, evaluate_json(&request));

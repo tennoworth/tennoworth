@@ -39,11 +39,12 @@ impl CmdError {
         )
     }
     pub fn wfm(e: anyhow::Error) -> Self {
-        if let Some(access) = e.downcast_ref::<wfm_client::governor::AccessError>() { return Self::of(access.code(), access.to_string()); }
+        if let Some(access) = e.downcast_ref::<wfm_client::governor::AccessError>() {
+            return Self::of(access.code(), access.to_string());
+        }
         Self::of("wfm", e.to_string())
     }
     pub fn internal(e: impl std::fmt::Display) -> Self {
         Self::of("internal", e.to_string())
     }
 }
-

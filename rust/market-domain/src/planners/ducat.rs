@@ -45,7 +45,13 @@ pub fn ducat_plan(r: &DucatRequest) -> DucatResult {
         if !seen.insert(&rec.slug) {
             continue;
         }
-        let spare = (count(&r.owned, &rec.slug) - if r.quantities_are_available == Some(true) { 0.0 } else { 1.0 }).max(0.0);
+        let spare = (count(&r.owned, &rec.slug)
+            - if r.quantities_are_available == Some(true) {
+                0.0
+            } else {
+                1.0
+            })
+        .max(0.0);
         let ducats = field(entry(&r.market, &rec.slug), "ducats");
         if spare == 0.0 || ducats <= 0.0 {
             continue;

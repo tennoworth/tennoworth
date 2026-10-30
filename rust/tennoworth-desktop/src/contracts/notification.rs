@@ -59,7 +59,14 @@ pub struct AnnouncementNotification {
     pub ends_at: String,
 }
 
-pub const CATEGORIES: &[&str] = &["trades", "watches", "baro", "calendar", "digest", "announcements"];
+pub const CATEGORIES: &[&str] = &[
+    "trades",
+    "watches",
+    "baro",
+    "calendar",
+    "digest",
+    "announcements",
+];
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CategoryPreference {

@@ -80,18 +80,32 @@ pub struct RichStatus {
 /// A parsed frame from the signed-in socket.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresenceEvent {
-    SignedIn { id: String },
-    SignInRefused { id: String, reason: String },
+    SignedIn {
+        id: String,
+    },
+    SignInRefused {
+        id: String,
+        reason: String,
+    },
     /// `status/set:ok`: the server committed the command `id`.
-    StatusSet { id: String, status: RichStatus },
+    StatusSet {
+        id: String,
+        status: RichStatus,
+    },
     /// `status/set:error`: the reason is the server's code, e.g. a field error.
-    StatusRefused { id: String, reason: String },
+    StatusRefused {
+        id: String,
+        reason: String,
+    },
     /// `event/status/set`: the committed status, after sign-in, after any of
     /// the account's clients changes it, and when a timed status expires.
     StatusChanged(RichStatus),
     /// `@wfm|protect/error`: the account may not use the route, e.g.
     /// `app.errors.userNotVerified`.
-    Protected { id: Option<String>, reason: String },
+    Protected {
+        id: Option<String>,
+        reason: String,
+    },
     /// Anything else, including the periodic online count. The stream must
     /// survive WFM adding routes.
     Other,
@@ -118,14 +132,19 @@ pub fn set_status_message(id: &str, status: Presence, duration: Option<u32>) -> 
     .to_string()
 }
 
-fn rich_status(payload: Option<&serde_json::Value>, meta: Option<&serde_json::Value>) -> Option<RichStatus> {
+fn rich_status(
+    payload: Option<&serde_json::Value>,
+    meta: Option<&serde_json::Value>,
+) -> Option<RichStatus> {
     let payload = payload?;
     let text = |key: &str| payload.get(key).and_then(|v| v.as_str()).map(String::from);
     Some(RichStatus {
         status: Presence::parse(payload.get("status")?.as_str()?)?,
         set_at: text("statusSetAt"),
         until: text("statusUntil"),
-        revision: meta.and_then(|m| m.get("revision")).and_then(|r| r.as_u64()),
+        revision: meta
+            .and_then(|m| m.get("revision"))
+            .and_then(|r| r.as_u64()),
     })
 }
 
@@ -153,17 +172,26 @@ pub fn parse_presence_event(text: &str) -> PresenceEvent {
     let payload = v.get("payload");
     match (route, id) {
         ("@wfm|cmd/auth/signIn:ok", Some(id)) => PresenceEvent::SignedIn { id },
-        ("@wfm|cmd/auth/signIn:error", Some(id)) => PresenceEvent::SignInRefused { id, reason: reason(payload) },
+        ("@wfm|cmd/auth/signIn:error", Some(id)) => PresenceEvent::SignInRefused {
+            id,
+            reason: reason(payload),
+        },
         ("@wfm|cmd/status/set:ok", Some(id)) => match rich_status(payload, v.get("meta")) {
             Some(status) => PresenceEvent::StatusSet { id, status },
             None => PresenceEvent::Other,
         },
-        ("@wfm|cmd/status/set:error", Some(id)) => PresenceEvent::StatusRefused { id, reason: reason(payload) },
+        ("@wfm|cmd/status/set:error", Some(id)) => PresenceEvent::StatusRefused {
+            id,
+            reason: reason(payload),
+        },
         ("@wfm|event/status/set", _) => match rich_status(payload, v.get("meta")) {
             Some(status) => PresenceEvent::StatusChanged(status),
             None => PresenceEvent::Other,
         },
-        ("@wfm|protect/error", id) => PresenceEvent::Protected { id, reason: reason(payload) },
+        ("@wfm|protect/error", id) => PresenceEvent::Protected {
+            id,
+            reason: reason(payload),
+        },
         _ => PresenceEvent::Other,
     }
 }
@@ -180,7 +208,9 @@ pub enum SignInError {
 impl std::fmt::Display for SignInError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SignInError::Refused(reason) => write!(f, "warframe.market refused the sign-in: {reason}"),
+            SignInError::Refused(reason) => {
+                write!(f, "warframe.market refused the sign-in: {reason}")
+            }
             SignInError::Unavailable(error) => write!(f, "{error:#}"),
         }
     }
@@ -199,7 +229,8 @@ impl PresenceSocket {
         let socket = open_socket(tick).map_err(SignInError::Unavailable)?;
         let mut this = PresenceSocket { socket, next_id: 0 };
         let id = this.next_id();
-        this.send_text(sign_in_message(&id, token)).map_err(SignInError::Unavailable)?;
+        this.send_text(sign_in_message(&id, token))
+            .map_err(SignInError::Unavailable)?;
         let deadline = std::time::Instant::now() + SIGN_IN_TIMEOUT;
         let mut signed_in = false;
         while std::time::Instant::now() < deadline {
@@ -208,15 +239,22 @@ impl PresenceSocket {
                 Some(PresenceEvent::SignInRefused { id: reply, reason }) if reply == id => {
                     return Err(SignInError::Refused(reason));
                 }
-                Some(PresenceEvent::Protected { reason, .. }) => return Err(SignInError::Refused(reason)),
-                Some(PresenceEvent::StatusChanged(status)) if signed_in => return Ok((this, Some(status))),
+                Some(PresenceEvent::Protected { reason, .. }) => {
+                    return Err(SignInError::Refused(reason))
+                }
+                Some(PresenceEvent::StatusChanged(status)) if signed_in => {
+                    return Ok((this, Some(status)))
+                }
                 _ => {}
             }
         }
         if signed_in {
             Ok((this, None))
         } else {
-            Err(SignInError::Unavailable(anyhow::anyhow!("no sign-in reply within {}s", SIGN_IN_TIMEOUT.as_secs())))
+            Err(SignInError::Unavailable(anyhow::anyhow!(
+                "no sign-in reply within {}s",
+                SIGN_IN_TIMEOUT.as_secs()
+            )))
         }
     }
 
@@ -226,13 +264,18 @@ impl PresenceSocket {
     }
 
     fn send_text(&mut self, text: String) -> Result<()> {
-        self.socket.send(Message::Text(text.into())).context("ws send")
+        self.socket
+            .send(Message::Text(text.into()))
+            .context("ws send")
     }
 
     /// Send a status change; the outcome arrives from [`Self::poll`] as
     /// `StatusSet` or `StatusRefused` carrying the returned id.
     pub fn set_status(&mut self, status: Presence, duration: Option<u32>) -> Result<String> {
-        wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context())?;
+        wfm_client::governor::process().check(
+            wfm_client::governor::Kind::WebSocket,
+            &wfm_client::governor::context(),
+        )?;
         let id = self.next_id();
         self.send_text(set_status_message(&id, status, duration))?;
         Ok(id)
@@ -250,7 +293,8 @@ impl PresenceSocket {
             Ok(Message::Close(_)) => anyhow::bail!("server closed the socket"),
             Ok(_) => Ok(None),
             Err(tungstenite::Error::Io(e))
-                if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut =>
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
             {
                 Ok(None)
             }
@@ -277,7 +321,10 @@ mod tests {
 
     #[test]
     fn parses_the_captured_sign_in_and_status_frames() {
-        assert_eq!(parse_presence_event(SIGN_IN_OK), PresenceEvent::SignedIn { id: "a1".into() });
+        assert_eq!(
+            parse_presence_event(SIGN_IN_OK),
+            PresenceEvent::SignedIn { id: "a1".into() }
+        );
         assert_eq!(
             parse_presence_event(STATUS_AFTER_SIGN_IN),
             PresenceEvent::StatusChanged(RichStatus {
@@ -302,22 +349,40 @@ mod tests {
         let PresenceEvent::StatusSet { status, .. } = parse_presence_event(SET_INVISIBLE_OK) else {
             panic!("expected StatusSet")
         };
-        assert_eq!((status.status, status.until, status.revision), (Presence::Invisible, None, Some(3)));
+        assert_eq!(
+            (status.status, status.until, status.revision),
+            (Presence::Invisible, None, Some(3))
+        );
     }
 
     #[test]
     fn refusals_keep_the_server_code() {
         assert_eq!(
-            parse_presence_event(r#"{"route":"@wfm|cmd/auth/signIn:error","payload":"app.errors.unauthorized","id":"a1"}"#),
-            PresenceEvent::SignInRefused { id: "a1".into(), reason: "app.errors.unauthorized".into() }
+            parse_presence_event(
+                r#"{"route":"@wfm|cmd/auth/signIn:error","payload":"app.errors.unauthorized","id":"a1"}"#
+            ),
+            PresenceEvent::SignInRefused {
+                id: "a1".into(),
+                reason: "app.errors.unauthorized".into()
+            }
         );
         assert_eq!(
-            parse_presence_event(r#"{"route":"@wfm|cmd/status/set:error","payload":{"duration":"app.field.tooSmall"},"id":"s2"}"#),
-            PresenceEvent::StatusRefused { id: "s2".into(), reason: "duration: app.field.tooSmall".into() }
+            parse_presence_event(
+                r#"{"route":"@wfm|cmd/status/set:error","payload":{"duration":"app.field.tooSmall"},"id":"s2"}"#
+            ),
+            PresenceEvent::StatusRefused {
+                id: "s2".into(),
+                reason: "duration: app.field.tooSmall".into()
+            }
         );
         assert_eq!(
-            parse_presence_event(r#"{"route":"@wfm|protect/error","payload":"app.errors.userNotVerified","id":"s3"}"#),
-            PresenceEvent::Protected { id: Some("s3".into()), reason: "app.errors.userNotVerified".into() }
+            parse_presence_event(
+                r#"{"route":"@wfm|protect/error","payload":"app.errors.userNotVerified","id":"s3"}"#
+            ),
+            PresenceEvent::Protected {
+                id: Some("s3".into()),
+                reason: "app.errors.userNotVerified".into()
+            }
         );
     }
 
@@ -342,20 +407,25 @@ mod tests {
 
     #[test]
     fn status_messages_send_no_activity_and_clamp_the_duration() {
-        let sent: serde_json::Value = serde_json::from_str(&set_status_message("s1", Presence::Ingame, Some(5))).unwrap();
+        let sent: serde_json::Value =
+            serde_json::from_str(&set_status_message("s1", Presence::Ingame, Some(5))).unwrap();
         assert_eq!(sent["route"], "@wfm|cmd/status/set");
         assert_eq!(sent["payload"]["status"], "ingame");
         assert_eq!(sent["payload"]["duration"], MIN_DURATION_SECS);
         assert!(sent["payload"].get("activity").is_none());
-        let long: serde_json::Value = serde_json::from_str(&set_status_message("s2", Presence::Online, Some(99_999))).unwrap();
+        let long: serde_json::Value =
+            serde_json::from_str(&set_status_message("s2", Presence::Online, Some(99_999)))
+                .unwrap();
         assert_eq!(long["payload"]["duration"], MAX_DURATION_SECS);
-        let open: serde_json::Value = serde_json::from_str(&set_status_message("s3", Presence::Invisible, None)).unwrap();
+        let open: serde_json::Value =
+            serde_json::from_str(&set_status_message("s3", Presence::Invisible, None)).unwrap();
         assert!(open["payload"]["duration"].is_null());
     }
 
     #[test]
     fn sign_in_carries_the_token_under_the_documented_route() {
-        let sent: serde_json::Value = serde_json::from_str(&sign_in_message("a1", "token")).unwrap();
+        let sent: serde_json::Value =
+            serde_json::from_str(&sign_in_message("a1", "token")).unwrap();
         assert_eq!(sent["route"], "@wfm|cmd/auth/signIn");
         assert_eq!(sent["id"], "a1");
         assert_eq!(sent["payload"]["token"], "token");

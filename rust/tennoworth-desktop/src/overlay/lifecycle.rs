@@ -36,11 +36,18 @@ impl CaptureLifecycle {
 
     pub(super) fn cancellation(&self, id: &str) -> Arc<AtomicBool> {
         let token = self.cancellation.lock().unwrap_or_else(|e| e.into_inner());
-        if self.is_current(id) { token.clone() } else { Arc::new(AtomicBool::new(true)) }
+        if self.is_current(id) {
+            token.clone()
+        } else {
+            Arc::new(AtomicBool::new(true))
+        }
     }
 
     pub(super) fn clear(&self) {
-        self.cancellation.lock().unwrap_or_else(|e| e.into_inner()).store(true, Ordering::Release);
+        self.cancellation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .store(true, Ordering::Release);
         *self.current.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
@@ -82,5 +89,4 @@ mod tests {
         state.clear();
         assert!(state.cancellation("second").load(Ordering::Acquire));
     }
-
 }

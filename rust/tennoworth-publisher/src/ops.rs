@@ -739,7 +739,10 @@ mod tests {
         );
         let parsed =
             host_check(&fs::read_to_string(out).unwrap()).expect("current report shape parses");
-        assert!(!parsed.ready, "a host with no sweep output must not read as healthy");
+        assert!(
+            !parsed.ready,
+            "a host with no sweep output must not read as healthy"
+        );
         assert!(!parsed.errors.is_empty());
         assert_eq!(parsed.checked_at, "2026-10-12T03:30:00Z");
         assert!(parsed.disk_floor_bytes.is_some());
@@ -793,7 +796,12 @@ mod tests {
         }
         let mut found = BTreeSet::new();
         for job in JOBS {
-            assert_eq!(job.unit, format!("tennoworth-{}.service", job.id), "job {}", job.id);
+            assert_eq!(
+                job.unit,
+                format!("tennoworth-{}.service", job.id),
+                "job {}",
+                job.id
+            );
             assert!(
                 deploy.join(job.unit).exists(),
                 "job {} starts {}, which deploy/ does not ship",

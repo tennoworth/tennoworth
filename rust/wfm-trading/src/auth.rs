@@ -20,8 +20,6 @@
 //! pipe, or a desktop dialog) and hands the plaintext to `encrypt_jwt`, or to
 //! `derive_jwt_key` and then `decrypt_jwt_with_key`.
 
-use wfm_client::transport::GovernedRequest;
-use wfm_client::governor::Kind;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use anyhow::{anyhow, bail, Context, Result};
@@ -33,6 +31,8 @@ use rand::{rngs::SysRng, TryRng};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use wfm_client::governor::Kind;
+use wfm_client::transport::GovernedRequest;
 
 use crate::time::chrono_now_iso;
 
@@ -174,7 +174,10 @@ pub fn decrypt_jwt_with_key(blob: &EncryptedJwt, key_bytes: &[u8; 32]) -> Result
     }
     let iv = B64.decode(&blob.cipher.iv).context("decoding IV")?;
     if iv.len() != JWT_IV_BYTES {
-        bail!("The saved WFM sign-in file is damaged (IV length {}).", iv.len());
+        bail!(
+            "The saved WFM sign-in file is damaged (IV length {}).",
+            iv.len()
+        );
     }
     let ciphertext = B64
         .decode(&blob.ciphertext)
@@ -260,15 +263,25 @@ mod tests {
         let good = encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
         let key = derive_jwt_key(&good, "correct horse battery").unwrap();
         for iv in ["", "AAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"] {
-            let mut blob = encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
+            let mut blob =
+                encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
             blob.cipher.iv = iv.into();
             let err = decrypt_jwt_with_key(&blob, &key).unwrap_err().to_string();
             assert!(err.contains("damaged"), "{iv:?}: {err}");
         }
-        for iterations in [0, 1, JWT_KDF_ITERATIONS - 1, MAX_JWT_KDF_ITERATIONS + 1, u32::MAX] {
-            let mut blob = encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
+        for iterations in [
+            0,
+            1,
+            JWT_KDF_ITERATIONS - 1,
+            MAX_JWT_KDF_ITERATIONS + 1,
+            u32::MAX,
+        ] {
+            let mut blob =
+                encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
             blob.kdf.iterations = iterations;
-            let err = derive_jwt_key(&blob, "correct horse battery").unwrap_err().to_string();
+            let err = derive_jwt_key(&blob, "correct horse battery")
+                .unwrap_err()
+                .to_string();
             assert!(err.contains("damaged"), "{iterations}: {err}");
         }
     }
@@ -283,9 +296,15 @@ mod tests {
     #[test]
     fn a_me_answer_yields_the_slug_and_never_echoes_the_profile() {
         let ok = r#"{"data":{"slug":"tenno_one","ingameName":"Tenno One"}}"#;
-        assert_eq!(username_from_me(reqwest::StatusCode::OK, ok).unwrap(), "tenno_one");
+        assert_eq!(
+            username_from_me(reqwest::StatusCode::OK, ok).unwrap(),
+            "tenno_one"
+        );
         let named = r#"{"data":{"ingameName":"Tenno One"}}"#;
-        assert_eq!(username_from_me(reqwest::StatusCode::OK, named).unwrap(), "Tenno One");
+        assert_eq!(
+            username_from_me(reqwest::StatusCode::OK, named).unwrap(),
+            "Tenno One"
+        );
         let odd = r#"{"data":{"email":"someone@example.invalid"}}"#;
         let err = username_from_me(reqwest::StatusCode::OK, odd).unwrap_err();
         assert!(!err.to_string().contains("example.invalid"), "{err}");
@@ -315,12 +334,22 @@ mod tests {
     #[test]
     fn passphrase_floor_matches_the_shared_scalar_value_cases() {
         #[derive(Deserialize)]
-        struct Case { name: String, passphrase: String, accepted: bool }
+        struct Case {
+            name: String,
+            passphrase: String,
+            accepted: bool,
+        }
         let cases: Vec<Case> = serde_json::from_str(include_str!(
             "../../../tests/fixtures/passphrase-floor.json"
-        )).unwrap();
+        ))
+        .unwrap();
         for case in cases {
-            assert_eq!(validate_passphrase(&case.passphrase).is_ok(), case.accepted, "{}", case.name);
+            assert_eq!(
+                validate_passphrase(&case.passphrase).is_ok(),
+                case.accepted,
+                "{}",
+                case.name
+            );
         }
     }
 

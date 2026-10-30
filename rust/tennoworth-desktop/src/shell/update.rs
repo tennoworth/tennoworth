@@ -13,11 +13,11 @@
 //! tauri.conf.json after download and refuses to install on mismatch, which
 //! reaches the user as a plain error banner while the running app stays intact.
 
+use crate::poison::guard;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
-use crate::poison::guard;
 
 /// Emitted to the webview whenever a launch, manual, or periodic check finds an
 /// update. The SPA also reads `update_status` at mount, so a listener

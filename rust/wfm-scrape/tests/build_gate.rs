@@ -37,18 +37,28 @@ fn build_produces_full_shape_market_json() {
         .expect("market.json is valid JSON");
 
     // The site's prerendered pages refresh from the slim copy written beside it.
-    let public: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(dir.join("market-public.json")).expect("market-public.json written"))
-            .expect("market-public.json is valid JSON");
+    let public: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(dir.join("market-public.json")).expect("market-public.json written"),
+    )
+    .expect("market-public.json is valid JSON");
     assert_eq!(public["updated_at"], snap["updated_at"]);
-    let home: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(dir.join("market-home.json")).expect("market-home.json written"))
-            .expect("market-home.json is valid JSON");
+    let home: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(dir.join("market-home.json")).expect("market-home.json written"),
+    )
+    .expect("market-home.json is valid JSON");
     assert_eq!(home["items"], snap["items"]);
     assert!(home.get("path_to_info").is_none());
     assert_eq!(
-        public["items"].as_object().unwrap().keys().collect::<Vec<_>>(),
-        snap["items"].as_object().unwrap().keys().collect::<Vec<_>>()
+        public["items"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>(),
+        snap["items"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .collect::<Vec<_>>()
     );
 
     let obj = snap.as_object().expect("market.json is an object");
@@ -135,17 +145,28 @@ fn build_reads_and_locks_the_named_data_dir_outside_a_checkout() {
     std::fs::create_dir_all(&data).unwrap();
     std::fs::create_dir_all(&publish).unwrap();
     let out = run(
-        &["build", "--data-dir", data.to_str().unwrap(), "--publish-dir", publish.to_str().unwrap()],
+        &[
+            "build",
+            "--data-dir",
+            data.to_str().unwrap(),
+            "--publish-dir",
+            publish.to_str().unwrap(),
+        ],
         &root,
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(!out.status.success());
     assert!(
-        stderr.contains(&format!("{} not found", data.join("wfm_results.csv").display())),
+        stderr.contains(&format!(
+            "{} not found",
+            data.join("wfm_results.csv").display()
+        )),
         "{stderr}"
     );
-    assert!(data.join(".wfm-output.lock").exists(), "the lock belongs in the data dir");
+    assert!(
+        data.join(".wfm-output.lock").exists(),
+        "the lock belongs in the data dir"
+    );
     assert!(!root.join(".wfm-output.lock").exists());
     std::fs::remove_dir_all(&root).unwrap();
 }
-

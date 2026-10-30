@@ -10,7 +10,9 @@
 use serde::{Deserialize, Serialize};
 
 /// Which side of the market an order sits on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ts_rs::TS)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ts_rs::TS,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum OrderSide {
     Sell,

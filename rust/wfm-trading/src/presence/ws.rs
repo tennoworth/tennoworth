@@ -171,7 +171,14 @@ pub fn run_new_orders_stream(
 
     let mut last_frame = std::time::Instant::now();
     loop {
-        if stop() || wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context()).is_err() {
+        if stop()
+            || wfm_client::governor::process()
+                .check(
+                    wfm_client::governor::Kind::WebSocket,
+                    &wfm_client::governor::context(),
+                )
+                .is_err()
+        {
             let _ = socket.close(None);
             return Ok(());
         }
@@ -210,7 +217,10 @@ pub(crate) type Socket = tungstenite::WebSocket<MaybeTlsStream<TcpStream>>;
 /// agent, after the governor allows WebSocket access. Reads time out after
 /// `tick` so callers can check their own stop conditions on a quiet socket.
 pub(crate) fn open_socket(tick: Duration) -> Result<Socket> {
-    wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context())?;
+    wfm_client::governor::process().check(
+        wfm_client::governor::Kind::WebSocket,
+        &wfm_client::governor::context(),
+    )?;
     let mut req = WS_URL.into_client_request().context("ws request")?;
     req.headers_mut().insert(
         "Sec-WebSocket-Protocol",
