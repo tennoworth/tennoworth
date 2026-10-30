@@ -12,7 +12,7 @@
 use tauri::image::Image;
 use tauri::{AppHandle, Manager};
 
-use crate::command_error::CmdError;
+use crate::contracts::command_error::CmdError;
 use crate::persistence::Db;
 
 /// The applied colour's `setting` row. The generic `set_setting` command

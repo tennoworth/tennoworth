@@ -7,7 +7,7 @@ use super::{
     REWARD_CARD_WIDTH_PER_HEIGHT, REWARD_SLOT_SPACING_PER_HEIGHT, REWARD_TITLE_TARGET_WIDTH,
     WARFRAME_DESIGN_ASPECT,
 };
-use crate::services::sellables::{OverlayCatalogItem, OverlayMarketFacts};
+use crate::services::market::sellables::{OverlayCatalogItem, OverlayMarketFacts};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;

@@ -7,8 +7,8 @@ use tauri_plugin_global_shortcut::ShortcutState;
 
 use crate::game_events::{GameEvent, GameEvents};
 use crate::persistence::Db;
-use crate::services::market::MarketCache;
-use crate::services::wfm_session::WfmSession;
+use crate::services::market::cache::MarketCache;
+use crate::services::wfm::session::WfmSession;
 
 #[derive(serde::Serialize)]
 struct Health {
@@ -34,8 +34,8 @@ fn health() -> Health {
 /// Scan definitions also carry the overlay's reward-screen markers. Definitions
 /// only fetches and parses them; the overlay owns their rules, so a refusal is
 /// its verdict, reported with the scan's own.
-fn install_definitions(dir: &std::path::Path) -> crate::services::definitions::DefinitionsOutcome {
-    let mut out = crate::services::definitions::refresh_and_install(dir);
+fn install_definitions(dir: &std::path::Path) -> crate::services::market::definitions::DefinitionsOutcome {
+    let mut out = crate::services::market::definitions::refresh_and_install(dir);
     if let Err(reason) = overlay::install_reward_markers(&out.reward_log_markers) {
         eprintln!("tennoworth: definitions rejected reward_log_markers: {reason}");
         out.rejected.push(format!("reward_log_markers: {reason}"));
@@ -95,11 +95,11 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::shell::update_notes::acknowledge_update_notes,
             crate::shell::update_notes::update_notes_can_present,
             health,
-            crate::services::usage::get_usage_preferences,
-            crate::services::usage::set_usage_preferences,
-            crate::services::reports::get_price_report_preferences,
-            crate::services::reports::set_price_report_preferences,
-            crate::services::reports::erase_price_reports,
+            crate::services::telemetry::usage::get_usage_preferences,
+            crate::services::telemetry::usage::set_usage_preferences,
+            crate::services::telemetry::reports::get_price_report_preferences,
+            crate::services::telemetry::reports::set_price_report_preferences,
+            crate::services::telemetry::reports::erase_price_reports,
             crate::commands::auth::wfm_access_status,
             crate::commands::domain::evaluate_domain,
             crate::commands::inventory::scan_inventory,
@@ -131,10 +131,10 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::services::notifications::get_notification_preferences,
             crate::services::notifications::set_notification_preferences,
             crate::services::notifications::test_notification,
-            crate::commands::watch::list_watches,
-            crate::commands::watch::add_watch,
-            crate::commands::watch::delete_watch,
-            crate::commands::watch::check_watches_now,
+            crate::commands::watches::list_watches,
+            crate::commands::watches::add_watch,
+            crate::commands::watches::delete_watch,
+            crate::commands::watches::check_watches_now,
             crate::commands::trades::list_trades,
             crate::commands::trades::eelog_status,
             crate::commands::trades::listing_outcomes,
@@ -162,7 +162,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::commands::listing::update_order,
             crate::commands::listing::delete_order,
             crate::commands::listing::bulk_visibility,
-            crate::commands::report::open_external_url,
+            crate::commands::reports::open_external_url,
             overlay::get_overlay_settings,
             overlay::update_overlay_settings,
             overlay::overlay_status,
@@ -199,11 +199,11 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             let profile_existed = db_path.exists();
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
-            app.manage(crate::services::auto_scan::AutoScanState::from_db(&store));
-            app.manage(crate::services::presence::PresenceState::from_db(&store));
+            app.manage(crate::services::inventory::auto_scan::AutoScanState::from_db(&store));
+            app.manage(crate::services::wfm::presence::PresenceState::from_db(&store));
             app.manage(store);
-            crate::services::usage::start(app.handle().clone());
-            crate::services::reports::start(app.handle().clone());
+            crate::services::telemetry::usage::start(app.handle().clone());
+            crate::services::telemetry::reports::start(app.handle().clone());
             crate::shell::update_notes::initialize(app.handle(), profile_existed);
             publish_access_changes(app.handle().clone());
 
@@ -221,7 +221,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             let presence_app = app.handle().clone();
             game_events.subscribe(move |event| {
                 if let GameEvent::LogLine(line) = event {
-                    if let Some(presence) = presence_app.try_state::<crate::services::presence::PresenceState>() {
+                    if let Some(presence) = presence_app.try_state::<crate::services::wfm::presence::PresenceState>() {
                         presence.game_line(line);
                     }
                 }
@@ -349,11 +349,11 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             //
             // The recorder is created before the tailer and handed to it, so a
             // surface that mounts after a pause can still ask what is true.
-            let recording = crate::services::recording::Recorder::new();
+            let recording = crate::services::game_log::recording::Recorder::new();
             let ee_path = if probe {
                 None
             } else {
-                crate::services::trades::start_tailer(
+                crate::services::trading::trades::start_tailer(
                     app.handle().clone(),
                     recording.clone(),
                     game_events,
@@ -363,29 +363,29 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 Some(p) => eprintln!("tennoworth: tailing EE.log at {}", p.display()),
                 None => eprintln!("tennoworth: EE.log not found - trade detection off (set TENNOWORTH_EELOG to override)"),
             }
-            app.manage(crate::services::eelog_state::EeLogState { path: ee_path, recording });
+            app.manage(crate::services::game_log::state::EeLogState { path: ee_path, recording });
 
             // Price-watch checker: a background pass every CHECK_INTERVAL
             // over the user's watches (see watch.rs). Not in probe runs -
             // the probe must not make WFM calls on a timer.
             if !probe {
-                crate::services::watch::start_checker(app.handle().clone());
-                crate::services::reminders::start(app.handle().clone(), |app| {
+                crate::services::watches::poll::start_checker(app.handle().clone());
+                crate::services::notifications::reminders::start(app.handle().clone(), |app| {
                     crate::shell::tray::rebuild_tray(app);
                 });
                 // Fast path beside the poll: WFM's live order stream fires a
                 // matching watch in seconds (see ws_watch.rs).
-                crate::services::ws_watch::start_stream(app.handle().clone());
+                crate::services::watches::stream::start_stream(app.handle().clone());
                 // Automatic scanning is off by default; the loop only idles
                 // until the user turns it on (see auto_scan.rs). Not in probe
                 // runs - the probe must not scan on a timer.
-                crate::services::auto_scan::start(
+                crate::services::inventory::auto_scan::start(
                     app.handle().clone(),
                     crate::shell::tray::post_scan_surfaces,
                 );
                 // The user's warframe.market status (see presence.rs). Not in
                 // probe runs - the probe must not change an account's status.
-                crate::services::presence::start(app.handle().clone(), crate::shell::tray::refresh_presence);
+                crate::services::wfm::presence::start(app.handle().clone(), crate::shell::tray::refresh_presence);
             }
 
             // C5: launch update check, off the main thread so it can never
@@ -419,7 +419,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
         .run(move |app, event| {
             // What TennoWorth kept up must not outlive it: say Invisible first.
             if matches!(event, tauri::RunEvent::Exit) {
-                if let Some(presence) = app.try_state::<crate::services::presence::PresenceState>() {
+                if let Some(presence) = app.try_state::<crate::services::wfm::presence::PresenceState>() {
                     presence.shutdown();
                 }
             }

@@ -3,22 +3,22 @@
 use tauri::{AppHandle, Manager, State};
 
 use crate::persistence::{Db, TradeRow};
-use crate::services::eelog_state::EeLogState;
-use crate::command_error::CmdError;
+use crate::services::game_log::state::EeLogState;
+use crate::contracts::command_error::CmdError;
 
 #[tauri::command]
 pub fn trade_session_state(
     app: AppHandle,
     db: State<'_, Db>,
 ) -> Result<TradeSessionState, CmdError> {
-    let market = crate::services::sellables::MarketData::load(
-        &app.state::<crate::services::market::MarketCache>(),
+    let market = crate::services::market::sellables::MarketData::load(
+        &app.state::<crate::services::market::cache::MarketCache>(),
     );
     let allowance = db
         .trade_allowance(crate::services::unix_now())
         .map_err(|e| CmdError::internal(e.to_string()))?;
     let quantities = market.session_quantities(&db).map_err(CmdError::internal)?;
-    let session = app.state::<std::sync::Arc<crate::services::wfm_session::WfmSession>>();
+    let session = app.state::<std::sync::Arc<crate::services::wfm::session::WfmSession>>();
     let unlocked = session.require_unlocked().ok();
     let bulk_slugs = unlocked
         .as_ref()
@@ -63,7 +63,7 @@ pub fn trade_session_state(
 #[derive(serde::Serialize)]
 pub struct TradeSessionState {
     pub set_recipes: std::collections::BTreeMap<String, std::collections::BTreeMap<String, u32>>,
-    pub allowance: crate::services::allowance::AllowanceView,
+    pub allowance: crate::services::game_log::allowance::AllowanceView,
     pub quantities: std::collections::BTreeMap<String, u32>,
     pub bulk_slugs: Vec<String>,
     pub supported_slugs: Option<Vec<String>>,
@@ -79,11 +79,11 @@ pub fn list_trades(db: State<'_, Db>, limit: Option<i64>) -> Result<Vec<TradeRow
 pub fn listing_outcomes(
     app: AppHandle,
     db: State<'_, Db>,
-) -> Result<crate::services::outcomes::ListingOutcomes, CmdError> {
-    let market = crate::services::sellables::MarketData::load(
-        &app.state::<crate::services::market::MarketCache>(),
+) -> Result<crate::services::trading::outcomes::ListingOutcomes, CmdError> {
+    let market = crate::services::market::sellables::MarketData::load(
+        &app.state::<crate::services::market::cache::MarketCache>(),
     );
-    crate::services::outcomes::read(
+    crate::services::trading::outcomes::read(
         &db,
         &|name| market.report_item(name).map(|(slug, _)| slug),
         crate::services::unix_now(),
@@ -93,7 +93,7 @@ pub fn listing_outcomes(
 
 #[tauri::command]
 pub fn set_listing_outcomes(db: State<'_, Db>, enabled: bool) -> Result<(), CmdError> {
-    crate::services::outcomes::set_enabled(&db, enabled)
+    crate::services::trading::outcomes::set_enabled(&db, enabled)
         .map_err(|e| CmdError::internal(format!("listing outcomes: {e}")))
 }
 
@@ -109,13 +109,13 @@ pub struct EeLogStatus {
     /// Read from memory, deliberately not from the database: the pause this
     /// reports is usually a database that refused a write, and a health flag
     /// stored there would answer with the health of the thing that just failed.
-    pub recording: crate::services::recording::RecordingState,
+    pub recording: crate::services::game_log::recording::RecordingState,
 }
 
 #[tauri::command]
 pub fn eelog_status(db: State<'_, Db>, ee: State<'_, EeLogState>) -> EeLogStatus {
     let auto_close = db
-        .get_setting(crate::services::trades::SETTING_AUTO_CLOSE)
+        .get_setting(crate::services::trading::trades::SETTING_AUTO_CLOSE)
         .ok()
         .flatten()
         .map(|v| v != "off")

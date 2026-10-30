@@ -95,7 +95,7 @@ impl Db {
 
 fn read_allowance(
     conn: &Connection,
-) -> rusqlite::Result<Option<crate::trading_contract::Observation>> {
+) -> rusqlite::Result<Option<crate::contracts::trading::Observation>> {
     let raw: Option<String> = conn
         .query_row(
             "SELECT observation FROM trade_allowance WHERE id = 1",
@@ -113,7 +113,7 @@ fn read_allowance(
 
 fn write_allowance(
     conn: &Connection,
-    observation: &crate::trading_contract::Observation,
+    observation: &crate::contracts::trading::Observation,
 ) -> rusqlite::Result<()> {
     let raw = serde_json::to_string(observation)
         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
@@ -212,7 +212,7 @@ mod tests {
             Some("2")
         );
         assert_eq!(db.trade_allowance(1000).unwrap().remaining, None);
-        let position = crate::services::eelog::LogPosition {
+        let position = crate::services::game_log::eelog::LogPosition {
             session: "upgrade".into(),
             start: 1,
             end: 2,
@@ -609,7 +609,7 @@ mod tests {
 
     #[test]
     fn trades_insert_dedupe_and_list_newest_first() {
-        use crate::services::eelog::{TradeEvent, TradeItem};
+        use crate::services::game_log::eelog::{TradeEvent, TradeItem};
         let db = Db::open_in_memory().unwrap();
         let t = TradeEvent {
             partner: "Buyer".into(),
@@ -622,7 +622,7 @@ mod tests {
             }],
             log_stamp: Some("1234.567".into()),
         };
-        let mut position = crate::services::eelog::LogPosition {
+        let mut position = crate::services::game_log::eelog::LogPosition {
             session: "one".into(),
             start: 10,
             end: 20,
@@ -654,7 +654,7 @@ mod tests {
     #[test]
     fn digests_and_sessions_share_reserves_and_post_trade_exclusions() {
         let db = Db::open_in_memory().unwrap();
-        let market: crate::services::sellables::MarketData = serde_json::from_value(serde_json::json!({
+        let market: crate::services::market::sellables::MarketData = serde_json::from_value(serde_json::json!({
             "items":{"test_part":{"vol":1000,"low_sell":10,"avg":10,"median_now":10,"median_90d":10,"low5_avg":10}},
             "path_to_info":{"/Lotus/TestPart":{"name":"Test Part","slug":"test_part"}}
         })).unwrap();
@@ -671,13 +671,13 @@ mod tests {
                 }],
             )
             .unwrap();
-        let boundary = crate::services::eelog::LogPosition {
+        let boundary = crate::services::game_log::eelog::LogPosition {
             session: "digest-test".into(),
             start: 100,
             end: 100,
             observed_after: 100,
         };
-        db.save_allowance(crate::services::allowance::Observation::scanned(
+        db.save_allowance(crate::services::game_log::allowance::Observation::scanned(
             "account".into(),
             id,
             &serde_json::json!({"TradesRemaining":8}),
@@ -690,51 +690,51 @@ mod tests {
         db.set_setting("reserve-copies", "1").unwrap();
         // One leveled copy plus two protected: three of six held back.
         set_plan_reserve(&db, "test_part", 2);
-        let rows = crate::services::sellables::rank_sellables(&db, &market);
+        let rows = crate::services::market::sellables::rank_sellables(&db, &market);
         assert_eq!(rows[0].sellable_qty, 3);
         assert_eq!(market.session_quantities(&db).unwrap()["test_part"], 3);
         let prices = serde_json::json!({"updated_at":stamp});
         assert!(
-            crate::services::reminders::digest(&prices, &rows, stamp, 110, "1970-01-01", 18)
+            crate::services::notifications::reminders::digest(&prices, &rows, stamp, 110, "1970-01-01", 18)
                 .unwrap()
                 .body
                 .contains("Test Part ×3")
         );
         db.set_setting("reserve-copies", "4").unwrap();
         assert_eq!(
-            crate::services::sellables::rank_sellables(&db, &market)[0].sellable_qty,
+            crate::services::market::sellables::rank_sellables(&db, &market)[0].sellable_qty,
             2
         );
         set_plan_reserve(&db, "test_part", 6);
-        assert!(crate::services::sellables::rank_sellables(&db, &market).is_empty());
+        assert!(crate::services::market::sellables::rank_sellables(&db, &market).is_empty());
         db.set_setting("reserve-copies", "1").unwrap();
         set_plan_reserve(&db, "test_part", 2);
-        let trade = crate::services::eelog::TradeEvent {
+        let trade = crate::services::game_log::eelog::TradeEvent {
             partner: "Buyer".into(),
             kind: "sale".into(),
             plat: 10,
             log_stamp: Some("110".into()),
-            items: vec![crate::services::eelog::TradeItem {
+            items: vec![crate::services::game_log::eelog::TradeItem {
                 name: "Test Part".into(),
                 qty: 1,
                 direction: "given".into(),
             }],
         };
-        let position = crate::services::eelog::LogPosition {
+        let position = crate::services::game_log::eelog::LogPosition {
             start: 101,
             end: 120,
             observed_after: 110,
             ..boundary
         };
         db.insert_trade(&trade, 110, &position).unwrap();
-        let rows = crate::services::sellables::rank_sellables(&db, &market);
+        let rows = crate::services::market::sellables::rank_sellables(&db, &market);
         assert!(rows.is_empty());
         assert!(!market
             .session_quantities(&db)
             .unwrap()
             .contains_key("test_part"));
         assert!(
-            crate::services::reminders::digest(&prices, &rows, stamp, 111, "1970-01-01", 18)
+            crate::services::notifications::reminders::digest(&prices, &rows, stamp, 111, "1970-01-01", 18)
                 .is_none()
         );
         let id = db
@@ -749,13 +749,13 @@ mod tests {
                 }],
             )
             .unwrap();
-        let boundary = crate::services::eelog::LogPosition {
+        let boundary = crate::services::game_log::eelog::LogPosition {
             start: 120,
             end: 120,
             observed_after: 130,
             ..position
         };
-        db.save_allowance(crate::services::allowance::Observation::scanned(
+        db.save_allowance(crate::services::game_log::allowance::Observation::scanned(
             "account".into(),
             id,
             &serde_json::json!({"TradesRemaining":7}),
@@ -766,7 +766,7 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(
-            crate::services::sellables::rank_sellables(&db, &market)[0].sellable_qty,
+            crate::services::market::sellables::rank_sellables(&db, &market)[0].sellable_qty,
             2
         );
         assert_eq!(market.session_quantities(&db).unwrap()["test_part"], 2);
@@ -774,19 +774,19 @@ mod tests {
 
     fn allowance_scan(db: &Db, account: &str, remaining: u32) {
         let id = db.insert_snapshot("memory", None, None, &[]).unwrap();
-        let before = crate::services::eelog::LogPosition {
+        let before = crate::services::game_log::eelog::LogPosition {
             session: "log".into(),
             start: 100,
             end: 100,
             observed_after: 100,
         };
-        let after = crate::services::eelog::LogPosition {
+        let after = crate::services::game_log::eelog::LogPosition {
             start: 200,
             end: 200,
             observed_after: 102,
             ..before.clone()
         };
-        db.save_allowance(crate::services::allowance::Observation::scanned(
+        db.save_allowance(crate::services::game_log::allowance::Observation::scanned(
             account.into(),
             id,
             &serde_json::json!({"TradesRemaining":remaining,"PlayerLevel":24}),
@@ -798,8 +798,8 @@ mod tests {
         .unwrap();
     }
 
-    fn allowance_trade(kind: &str) -> crate::services::eelog::TradeEvent {
-        crate::services::eelog::TradeEvent {
+    fn allowance_trade(kind: &str) -> crate::services::game_log::eelog::TradeEvent {
+        crate::services::game_log::eelog::TradeEvent {
             partner: "Partner".into(),
             kind: kind.into(),
             plat: 12,
@@ -813,7 +813,7 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         allowance_scan(&db, "account", 8);
         for (index, kind) in ["sale", "purchase", "trade"].iter().enumerate() {
-            let position = crate::services::eelog::LogPosition {
+            let position = crate::services::game_log::eelog::LogPosition {
                 session: "log".into(),
                 start: 201 + index as u64 * 20,
                 end: 220 + index as u64 * 20,
@@ -835,7 +835,7 @@ mod tests {
     #[test]
     fn allowance_reconciles_callback_committed_before_observation_is_saved() {
         let db = Db::open_in_memory().unwrap();
-        let position = crate::services::eelog::LogPosition {
+        let position = crate::services::game_log::eelog::LogPosition {
             session: "log".into(),
             start: 201,
             end: 220,
@@ -851,7 +851,7 @@ mod tests {
     fn failed_ledger_write_cannot_advance_allowance_or_replay_position() {
         let db = Db::open_in_memory().unwrap();
         allowance_scan(&db, "account", 8);
-        let position = crate::services::eelog::LogPosition {
+        let position = crate::services::game_log::eelog::LogPosition {
             session: "log".into(),
             start: 201,
             end: 220,
@@ -881,7 +881,7 @@ mod tests {
                 .account_key,
             "second"
         );
-        db.save_allowance(crate::services::allowance::Observation::scanned(
+        db.save_allowance(crate::services::game_log::allowance::Observation::scanned(
             "third".into(),
             3,
             &serde_json::json!({}),
@@ -910,7 +910,7 @@ mod tests {
     #[test]
     fn restart_retains_age_and_deduplication_but_cannot_assume_the_account() {
         let path = temp_db_path();
-        let position = crate::services::eelog::LogPosition {
+        let position = crate::services::game_log::eelog::LogPosition {
             session: "log".into(),
             start: 201,
             end: 220,
@@ -928,7 +928,7 @@ mod tests {
         assert_eq!(view.observed_at, Some(102));
         assert_eq!(
             view.confidence,
-            crate::trading_contract::Confidence::Estimated
+            crate::contracts::trading::Confidence::Estimated
         );
         assert!(!view.monitoring);
         assert_eq!(
@@ -936,7 +936,7 @@ mod tests {
                 .unwrap(),
             None
         );
-        let next = crate::services::eelog::LogPosition {
+        let next = crate::services::game_log::eelog::LogPosition {
             start: 230,
             end: 250,
             observed_after: 120,
@@ -953,7 +953,7 @@ mod tests {
 #[cfg(test)]
 mod notification_tests {
     use super::*;
-    use crate::notification_contract::Candidate;
+    use crate::contracts::notification::Candidate;
     fn candidate() -> Candidate {
         Candidate::once(
             "baro:visit".into(),
@@ -1152,14 +1152,14 @@ mod notification_tests {
         let prefs = db.notification_preferences().unwrap();
         let mut keys: Vec<&str> = prefs.categories.keys().map(String::as_str).collect();
         keys.sort_unstable();
-        let mut expected = crate::notification_contract::CATEGORIES.to_vec();
+        let mut expected = crate::contracts::notification::CATEGORIES.to_vec();
         expected.sort_unstable();
         assert_eq!(keys, expected);
         assert!(!prefs.categories.contains_key("scans"));
         assert!(!prefs.popups);
         assert!(!prefs.categories["baro"].enabled);
         // The same predicate `set_notification_preferences` uses to accept a save.
-        assert!(crate::notification_contract::categories_match_contract(
+        assert!(crate::contracts::notification::categories_match_contract(
             &prefs.categories
         ));
     }

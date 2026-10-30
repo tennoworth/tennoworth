@@ -1,7 +1,7 @@
 use super::recognition::*;
 use crate::vision::ocr::TsvLine;
 use super::*;
-use crate::services::sellables::{OverlayCatalogItem, OverlayMarketFacts};
+use crate::services::market::sellables::{OverlayCatalogItem, OverlayMarketFacts};
 use image::{imageops::FilterType, RgbaImage};
 use std::collections::HashMap;
 

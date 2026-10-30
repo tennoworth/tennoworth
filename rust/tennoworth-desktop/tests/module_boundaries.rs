@@ -255,7 +255,7 @@ fn the_gate_reads_real_sources_and_real_imports() {
 
     // A plain import and a re-export are both edges.
     assert_eq!(
-        imported_modules("use crate::services::market::MarketCache;"),
+        imported_modules("use crate::services::market::cache::MarketCache;"),
         vec!["services"]
     );
     assert_eq!(

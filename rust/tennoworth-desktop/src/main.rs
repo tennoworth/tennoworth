@@ -1,14 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod command_error;
 mod commands;
+mod contracts;
 mod game_events;
-mod notification_contract;
 mod overlay;
 mod persistence;
 mod poison;
 mod services;
-mod trading_contract;
 mod vision;
 mod shell;
 

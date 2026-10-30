@@ -1,29 +1,13 @@
-pub(crate) mod acquisition;
 pub(crate) mod announcements;
-pub(crate) mod allowance;
-pub(crate) mod auto_scan;
 pub(crate) mod browser;
-pub(crate) mod definitions;
-pub(crate) mod eelog;
-pub(crate) mod eelog_state;
+pub(crate) mod game_log;
 pub(crate) mod inventory;
 pub(crate) mod market;
 pub(crate) mod notifications;
-pub(crate) mod order_mutations;
-pub(crate) mod outcomes;
-pub(crate) mod presence;
-pub(crate) mod protection;
-pub(crate) mod recording;
-pub(crate) mod reminders;
-pub(crate) mod sellables;
-pub(crate) mod trades;
-pub(crate) mod watch;
-pub(crate) mod wfm_session;
-pub(crate) mod wfm_signin;
-pub(crate) mod ws_watch;
-
-pub(crate) mod reports;
-pub(crate) mod usage;
+pub(crate) mod telemetry;
+pub(crate) mod trading;
+pub(crate) mod watches;
+pub(crate) mod wfm;
 
 pub(crate) fn unix_now() -> i64 {
     std::time::SystemTime::now()
