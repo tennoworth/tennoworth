@@ -108,7 +108,7 @@ Rust constants and the shell defaults from drifting apart. The offline
 removed once production reused statistics, because a sweep with reused rows
 cannot be scored. The fixture regression gates in `tests/` shell the
 freshly built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen
-fixtures in `tests/fixtures/{scrape,convert}` - cargo rebuilds the binary first,
+fixtures in `tests/fixtures/{scrape,build}` - cargo rebuilds the binary first,
 so a stale one cannot green them.
 
 `--stats-cache <FILE> --stats-interval <6h>` (`src/stats_cache.rs`) reuses an

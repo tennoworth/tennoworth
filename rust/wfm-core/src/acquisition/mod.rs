@@ -4,7 +4,7 @@ pub mod scan;
 
 /// The SPA reduces scan failures to fixed categories by reading their text, so
 /// rewording a message here can silently move a real failure into
-/// `unclassified_error`. tests/fixtures/scan-error-categories/cases.json holds
+/// `unclassified_error`. tests/fixtures/scan-error-categories.json holds
 /// the text both sides check: this asserts the text is still what the scan
 /// produces, and frontend/src/contracts/errors.test.ts asserts its category.
 #[cfg(test)]
@@ -51,7 +51,7 @@ mod message_fixture_tests {
     #[test]
     fn scan_failures_still_produce_the_text_the_spa_classifies() {
         let fixture: Fixture = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/scan-error-categories/cases.json"
+            "../../../../tests/fixtures/scan-error-categories.json"
         ))
         .expect("fixture parses");
         assert!(!fixture.cases.is_empty());

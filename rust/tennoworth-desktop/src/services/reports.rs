@@ -1,6 +1,6 @@
 //! Opt-in price reports: sale prices from the trade ledger, sent anonymously to
 //! tennoworth.app. docs/price-reports.md owns the contract and its privacy
-//! terms; tests/fixtures/reports/contract.json pins the wire format and the
+//! terms; tests/fixtures/reports.json pins the wire format and the
 //! id derivation on both sides.
 //!
 //! The ledger is the queue. Opting in records the newest trade id, and only

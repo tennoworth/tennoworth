@@ -2,7 +2,7 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopRivenComps } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
-  import CopyBtn from '../../ui/CopyBtn.svelte';
+  import CopyButton from '../../ui/CopyButton.svelte';
   import Pager from '../../ui/Pager.svelte';
   import { pageWindow } from '../../ui/paging';
 
@@ -280,7 +280,7 @@
                        app does not read yet. No account details: the path
                        and fingerprint only. -->
                   <span class="copy-data" title="Copy DE's raw data for this riven, to paste into a bug report. It holds no account details.">
-                    <CopyBtn text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
+                    <CopyButton text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
                   </span>
                 {/if}
               </td>

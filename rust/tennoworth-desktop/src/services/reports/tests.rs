@@ -6,7 +6,7 @@ use std::future::IntoFuture;
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!(
-        "../../../../../tests/fixtures/reports/contract.json"
+        "../../../../../tests/fixtures/reports.json"
     ))
     .unwrap()
 }

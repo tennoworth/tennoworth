@@ -21,8 +21,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The one directive that differs between the hosted and desktop builds.
 // The hosted site is informational: everything it loads is baked same-origin,
-// so there are no loopback or third-party connect origins. (The loopback
-// entries were for the removed companion CLI.)
+// so there are no loopback or third-party connect origins.
 const HOSTED_CONNECT_SRC = "connect-src 'self'";
 // Desktop: the Tauri IPC transport (`ipc://localhost` + the
 // `http://ipc.localhost` fast path). No remote origin: the market, history,

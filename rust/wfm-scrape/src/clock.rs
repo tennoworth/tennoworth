@@ -1,4 +1,4 @@
-//! The single injected clock. Every timestamp the converter reads or writes
+//! The single injected clock. Every timestamp the build stage reads or writes
 //! flows through a `DateTime<Utc>` handed in by the caller - `updated_at`,
 //! the per-surface `surface_fetched_at` stamps, the reconcile staleness
 //! warning, and the vaulting-soon horizon. Nothing in this crate may call
@@ -6,15 +6,15 @@
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
-/// The snapshot's stamp format - Python's
-/// `datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")`.
+/// The snapshot's stamp format: UTC, whole seconds, `Z` suffix
+/// (`%Y-%m-%dT%H:%M:%SZ`).
 pub fn iso_z(dt: DateTime<Utc>) -> String {
     dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
-/// Strict mirror of the converter's `strptime(s, "%Y-%m-%dT%H:%M:%SZ")` -
+/// Strict `%Y-%m-%dT%H:%M:%SZ` parse -
 /// used on prior `surface_fetched_at` stamps. Anything else is a parse
-/// failure, exactly like Python's ValueError path.
+/// failure.
 pub fn parse_stamp(s: &str) -> Option<DateTime<Utc>> {
     NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ")
         .ok()
@@ -30,11 +30,10 @@ pub fn from_millis(ms: i64) -> DateTime<Utc> {
     DateTime::<Utc>::from_timestamp_millis(ms).unwrap_or(DateTime::UNIX_EPOCH)
 }
 
-/// Mirror of the `datetime.fromisoformat` subset the converter feeds it
+/// The ISO 8601 subset the build stage is fed
 /// (WFCD `estimatedVaultDate`, after the caller's `Z` → `+00:00` rewrite):
 /// RFC 3339 with offset, naive datetime with optional fraction (T or space
-/// separator), or a bare date. Naive values are assumed UTC, matching the
-/// explicit `tzinfo is None → utc` branch in `fetch_vault_status`.
+/// separator), or a bare date. Naive values are assumed UTC.
 pub fn parse_isoformat_utc(s: &str) -> Option<DateTime<Utc>> {
     if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
         return Some(dt.with_timezone(&Utc));
@@ -97,7 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn isoformat_rejects_garbage_like_python_valueerror() {
+    fn isoformat_rejects_garbage() {
         assert_eq!(parse_isoformat_utc("soon"), None);
         assert_eq!(parse_isoformat_utc(""), None);
     }

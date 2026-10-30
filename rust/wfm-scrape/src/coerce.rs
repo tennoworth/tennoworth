@@ -1,7 +1,7 @@
 //! Permissive numeric-field parsing with coercion counting.
 //!
-//! Python's scraper reads stat fields with an *accidental* contract:
-//! `d.get("median", 0) or 0`. That silently maps null / missing / 0 to 0, but
+//! The frozen snapshots were produced under an *accidental* contract for stat
+//! fields: missing-or-falsy becomes 0. That silently maps null / missing / 0 to 0, but
 //! a numeric-string (`"33"`) survives as a truthy string and later blows up
 //! `statistics.median` with a `TypeError` - a hard crash of the whole run with
 //! an opaque traceback and no field context.
@@ -86,7 +86,7 @@ pub fn coerce_number(v: &Value, field_path: &str, coercions: &mut Coercions) -> 
 }
 
 /// Coerce a named field of a JSON object, treating a missing key exactly like
-/// `null` (Python's `d.get(key, 0)`).
+/// `null`.
 pub fn coerce_field(
     obj: &Value,
     key: &str,
@@ -126,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_field_is_zero_like_python_get_default() {
+    fn missing_field_is_zero() {
         let mut co = c();
         let obj = json!({"median": 5});
         assert_eq!(coerce_field(&obj, "volume", "x.volume", &mut co).unwrap(), 0.0);

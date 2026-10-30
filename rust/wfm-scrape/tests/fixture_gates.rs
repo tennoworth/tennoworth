@@ -7,9 +7,7 @@
     reason = "integration-test helpers may panic to fail the test and are never shipped"
 )]
 //!
-//! These replace the retired Python parity tests (test_scrape_parity.py /
-//! test_convert_parity.py). There is no second implementation to diff against
-//! anymore - the Rust pipeline is the only one - so the gates assert the
+//! There is no second implementation to diff against, so the gates assert the
 //! binary's behaviour on the SAME frozen fixtures, end to end: shell the
 //! freshly-built binary (`env!("CARGO_BIN_EXE_wfm-scrape")` - cargo guarantees
 //! it matches this source), run against a copy of the committed fixtures, and
@@ -83,7 +81,7 @@ fn run(args: &[&str], cwd: &Path) -> std::process::Output {
 
 #[test]
 fn build_produces_full_shape_market_json() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let out = run(
         &[
             "build",
@@ -500,7 +498,7 @@ fn scrape_limit_truncates_after_filter() {
 /// slug, and Baro's manifest arriving with prices.
 #[test]
 fn build_uses_de_export_and_world_state() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let out = run(
         &[
             "build",
@@ -604,7 +602,7 @@ fn build_uses_de_export_and_world_state() {
 /// path-derived name and no price until he returns.
 #[test]
 fn carried_baro_stock_is_resolved_against_the_current_map() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let args = |now: &'static str| {
         vec!["build".to_string(), "--fixtures-dir".into(), dir.to_str().unwrap().into(), "--now".into(), now.into()]
     };
@@ -649,7 +647,7 @@ fn carried_baro_stock_is_resolved_against_the_current_map() {
 
 #[test]
 fn world_children_reconcile_independently_and_only_literal_empty_clears() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let first = run(
         &[
             "build",
@@ -756,7 +754,7 @@ fn world_children_reconcile_independently_and_only_literal_empty_clears() {
 
 #[test]
 fn malformed_manifest_and_non_object_world_keep_invalid_provenance() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     assert!(run(
         &[
             "build",
@@ -820,12 +818,12 @@ fn malformed_manifest_and_non_object_world_keep_invalid_provenance() {
 
 #[test]
 fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     let observed: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(fixtures_dir("de-events").join("world-shapes.json")).unwrap(),
+        &std::fs::read(fixtures_dir("de-events.json")).unwrap(),
     )
     .unwrap();
     let world = responses["https://api.warframe.com/cdn/worldState.php"]
@@ -1031,7 +1029,7 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
 
 #[test]
 fn riven_children_keep_failed_console_data_and_its_own_stamp() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -1149,7 +1147,7 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
 /// nothing changed must fetch the 490-byte index and nothing else.
 #[test]
 fn build_skips_manifests_whose_hash_has_not_moved() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let args = [
         "build",
         "--fixtures-dir",
@@ -1261,7 +1259,7 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
 /// stock - `CorufellPrimeBarrel` to DE - resolved to nothing in inventory.
 #[test]
 fn items_only_warframe_market_knows_reach_every_resolver_surface() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -1429,7 +1427,7 @@ fn items_only_warframe_market_knows_reach_every_resolver_surface() {
 /// the good one.
 #[test]
 fn a_failed_recipes_manifest_preserves_both_de_overrides() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let args = [
         "build",
         "--fixtures-dir",
@@ -1510,7 +1508,7 @@ fn a_failed_recipes_manifest_preserves_both_de_overrides() {
 /// other failure test always seeds a good prior, so it cannot see this.
 #[test]
 fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_nothing() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
 
     // No prior-market.json at all, and the recipes manifest unavailable.
     let _ = std::fs::remove_file(dir.join("prior-market.json"));
@@ -1567,7 +1565,7 @@ fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_n
 /// revert it was written to prevent.
 #[test]
 fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let args = [
         "build",
         "--fixtures-dir",
@@ -1646,7 +1644,7 @@ fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
 /// relic surface on a cold build while the legacy table sat unused.
 #[test]
 fn de_manifests_that_yield_no_rows_fall_back_rather_than_publishing_empty() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let _ = std::fs::remove_file(dir.join("prior-market.json"));
 
     // A well-formed relic manifest whose every reward points at an item the
@@ -1702,7 +1700,7 @@ fn de_manifests_that_yield_no_rows_fall_back_rather_than_publishing_empty() {
 /// The same case, but WITH a prior surface: carry it, do not downgrade.
 #[test]
 fn de_manifests_that_yield_no_rows_carry_a_prior_surface_rather_than_downgrading() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let args = [
         "build",
         "--fixtures-dir",
@@ -1765,7 +1763,7 @@ fn a_failed_manifest_does_not_record_its_hash() {
     // The index names ExportRecipes, but no fixture answers for its URL.
     let index_text = "ExportRecipes_en.json!00_abc\n";
     let compressed = {
-        // Keep this fixture runnable on Windows without a separate Python install.
+        // Compressed in-process so the fixture needs no external tool.
         use base64::Engine as _;
         let mut bytes = Vec::new();
         lzma_rs::lzma_compress(&mut std::io::Cursor::new(index_text.as_bytes()), &mut bytes)
@@ -1898,7 +1896,7 @@ fn de_endpoints_are_still_alive() {
 /// is the point; testing them one at a time is how the hole kept moving.
 #[test]
 fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let args = [
         "build",
         "--fixtures-dir",
@@ -2002,7 +2000,7 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
 
 #[test]
 fn all_unmatched_dispositions_preserve_prior_joined_slug_provenance() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -2121,7 +2119,7 @@ fn all_unmatched_dispositions_preserve_prior_joined_slug_provenance() {
 ///   never happened.
 #[test]
 fn the_disposition_log_reports_no_change_when_only_the_mirror_disagrees() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let args = [
         "build",
         "--fixtures-dir",
@@ -2163,7 +2161,7 @@ fn the_disposition_log_reports_no_change_when_only_the_mirror_disagrees() {
 
 #[test]
 fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -2416,7 +2414,7 @@ fn throttled_scrape_preserves_the_published_csv() {
 /// surface's age for as long as the source stays down.
 #[test]
 fn a_carried_key_keeps_its_own_age_and_is_dropped_after_the_stale_window() {
-    let dir = stage_fixtures("convert");
+    let dir = stage_fixtures("build");
     let responses_path = dir.join("fixture_responses.json");
     let build = |now: &str| {
         let out = run(

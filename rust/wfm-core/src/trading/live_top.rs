@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn buyer_book_matches_frontend_contract_fixture() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/buyer-alternatives/book.json"
+            "../../../../tests/fixtures/buyer-alternatives.json"
         ))
         .unwrap();
         let query = serde_json::from_value(fixture["query"].clone()).unwrap();
@@ -510,7 +510,7 @@ mod tests {
     #[test]
     fn the_book_is_stamped_with_the_observation_instant_not_the_current_clock() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/buyer-alternatives/book.json"
+            "../../../../tests/fixtures/buyer-alternatives.json"
         ))
         .unwrap();
         let query: LiveTopQuery = serde_json::from_value(fixture["query"].clone()).unwrap();

@@ -1,7 +1,7 @@
 use crate::platform::{dirs_home, real_user_home};
 use std::path::{Path, PathBuf};
 
-/// `~/.config/wfminv` - the one place companion state lives.
+/// `~/.config/wfminv` - credential and pending-plan state (a frozen name).
 pub fn config_dir() -> PathBuf {
     real_user_home()
         .unwrap_or_else(dirs_home)

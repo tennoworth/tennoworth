@@ -1,4 +1,4 @@
-//! wfm-core - the reusable core of the Warframe companion.
+//! wfm-core - game acquisition and WFM trading for the desktop app.
 //!
 //! Everything the app does that is NOT shell/webview glue lives here:
 //! process detection + memory scan, DE inventory fetch, warframe.market

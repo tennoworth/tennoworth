@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import fixture from '../../../tests/fixtures/scan-error-categories/cases.json';
+import fixture from '../../../tests/fixtures/scan-error-categories.json';
 import { DesktopCmdError, diagnosticCode, diagnosticError, diagnosticHttpStatus } from './errors';
 
 // The Rust side of this gate (wfm-core acquisition::message_fixture_tests)

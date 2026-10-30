@@ -530,7 +530,7 @@ pub fn build_probe_script(runtag: &str) -> String {
     PROBE_JS
         .replace("__RUNTAG__", runtag)
         .replace("__FIXTURE__", &fixture_literal)
-        .replace("__DOMAIN_CASES__", include_str!("../../../../tests/fixtures/domain-ipc/cases.json"))
+        .replace("__DOMAIN_CASES__", include_str!("../../../../tests/fixtures/domain-ipc.json"))
 }
 
 /// Probe-only: run the full post-scan surface path (rebuild tray + fire the

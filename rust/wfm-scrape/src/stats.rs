@@ -3,17 +3,16 @@
 //!
 //! Each row becomes a [`market_math::StatsDay`]. Numeric fields flow through
 //! [`crate::coerce`]; `mod_rank` keeps the absent / null / number tri-state the
-//! market-math tier filter depends on; non-object entries are skipped exactly
-//! like Python's `if isinstance(d, dict)`.
+//! market-math tier filter depends on; non-object entries are skipped.
 //!
 //! FIELD-READ AUDIT (the orders.rs coercion-safety fix's sibling check): unlike
 //! orders - where liveness is a cheap local predicate we can apply before
 //! coercing - the stats rank-0 / subtype narrowing lives in `market-math`,
 //! which is a pure, dependency-free crate and therefore cannot thread the
 //! coercion counter. So every window row is coerced up front, before the
-//! rank0/subtype filters run. `volume` matches Python exactly (Python reads it
-//! on ALL rows via `canonical_subtype`); `median` / `max_price` / `avg_price`
-//! are read by Python only on rank-0 + right-subtype rows, so we over-coerce
+//! rank0/subtype filters run. `volume` is needed on ALL rows (via
+//! `canonical_subtype`); `median` / `max_price` / `avg_price` matter only on
+//! rank-0 + right-subtype rows, so we over-coerce
 //! them on ranked / wrong-subtype rows. In healthy data those are plain numbers
 //! → identical output; a divergence needs junk confined to a filtered-out row
 //! (a partial schema drift) - a tiny surface that fixing would cost a breach of
@@ -27,7 +26,7 @@ use crate::coerce::{coerce_field, Coercions};
 
 /// Parse the (envelope-unwrapped) v1 statistics payload into
 /// `(48h_rows, 90d_rows)`. A missing `statistics_closed` or window yields an
-/// empty vector, matching Python's `.get(..., {})` / `.get(..., [])` chain.
+/// empty vector.
 pub fn parse_stats(
     payload: &Value,
     url_name: &str,
@@ -52,7 +51,7 @@ fn parse_window(
     let mut out = Vec::with_capacity(arr.len());
     for (i, d) in arr.iter().enumerate() {
         if !d.is_object() {
-            continue; // Python: if isinstance(d, dict)
+            continue;
         }
         let path = format!("{url_name}.{window}[{i}]");
         out.push(StatsDay {

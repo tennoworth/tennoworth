@@ -118,8 +118,8 @@ mod tests {
             ("advisor", "advisor/verdicts.json", None),
             ("history", "advisor/history.json", None),
             ("trade_session", "trade-session/selector.json", None),
-            ("normalize_inventory", "inventory-normalization/cases.json", Some("cases")),
-            ("score_inventory", "inventory-scoring/cases.json", Some("cases")),
+            ("normalize_inventory", "inventory-normalization.json", Some("cases")),
+            ("score_inventory", "inventory-scoring.json", Some("cases")),
         ] {
             let cases = fixture(path);
             let cases = list.map_or(&cases, |key| &cases[key]);

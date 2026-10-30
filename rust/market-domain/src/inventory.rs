@@ -368,7 +368,7 @@ mod tests {
     #[test]
     fn matches_shared_frontend_fixture() {
         let fixture: Fixture = serde_json::from_str(include_str!(
-            "../../../tests/fixtures/inventory-normalization/cases.json"
+            "../../../tests/fixtures/inventory-normalization.json"
         ))
         .unwrap();
         for case in fixture.cases {

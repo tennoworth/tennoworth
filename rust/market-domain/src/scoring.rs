@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn malformed_quantities_and_overflow_reject_the_batch() {
         let fixture: Fixture = serde_json::from_str(include_str!(
-            "../../../tests/fixtures/inventory-scoring/cases.json"
+            "../../../tests/fixtures/inventory-scoring.json"
         ))
         .unwrap();
         let mut request = fixture.cases.into_iter().next().unwrap().request;
@@ -383,7 +383,7 @@ mod tests {
     #[test]
     fn matches_shared_frontend_fixture() {
         let fixture: Fixture = serde_json::from_str(include_str!(
-            "../../../tests/fixtures/inventory-scoring/cases.json"
+            "../../../tests/fixtures/inventory-scoring.json"
         ))
         .unwrap();
         for case in fixture.cases {
