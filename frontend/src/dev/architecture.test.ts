@@ -58,11 +58,6 @@ describe('architecture boundaries', () => {
     }
   });
 
-  it('keeps the hosted shell free of account capabilities', () => {
-    const hosted = sources['../shells/HostedShell.svelte'];
-    expect(hosted).toBeDefined();
-    expect(imports(hosted).filter(specifier => /adapters\/(desktop|services)|ui\/desktop-context|features\/(inventory|selling|orders|watches)\//.test(specifier))).toEqual([]);
-  });
   it('keeps the homepage off the fields its market copy omits', () => {
     // The homepage loads market-home.json, which lacks these fields; a reader
     // reachable from it would see them as missing data.
@@ -82,6 +77,11 @@ describe('architecture boundaries', () => {
     expect(readers).toEqual([]);
   });
 });
+
+// Every module main.ts loads for the public site. A hosted entry left off this
+// list is a root the desktop-only check never walks.
+const HOSTED_ENTRIES = ['../shells/HostedShell.svelte', '../shells/PublicPage.svelte', '../shells/PublicHome.svelte'];
+const DESKTOP_ONLY = /adapters\/(desktop|services)|ui\/desktop-context|features\/(inventory|selling|orders|watches|ledger|presence|relics|rivens|routines)\/|features\/settings\/(?!feedback)/;
 
 function runtimeGraph(): Map<string, string[]> {
   const graph = new Map<string, string[]>();
@@ -109,13 +109,23 @@ it('keeps static production imports acyclic and hosted dependencies public', () 
   }
   for (const path of graph.keys()) visit(path, []);
   const reached = new Set<string>();
-  function hosted(path: string): void {
+  function hosted(path: string, from: string): void {
     if (reached.has(path)) return;
     reached.add(path);
-    expect(path).not.toMatch(/adapters\/(desktop|services)|ui\/desktop-context|features\/(inventory|selling|orders|watches)\//);
-    for (const dependency of graph.get(path) ?? []) hosted(dependency);
+    expect(path, `reached from ${from}`).not.toMatch(DESKTOP_ONLY);
+    for (const dependency of graph.get(path) ?? []) hosted(dependency, from);
   }
-  hosted('../shells/HostedShell.svelte');
+  for (const entry of HOSTED_ENTRIES) {
+    expect(sources[entry], entry).toBeDefined();
+    hosted(entry, entry);
+  }
+});
+
+it('lists every hosted entry main.ts loads', () => {
+  const main = sources['../main.ts'];
+  const loaded = Array.from(main.matchAll(/import\('\.\/(shells\/(?:Hosted|Public)[A-Za-z]*\.svelte)'\)/g), match => `../${match[1]}`);
+  expect(loaded.length).toBeGreaterThan(0);
+  for (const entry of loaded) expect(HOSTED_ENTRIES, entry).toContain(entry);
 });
 
 it('finds dependencies in both component scripts and re-exports', () => {

@@ -260,6 +260,7 @@ These exist because each has already gone wrong once:
   attributed, not about hiding that these tools are used. It does not forbid
   product or security documentation from discussing AI when AI is itself the
   subject, nor these governance and instruction files, which define the rule.
+  `scripts/check-attribution.ts` gates commit messages and pull request bodies.
 
 ## AI-written code - failure modes to catch in your own output
 
