@@ -16,7 +16,21 @@ binary="tennoworth-$name"
 base="https://github.com/tennoworth/tennoworth/releases/download/$name-latest"
 curl --fail --silent --show-error --location "$base/$binary" -o "$stage/$binary"
 curl --fail --silent --show-error --location "$base/$binary.sha256" -o "$stage/$binary.sha256"
+curl --fail --silent --show-error --location "$base/$binary.minisig" -o "$stage/$binary.minisig"
 (cd "$stage" && sha256sum --check "$binary.sha256")
+# The checksum sits in the same release, so it proves an intact download, not
+# who built it. This runs as root: only a build signed by the CI-held collector
+# key, for this binary, is installed. The key lives in a main-only environment,
+# so a token that can edit releases cannot sign.
+pub="${COLLECTOR_SIGNING_PUB:-/etc/tennoworth/collector-signing.pub}"
+[ -r "$pub" ] || { echo "Refusing to install $binary: $pub is missing" >&2; exit 1; }
+verified=$(minisign -V -p "$pub" -m "$stage/$binary" -x "$stage/$binary.minisig") || {
+  echo "Refusing to install $binary: its signature does not verify" >&2; exit 1; }
+comment=$(printf '%s\n' "$verified" | sed -n 's/^Trusted comment: //p')
+case "$comment" in
+  "tennoworth-collector $binary "*) ;;
+  *) echo "Refusing to install $binary: signed for '$comment'" >&2; exit 1 ;;
+esac
 bin="/srv/wfm/bin/$binary"
 mkdir -p /srv/wfm/bin
 if cmp -s "$stage/$binary" "$bin"; then exit 0; fi

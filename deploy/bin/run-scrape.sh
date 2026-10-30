@@ -22,6 +22,9 @@
 #               beside the CSV)
 #   HISTORY     1 (default) also refresh history.json from relics.run after the
 #               build; 0 skips it for a one-off local scrape
+#   SIGNING_KEY  Minisign secret key that signs market.json and history.json for
+#               the desktop (default /etc/tennoworth/artifact-signing.key);
+#               empty skips signing for a local run
 set -euo pipefail
 
 DATA="${DATA:-/srv/wfm/data/scrape}"
@@ -44,6 +47,24 @@ prior=0
 
 SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/tennoworth-pipeline}"
 [ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (deploy/install-pipeline.sh installs it)." >&2; exit 1; }
+
+# Release desktops accept market.json and history.json only with a valid
+# signature, so an unsigned production snapshot reaches nobody: check the key
+# before an hour of scraping rather than after. The trusted comment names the
+# file, so one file's signature cannot vouch for another
+# (tests/fixtures/artifact-signature/cases.json).
+SIGNING_KEY="${SIGNING_KEY-/etc/tennoworth/artifact-signing.key}"
+if [ -n "$SIGNING_KEY" ]; then
+  command -v minisign >/dev/null || { echo "ABORT: minisign is not installed; desktops would refuse the snapshot." >&2; exit 1; }
+  [ -r "$SIGNING_KEY" ] || { echo "ABORT: cannot read $SIGNING_KEY; desktops would refuse the snapshot." >&2; exit 1; }
+fi
+sign() {
+  [ -n "$SIGNING_KEY" ] || return 0
+  # Written beside the file and renamed, so a reader never sees half a signature.
+  minisign -S -s "$SIGNING_KEY" -m "$PUBLISH/$1" -x "$PUBLISH/.$1.minisig.tmp" \
+    -t "tennoworth-artifact $1" </dev/null >/dev/null &&
+    mv -f "$PUBLISH/.$1.minisig.tmp" "$PUBLISH/$1.minisig"
+}
 SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
 # Daily medians move once a day and the 48-hour figures drift slowly, while
 # the order book moves every sweep. A replay of the since-retired observation corpus
@@ -80,6 +101,7 @@ fi
 # `build` writes the catalog BEFORE the snapshot (both atomic tmp+rename), so a
 # reader catching the gap sees new-catalog + old-market, never the reverse.
 "$SCRAPE_BIN" build --data-dir "$DATA" --publish-dir "$PUBLISH"
+sign market.json || { echo "ABORT: signing market.json failed; desktops keep their previous snapshot." >&2; exit 1; }
 echo "scrape complete: $now rows, $(date -Is)"
 
 # Long price history (relics.run → $PUBLISH/history.json). Production-only:
@@ -89,5 +111,8 @@ echo "scrape complete: $now rows, $(date -Is)"
 if [ "${HISTORY:-1}" = "1" ]; then
   if ! "$SCRAPE_BIN" history --publish-dir "$PUBLISH"; then
     echo "history: update failed (market.json is unaffected); will retry on the next tick." >&2
+  fi
+  if [ -f "$PUBLISH/history.json" ] && ! sign history.json; then
+    echo "history: signing failed; desktops keep their previous history." >&2
   fi
 fi

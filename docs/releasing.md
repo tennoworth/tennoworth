@@ -38,6 +38,12 @@ the desktop release contains the complete, tested `main` commit.
 
 ## Release procedure
 
+Release builds embed the box's live-data public key from the repository
+variable `TENNOWORTH_ARTIFACT_PUBLIC_KEY`, and `release-desktop` refuses to
+publish unless the live `market.json` and `history.json` verify under it. If
+that step fails, fix the box's signing (`/etc/tennoworth/artifact-signing.key`,
+used by `run-scrape.sh`) rather than unsetting the variable.
+
 1. Merge the release's reviewed product work into `develop`.
 2. Create a release-preparation branch from the latest `develop`. Wait for the
    production scrape to finish, then copy its locked snapshot pair:
