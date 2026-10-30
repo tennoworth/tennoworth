@@ -1,7 +1,7 @@
 //! Scrape orchestration.
 //!
 //! Fetch the master item list, filter/exclude/limit it, then per item fetch the
-//! order book + closed stats (paced + retried through [`crate::http`]), compose
+//! order book + closed stats (paced + retried through [`crate::scrape::http`]), compose
 //! the row entirely from [`market_domain::math`] heuristics, gate on `--min-volume`,
 //! and write the CSV atomically. The scoring/filtering math lives in
 //! `market_domain::math`; this module only wires it together.
@@ -9,6 +9,12 @@
 //! Items are scanned by a small worker pool sized to the concurrency the signed
 //! policy grants: the governor deliberately allows two requests in flight, and
 //! a serial loop spends the sweep waiting on one response at a time.
+
+pub mod http;
+pub mod orders;
+pub mod stats;
+pub mod stats_cache;
+
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -25,16 +31,16 @@ use market_domain::math::{
 };
 
 use crate::coerce::{Coercions, DEFAULT_MAX_COERCIONS};
-use crate::http::{fetch_json, ScrapeHttp, Sleeper};
+use crate::scrape::http::{fetch_json, ScrapeHttp, Sleeper};
 use crate::observations;
-use crate::orders::{live_orders, parse_orders};
-use crate::stats::parse_stats;
-use crate::stats_cache::{self, Cache};
+use crate::scrape::orders::{live_orders, parse_orders};
+use crate::scrape::stats::parse_stats;
+use crate::scrape::stats_cache::Cache;
 
 const API_ROOT: &str = "https://api.warframe.market";
 
 /// The CSV column order - the keys of `analyze_item`'s dict, in insertion
-/// order, which is also what `csvin::CsvRow` reads back.
+/// order, which is also what `csv_input::CsvRow` reads back.
 const HEADER: [&str; 20] = [
     "url_name", "name", "tags", "ducats", "live_buys", "live_sells", "buy_sell_ratio",
     "top_buy_price", "low_sell_price", "low5_avg", "spread", "volume_48h", "avg_price_48h",
@@ -836,7 +842,7 @@ pub fn run_scrape(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::{FixtureScrapeHttp, HttpOutcome, NoopSleeper, RecordingSleeper};
+    use crate::scrape::http::{FixtureScrapeHttp, HttpOutcome, NoopSleeper, RecordingSleeper};
     use std::time::Duration;
     use serde_json::json;
     use std::collections::HashMap;

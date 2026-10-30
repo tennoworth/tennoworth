@@ -1,5 +1,5 @@
 // Year-long daily price history - the `history.json` the box builds from
-// relics.run (see rust/wfm-scrape/src/history.rs for the pipeline side).
+// relics.run (see rust/wfm-scrape/src/pipeline/history.rs for the pipeline side).
 // Pure helpers over that shape; the transports load it, the UI renders it.
 
 export interface HistorySeries {

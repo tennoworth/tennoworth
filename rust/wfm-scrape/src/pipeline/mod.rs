@@ -1,8 +1,12 @@
 //! Snapshot construction coordinates independently observed upstream data.
 
 mod catalog;
+pub mod csv_input;
+pub mod history;
 mod inputs;
 mod paths;
+pub mod reconcile;
+pub mod render;
 mod publish;
 mod rivens;
 mod usage;
@@ -19,11 +23,11 @@ use crate::clock;
 /// Days after which a preserved-from-prior surface triggers a "this surface
 /// is stale" warning.
 const STALE_DAYS: i64 = 7;
-use crate::csvin;
 use crate::ingest;
-use crate::reconcile::{reconcile, reconcile_keyed, KeyStamps, Observation};
-use crate::render::{self, assemble_snapshot};
-use crate::{de, de_extract};
+use crate::pipeline::reconcile::{reconcile, reconcile_keyed, KeyStamps, Observation};
+use crate::pipeline::render::assemble_snapshot;
+use crate::ingest::de;
+use crate::ingest::de::extract as de_extract;
 
 pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), String> {
     let now = now_arg
@@ -663,7 +667,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .cloned()
         .unwrap_or_else(|| clock::iso_z(now));
     let disposition_fetched_at =
-        if disposition_state == crate::reconcile::Disposition::PublishedFresh {
+        if disposition_state == crate::pipeline::reconcile::Disposition::PublishedFresh {
             clock::iso_z(now)
         } else {
             prior_disposition_stamp
@@ -679,7 +683,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     );
 
     eprintln!("Rendering {} CSV rows...", csv_path.display());
-    let rows = csvin::read_csv_rows(&csv_path)?;
+    let rows = csv_input::read_csv_rows(&csv_path)?;
     let items = render::render_items(&rows, &meta_by_slug);
 
     // The DE provenance block. `hashes` is what makes the next cycle cheap -

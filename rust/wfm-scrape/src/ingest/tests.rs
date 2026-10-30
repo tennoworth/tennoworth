@@ -1,7 +1,7 @@
 use super::rivens::parse_weekly_rivens;
 use super::*;
 use crate::clock;
-use crate::de::{DE_WEEKLY_RIVENS_URL, DE_WEEKLY_RIVEN_PLATFORMS};
+use crate::ingest::de::{DE_WEEKLY_RIVENS_URL, DE_WEEKLY_RIVEN_PLATFORMS};
 use std::collections::HashMap;
 
 fn fixture() -> FixtureHttp {

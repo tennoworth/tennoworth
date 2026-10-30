@@ -17,7 +17,7 @@ required-features = ["dev-server"]
 [dependencies]
 # One process owns publication state and its atomic export at a time.
 fs2 = "0.4"
-tennoworth-announcements = { path = "../tennoworth-announcements" }
+announcement-feed = { path = "../announcement-feed" }
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }

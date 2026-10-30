@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use crate::clock;
-use crate::csvin;
+use crate::pipeline::csv_input;
 use market_domain::math::{clamp_avg, clamp_low5};
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -54,7 +54,7 @@ pub struct ItemEntry {
 }
 
 /// Render a single CSV row into an [`ItemEntry`].
-pub fn render_item(row: &csvin::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
+pub fn render_item(row: &csv_input::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
     let avg_raw = parse_f64_or(&row.avg_price_48h, 0.0);
     let med90 = parse_f64_or(&row.median_90d, 0.0);
     let ls = parse_f64_or(&row.low_sell_price, 0.0);
@@ -83,7 +83,7 @@ pub fn render_item(row: &csvin::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
             parse_f64_or(val, 0.0)
         },
         median_90d: med90,
-        medians_7d: csvin::parse_medians_7d(&row.medians_7d),
+        medians_7d: csv_input::parse_medians_7d(&row.medians_7d),
         donch_top_90d: parse_i64_or(&row.donch_top_90d, 0),
         donch_bot_90d: parse_i64_or(&row.donch_bot_90d, 0),
     }
@@ -91,7 +91,7 @@ pub fn render_item(row: &csvin::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
 
 /// Render all rows into a slug→[`ItemEntry`] map.
 pub fn render_items(
-    rows: &[csvin::CsvRow],
+    rows: &[csv_input::CsvRow],
     meta_by_slug: &HashMap<String, CatalogItemMeta>,
 ) -> HashMap<String, ItemEntry> {
     let mut items = HashMap::new();
@@ -159,7 +159,7 @@ pub struct Snapshot {
     /// Per-key evidence stamps for the surfaces a partial fetch can merge, read
     /// back by the next build. See `reconcile::KeyStamps`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub surface_key_fetched_at: HashMap<String, crate::reconcile::KeyStamps>,
+    pub surface_key_fetched_at: HashMap<String, crate::pipeline::reconcile::KeyStamps>,
     #[serde(default, skip_serializing_if = "EventRewardsSurface::is_empty")]
     pub event_rewards: EventRewardsSurface,
     /// Digital Extremes provenance + the worldState-only surfaces.
@@ -197,7 +197,7 @@ impl EventRewardsSurface {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SurfaceProvenance {
-    pub disposition: crate::reconcile::Disposition,
+    pub disposition: crate::pipeline::reconcile::Disposition,
     pub attempted_at: String,
     pub data_fetched_at: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -323,7 +323,7 @@ fn parse_i64_or(s: &str, default: i64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use csvin::CsvRow;
+    use csv_input::CsvRow;
 
     fn test_meta() -> CatalogItemMeta {
         CatalogItemMeta {

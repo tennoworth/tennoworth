@@ -1,6 +1,8 @@
 use crate::ingest::{self, Http, RivenChildOutcome};
-use crate::reconcile::Disposition;
-use crate::{clock, de, de_extract};
+use crate::pipeline::reconcile::Disposition;
+use crate::clock;
+use crate::ingest::de;
+use crate::ingest::de::extract as de_extract;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, HashMap};
 
@@ -70,13 +72,13 @@ pub(super) fn fetch(
         && prior_coverage_ok;
     let disposition_state = match de_snap.outcome("ExportWeapons_en.json") {
         de::ManifestOutcome::Usable if joined_usable => {
-            crate::reconcile::Disposition::PublishedFresh
+            crate::pipeline::reconcile::Disposition::PublishedFresh
         }
         de::ManifestOutcome::Usable | de::ManifestOutcome::Invalid => {
-            crate::reconcile::Disposition::PreservedInvalid
+            crate::pipeline::reconcile::Disposition::PreservedInvalid
         }
-        de::ManifestOutcome::Unchanged => crate::reconcile::Disposition::PreservedUnchanged,
-        de::ManifestOutcome::Unavailable => crate::reconcile::Disposition::PreservedUnavailable,
+        de::ManifestOutcome::Unchanged => crate::pipeline::reconcile::Disposition::PreservedUnchanged,
+        de::ManifestOutcome::Unavailable => crate::pipeline::reconcile::Disposition::PreservedUnavailable,
     };
     if !joined_usable && !de_dispos.is_empty() {
         eprintln!("  warning: {}/{} DE dispositions joined (prior exact set {}) - preserving prior exact provenance", joined_dispositions.len(), de_dispos.len(), prior_de_dispositions.len());

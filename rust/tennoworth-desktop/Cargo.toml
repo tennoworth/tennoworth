@@ -22,7 +22,7 @@ license = "MIT"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tennoworth-announcements = { path = "../tennoworth-announcements" }
+announcement-feed = { path = "../announcement-feed" }
 tokio = { workspace = true }
 # Fallible OS randomness keeps counting failures off the app startup path.
 rand = "0.10"

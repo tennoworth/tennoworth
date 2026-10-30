@@ -16,17 +16,7 @@
 
 pub mod clock;
 pub mod coerce;
-pub mod csvin;
-pub mod de;
-pub mod de_extract;
-pub mod history;
-pub mod http;
 pub mod ingest;
 pub mod observations;
-pub mod orders;
 pub mod pipeline;
-pub mod reconcile;
-pub mod render;
 pub mod scrape;
-pub mod stats;
-pub mod stats_cache;

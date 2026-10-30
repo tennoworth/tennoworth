@@ -1,5 +1,5 @@
 use crate::ingest::{self, Http};
-use crate::render::CatalogItemMeta;
+use crate::pipeline::render::CatalogItemMeta;
 use std::collections::HashMap;
 use std::path::Path;
 

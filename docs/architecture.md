@@ -54,12 +54,13 @@ rust/
     presence/                presence and the live order stream
     market/                  catalog, live order-book top, riven auctions
   wfm-scrape/src/
-    ingest/                  upstream transport and source-specific adapters
-    pipeline/                build orchestration, root discovery, publication
+    ingest/                  upstream transport and source adapters; de/ is the DE ingest
+    scrape/                  the WFM sweep: transport and retry, orders, statistics, stats cache
+    pipeline/                build: CSV input, render, reconcile, history, publication
   market-domain/             market heuristics (math), inventory, scoring, advisor, planners
   market-domain-wasm/        market-domain for the browser desktop preview (wasm32)
   wfm-client/                shared request policy and transport primitives
-  tennoworth-announcements/  pure curated announcement feed contract
+  announcement-feed/         pure curated announcement feed contract
   tennoworth-publisher/      private publisher API, SQLite history and feed export
   tennoworth-collectors/     opt-in usage and price-report services, shared quota gate
 scripts/                     release, CSP, probe and deployment checks
@@ -167,7 +168,7 @@ flowchart TD
   Desktop --> Core[wfm-trading]
   Desktop --> Client[wfm-client]
   Desktop --> Market[market-domain]
-  Desktop --> Feed[tennoworth-announcements]
+  Desktop --> Feed[announcement-feed]
   Desktop -.->|tests only| Collectors[tennoworth-collectors]
   Core --> Client
   Core --> Market

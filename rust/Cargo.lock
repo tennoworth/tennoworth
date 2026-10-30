@@ -87,6 +87,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "announcement-feed"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "url",
+]
+
+[[package]]
 name = "anstyle"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5643,17 +5654,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tennoworth-announcements"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "ts-rs",
- "url",
-]
-
-[[package]]
 name = "tennoworth-collectors"
 version = "0.1.0"
 dependencies = [
@@ -5672,6 +5672,7 @@ dependencies = [
 name = "tennoworth-desktop"
 version = "0.8.112"
 dependencies = [
+ "announcement-feed",
  "anyhow",
  "axum",
  "base64 0.22.1",
@@ -5702,7 +5703,6 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tempfile",
- "tennoworth-announcements",
  "tennoworth-collectors",
  "tokio",
  "ts-rs",
@@ -5721,6 +5721,7 @@ dependencies = [
 name = "tennoworth-publisher"
 version = "0.1.0"
 dependencies = [
+ "announcement-feed",
  "anyhow",
  "axum",
  "base64 0.22.1",
@@ -5734,7 +5735,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
- "tennoworth-announcements",
  "tokio",
  "tower",
  "ts-rs",

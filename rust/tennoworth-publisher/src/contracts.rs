@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tennoworth_announcements::{Announcement, AnnouncementFeed, OfficialEvent};
+use announcement_feed::{Announcement, AnnouncementFeed, OfficialEvent};
 use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]

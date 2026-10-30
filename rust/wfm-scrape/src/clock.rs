@@ -23,7 +23,7 @@ pub fn parse_stamp(s: &str) -> Option<DateTime<Utc>> {
 
 /// Epoch milliseconds → UTC. DE's worldState stamps every window
 /// (`Activation`, `Expiry`) as millis inside a Mongo-flavoured wrapper; once
-/// [`crate::de::de_millis`] has unwrapped it, this is the only conversion
+/// [`crate::ingest::de::de_millis`] has unwrapped it, this is the only conversion
 /// needed. Out-of-range values clamp to the epoch rather than panicking - a
 /// garbage timestamp should render as obviously wrong, not take down a build.
 pub fn from_millis(ms: i64) -> DateTime<Utc> {

@@ -1,5 +1,5 @@
 use super::Http;
-use crate::render::CatalogItemMeta;
+use crate::pipeline::render::CatalogItemMeta;
 use std::collections::HashMap;
 
 /// Fetch WFM catalog (`/v2/items`) - returns name→slug catalog AND

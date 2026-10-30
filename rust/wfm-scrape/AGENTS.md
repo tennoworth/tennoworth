@@ -1,7 +1,7 @@
 # wfm-scrape/ - DE ingest and the host market pipeline
 
 Parent rules: [`../AGENTS.md`](../AGENTS.md). This file covers
-`wfm-scrape/src/de.rs` and `de_extract.rs` - the Digital Extremes ingest - and
+`wfm-scrape/src/ingest/de/` (`mod.rs` and `extract.rs`) - the Digital Extremes ingest - and
 the observation-state contracts the pipeline enforces.
 
 ## Digital Extremes ingest
@@ -11,7 +11,7 @@ endpoints the game and the official Companion app run on; a decade of community
 use has been tolerated, not licensed. Fetch them from the host pipeline once per
 cycle, with the descriptive UA, and never from a visitor's browser.
 
-- **Every DE URL lives in `de.rs`.** Five of the paths the community wiki
+- **Every DE URL lives in `ingest/de/mod.rs`.** Five of the paths the community wiki
   documents are already dead - including the worldState URL most guides still
   quote. When the next one moves, one file changes.
 - **The index is LZMA-*alone*, not xz.** `lzma_rs::lzma_decompress`, not
@@ -111,7 +111,7 @@ freshly built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen
 fixtures in `tests/fixtures/{scrape,build}` - cargo rebuilds the binary first,
 so a stale one cannot green them.
 
-`--stats-cache <FILE> --stats-interval <6h>` (`src/stats_cache.rs`) reuses an
+`--stats-cache <FILE> --stats-interval <6h>` (`src/scrape/stats_cache.rs`) reuses an
 item's statistics between sweeps while its book is still read every sweep. It
 refreshes on the policy that replay validated: first sight, an unusable cached
 entry, a reappearance after an absence, an empty book last time, or age at the

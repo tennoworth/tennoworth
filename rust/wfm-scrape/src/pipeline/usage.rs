@@ -1,6 +1,8 @@
 use crate::ingest::Http;
-use crate::reconcile::Observation;
-use crate::{de, de_extract, render};
+use crate::pipeline::reconcile::Observation;
+use crate::ingest::de;
+use crate::ingest::de::extract as de_extract;
+use crate::pipeline::render;
 use std::collections::HashMap;
 
 pub(super) struct UsageSources {

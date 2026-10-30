@@ -232,7 +232,7 @@ pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven
 /// literal (NOT JSON: unquoted keys, single-quoted strings), keyed by weapon
 /// display name x `rerolled`. ~150 KB; the only stats that actually sample
 /// riven auctions - WFM's `/statistics` has no riven rows at all.
-pub use crate::de::DE_WEEKLY_RIVENS_URL;
+pub use crate::ingest::de::DE_WEEKLY_RIVENS_URL;
 
 /// The same file per platform. Console riven markets diverge sharply from PC's
 /// because of different populations, different metas, and far smaller samples.
@@ -241,7 +241,7 @@ pub use crate::de::DE_WEEKLY_RIVENS_URL;
 /// PC stays the primary surface (`unrolled`/`rolled` at the top level); the
 /// consoles ride along under `platforms` so a consumer that only knows about
 /// PC keeps working untouched.
-pub use crate::de::DE_WEEKLY_RIVEN_PLATFORMS;
+pub use crate::ingest::de::DE_WEEKLY_RIVEN_PLATFORMS;
 
 /// One row of `DE_WEEKLY_RIVENS_URL`: one weapon x reroll-state's price band.
 /// Generic rows (`compatibility: null` - "Rifle Riven Mod") carry no weapon

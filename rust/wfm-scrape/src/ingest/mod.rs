@@ -2,6 +2,7 @@
 
 mod baro;
 mod calendar;
+pub mod de;
 mod catalog;
 mod relics;
 mod rivens;

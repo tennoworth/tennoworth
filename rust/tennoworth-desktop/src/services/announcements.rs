@@ -2,8 +2,8 @@
 use super::{market::cache::MarketCache, notifications};
 use crate::contracts::notification::{AnnouncementNotification, Candidate, NotificationContent};
 use tauri::{AppHandle, Manager};
-use tennoworth_announcements::stamp;
-pub use tennoworth_announcements::{parse, source_allowed, validated_stamp, AnnouncementFeed};
+use announcement_feed::stamp;
+pub use announcement_feed::{parse, source_allowed, validated_stamp, AnnouncementFeed};
 
 pub const EVENT: &str = "announcements-changed";
 const BUNDLED: &str = include_str!("../../../../frontend/public/announcements.json");

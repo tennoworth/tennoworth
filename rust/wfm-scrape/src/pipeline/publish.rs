@@ -1,4 +1,4 @@
-use crate::render::Snapshot;
+use crate::pipeline::render::Snapshot;
 use serde_json::{Map, Value};
 use std::path::Path;
 
