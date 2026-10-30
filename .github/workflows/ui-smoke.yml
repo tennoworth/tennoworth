@@ -69,7 +69,6 @@ jobs:
               - 'rust/tennoworth-desktop/**'
               - 'rust/wfm-client/**'
               - 'rust/market-domain/**'
-              - 'rust/market-math/**'
               - 'rust/wfm-core/**'
               - 'frontend/src/**'
               - 'tests/fixtures/relic-ocr/**'

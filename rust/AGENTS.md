@@ -18,12 +18,12 @@ scan), [`wfm-client/AGENTS.md`](wfm-client/AGENTS.md) (WFM transport).
 
 - `wfm-core` stays usable without a terminal or Tauri: **no interactive
   terminal I/O** - the passphrase arrives from the webview over IPC.
-- `market-math` stays pure: no I/O, no dependencies, no clock.
+- `market-domain::math` stays pure: no I/O, nothing outside `std`, no clock.
 - `wfm-client` shares transport primitives only; authed order mutation and its
   reconciliation stay in `wfm-core`'s trading services.
 - `wfm-scrape` is the ONLY market pipeline and runs only on the host.
-- `market-domain` holds decision contracts and computations free of Tauri and
-  the network; `market-domain-wasm` exposes it to the browser preview and never
+- `market-domain` holds the market heuristics, decision contracts and
+  computations, free of Tauri and the network; `market-domain-wasm` exposes it to the browser preview and never
   ships.
 - `tennoworth-publisher` has no Tauri dependency and no player account
   operations; the collectors (`tennoworth-usage`, `tennoworth-reports`) stay

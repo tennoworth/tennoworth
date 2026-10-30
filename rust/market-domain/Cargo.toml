@@ -2,11 +2,10 @@
 name = "market-domain"
 version = "0.1.0"
 edition = "2021"
-description = "Portable inventory and market decision contracts."
+description = "Portable market heuristics, inventory and decision contracts."
 license = "MIT"
 
 [dependencies]
-market-math = { path = "../market-math" }
 # Calendar rules parse snapshot ISO dates without consulting the system clock.
 chrono = { workspace = true }
 serde = { workspace = true }

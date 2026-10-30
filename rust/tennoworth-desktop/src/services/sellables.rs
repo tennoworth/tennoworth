@@ -11,7 +11,7 @@
 //!      (name→slug), then a de-camelled name guess. Relic refinement subtypes
 //!      are NOT reconstructed - the snapshot doesn't carry per-instance subtype -
 //!      so relics collapse to their base slug (a low-value edge for a top-5 tray).
-//!   2. SCORING. `market_math::sell_priority` - the single source of truth shared
+//!   2. SCORING. `market_domain::math::sell_priority` - the single source of truth shared
 //!      with the SPA (parity-tested). We only rank; we never re-derive the score.
 //!   3. DATA FLOOR. Both catalogs are bundled via `include_str!` from the
 //!      committed `frontend/public/*.json`, so the tray works offline on a first
@@ -24,9 +24,9 @@ use std::collections::BTreeMap;
 
 #[cfg(test)]
 use market_domain::inventory::{path_guess_candidates, slug_guess};
-use market_math::sell_priority::PricedEntry;
+use market_domain::math::sell_priority::PricedEntry;
 #[cfg(test)]
-use market_math::sell_priority;
+use market_domain::math::sell_priority;
 use serde::{Deserialize, Deserializer};
 
 #[cfg(test)]

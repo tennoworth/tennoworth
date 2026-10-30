@@ -2,9 +2,9 @@
 //!
 //! Fetch the master item list, filter/exclude/limit it, then per item fetch the
 //! order book + closed stats (paced + retried through [`crate::http`]), compose
-//! the row entirely from [`market_math`] heuristics, gate on `--min-volume`,
+//! the row entirely from [`market_domain::math`] heuristics, gate on `--min-volume`,
 //! and write the CSV atomically. The scoring/filtering math lives in
-//! `market-math`; this module only wires it together.
+//! `market_domain::math`; this module only wires it together.
 //!
 //! Items are scanned by a small worker pool sized to the concurrency the signed
 //! policy grants: the governor deliberately allows two requests in flight, and
@@ -18,7 +18,7 @@ use std::sync::Mutex;
 
 use serde_json::Value;
 
-use market_math::{
+use market_domain::math::{
     avg_lowest_asks, canonical_subtype, clamp_low5, demand_ratio, drop_poisoned_rows, low_sell,
     rank0_orders, rank0_rows, round_dp, score, series_stats, spread, subtype_rows, top_buy,
     weighted_avg_48h, StatsDay,

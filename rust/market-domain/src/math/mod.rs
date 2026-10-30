@@ -1,7 +1,7 @@
 //! Pure market-data heuristics behind the published snapshot.
 //!
-//! RULES FOR THIS CRATE:
-//! - No I/O, no HTTP, no clocks, no dependencies. Pure functions only -
+//! RULES FOR THIS MODULE:
+//! - No I/O, no HTTP, no clocks, nothing outside `std`. Pure functions only -
 //!   that's what lets every function be pinned against the shared fixtures.
 //! - Quirky semantics (ties-to-even rounding, upper-middle baseline,
 //!   insertion-order tie-breaks) are part of the frozen fixtures' contract and

@@ -9,7 +9,7 @@
 //! - ONE injected clock everywhere time is read: `updated_at`, every
 //!   `surface_fetched_at` stamp, AND the vaulting-soon derivation. Fixtures
 //!   are only reproducible if no code path calls the system clock directly.
-//! - Heuristics live in `market-math`; this crate never re-implements them.
+//! - Heuristics live in `market_domain::math`; this crate never re-implements them.
 //! - Fixture regression tests (tests/ dir) shell the real binary against the
 //!   frozen inputs in tests/fixtures/{scrape,build}/ - never
 //!   byte-diff, never live endpoints outside the one opt-in liveness test.

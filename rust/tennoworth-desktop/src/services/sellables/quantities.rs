@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use market_math::sell_priority;
+use market_domain::math::sell_priority;
 
 use crate::persistence::Db;
 

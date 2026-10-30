@@ -9,7 +9,7 @@
 
 use serde_json::Value;
 
-use market_math::LiveOrder;
+use market_domain::math::LiveOrder;
 
 use crate::coerce::{coerce_field, Coercions};
 
@@ -92,7 +92,7 @@ fn parse_rank(v: Option<&Value>) -> Option<i64> {
 
 /// Split out the live orders of one side (`"buy"` / `"sell"`). Liveness was
 /// already applied in [`parse_orders`]; here we only partition by side. Returns the
-/// bare [`LiveOrder`]s the market-math tier filters operate on.
+/// bare [`LiveOrder`]s the `market_domain::math` tier filters operate on.
 pub fn live_orders(parsed: &[ParsedOrder], kind: &str) -> Vec<LiveOrder> {
     parsed
         .iter()
@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_bulk_lot_totals_before_market_math() {
+    fn normalizes_bulk_lot_totals_before_the_heuristics() {
         let v = json!([
             {"type":"sell", "platinum":48, "perTrade":6, "user":{"status":"online"}},
             {"type":"sell", "platinum":36, "perTrade":5, "user":{"status":"online"}},

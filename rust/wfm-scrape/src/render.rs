@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::clock;
 use crate::csvin;
-use market_math::{clamp_avg, clamp_low5};
+use market_domain::math::{clamp_avg, clamp_low5};
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct CatalogItemMeta {

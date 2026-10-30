@@ -45,9 +45,8 @@ rust/
   wfm-scrape/src/
     ingest/                  upstream transport and source-specific adapters
     pipeline/                build orchestration, root discovery, publication
-  market-domain/             inventory, scoring, advisor and planning decisions
+  market-domain/             market heuristics (math), inventory, scoring, advisor, planners
   market-domain-wasm/        market-domain for the browser desktop preview (wasm32)
-  market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
   tennoworth-announcements/  pure curated announcement feed contract
   tennoworth-publisher/      private publisher API, SQLite history and feed export
@@ -158,14 +157,12 @@ flowchart TD
   Desktop --> Core[wfm-core]
   Desktop --> Client[wfm-client]
   Desktop --> Market[market-domain]
-  Desktop --> Math[market-math]
   Desktop --> Feed[tennoworth-announcements]
   Desktop --> Reports[tennoworth-reports]
   Core --> Client
   Core --> Market
-  Market --> Math
   Wasm[market-domain-wasm] --> Market
-  Scrape[wfm-scrape] --> Math
+  Scrape[wfm-scrape] --> Market
   Scrape --> Client
   Publisher[tennoworth-publisher] --> Feed
   Publisher --> Market
@@ -241,8 +238,8 @@ capture must not implicitly clear or replace that identity.
 `wfm-core` stays usable without terminal prompts or a Tauri dependency. Its
 acquisition and trading modules share narrowly named HTTP, identity, path, and
 time helpers. `wfm-client` shares transport primitives, not an abstraction that
-combines anonymous scraping with authenticated order mutation. `market-math`
-has no I/O or clock dependency. `market-domain` isolates decision contracts and computations from both Tauri and the network
+combines anonymous scraping with authenticated order mutation. `market-domain`'s
+`math` module has no I/O or clock dependency, and the crate isolates decision contracts and computations from both Tauri and the network
 core, so shared fixtures and contract generation can run without the GUI stack.
 
 That is why `wfm-core` depends on `market-domain` rather than the reverse, and

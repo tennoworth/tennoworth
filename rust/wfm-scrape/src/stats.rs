@@ -1,14 +1,14 @@
 //! Closed-trade statistics parsing - the v1 `/v1/items/{slug}/statistics`
 //! payload's `statistics_closed.48hours` / `.90days` day-rows.
 //!
-//! Each row becomes a [`market_math::StatsDay`]. Numeric fields flow through
+//! Each row becomes a [`market_domain::math::StatsDay`]. Numeric fields flow through
 //! [`crate::coerce`]; `mod_rank` keeps the absent / null / number tri-state the
-//! market-math tier filter depends on; non-object entries are skipped.
+//! `math` tier filter depends on; non-object entries are skipped.
 //!
 //! FIELD-READ AUDIT (the orders.rs coercion-safety fix's sibling check): unlike
 //! orders - where liveness is a cheap local predicate we can apply before
-//! coercing - the stats rank-0 / subtype narrowing lives in `market-math`,
-//! which is a pure, dependency-free crate and therefore cannot thread the
+//! coercing - the stats rank-0 / subtype narrowing lives in `market_domain::math`,
+//! which is pure and std-only and therefore cannot thread the
 //! coercion counter. So every window row is coerced up front, before the
 //! rank0/subtype filters run. `volume` is needed on ALL rows (via
 //! `canonical_subtype`); `median` / `max_price` / `avg_price` matter only on
@@ -16,11 +16,11 @@
 //! them on ranked / wrong-subtype rows. In healthy data those are plain numbers
 //! → identical output; a divergence needs junk confined to a filtered-out row
 //! (a partial schema drift) - a tiny surface that fixing would cost a breach of
-//! the market-math purity boundary, so it is accepted and documented, not fixed.
+//! the `math` purity boundary, so it is accepted and documented, not fixed.
 
 use serde_json::Value;
 
-use market_math::StatsDay;
+use market_domain::math::StatsDay;
 
 use crate::coerce::{coerce_field, Coercions};
 
