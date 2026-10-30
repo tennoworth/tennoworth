@@ -1,7 +1,9 @@
 #!/bin/sh
 # Pull the CI-built web bundle (web-latest release) when it changes, swap it
-# into place atomically, reload Caddy. Run from the wfm-web-pull.timer - the
-# box never builds anything (node/bun stay off it, per README).
+# into place atomically, reload Caddy. The site itself is served from
+# Cloudflare, so this only refreshes the box's rollback copy: it runs when the
+# private dashboard asks, or by hand before removing the Cloudflare site route.
+# The box never builds anything (node/bun stay off it, per README).
 set -eu
 
 APP=/srv/wfm/app

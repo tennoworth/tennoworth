@@ -123,9 +123,9 @@ itself - the live data files, `wfm-policy.json`, `announcements.json`, the
 `/api/*` collectors and the removed package tombstones - is a Cloudflare route
 with no Worker, so it reaches the box through its tunnel unchanged.
 `deploy/cloudflare-web/routes.json` records that routing; it is changed
-through the Cloudflare API, never by a deploy. The box also keeps pulling the
-`web-latest` bundle, so removing the site route serves the site from the box
-again.
+through the Cloudflare API, never by a deploy. The box keeps a rollback copy
+of the `web-latest` bundle, refreshed only on request; refresh it, then remove
+the site route, and the box serves the site again.
 
 ## CI inventory
 

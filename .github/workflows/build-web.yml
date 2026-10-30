@@ -1,9 +1,9 @@
 name: build-web
 
 # Build the static frontend/dist/ off the exposed box (node/bun never touch
-# it - see the deploy runbook "Build supply-chain"). Publishes a rolling
-# `web-latest` release asset the deploy box pulls with a plain curl, no auth,
-# no Tailscale/LAN transfer needed - matches release-desktop.yml's pattern.
+# it - see the deploy runbook "Build supply-chain") and deploys it to
+# Cloudflare. Also publishes a rolling `web-latest` release asset, the box's
+# on-demand rollback copy, fetched with a plain curl and no auth.
 
 on:
   push:
@@ -178,8 +178,7 @@ jobs:
 
       # The site is served from Cloudflare (deploy/cloudflare-web). This only
       # uploads a new version of the Worker: routing is managed separately, so
-      # it cannot move traffic. web-latest above stays the box's copy and the
-      # rollback path.
+      # it cannot move traffic. web-latest above is the box's rollback copy.
       - name: Deploy to Cloudflare
         working-directory: deploy/cloudflare-web
         env:
