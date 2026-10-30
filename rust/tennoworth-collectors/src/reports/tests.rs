@@ -1,6 +1,6 @@
 use super::*;
-use crate::contract::{validate_erase, validate_sales, validate_shape};
-use crate::store::{aggregate, RawSale, MAX_SALES_PER_CONTRIBUTOR_WEEK, MIN_CONTRIBUTORS};
+use super::contract::{validate_erase, validate_sales, validate_shape};
+use super::store::{aggregate, RawSale, MAX_SALES_PER_CONTRIBUTOR_WEEK, MIN_CONTRIBUTORS};
 use chrono::{DateTime, NaiveDate};
 use rusqlite::Connection;
 use serde_json::{json, Value};
@@ -8,7 +8,7 @@ use std::future::IntoFuture;
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!(
-        "../../../tests/fixtures/reports.json"
+        "../../../../tests/fixtures/reports.json"
     ))
     .unwrap()
 }

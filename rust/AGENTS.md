@@ -27,7 +27,7 @@ build and check commands are in ../CONTRIBUTING.md. Crate-specific rules:
   computations, free of Tauri and the network; `market-domain-wasm` exposes it to the browser preview and never
   ships.
 - `tennoworth-publisher` has no Tauri dependency and no player account
-  operations; the collectors (`tennoworth-usage`, `tennoworth-reports`) stay
+  operations; the collectors (`tennoworth-collectors`' two binaries) stay
   separate processes with their own databases.
 
 ## Cross-crate invariants

@@ -205,9 +205,9 @@ fn the_service_accepts_what_the_app_builds_and_it_names_no_partner() {
     ];
     let (batches, _) = plan(&trades, today(), &resolve);
     let body = body(&key(), &batches[0]);
-    let parsed: tennoworth_reports::contract::SalesBatch =
+    let parsed: tennoworth_collectors::reports::contract::SalesBatch =
         serde_json::from_value(body.clone()).unwrap();
-    tennoworth_reports::contract::validate_sales(parsed, today()).unwrap();
+    tennoworth_collectors::reports::contract::validate_sales(parsed, today()).unwrap();
     let text = body.to_string();
     for leaked in ["SomeTenno", "1234.5", "Primed Flow"] {
         assert!(
@@ -328,8 +328,8 @@ async fn run_pass(endpoint: &str, consent_on: bool) -> (Db, i64, i64) {
 #[tokio::test]
 async fn an_accepted_batch_advances_the_mark_and_the_weekly_count() {
     let store =
-        tennoworth_reports::Store::new(rusqlite::Connection::open_in_memory().unwrap()).unwrap();
-    let service = tennoworth_reports::Collector::new(store);
+        tennoworth_collectors::reports::Store::new(rusqlite::Connection::open_in_memory().unwrap()).unwrap();
+    let service = tennoworth_collectors::reports::Collector::new(store);
     service.tick().unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!(
@@ -337,7 +337,7 @@ async fn an_accepted_batch_advances_the_mark_and_the_weekly_count() {
         listener.local_addr().unwrap()
     );
     let task =
-        tokio::spawn(axum::serve(listener, tennoworth_reports::router(service)).into_future());
+        tokio::spawn(axum::serve(listener, tennoworth_collectors::reports::router(service)).into_future());
 
     let (db, _, newest) = run_pass(&endpoint, true).await;
     assert_eq!(mark(&db).unwrap(), newest);

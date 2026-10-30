@@ -1,6 +1,6 @@
 use chrono::Utc;
 use std::path::PathBuf;
-use tennoworth_usage::{Collector, Store};
+use tennoworth_collectors::usage::{Collector, Store};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -28,11 +28,11 @@ async fn main() -> anyhow::Result<()> {
         None => {}
     }
     let state = Collector::new(store);
-    collector_gate::serve(
+    tennoworth_collectors::gate::serve(
         "usage",
         state.clone(),
         Collector::tick,
-        tennoworth_usage::router(state),
+        tennoworth_collectors::usage::router(state),
         "TENNOWORTH_USAGE_PORT",
         8082,
     )

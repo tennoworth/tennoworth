@@ -17,12 +17,12 @@
 #                         scoring, planners, generated IPC types.
 #   tennoworth-desktop  - Tauri v2 shell, the app users actually install.
 #                         Drives both over IPC - the only player adapter.
-#   tennoworth-usage    - the opt-in installation-count service on the host.
-#   tennoworth-reports  - the opt-in anonymous price-report service on the host.
+#   tennoworth-collectors - the opt-in host collectors (installation counts,
+#                         price reports): two binaries, one shared quota gate.
 #   tennoworth-announcements - pure feed contract shared by readers and publishers.
 #   tennoworth-publisher - private host-only announcement publication service.
 [workspace]
-members = ["game-acquisition", "wfm-trading", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports", "collector-gate", "tennoworth-announcements", "tennoworth-publisher"]
+members = ["game-acquisition", "wfm-trading", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-collectors", "tennoworth-announcements", "tennoworth-publisher"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping

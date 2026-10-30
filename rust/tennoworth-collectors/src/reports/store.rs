@@ -3,7 +3,7 @@
 //! published aggregates and their raw rows deleted, so a contributor id never
 //! outlives the week after it was used.
 
-use crate::contract::{iso_week, ValidBatch, ValidErase, ValidShape};
+use super::contract::{iso_week, ValidBatch, ValidErase, ValidShape};
 use axum::http::StatusCode;
 use chrono::{DateTime, Days, NaiveDate, Utc};
 use rusqlite::{Connection, OptionalExtension};

@@ -7,7 +7,11 @@ on:
   workflow_call:
     inputs:
       crate:
-        description: Workspace crate whose binary is published.
+        description: tennoworth-collectors binary that is published.
+        required: true
+        type: string
+      module:
+        description: The binary's own module under tennoworth-collectors/src.
         required: true
         type: string
       caller:
@@ -60,8 +64,11 @@ jobs:
           predicate-quantifier: 'some-with-excludes'
           filters: |
             build:
-              - 'rust/${{ inputs.crate }}/**'
-              - 'rust/collector-gate/**'
+              - 'rust/tennoworth-collectors/Cargo.toml'
+              - 'rust/tennoworth-collectors/src/lib.rs'
+              - 'rust/tennoworth-collectors/src/gate.rs'
+              - 'rust/tennoworth-collectors/src/${{ inputs.module }}/**'
+              - 'rust/tennoworth-collectors/src/bin/${{ inputs.crate }}.rs'
               - 'rust/Cargo.toml'
               - 'rust/Cargo.lock'
               - '!**/AGENTS.md'
@@ -72,8 +79,8 @@ jobs:
 
       # `build` covers the paths the binary is built from, not a fail-closed net:
       # an unrelated change - a frontend-only promotion - must not republish a
-      # collector. Its only path dependency is collector-gate, so the two crates
-      # plus the manifests are the whole list.
+      # collector. Its inputs are its own module and bin, the shared gate and
+      # crate root, and the manifests; the other collector's module is not one.
       - name: Publish only when the service's inputs changed
         id: decide
         env:
@@ -133,7 +140,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
 
       - name: Build
-        run: cargo build --release -p "$CRATE"
+        run: cargo build --release -p tennoworth-collectors --bin "$CRATE"
 
       - name: Package + checksum
         run: |
