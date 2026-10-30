@@ -129,12 +129,12 @@ fn raw_http_send_sites_are_classified() {
         "wfm-client/src/transport.rs",
         "wfm-client/src/policy.rs",
         "game-acquisition/src/inventory.rs",
-        "tennoworth-desktop/src/services/market.rs",
+        "tennoworth-desktop/src/services/market/cache.rs",
         // First-party, consent-gated counter: must not inherit WFM identity headers.
-        "tennoworth-desktop/src/services/usage.rs",
+        "tennoworth-desktop/src/services/telemetry/usage.rs",
         // First-party, consent-gated price reports: same client as the counter.
-        "tennoworth-desktop/src/services/reports.rs",
-        "tennoworth-desktop/src/services/definitions.rs",
+        "tennoworth-desktop/src/services/telemetry/reports/mod.rs",
+        "tennoworth-desktop/src/services/market/definitions.rs",
         "wfm-scrape/src/ingest/catalog.rs",
         "wfm-scrape/src/ingest/transport.rs",
     ];

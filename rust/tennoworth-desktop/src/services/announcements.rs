@@ -1,6 +1,6 @@
 //! Curated, expiring messages. Remote prose is data, never an instruction to trade.
-use super::{market::MarketCache, notifications};
-use crate::notification_contract::{AnnouncementNotification, Candidate, NotificationContent};
+use super::{market::cache::MarketCache, notifications};
+use crate::contracts::notification::{AnnouncementNotification, Candidate, NotificationContent};
 use tauri::{AppHandle, Manager};
 use tennoworth_announcements::stamp;
 pub use tennoworth_announcements::{parse, source_allowed, validated_stamp, AnnouncementFeed};

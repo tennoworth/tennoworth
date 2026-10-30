@@ -6,7 +6,7 @@ pub struct TradeRow {
     pub partner: String,
     pub kind: String,
     pub plat: i64,
-    pub items: Vec<crate::trading_contract::TradeItem>,
+    pub items: Vec<crate::contracts::trading::TradeItem>,
     pub log_stamp: Option<String>,
     pub wfm_closed: bool,
 }

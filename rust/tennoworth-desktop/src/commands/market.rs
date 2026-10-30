@@ -14,10 +14,10 @@ use wfm_trading::market::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 use wfm_trading::market::rivens::{fetch_riven_comps, RivenAuction, RivenStatFilter};
 
 use crate::persistence::Db;
-use crate::services::market::{self, MarketCache, RefreshResult};
-use crate::services::sellables::{self, SellableRow};
-use crate::command_error::CmdError;
-use crate::services::wfm_session::WfmSession;
+use crate::services::market::cache::{self as market, MarketCache, RefreshResult};
+use crate::services::market::sellables::{self, SellableRow};
+use crate::contracts::command_error::CmdError;
+use crate::services::wfm::session::WfmSession;
 use crate::shell::tray::{rebuild_tray, TrayState};
 
 /// The tray labels the last rebuild pushed + the last post-scan summary -

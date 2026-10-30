@@ -1,5 +1,5 @@
 use super::super::{RelicOverlaySlot, RECOMMENDATION_CONFIDENCE};
-use crate::services::sellables::OverlayCatalogItem;
+use crate::services::market::sellables::OverlayCatalogItem;
 
 #[derive(Debug, Clone)]
 pub(in crate::overlay) struct FoundMatch {

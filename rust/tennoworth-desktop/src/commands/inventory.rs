@@ -5,7 +5,7 @@
 use tauri::{AppHandle, State};
 
 use crate::persistence::Db;
-use crate::services::acquisition::{record_snapshot, scan_and_record, ScannedInventory};
+use crate::services::inventory::acquisition::{record_snapshot, scan_and_record, ScannedInventory};
 use crate::shell::tray::post_scan_surfaces;
 
 #[tauri::command]

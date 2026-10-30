@@ -45,7 +45,7 @@ These bind every crate here, including callers:
   desktop's `commands/listing.rs`, trade-session selection). Never restate a
   value; the frontend's pre-flight copy is gated by `tests/fixtures/limits.json`.
 - **Nullable auxiliary market maps are not a broken snapshot.** Desktop cache
-  loading (`tennoworth-desktop/src/services/sellables.rs`) treats explicit
+  loading (`tennoworth-desktop/src/services/market/sellables/`) treats explicit
   `null` for optional `catalog`, `path_to_info`, `usage` and `set_to_parts` as
   empty while keeping `items` strict; otherwise one optional surface discards
   current rows and silently falls back to the bundled snapshot. Keep a
@@ -59,9 +59,9 @@ These bind every crate here, including callers:
   Audit every new log line.
 - **A background scan must not run during an interactive listing flow.** A scan
   that changes the inventory records a new snapshot, and
-  `services::protection::validate_snapshot` and `Db::session_allowance` require
+  `services::trading::protection::validate_snapshot` and `Db::session_allowance` require
   a submitted listing's snapshot to be the latest, so a scan landing mid-review
-  throws the user's review away. The webview holds `services/auto_scan.rs` while
+  throws the user's review away. The webview holds `services/inventory/auto_scan.rs` while
   `listing.listingOpen` or the Trade Session view is active, and the SPA defers
   adoption. Keep that hold, and route any new background scan path through it.
 - **The desktop build embeds `frontend/dist-desktop`.** Run

@@ -1,4 +1,4 @@
-//! Trade presence over IPC. Thin adapters over [`crate::services::presence`],
+//! Trade presence over IPC. Thin adapters over [`crate::services::wfm::presence`],
 //! which owns the status channel and the stored settings.
 #![allow(
     clippy::unreachable,
@@ -7,9 +7,9 @@
 
 use tauri::{AppHandle, Manager, State};
 
-use crate::command_error::CmdError;
+use crate::contracts::command_error::CmdError;
 use crate::persistence::Db;
-use crate::services::presence::{self, PresenceChoice, PresenceSettings, PresenceState, PresenceStatus};
+use crate::services::wfm::presence::{self, PresenceChoice, PresenceSettings, PresenceState, PresenceStatus};
 
 #[tauri::command]
 pub fn presence_status(state: State<'_, PresenceState>) -> PresenceStatus {

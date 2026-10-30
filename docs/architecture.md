@@ -28,8 +28,16 @@ rust/
   tennoworth-desktop/src/
     shell/                   startup, tray, updates, probes
     commands/                IPC entry points and input validation
-    services/                inventory state, automatic scan, watches, trades,
-                             notifications, WFM status, usage and price reports
+    contracts/               command errors, notification and trading view shapes
+    services/                capability owners, one folder per capability:
+      inventory/             scan, shared scanner, automatic scan
+      game_log/              EE.log tailer, trade recording, trade allowance
+      trading/               trade ledger, listing outcomes, order edits, protection
+      wfm/                   signed-in session, sign-in window, presence
+      watches/               order-book poll and live order stream
+      market/                snapshot cache, scan definitions, sellable ranking
+      telemetry/             opt-in check-in and price reports
+      notifications/         notification delivery and clock-driven reminders
     persistence/             schema, record types, table operations, key storage
     game_events.rs           EE.log lines published to whoever subscribes
     vision/

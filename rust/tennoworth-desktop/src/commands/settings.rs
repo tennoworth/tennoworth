@@ -7,9 +7,9 @@
 use tauri::{AppHandle, Manager, State};
 
 use crate::persistence::{Db, SnapshotSummary};
-use crate::services::protection::{GuidanceInventory, ProtectionPlan, ProtectionState};
-use crate::command_error::CmdError;
-use crate::services::wfm_session::WfmSession;
+use crate::services::trading::protection::{GuidanceInventory, ProtectionPlan, ProtectionState};
+use crate::contracts::command_error::CmdError;
+use crate::services::wfm::session::WfmSession;
 use std::sync::Arc;
 
 #[tauri::command]
@@ -20,10 +20,10 @@ pub async fn protection_state(
 ) -> Result<ProtectionState, CmdError> {
     let session = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let market = crate::services::sellables::MarketData::load(
-            &app.state::<crate::services::market::MarketCache>(),
+        let market = crate::services::market::sellables::MarketData::load(
+            &app.state::<crate::services::market::cache::MarketCache>(),
         );
-        let orders = crate::services::protection::validate_snapshot(
+        let orders = crate::services::trading::protection::validate_snapshot(
             &app.state::<Db>(),
             inventory.snapshot_id,
         )
@@ -35,7 +35,7 @@ pub async fn protection_state(
         .and_then(|unlocked| {
             wfm_trading::orders::listing::list_user_orders(&unlocked).map_err(|e| e.to_string())
         });
-        crate::services::protection::guidance_state(&app.state::<Db>(), &market, orders, inventory)
+        crate::services::trading::protection::guidance_state(&app.state::<Db>(), &market, orders, inventory)
             .map_err(CmdError::internal)
     })
     .await
@@ -54,8 +54,8 @@ pub fn save_protection_plan(
             "Wait for the current listing operation before changing protection.",
         )
     })?;
-    let market = crate::services::sellables::MarketData::load(
-        &app.state::<crate::services::market::MarketCache>(),
+    let market = crate::services::market::sellables::MarketData::load(
+        &app.state::<crate::services::market::cache::MarketCache>(),
     );
     plan.save(&app.state::<Db>(), &market)
         .map_err(CmdError::internal)?;

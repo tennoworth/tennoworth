@@ -27,7 +27,7 @@ agent), so the old flow - GET `/auth/signin` for its `csrf-token` meta tag,
 then `POST /v1/auth/signin` - dies at the GET, and the POST refuses to run
 without that page-minted token. `api.warframe.market` is not challenged. The
 desktop opens WFM's sign-in page in an incognito webview window
-(`tennoworth-desktop/src/services/wfm_signin.rs`), reads the site's `JWT`
+(`tennoworth-desktop/src/services/wfm/signin.rs`), reads the site's `JWT`
 cookie, and `jwt_is_signed_in` (`/v2/me`: 401 = still the anonymous cookie
 every visitor gets) decides when it is a real session. v2 endpoints require
 this cookie-style JWT - header-style is rejected.

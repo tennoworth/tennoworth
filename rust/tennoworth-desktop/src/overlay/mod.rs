@@ -34,8 +34,8 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::persistence::Db;
-use crate::services::market::MarketCache;
-use crate::services::sellables::MarketData;
+use crate::services::market::cache::MarketCache;
+use crate::services::market::sellables::MarketData;
 
 pub const EVENT_UPDATE: &str = "relic-overlay:update";
 pub const EVENT_HIDE: &str = "relic-overlay:hide";

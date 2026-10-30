@@ -14,9 +14,9 @@ use tauri::{AppHandle, Manager, State};
 use crate::poison::guard;
 use wfm_trading::orders::listing::Unlocked;
 
-use crate::services::sellables::ScanNotification;
-use crate::command_error::CmdError;
-use crate::services::wfm_session::WfmSession;
+use crate::services::market::sellables::ScanNotification;
+use crate::contracts::command_error::CmdError;
+use crate::services::wfm::session::WfmSession;
 use crate::shell::tray::{post_scan_surfaces, TrayState};
 
 // A minimal DE inventory: four distinct tradeable-category paths (so
@@ -587,9 +587,9 @@ pub fn debug_seed_unlocked(app: AppHandle, session: State<'_, Arc<WfmSession>>) 
 }
 
 fn check_trade_contention(app: &AppHandle, session: &Arc<WfmSession>) -> Result<(), CmdError> {
-    use crate::services::order_mutations::OrderMutations;
-    use crate::services::trades::{handle_trade, LedgerOutcome};
-    use crate::trading_contract::{LogPosition, TradeEvent, TradeItem};
+    use crate::services::trading::order_mutations::OrderMutations;
+    use crate::services::trading::trades::{handle_trade, LedgerOutcome};
+    use crate::contracts::trading::{LogPosition, TradeEvent, TradeItem};
 
     let mutations = OrderMutations::new(Arc::clone(session));
     let _reviewed = mutations.begin_only()?;

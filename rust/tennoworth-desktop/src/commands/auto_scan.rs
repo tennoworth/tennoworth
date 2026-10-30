@@ -1,10 +1,10 @@
 //! Automatic-scan settings and status over IPC. Thin adapters over
-//! [`crate::services::auto_scan`], which owns the loop and the stored value.
+//! [`crate::services::inventory::auto_scan`], which owns the loop and the stored value.
 
 use tauri::State;
 
 use crate::persistence::Db;
-use crate::services::auto_scan::{self, AutoScanSettings, AutoScanState, AutoScanStatus};
+use crate::services::inventory::auto_scan::{self, AutoScanSettings, AutoScanState, AutoScanStatus};
 
 #[tauri::command]
 pub fn get_auto_scan_settings(db: State<'_, Db>) -> AutoScanSettings {

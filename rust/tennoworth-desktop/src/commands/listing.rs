@@ -25,14 +25,14 @@ use wfm_trading::orders::plan::{
 };
 
 use crate::persistence::Db;
-use crate::command_error::CmdError;
-use crate::services::wfm_session::WfmSession;
+use crate::contracts::command_error::CmdError;
+use crate::services::wfm::session::WfmSession;
 
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 
 fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), PlanValidationError> {
     for item in items.iter().filter(|item| item.order_type == "sell") {
-        crate::services::protection::validate_snapshot(&app.state::<Db>(), item.inventory_snapshot_id)?;
+        crate::services::trading::protection::validate_snapshot(&app.state::<Db>(), item.inventory_snapshot_id)?;
     }
     validate_protected_plan(app, items)?;
     if items.iter().all(|i| i.session.is_none()) {
@@ -48,8 +48,8 @@ fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Plan
         context.utc_day,
         crate::services::unix_now(),
     )?;
-    let market = crate::services::sellables::MarketData::load(
-        &app.state::<crate::services::market::MarketCache>(),
+    let market = crate::services::market::sellables::MarketData::load(
+        &app.state::<crate::services::market::cache::MarketCache>(),
     );
     let quantities = market.session_quantities(&db)?;
     let session = app.state::<Arc<WfmSession>>();
@@ -69,7 +69,7 @@ fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Plan
 
 fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), PlanValidationError> {
     let db = app.state::<Db>();
-    let protection = crate::services::protection::ProtectionPlan::load(&db)?;
+    let protection = crate::services::trading::protection::ProtectionPlan::load(&db)?;
     if !protection.active(&db)?
         && items
             .iter()
@@ -77,8 +77,8 @@ fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Pl
     {
         return Ok(());
     }
-    let market = crate::services::sellables::MarketData::load(
-        &app.state::<crate::services::market::MarketCache>(),
+    let market = crate::services::market::sellables::MarketData::load(
+        &app.state::<crate::services::market::cache::MarketCache>(),
     );
     let session = app.state::<Arc<WfmSession>>();
     let unlocked = session
@@ -100,7 +100,7 @@ fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Pl
 
 fn validate_protected_contents(
     db: &Db,
-    market: &crate::services::sellables::MarketData,
+    market: &crate::services::market::sellables::MarketData,
     body: &serde_json::Value,
     items: &[PlanItem],
 ) -> Result<(), String> {
@@ -148,7 +148,7 @@ fn validate_protected_contents(
         );
     }
     let projected_body = serde_json::json!({"data":{"sell":projected,"buy":[]}});
-    let state = crate::services::protection::state(db, market, Ok(projected_body))?;
+    let state = crate::services::trading::protection::state(db, market, Ok(projected_body))?;
     if state.snapshot_id.is_none() {
         return Err("Scan inventory before listing from a protected plan.".into());
     }
@@ -260,7 +260,7 @@ fn finish_plan(path: &std::path::Path, response: &mut PlanResponse) {
 /// hold a finished batch's journal open, which is what retired listing_log.
 fn record_outcomes(app: &AppHandle, items: &[PlanItem], response: &PlanResponse) {
     let db = app.state::<Db>();
-    crate::services::outcomes::record(&db, &response.plan_id, items, &response.results, crate::services::unix_now());
+    crate::services::trading::outcomes::record(&db, &response.plan_id, items, &response.results, crate::services::unix_now());
 }
 
 fn finished_plan_response(pending: &PendingPlan) -> PlanResponse {
@@ -290,7 +290,7 @@ pub async fn submit_plan(
     let reviewed = items.clone();
     let response = tauri::async_runtime::spawn_blocking(move || {
         let request = s.claim_plan_request(request_id)?;
-        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let (_guard, unlocked) = mutations.begin()?;
         match journal_state(s.pending_path()) {
             JournalState::Unfinished => {
@@ -368,7 +368,7 @@ pub async fn resume_pending_plan(
             }
         };
         let request = s.claim_plan_request(request_id)?;
-        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
         if pending.is_finished() {
             let _guard = mutations.begin_only()?;
@@ -470,11 +470,11 @@ pub async fn update_order(
     }
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let (_guard, unlocked) = mutations.begin()?;
-        let protection = crate::services::protection::ProtectionPlan::load(&app.state::<Db>()).map_err(CmdError::internal)?;
+        let protection = crate::services::trading::protection::ProtectionPlan::load(&app.state::<Db>()).map_err(CmdError::internal)?;
         if protection.active(&app.state::<Db>()).map_err(CmdError::internal)? && (patch.quantity.is_some() || patch.rank.is_some()) {
-            let market = crate::services::sellables::MarketData::load(&app.state::<crate::services::market::MarketCache>());
+            let market = crate::services::market::sellables::MarketData::load(&app.state::<crate::services::market::cache::MarketCache>());
             let body = list_user_orders(&unlocked).map_err(CmdError::wfm)?;
             let data = body.get("data").unwrap_or(&body);
             let rows = data.as_array().or_else(|| data.get("sell").and_then(|v| v.as_array())).ok_or_else(|| CmdError::internal("Current orders unavailable."))?;
@@ -502,7 +502,7 @@ pub async fn delete_order(
 ) -> Result<(), CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let (_guard, unlocked) = mutations.begin()?;
         core_delete_order(&unlocked, &order_id).map_err(CmdError::wfm)
     })
@@ -520,7 +520,7 @@ pub async fn bulk_visibility(
 ) -> Result<Vec<PerOrderResult>, CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
         let (_guard, unlocked) = mutations.begin()?;
         Ok(bulk_set_visibility(
             &unlocked,
@@ -606,7 +606,7 @@ mod tests {
             }],
         )
         .unwrap();
-        let plan = crate::services::protection::ProtectionPlan {
+        let plan = crate::services::trading::protection::ProtectionPlan {
             reserves: BTreeMap::new(),
             goal: Some("test_set".into()),
         };

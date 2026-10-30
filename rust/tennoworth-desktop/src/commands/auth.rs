@@ -8,8 +8,8 @@ use std::sync::Arc;
 use tauri::State;
 use zeroize::Zeroizing;
 
-use crate::command_error::CmdError;
-use crate::services::{wfm_session::WfmSession, wfm_signin};
+use crate::contracts::command_error::CmdError;
+use crate::services::wfm::{session::WfmSession, signin as wfm_signin};
 
 #[derive(serde::Serialize)]
 pub struct WfmAuthStatus {
