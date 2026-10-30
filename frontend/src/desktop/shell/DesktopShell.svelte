@@ -158,6 +158,8 @@ import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
       document,
       setInterval: (fn, ms) => window.setInterval(fn, ms),
       clearInterval: id => window.clearInterval(id),
+      now: () => Date.now(),
+      reviewing: () => listing.listingOpen || effectiveView === 'session',
     });
     const stopAutoScan = autoScan.start();
     void autoScan.load();

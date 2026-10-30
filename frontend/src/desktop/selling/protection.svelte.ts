@@ -20,11 +20,22 @@ export const PROTECTION_REFRESH_EVENTS = [ALLOWANCE_CHANGED_EVENT, TRADE_DETECTE
  */
 export const PROTECTION_BACKSTOP_MS = 5 * 60_000;
 
+/**
+ * While a listing review or Trade Session is open, the quantities refresh this
+ * often instead: that is how an open review learns the native snapshot moved
+ * under it and blocks sending. A review is short and watched, so the cost is
+ * bounded.
+ */
+export const PROTECTION_REVIEW_MS = 30_000;
+
 export interface ProtectionSchedule {
   listen: (event: string, cb: () => void) => () => void;
   document: Pick<Document, 'hidden' | 'addEventListener' | 'removeEventListener'>;
   setInterval: (fn: () => void, ms: number) => number;
   clearInterval: (id: number) => void;
+  now: () => number;
+  /** Whether a listing review or Trade Session is open. */
+  reviewing: () => boolean;
 }
 
 export class ProtectionController {
@@ -92,15 +103,21 @@ export class ProtectionController {
 
   /**
    * Keep the quantities current: on native changes, when the window is shown
-   * again, and on a slow backstop that skips while the window is hidden.
-   * Returns the teardown.
+   * again, every 30 seconds while a review is open, and otherwise on a slow
+   * backstop. Timed refreshes skip while the window is hidden. Returns the
+   * teardown.
    */
   start(schedule: ProtectionSchedule): () => void {
     const idle = () => !this.loading && !this.saving;
-    const stops = PROTECTION_REFRESH_EVENTS.map(event => schedule.listen(event, () => void this.refresh()));
-    const onVisibility = () => { if (!schedule.document.hidden && idle()) void this.refresh(); };
+    let last = schedule.now();
+    const refresh = () => { last = schedule.now(); void this.refresh(); };
+    const stops = PROTECTION_REFRESH_EVENTS.map(event => schedule.listen(event, refresh));
+    const onVisibility = () => { if (!schedule.document.hidden && idle()) refresh(); };
     schedule.document.addEventListener('visibilitychange', onVisibility);
-    const timer = schedule.setInterval(() => { if (!schedule.document.hidden && idle()) void this.refresh(); }, PROTECTION_BACKSTOP_MS);
+    const timer = schedule.setInterval(() => {
+      if (schedule.document.hidden || !idle()) return;
+      if (schedule.reviewing() || schedule.now() - last >= PROTECTION_BACKSTOP_MS) refresh();
+    }, PROTECTION_REVIEW_MS);
     return () => {
       schedule.clearInterval(timer);
       schedule.document.removeEventListener('visibilitychange', onVisibility);
