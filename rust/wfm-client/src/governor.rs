@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const SPACING_MS: u64 = 500;
@@ -192,10 +192,49 @@ impl fmt::Display for AccessError {
 }
 impl std::error::Error for AccessError {}
 
+/// A generation prevents a notification between checking state and sleeping
+/// from being lost. The same wakeup serves queued requests and status readers.
+#[derive(Default)]
+pub struct Wake {
+    revision: Mutex<u64>,
+    changed: Condvar,
+}
+impl Wake {
+    fn revision(&self) -> u64 {
+        *lock(&self.revision)
+    }
+    fn notify(&self) {
+        let mut revision = lock(&self.revision);
+        *revision = revision.wrapping_add(1);
+        self.changed.notify_all();
+    }
+    fn wait(&self, observed: u64, timeout: Option<Duration>) {
+        let revision = lock(&self.revision);
+        if *revision != observed {
+            return;
+        }
+        if let Some(timeout) = timeout {
+            drop(
+                self.changed
+                    .wait_timeout(revision, timeout)
+                    .unwrap_or_else(|e| e.into_inner()),
+            );
+        } else {
+            drop(
+                self.changed
+                    .wait(revision)
+                    .unwrap_or_else(|e| e.into_inner()),
+            );
+        }
+    }
+}
 pub trait Clock: Send + Sync {
     fn monotonic_ms(&self) -> u64;
     fn wall_ms(&self) -> u64;
     fn sleep(&self, duration: Duration);
+    fn wait(&self, _wake: &Wake, _observed: u64, timeout: Duration) {
+        self.sleep(timeout);
+    }
 }
 struct RealClock(Instant);
 impl Clock for RealClock {
@@ -207,6 +246,9 @@ impl Clock for RealClock {
     }
     fn sleep(&self, d: Duration) {
         std::thread::sleep(d);
+    }
+    fn wait(&self, wake: &Wake, observed: u64, timeout: Duration) {
+        wake.wait(observed, Some(timeout));
     }
 }
 struct Waiting {
@@ -228,6 +270,7 @@ struct State {
 pub struct Governor {
     state: Mutex<State>,
     clock: Arc<dyn Clock>,
+    wake: Wake,
 }
 impl Default for Governor {
     fn default() -> Self {
@@ -238,6 +281,7 @@ impl Governor {
     pub fn new(clock: Arc<dyn Clock>) -> Self {
         Self {
             clock,
+            wake: Wake::default(),
             state: Mutex::new(State {
                 status: AccessStatus {
                     revision: 0,
@@ -273,8 +317,40 @@ impl Governor {
         }
         out
     }
+    pub fn wait_for_status_change(&self, previous: &AccessStatus) -> AccessStatus {
+        loop {
+            let observed = self.activity();
+            let current = self.status();
+            if &current != previous {
+                return current;
+            }
+            self.wake.wait(observed, None);
+        }
+    }
+    /// Wake waiting work immediately after setting a cancellation token.
+    pub fn notify_cancelled(&self) {
+        self.wake.notify();
+    }
+    pub(crate) fn activity(&self) -> u64 {
+        self.wake.revision()
+    }
+    pub(crate) fn notify_waiters(&self) {
+        self.wake.notify();
+    }
+    pub(crate) fn wait_for_activity(&self, observed: u64, ctx: &Context, mut timeout: Duration) {
+        if let Some(expires) = ctx.expires {
+            timeout = timeout.min(expires.saturating_duration_since(Instant::now()));
+        }
+        // Existing callers own an AtomicBool; retain bounded cancellation even
+        // when a caller cannot notify the governor after setting it.
+        if ctx.cancelled.is_some() {
+            timeout = timeout.min(Duration::from_millis(100));
+        }
+        self.clock.wait(&self.wake, observed, timeout);
+    }
     pub fn configure_persistence(&self, path: std::path::PathBuf) -> Result<(), AccessError> {
         let mut s = lock(&self.state);
+        self.wake.notify();
         match std::fs::read(&path) {
             Ok(raw) => match serde_json::from_slice::<u64>(&raw) {
                 Ok(deadline) => {
@@ -311,6 +387,7 @@ impl Governor {
         s.status.revision = revision;
         s.status.reason = reason;
         s.status.restrictions = restrictions;
+        self.wake.notify();
         Ok(())
     }
     fn check_state(&self, s: &State, kind: Kind, ctx: &Context) -> Result<(), AccessError> {
@@ -337,6 +414,7 @@ impl Governor {
             self.check_state(&s, kind, &ctx)?;
             if s.queue.len() >= MAX_QUEUE {
                 s.status.queue_rejections = s.status.queue_rejections.saturating_add(1);
+                self.wake.notify();
                 return Err(AccessError::Busy);
             }
             let id = s.next_id;
@@ -346,13 +424,16 @@ impl Governor {
                 kind,
                 context: ctx.clone(),
             });
+            self.wake.notify();
             id
         };
         loop {
-            {
+            let observed = self.activity();
+            let timeout = {
                 let mut s = lock(&self.state);
                 if let Err(e) = self.check_state(&s, kind, &ctx) {
                     s.queue.retain(|q| q.id != id);
+                    self.wake.notify();
                     return Err(e);
                 }
                 let now = self.clock.monotonic_ms();
@@ -389,10 +470,33 @@ impl Governor {
                     };
                     s.status.outstanding += 1;
                     s.status.requests = s.status.requests.saturating_add(1);
+                    self.wake.notify();
                     return Ok(Permit(self.clone()));
                 }
-            }
-            self.clock.sleep(Duration::from_millis(10));
+                let mut wait = Duration::from_secs(86_400);
+                if s.status.outstanding < s.status.restrictions.concurrency {
+                    if let Some(last) = s.last_start {
+                        let remaining = last
+                            .saturating_add(s.status.restrictions.spacing_ms)
+                            .saturating_sub(now);
+                        if remaining > 0 {
+                            wait = wait.min(Duration::from_millis(remaining));
+                        }
+                    }
+                }
+                if kind == Kind::Contract {
+                    if let Some(last) = s.last_contract {
+                        let remaining = last
+                            .saturating_add(s.status.restrictions.contract_spacing_ms)
+                            .saturating_sub(now);
+                        if remaining > 0 {
+                            wait = wait.min(Duration::from_millis(remaining));
+                        }
+                    }
+                }
+                wait
+            };
+            self.wait_for_activity(observed, &ctx, timeout);
         }
     }
     pub fn throttled(&self, retry_after: Option<&str>) -> Result<(), AccessError> {
@@ -412,6 +516,7 @@ impl Governor {
             .cooldown_until_ms
             .max(deadline.saturating_add(jitter(1000).as_millis() as u64));
         s.status.throttles = s.status.throttles.saturating_add(1);
+        self.wake.notify();
         if let Some(path) = &s.persistence {
             if crate::policy::atomic_write(path, s.status.cooldown_until_ms.to_string().as_bytes())
                 .is_err()
@@ -424,6 +529,7 @@ impl Governor {
     }
     pub(crate) fn persistence_failed(&self) {
         lock(&self.state).persistence_failed = true;
+        self.wake.notify();
     }
     pub fn cache_observed(&self, hit: bool) {
         let mut s = lock(&self.state);
@@ -432,6 +538,7 @@ impl Governor {
         } else {
             s.status.cache_misses = s.status.cache_misses.saturating_add(1);
         }
+        self.wake.notify();
     }
     pub fn successful(&self) {
         let mut s = lock(&self.state);
@@ -445,6 +552,7 @@ impl Drop for Permit {
     fn drop(&mut self) {
         let mut s = lock(&self.0.state);
         s.status.outstanding = s.status.outstanding.saturating_sub(1);
+        self.0.wake.notify();
     }
 }
 
@@ -595,6 +703,41 @@ mod tests {
             .unwrap();
         assert!(governor.acquire(Kind::Read, Context::default()).is_ok());
     }
+
+    #[test]
+    fn spacing_waits_once_for_the_next_admission_deadline() {
+        struct CountClock {
+            at: AtomicU64,
+            sleeps: AtomicU64,
+        }
+        impl Clock for CountClock {
+            fn monotonic_ms(&self) -> u64 {
+                self.at.load(Ordering::SeqCst)
+            }
+            fn wall_ms(&self) -> u64 {
+                1_000_000 + self.monotonic_ms()
+            }
+            fn sleep(&self, duration: Duration) {
+                self.sleeps.fetch_add(1, Ordering::SeqCst);
+                self.at
+                    .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
+            }
+        }
+        let clock = Arc::new(CountClock {
+            at: AtomicU64::new(0),
+            sleeps: AtomicU64::new(0),
+        });
+        let governor = Arc::new(Governor::new(clock.clone()));
+        drop(governor.acquire(Kind::Read, Context::default()).unwrap());
+        drop(governor.acquire(Kind::Read, Context::default()).unwrap());
+        assert_eq!(clock.monotonic_ms(), 500);
+        assert_eq!(
+            clock.sleeps.load(Ordering::SeqCst),
+            1,
+            "waiting must not poll every 10ms"
+        );
+    }
+
     #[test]
     fn defaults_match_the_shared_contract() {
         let fixture: Restrictions =
@@ -711,6 +854,28 @@ mod tests {
         assert_eq!(governor.status().requests, 2);
         assert_eq!(governor.status().queue_count, 0);
     }
+
+    #[test]
+    fn status_subscribers_wake_on_counter_changes_even_if_the_change_precedes_the_wait() {
+        let governor = Arc::new(Governor::default());
+        let before = governor.status();
+        governor.cache_observed(true);
+        assert_eq!(governor.wait_for_status_change(&before).cache_hits, 1);
+        let before = governor.status();
+        let waiting = governor.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let task =
+            std::thread::spawn(move || tx.send(waiting.wait_for_status_change(&before)).unwrap());
+        governor.cache_observed(false);
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(2))
+                .unwrap()
+                .cache_misses,
+            1
+        );
+        task.join().unwrap();
+    }
+
     #[test]
     fn command_codes_match_the_frontend_fixture() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(

@@ -154,14 +154,18 @@ pub fn publish_access_changes(app: tauri::AppHandle) {
     let _ = std::thread::Builder::new()
         .name("wfm-access-status".into())
         .spawn(move || {
-            let mut previous = None;
+            let governor = wfm_client::governor::process();
+            let mut previous = governor.status();
+            let _ = app.emit(WFM_ACCESS_EVENT, &previous);
             loop {
-                let current = wfm_access_status();
-                if previous.as_ref() != Some(&current) {
-                    let _ = app.emit(WFM_ACCESS_EVENT, &current);
-                    previous = Some(current);
-                }
+                governor.wait_for_status_change(&previous);
+                // Coalesce counter bursts without waking at all while idle.
                 std::thread::sleep(std::time::Duration::from_millis(100));
+                let current = governor.status();
+                if current != previous {
+                    let _ = app.emit(WFM_ACCESS_EVENT, &current);
+                    previous = current;
+                }
             }
         });
 }

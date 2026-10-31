@@ -416,6 +416,7 @@ impl WfmSession {
     pub fn cancel_plan(&self, id: &str) -> Result<(), CmdError> {
         if let Some(token) = self.request_token(id, false)? {
             token.store(true, std::sync::atomic::Ordering::Release);
+            wfm_client::governor::process().notify_cancelled();
         }
         Ok(())
     }

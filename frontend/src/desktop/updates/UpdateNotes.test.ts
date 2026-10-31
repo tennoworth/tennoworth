@@ -95,3 +95,37 @@ describe('installed update notes', () => {
   });
 
 });
+
+
+it('does not keep checking dialogs after automatic notes have been dismissed', async () => {
+  vi.useFakeTimers();
+  try {
+    const query = vi.spyOn(document, 'querySelectorAll');
+    const api = services({ updateNotes: vi.fn(async () => ({ ...structuredClone(fixture), auto_show: false }) as UpdateNotesStatus) });
+    render(UpdateNotes, { services: api, ready: true });
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(query.mock.calls.filter(([selector]) => selector === 'dialog[open], [role="dialog"], [aria-modal="true"]')).toHaveLength(0);
+  } finally { cleanup(); vi.useRealTimers(); }
+});
+
+it('retries an explicit notes request after another dialog closes', async () => {
+  vi.useFakeTimers();
+  const blocker = document.createElement('div');
+  blocker.setAttribute('role', 'dialog');
+  blocker.getClientRects = () => [{ width: 10 }] as unknown as DOMRectList;
+  document.body.append(blocker);
+  try {
+    const api = services({ updateNotes: async () => ({ ...structuredClone(fixture), auto_show: false }) as UpdateNotesStatus });
+    const { component } = render(UpdateNotes, { services: api, ready: true });
+    await component.open();
+    expect(document.querySelector('dialog')?.open).toBe(false);
+    blocker.remove();
+    await vi.advanceTimersByTimeAsync(800);
+    expect(document.querySelector('dialog')?.open).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    const query = vi.spyOn(document, 'querySelectorAll');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(query.mock.calls.filter(([selector]) => selector === 'dialog[open], [role="dialog"], [aria-modal="true"]')).toHaveLength(0);
+  } finally { blocker.remove(); cleanup(); vi.useRealTimers(); }
+});

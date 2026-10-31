@@ -108,21 +108,20 @@
     const refreshStatus = async () => {
       if (!overlay || statusPolling || savingOverlay || disposed) return;
       statusPolling = true;
-      try { await refreshOverlayStatus(); }
-      catch { /* The next poll retries while the last status remains visible. */ }
+      try { await Promise.allSettled([refreshOverlayStatus(), autoScan?.refreshStatus()]); }
+      // A failed read retries next time; both reads must finish first.
       finally { statusPolling = false; }
     };
     loaded = initial();
     mounted = true;
     const timer = window.setInterval(() => {
       // Native status reads only while the page is on screen.
-      if (!active) return;
+      if (!active || document.hidden) return;
       void refreshStatus();
-      // The loop's own view: whether the game is up, when the next scan is due,
-      // and why the last one failed.
-      void autoScan?.refreshStatus();
     }, 1000);
-    return () => { disposed = true; window.clearInterval(timer); };
+    const onVisibility = () => { if (active && !document.hidden) void refreshStatus(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { disposed = true; window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility); };
   });
 
   /** What the background loop is doing right now, in the user's terms. */

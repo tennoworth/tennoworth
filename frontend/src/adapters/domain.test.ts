@@ -59,7 +59,7 @@ describe('planner requests', () => {
     vi.stubGlobal('__TAURI_INTERNALS__', { invoke });
     const market = { updated_at: 'now', items: { a: {} }, set_to_parts: {}, relic_rewards: {}, catalog: {}, path_to_info: {}, recipes: {}, usage_history: {} } as unknown as Market;
     const owned = new Map([['a', { slug: 'a', name: 'A', count: 1, subtype: null, type: 'Misc', kept_lvl: null, leveled: 0 }]]);
-    await relicPlan(owned, market);
+    await relicPlan(new Map([['relic', { ...owned.get('a')!, subtype: 'intact' }]]), market);
     await setRecos(owned, market);
     await ducatPlan(owned, market, 0);
     await baroValue([], market, owned);
@@ -74,4 +74,28 @@ describe('planner requests', () => {
     await relicPlan(null, null);
     expect(invoke).toHaveBeenCalledWith('evaluate_domain', { request: { operation: 'relic_plan', input: { owned: [], market: null, limit: 3 } } });
   });
+});
+
+
+it('skips relic IPC when none of the owned rows is intact', async () => {
+  const invoke = invokeMock();
+  const market = { items: {}, relic_rewards: {} } as unknown as Market;
+  const row = { slug: 'part', name: 'Part', count: 1, subtype: null, type: 'Misc', kept_lvl: null, leveled: 0 };
+  expect(await relicPlan(new Map([['part', row]]), market)).toEqual([]);
+  expect(await relicPlan(new Map([['part', { ...row, subtype: 'radiant' }]]), market)).toEqual([]);
+  expect(invoke).toHaveBeenCalledTimes(0);
+});
+it('keeps planner payloads below the large-inventory budget and excludes unrelated item metadata', async () => {
+  const invoke = vi.fn(async (_cmd: string, args: any) => ({ operation: args.request.operation, result: [] }));
+  vi.stubGlobal('__TAURI_INTERNALS__', { invoke });
+  const items = Object.fromEntries(Array.from({ length: 2700 }, (_, i) => ['item_' + i, {
+    low_sell: 10, median_now: 12, median_90d: 11, avg: 12, vol: 20, ducats: 15, top_buy: 9,
+    medians_7d: Array(100).fill(11), tags: Array(20).fill('unrelated'),
+  }]));
+  const market = { items, set_to_parts: {} } as unknown as Market;
+  await setRecos(new Map(), market);
+  const input = invoke.mock.calls[0][1].request.input;
+  expect(JSON.stringify(input).length).toBeLessThan(400_000);
+  expect(input.market.items.item_0).not.toHaveProperty('medians_7d');
+  expect(input.market.items.item_0).not.toHaveProperty('tags');
 });
