@@ -1,5 +1,5 @@
 {
-  "version": "0.8.112",
+  "version": "0.8.113",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1641,6 +1641,45 @@
           "kind": "fixed",
           "title": "Calendar reminders open the calendar",
           "body": "The Open calendar button on a calendar reminder used to open Routines. It now opens Calendar.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.113",
+      "date": "2026-10-30",
+      "changes": [
+        {
+          "id": "lighter-background-work",
+          "kind": "improved",
+          "title": "Lighter while you play",
+          "body": "The app no longer re-reads the whole market snapshot every few seconds or scans every running program to find the game. Memory use stays flat instead of climbing toward 800 MB, and it uses almost no processor time in the background.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "fewer-order-checks",
+          "kind": "improved",
+          "title": "Fewer warframe.market requests while minimised",
+          "body": "Listed and protected quantities refresh when something changes them: a trade, a scan, signing in, or showing the window again. They still refresh every 30 seconds while a listing review or Trade Session is open, and otherwise every five minutes while the window is visible.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "one-item-resolver",
+          "kind": "fixed",
+          "title": "Tray and overlay counts match the inventory table",
+          "body": "The tray, Trade Session and relic overlay now recognise items with the same rules as the inventory table, so refined relics are no longer counted as intact ones.",
           "platforms": [
             "windows",
             "linux"
