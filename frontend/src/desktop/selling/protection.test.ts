@@ -1,7 +1,16 @@
 import { expect, it, vi } from 'vitest';
+import defaults from '../../../../tests/fixtures/pacing.json';
+import { type AccessStatus, WFM_ACCESS_EVENT } from '../../contracts/generated/desktop';
+
 import { ProtectionController, PROTECTION_BACKSTOP_MS, PROTECTION_REVIEW_MS, type ProtectionSchedule } from './protection.svelte';
 import type { OwnedRecord } from '../../contracts/data';
 import type { ProtectionState } from '../../contracts/protection';
+
+const accessStatus = (): AccessStatus => ({
+  revision: 0, reason: '', cooldown_until_ms: 0, queue_count: 0, outstanding: 0,
+  requests: 0, throttles: 0, cache_hits: 0, cache_misses: 0, queue_rejections: 0,
+  restrictions: { ...defaults },
+});
 
 const inventory = (count: number) => new Map<string, OwnedRecord>([['part', { slug: 'part', name: 'Part', count, leveled: 0, subtype: null, kept_lvl: null, type: 'MiscItems' }]]);
 const allocation = (count: number): ProtectionState => ({ plan: { reserves: {}, goal: null }, snapshot_id: 1,
@@ -61,7 +70,7 @@ it('a failed quantity refresh retains saved keep rules for editing without retai
 });
 
 function schedule(hidden: boolean) {
-  const listeners = new Map<string, () => void>();
+  const listeners = new Map<string, (payload?: unknown) => void>();
   const docListeners = new Map<string, () => void>();
   let tick: (() => void) | null = null;
   const state = { now: 0, reviewing: false };
@@ -71,7 +80,7 @@ function schedule(hidden: boolean) {
     removeEventListener: vi.fn((type: string) => { docListeners.delete(type); }),
   };
   const env: ProtectionSchedule = {
-    listen: vi.fn((event: string, cb: () => void) => { listeners.set(event, cb); return () => { listeners.delete(event); }; }),
+    listen: vi.fn(<T>(event: string, cb: (payload: T) => void) => { listeners.set(event, payload => cb(payload as T)); return () => { listeners.delete(event); }; }),
     document: doc as unknown as ProtectionSchedule['document'],
     setInterval: vi.fn((fn: () => void, ms: number) => { expect(ms).toBe(PROTECTION_REVIEW_MS); tick = fn; return 7; }),
     clearInterval: vi.fn(() => { tick = null; }),
@@ -96,7 +105,7 @@ async function started(hidden: boolean) {
 it('native changes refresh the quantities whether or not the window is shown', async () => {
   const { port, s } = await started(true);
   expect([...s.listeners.keys()].sort()).toEqual(['trade-allowance-changed', 'trade-detected', 'wfm-access-changed']);
-  for (const cb of s.listeners.values()) cb();
+  for (const [event, cb] of s.listeners) cb(event === WFM_ACCESS_EVENT ? accessStatus() : undefined);
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(3);
 });
 
@@ -144,4 +153,55 @@ it('stopping removes every trigger', async () => {
   expect(s.docListeners.size).toBe(0);
   s.advance(PROTECTION_BACKSTOP_MS);
   expect(port.desktopProtectionState).not.toHaveBeenCalled();
+});
+
+it('market traffic cannot recursively schedule quantity reads', async () => {
+  const { port, s, c } = await started(false);
+  const status = accessStatus();
+  const emit = (payload: AccessStatus) => s.listeners.get(WFM_ACCESS_EVENT)?.(payload);
+  emit(status);
+  await Promise.resolve();
+  port.desktopProtectionState.mockClear();
+  for (let i = 1; i <= 150; i++) {
+    emit({ ...status, queue_count: Math.min(i, 128), outstanding: 2, requests: i, cache_misses: i, queue_rejections: Math.max(0, i - 128) });
+    await Promise.resolve();
+  }
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(0);
+  expect(c.loading).toBe(false);
+});
+
+it('market policy and cooldown changes still refresh quantities', async () => {
+  const { port, s } = await started(false);
+  const status = accessStatus();
+  const emit = (payload: AccessStatus) => s.listeners.get(WFM_ACCESS_EVENT)?.(payload);
+  emit(status);
+  await Promise.resolve();
+  port.desktopProtectionState.mockClear();
+  emit({ ...status, revision: 1, restrictions: { ...status.restrictions, pause_all: true } });
+  await Promise.resolve();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
+  emit({ ...status, revision: 2 });
+  await Promise.resolve();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(2);
+  emit({ ...status, revision: 2, cooldown_until_ms: 60000 });
+  await Promise.resolve();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(3);
+  emit({ ...status, revision: 2 });
+  await Promise.resolve();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(4);
+});
+
+it('traffic after cooldown expiry refreshes once without feeding the counters back', async () => {
+  const { port, s } = await started(false);
+  const status = { ...accessStatus(), cooldown_until_ms: 60000 };
+  const emit = (payload: AccessStatus) => s.listeners.get(WFM_ACCESS_EVENT)?.(payload);
+  emit(status);
+  await Promise.resolve();
+  port.desktopProtectionState.mockClear();
+  s.state.now = 60000;
+  emit({ ...status, requests: 1 });
+  await Promise.resolve();
+  emit({ ...status, requests: 2 });
+  await Promise.resolve();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
 });
