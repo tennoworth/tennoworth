@@ -2,11 +2,11 @@ import type { OwnedRecord } from '../../contracts/data';
 import type { DesktopServices } from '../../contracts/services';
 import type { ProtectionPlan, ProtectionState, ProtectionInventory } from '../../contracts/protection';
 import { humanError } from '../../contracts/errors';
-import { ALLOWANCE_CHANGED_EVENT, TRADE_DETECTED_EVENT, WFM_ACCESS_EVENT } from '../../contracts/generated/desktop';
+import { type AccessStatus, ALLOWANCE_CHANGED_EVENT, TRADE_DETECTED_EVENT, WFM_ACCESS_EVENT } from '../../contracts/generated/desktop';
 
 /**
  * Native changes that can move listed or available quantities: the trade
- * allowance, a trade the game confirmed, and signing in or unlocking WFM. A new
+ * allowance, a trade the game confirmed, and market access policy changes. A new
  * inventory arrives through `setInventory`, and the app's own saves refresh
  * themselves.
  */
@@ -29,7 +29,7 @@ export const PROTECTION_BACKSTOP_MS = 5 * 60_000;
 export const PROTECTION_REVIEW_MS = 30_000;
 
 export interface ProtectionSchedule {
-  listen: (event: string, cb: () => void) => () => void;
+  listen: DesktopServices['listenForTauriEvent'];
   document: Pick<Document, 'hidden' | 'addEventListener' | 'removeEventListener'>;
   setInterval: (fn: () => void, ms: number) => number;
   clearInterval: (id: number) => void;
@@ -111,7 +111,17 @@ export class ProtectionController {
     const idle = () => !this.loading && !this.saving;
     let last = schedule.now();
     const refresh = () => { last = schedule.now(); void this.refresh(); };
-    const stops = PROTECTION_REFRESH_EVENTS.map(event => schedule.listen(event, refresh));
+    let accessKey: string | undefined;
+    const stops = PROTECTION_REFRESH_EVENTS.map(event => event === WFM_ACCESS_EVENT
+      ? schedule.listen<AccessStatus>(event, status => {
+        // A quantity read changes the request counters itself. Refreshing on
+        // those changes feeds another read back into the shared market queue.
+        const key = JSON.stringify([status.revision, status.cooldown_until_ms, status.restrictions, status.cooldown_until_ms > schedule.now()]);
+        if (key === accessKey) return;
+        accessKey = key;
+        refresh();
+      })
+      : schedule.listen(event, refresh));
     const onVisibility = () => { if (!schedule.document.hidden && idle()) refresh(); };
     schedule.document.addEventListener('visibilitychange', onVisibility);
     const timer = schedule.setInterval(() => {

@@ -46,6 +46,52 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(price).toHaveValue('99');
     expect(errors).toEqual([]);
   });
+  test(`${theme} market request completion does not start another quantity read`, async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript(() => {
+      const listeners = new Map<string, Set<(event: unknown) => void>>();
+      let runtime: any;
+      Object.defineProperty(window, '__TAURI__', { configurable: true, get: () => runtime, set: value => {
+        runtime = value;
+        runtime.event.listen = async (name: string, fn: (event: unknown) => void) => {
+          const callbacks = listeners.get(name) ?? new Set(); callbacks.add(fn); listeners.set(name, callbacks);
+          return () => callbacks.delete(fn);
+        };
+      } });
+      (window as any).marketEvent = (name: string, payload: unknown) => listeners.get(name)?.forEach(fn => fn({ payload }));
+    });
+    await page.goto('/?preview-desktop&sample');
+    await expect(page.getByRole('heading', { name: 'Sell', exact: true })).toBeVisible();
+    const status = { revision: 0, reason: '', cooldown_until_ms: 0, queue_count: 0, outstanding: 0, requests: 0, throttles: 0, cache_hits: 0, cache_misses: 0, queue_rejections: 0, restrictions: defaults };
+    await page.evaluate(({ event, status }) => {
+      const original = (window as any).__TAURI__.core.invoke;
+      (window as any).quantityReads = 0;
+      (window as any).__TAURI__.core.invoke = async (cmd: string, args: unknown) => {
+        const result = await original(cmd, args);
+        if (cmd === 'protection_state') {
+          const reads = ++(window as any).quantityReads;
+          if (reads <= 10) setTimeout(() => (window as any).marketEvent(event, { ...status, requests: reads }), 0);
+        }
+        return result;
+      };
+      (window as any).marketEvent(event, { ...status, queue_count: 1 });
+    }, { event: WFM_ACCESS_EVENT, status });
+    await expect.poll(() => page.evaluate(() => (window as any).quantityReads)).toBeGreaterThan(0);
+    // Let the synthetic request completion feed through the same event boundary.
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => (window as any).quantityReads)).toBe(1);
+    await expect(page.getByText(/Waiting for market access/)).toHaveCount(0);
+    await expect(page.getByText('Checking quantities…')).toHaveCount(0);
+    for (const [width, height] of [[1440, 900], [768, 600], [320, 480]]) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`quantity-refresh-${theme}-${width}.png`) });
+    }
+    expect(errors).toEqual([]);
+  });
+
   test(`${theme} stopping a batch targets its request and waits for the transmitted item`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample=session');
