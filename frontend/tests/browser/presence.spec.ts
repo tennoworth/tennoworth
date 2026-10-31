@@ -96,6 +96,50 @@ test('a signed-out session names the step instead of a status', async ({ page })
   await expect(page.getByTestId('wfm-login-dialog')).toBeVisible();
 });
 
+for (const theme of ['light', 'dark'] as const) {
+  for (const session of ['locked', 'signed-out', 'unlocked'] as const) {
+    test(`${theme} ${session} account stays on the right when the header wraps`, async ({ page }, info) => {
+      await page.emulateMedia({ colorScheme: theme });
+      if (session === 'locked') {
+        await page.addInitScript(() => {
+          let runtime: any;
+          Object.defineProperty(window, '__TAURI__', {
+            configurable: true,
+            get: () => runtime,
+            set(value) {
+              runtime = value;
+              const invoke = value.core.invoke;
+              value.core.invoke = (command: string, args: unknown) => command === 'wfm_auth_status'
+                ? Promise.resolve({ logged_in: true, unlocked: false })
+                : invoke(command, args);
+            },
+          });
+        });
+      }
+      await page.goto(`/?preview-desktop&sample${session === 'signed-out' ? '=logged-out' : ''}`);
+      const strip = page.locator('.statusbar.shell-strip');
+      const cell = strip.locator('.cell.end');
+      const control = session === 'unlocked' ? cell.locator('.presence') : cell.getByRole('button', { name: session === 'locked' ? 'Unlock' : 'Sign in' });
+      await expect(control).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      for (const width of [1502, 1233, 1100, 1000, 901, 900, 899, 768, 560, 559, 320, 1233, 1502]) {
+        await page.setViewportSize({ width, height: width <= 768 ? 480 : 800 });
+        const header = (await strip.boundingBox())!;
+        const account = (await cell.boundingBox())!;
+        const action = (await control.boundingBox())!;
+        const padding = await cell.evaluate(node => parseFloat(getComputedStyle(node).paddingRight));
+        expect(account.x + account.width, `account cell at ${width}px`).toBeCloseTo(header.x + header.width, 0);
+        expect(action.x + action.width, `account controls at ${width}px`).toBeCloseTo(header.x + header.width - padding, 0);
+        expect(action.x).toBeGreaterThanOrEqual(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        if ([1502, 1233, 320].includes(width)) {
+          await page.screenshot({ path: info.outputPath(`account-${theme}-${session}-${width}.png`), clip: { x: header.x, y: header.y, width: header.width, height: header.height } });
+        }
+      }
+    });
+  }
+}
+
 // Invisible while Warframe runs is the costly case: most buyers filter for
 // online sellers. Invisible after the game closes is what following does.
 for (const theme of ['light', 'dark'] as const) test(`${theme} playing while Invisible offers one-click Go online; following stays calm`, async ({ page }) => {

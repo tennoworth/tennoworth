@@ -132,6 +132,7 @@
   }
   .statusbar.shell-strip .brand + .cell[data-shell] { border-left: none; }
   .statusbar .cell.end[data-shell] { padding-right: var(--inset); }
+  .statusbar.shell-strip .cell.end[data-shell] { margin-left: auto; justify-content: flex-end; }
   .statusbar .cell b[data-shell] {
     color: var(--fg);
     font-weight: 600;
