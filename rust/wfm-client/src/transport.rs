@@ -207,6 +207,7 @@ pub fn read_json_observed(
         let result = load();
         *crate::governor::lock(&entry.payload) = Some(result.clone());
         *crate::governor::lock(&entry.completed) = Some(std::time::Instant::now());
+        process().notify_waiters();
         if result.is_err() {
             let mut cache = crate::governor::lock(cache());
             if cache
@@ -219,11 +220,16 @@ pub fn read_json_observed(
         result
     } else {
         loop {
+            let observed = process().activity();
             if let Some(result) = crate::governor::lock(&entry.payload).clone() {
                 return result;
             }
             process().check(kind, &context())?;
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            process().wait_for_activity(
+                observed,
+                &context(),
+                std::time::Duration::from_secs(86_400),
+            );
         }
     }
 }
@@ -497,6 +503,84 @@ mod tests {
         );
         task.join().unwrap();
         assert_eq!(starts.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn authenticated_read_bursts_share_one_observation_but_final_validation_is_fresh() {
+        let _serial = SERIAL.lock().unwrap();
+        invalidate_reads();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/orders", listener.local_addr().unwrap());
+        let task = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    let mut chunk = [0; 1024];
+                    let read = socket.read(&mut chunk).unwrap();
+                    assert!(read > 0 && request.len() < 16_384);
+                    request.extend_from_slice(&chunk[..read]);
+                }
+                let request = String::from_utf8(request).unwrap().to_ascii_lowercase();
+                assert!(request.contains("cookie: jwt=fixture-session"));
+                socket.write_all(OK.as_bytes()).unwrap();
+            }
+        });
+        let client = crate::build_client(5).unwrap();
+        let key = ReadKey {
+            url: url.clone(),
+            platform: "pc".into(),
+            account: Some("fixture-user".into()),
+        };
+        let before = process().status().requests;
+        let load = |fresh| {
+            read_json_observed(
+                crate::wfm_authed_headers(client.get(&url), "pc", "fixture-session"),
+                Kind::Read,
+                key.clone(),
+                Duration::from_secs(300),
+                fresh,
+            )
+            .unwrap()
+        };
+        let observations = std::thread::scope(|scope| {
+            let tasks: Vec<_> = (0..32)
+                .map(|_| {
+                    let load = &load;
+                    scope.spawn(move || load(false))
+                })
+                .collect();
+            tasks
+                .into_iter()
+                .map(|task| task.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        let first = observations.first().unwrap();
+        assert!(observations
+            .iter()
+            .all(|observation| observation.observed_at == first.observed_at));
+        std::thread::scope(|scope| {
+            for _ in 0..32 {
+                let load = &load;
+                let at = first.observed_at;
+                scope.spawn(move || {
+                    for _ in 0..16 {
+                        assert_eq!(load(false).observed_at, at);
+                    }
+                });
+            }
+        });
+        assert_eq!(process().status().requests - before, 1);
+        let fresh = load(true);
+        assert!(fresh.observed_at > first.observed_at);
+        task.join().unwrap();
+        let status = process().status();
+        assert_eq!(status.requests - before, 2);
+        assert_eq!(status.queue_count, 0);
+        assert_eq!(status.outstanding, 0);
     }
 
     #[test]

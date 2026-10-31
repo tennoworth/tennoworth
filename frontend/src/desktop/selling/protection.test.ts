@@ -12,6 +12,8 @@ const accessStatus = (): AccessStatus => ({
   restrictions: { ...defaults },
 });
 
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
 const inventory = (count: number) => new Map<string, OwnedRecord>([['part', { slug: 'part', name: 'Part', count, leveled: 0, subtype: null, kept_lvl: null, type: 'MiscItems' }]]);
 const allocation = (count: number): ProtectionState => ({ plan: { reserves: {}, goal: null }, snapshot_id: 1,
   items: { part: { owned: count, protected: 0, estimated: count, listed: 0, available: count } }, issues: [] });
@@ -23,6 +25,7 @@ it('a replacement inventory cannot reuse an outstanding allocation response', as
   const old = inventory(6);
   const newer = inventory(1);
   const pending = c.setInventory(old, 1);
+  await settle();
   expect(c.matchesInventory(newer, null)).toBe(false);
   await c.setInventory(newer, null);
   finish(allocation(6));
@@ -106,7 +109,8 @@ it('native changes refresh the quantities whether or not the window is shown', a
   const { port, s } = await started(true);
   expect([...s.listeners.keys()].sort()).toEqual(['trade-allowance-changed', 'trade-detected', 'wfm-access-changed']);
   for (const [event, cb] of s.listeners) cb(event === WFM_ACCESS_EVENT ? accessStatus() : undefined);
-  expect(port.desktopProtectionState).toHaveBeenCalledTimes(3);
+  await settle();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
 });
 
 it('outside a review, a shown window refreshes on the five-minute backstop only', async () => {
@@ -114,6 +118,7 @@ it('outside a review, a shown window refreshes on the five-minute backstop only'
   s.advance(PROTECTION_REVIEW_MS);
   expect(port.desktopProtectionState).not.toHaveBeenCalled();
   s.advance(PROTECTION_BACKSTOP_MS - PROTECTION_REVIEW_MS);
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
   s.advance(PROTECTION_REVIEW_MS);
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
@@ -133,6 +138,7 @@ it('an open review refreshes every tick, so a changed snapshot blocks it', async
   s.advance(PROTECTION_REVIEW_MS);
   await new Promise(resolve => setTimeout(resolve, 0));
   s.advance(PROTECTION_REVIEW_MS);
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(2);
 });
 
@@ -142,6 +148,7 @@ it('showing the window again refreshes once', async () => {
   expect(port.desktopProtectionState).not.toHaveBeenCalled();
   s.doc.hidden = false;
   s.docListeners.get('visibilitychange')?.();
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
 });
 
@@ -160,11 +167,11 @@ it('market traffic cannot recursively schedule quantity reads', async () => {
   const status = accessStatus();
   const emit = (payload: AccessStatus) => s.listeners.get(WFM_ACCESS_EVENT)?.(payload);
   emit(status);
-  await Promise.resolve();
+  await settle();
   port.desktopProtectionState.mockClear();
   for (let i = 1; i <= 150; i++) {
     emit({ ...status, queue_count: Math.min(i, 128), outstanding: 2, requests: i, cache_misses: i, queue_rejections: Math.max(0, i - 128) });
-    await Promise.resolve();
+    await settle();
   }
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(0);
   expect(c.loading).toBe(false);
@@ -175,19 +182,19 @@ it('market policy and cooldown changes still refresh quantities', async () => {
   const status = accessStatus();
   const emit = (payload: AccessStatus) => s.listeners.get(WFM_ACCESS_EVENT)?.(payload);
   emit(status);
-  await Promise.resolve();
+  await settle();
   port.desktopProtectionState.mockClear();
   emit({ ...status, revision: 1, restrictions: { ...status.restrictions, pause_all: true } });
-  await Promise.resolve();
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
   emit({ ...status, revision: 2 });
-  await Promise.resolve();
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(2);
   emit({ ...status, revision: 2, cooldown_until_ms: 60000 });
-  await Promise.resolve();
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(3);
   emit({ ...status, revision: 2 });
-  await Promise.resolve();
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(4);
 });
 
@@ -196,12 +203,27 @@ it('traffic after cooldown expiry refreshes once without feeding the counters ba
   const status = { ...accessStatus(), cooldown_until_ms: 60000 };
   const emit = (payload: AccessStatus) => s.listeners.get(WFM_ACCESS_EVENT)?.(payload);
   emit(status);
-  await Promise.resolve();
+  await settle();
   port.desktopProtectionState.mockClear();
   s.state.now = 60000;
   emit({ ...status, requests: 1 });
-  await Promise.resolve();
+  await settle();
   emit({ ...status, requests: 2 });
-  await Promise.resolve();
+  await settle();
   expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
+});
+
+it('coalesces synchronous refresh events and bounds an in-flight burst to one follow-up', async () => {
+  const { c, port, s } = await started(false);
+  let finish!: (value: ProtectionState) => void;
+  port.desktopProtectionState.mockImplementationOnce(() => new Promise<ProtectionState>(resolve => { finish = resolve; }));
+  for (const cb of [...s.listeners].filter(([event]) => event !== WFM_ACCESS_EVENT).map(([, cb]) => cb)) cb();
+  await settle();
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
+  const waits = Array.from({ length: 50 }, () => c.refresh());
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(1);
+  finish(allocation(1));
+  await Promise.all(waits);
+  expect(port.desktopProtectionState).toHaveBeenCalledTimes(2);
+  expect(c.loading).toBe(false);
 });

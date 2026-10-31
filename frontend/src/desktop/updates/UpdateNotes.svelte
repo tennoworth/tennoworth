@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import type { UpdateNotesServices, UpdateNotesStatus } from '../../contracts/update';
   let { services, ready = false, blocked = false, onautomatic }: {
     services: UpdateNotesServices; ready?: boolean; blocked?: boolean;
@@ -13,7 +13,7 @@
   let saveError = $state(false);
   let loadEpoch = 0;
   let saveEpoch = 0;
-  let requested = false;
+  let requested = $state(false);
   let pending = false;
   let disposed = false;
   let manual = $state(false);
@@ -33,8 +33,9 @@
   }
   async function present() {
     const manualRequest = requested;
-    if (disposed || pending || dialog?.open || !data || !unobstructed(manualRequest)) return;
+    if (disposed || pending || dialog?.open || !data) return;
     if (!manualRequest && (!data.auto_show || !ready || blocked)) return;
+    if (!unobstructed(manualRequest)) return;
     pending = true;
     try {
       if (!manualRequest && !await services.updateNotesCanPresent()) return;
@@ -86,6 +87,12 @@
     void saveAcknowledgement();
     if (automatic) onautomatic?.('dismissed');
   }
+  $effect(() => {
+    if (!data || (!requested && (!data.auto_show || !ready || blocked))) return;
+    untrack(() => { void present(); });
+    const timer = window.setInterval(() => { void present(); }, 750);
+    return () => window.clearInterval(timer);
+  });
   onMount(() => {
     const epoch = ++loadEpoch;
     void services.updateNotes().then(value => {
@@ -94,10 +101,9 @@
       onautomatic?.(value.auto_show ? 'pending' : 'none');
       void present();
     }).catch(() => { onautomatic?.('none'); });
-    const timer = window.setInterval(() => { void present(); }, 750);
     window.addEventListener('focus', present);
     document.addEventListener('visibilitychange', present);
-    return () => { disposed = true; clearInterval(timer); window.removeEventListener('focus', present); document.removeEventListener('visibilitychange', present); };
+    return () => { disposed = true; window.removeEventListener('focus', present); document.removeEventListener('visibilitychange', present); };
   });
 </script>
 

@@ -67,6 +67,43 @@ describe('SettingsPanel', () => {
     return { transport, overlayStatus, resolve, reject, status };
   }
 
+  it('does not poll a selected Settings pane while its document is hidden', async () => {
+    vi.useFakeTimers();
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    try {
+      const { transport, overlayStatus } = pollingTransport();
+      render(SettingsPanel, { props: { theme: fakeTheme().theme, transport } });
+      await act(async () => {});
+      await act(() => vi.advanceTimersByTimeAsync(5000));
+      expect(overlayStatus).toHaveBeenCalledTimes(1);
+      hidden.mockReturnValue(false);
+      await fireEvent(document, new Event('visibilitychange'));
+      await act(async () => {});
+      expect(overlayStatus).toHaveBeenCalledTimes(2);
+    } finally { hidden.mockRestore(); cleanup(); vi.useRealTimers(); }
+  });
+
+  it('waits for both status reads when overlay polling fails before auto scan finishes', async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    try {
+      const { transport, overlayStatus, reject } = pollingTransport();
+      const refreshStatus = vi.fn().mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve; })).mockResolvedValue(undefined);
+      const autoScan = { settings: null, status: null, loading: false, error: null, refreshStatus } as unknown as AutoScanController;
+      render(SettingsPanel, { props: { theme: fakeTheme().theme, transport, autoScan } });
+      await act(async () => {});
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      await act(async () => { reject(new Error('Status unavailable')); });
+      await act(() => vi.advanceTimersByTimeAsync(3000));
+      expect(refreshStatus).toHaveBeenCalledTimes(1);
+      expect(overlayStatus).toHaveBeenCalledTimes(2);
+      await act(async () => { finish(); });
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      expect(refreshStatus).toHaveBeenCalledTimes(2);
+      expect(overlayStatus).toHaveBeenCalledTimes(3);
+    } finally { finish?.(); cleanup(); vi.useRealTimers(); }
+  });
+
   it('keeps one polling read in flight and retries after a failed status read', async () => {
     vi.useFakeTimers();
     try {

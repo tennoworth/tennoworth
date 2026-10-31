@@ -11,6 +11,12 @@ background request gets a turn after four foreground requests. Cached quotes,
 contract results and own orders last 15, 60 and 5 seconds respectively; final
 listing validation always makes a fresh read.
 
+Request waiters sleep on governor notifications until their next admission deadline.
+The status publisher also waits for changes instead of checking on a fixed timer.
+Setting a plan cancellation token wakes the governor immediately; callers that
+only own an atomic token retain a 100 ms cancellation backstop. Fresh validation
+reads still bypass the shared read cache.
+
 Each request must declare its kind and priority before dispatch. Keep WFM sends
 inside `wfm-client::transport`; authentication and reconciliation belong in the
 existing core services. Non-WFM providers bypass this governor. New integrations

@@ -151,6 +151,10 @@ fn planners_answer_the_same_from_their_declared_market_keys() {
         "../../../tests/fixtures/planners/market-keys.json"
     ))
     .unwrap();
+    let fields: Vec<String> = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/planners/item-fields.json"
+    ))
+    .unwrap();
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../frontend/public/market.json"
@@ -188,7 +192,7 @@ fn planners_answer_the_same_from_their_declared_market_keys() {
         serde_json::to_value(request.execute().unwrap()).unwrap()
     };
     for (operation, input) in &inputs {
-        let declared = keys[*operation]
+        let mut declared: serde_json::Map<String, Value> = keys[*operation]
             .as_array()
             .unwrap()
             .iter()
@@ -197,6 +201,11 @@ fn planners_answer_the_same_from_their_declared_market_keys() {
                 (key.to_string(), market[key].clone())
             })
             .collect();
+        if let Some(items) = declared.get_mut("items").and_then(Value::as_object_mut) {
+            for item in items.values_mut().filter_map(Value::as_object_mut) {
+                item.retain(|key, _| fields.contains(key));
+            }
+        }
         let full = run(operation, input, market.clone());
         assert!(
             full["result"].to_string().len() > 40,

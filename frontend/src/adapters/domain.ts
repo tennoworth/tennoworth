@@ -10,6 +10,7 @@ import type {
 } from '../contracts/generated/domain';
 import type { SessionCandidate, SessionPlan } from '../domain/trade-session';
 import marketKeys from '../../../tests/fixtures/planners/market-keys.json';
+import itemFields from '../../../tests/fixtures/planners/item-fields.json';
 
 type Operation = DomainRequest['operation'];
 type Input<K extends Operation> = Extract<DomainRequest, { operation: K }>['input'];
@@ -99,15 +100,26 @@ export async function scoreInventoryNative(owned: Map<string, OwnedRecord>, mark
 // Each planner reads only these parts of the snapshot. Sending the whole
 // snapshot serialized ~3 MB on the UI thread per call; the native tests run
 // every planner on the bundled snapshot with and without the rest.
+const plannerItems = new WeakMap<Market, Record<string, unknown>>();
 function plannerMarket(operation: keyof typeof marketKeys, market: Market | null) {
   if (!market) return market;
-  return Object.fromEntries(marketKeys[operation].filter(key => key in market).map(key => [key, market[key as keyof Market]]));
+  let items = plannerItems.get(market);
+  if (!items) {
+    items = Object.fromEntries(Object.entries(market.items).map(([slug, entry]) => [slug,
+      object(entry) ? Object.fromEntries(itemFields.filter(key => key in entry).map(key => [key, entry[key]])) : entry,
+    ]));
+    plannerItems.set(market, items);
+  }
+  return Object.fromEntries(marketKeys[operation].filter(key => key in market).map(key => [key, key === 'items' ? items : market[key as keyof Market]]));
 }
 
 function records(owned: Map<string, OwnedRecord> | null | undefined) {
   return Array.from(owned?.values() ?? [], ({ slug, name, count, subtype }) => ({ slug, name, count, subtype: subtype ?? null }));
 }
 export function relicPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, limit = 3): Promise<RelicPlanEntry[]> {
+  if (market && owned && ![...owned.values()].some(row => row.subtype === 'intact')
+    && [...owned.values()].every(row => Number.isSafeInteger(row.count) && row.count >= 0)
+    && Number.isSafeInteger([...owned.values()].reduce((total, row) => total + row.count, 0))) return Promise.resolve([]);
   return callDomain('relic_plan', { owned: records(owned), market: plannerMarket('relic_plan', market), limit: Number.isFinite(limit) ? limit : (owned?.size ?? 0) });
 }
 export function setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit = 24): Promise<SetReco[]> {

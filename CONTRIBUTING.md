@@ -154,6 +154,17 @@ Check the actual app for native behavior. Preserve unfinished form edits through
 refreshes, resizes, authentication, and error states. Do not hide diagnostics
 with `@ts-nocheck` or replace runtime verification with type checking.
 
+The browser suite also includes `performance.spec.ts`: large-inventory planner
+payload limits, no dispatch for inventories without intact relics, hidden-document
+status polling, and event bursts in an unlocked simulated listing session.
+Native `wfm-client` tests cover authenticated mock read bursts, shared observation
+timestamps, fresh final validation, pacing deadlines, cancellation and policy
+wakeups. These are deterministic work budgets, not native timing or memory claims.
+For timing/soak comparisons, use release builds on the same machine and record
+visible/hidden state, WFM lock state, inventory size, CPU and private-memory trends;
+exercise unlocked idle, scanning and an open review. Real-account and Windows/Linux
+runtime measurements remain separate from the mock and browser checks.
+
 ## Publishing market announcements
 
 The bundled feed bootstraps readers and initial publisher state. Once a host

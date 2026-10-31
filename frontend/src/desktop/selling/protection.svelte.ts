@@ -53,6 +53,7 @@ export class ProtectionController {
   }
 
   async setInventory(owned: Map<string, OwnedRecord>, snapshotId: number | null) {
+    this.request++;
     this.input = { owned, snapshotId, request: { snapshot_id: snapshotId, items: Object.fromEntries([...owned.values()]
       .filter(row => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic'))
       .map(row => [row.slug, { count: row.count, leveled: row.leveled ?? 0 }])) } };
@@ -61,14 +62,42 @@ export class ProtectionController {
   }
 
   private disposed = false;
+  private refreshTask: { input: object; started: boolean; again: boolean; promise: Promise<void> } | null = null;
 
-  async refresh() {
+  refresh(): Promise<void> {
     const input = this.input;
-    if (!input) return;
+    if (!input || this.disposed) return Promise.resolve();
+    const running = this.refreshTask;
+    if (running?.input === input) {
+      if (running.started) {
+        running.again = true;
+        this.request++;
+      }
+      return running.promise;
+    }
+    this.loading = true;
+    const task = { input, started: false, again: false, promise: Promise.resolve() };
+    this.refreshTask = task;
+    // Events delivered together share one read; changes during that read get
+    // one trailing read so an older observation cannot grant sale permission.
+    task.promise = Promise.resolve().then(async () => {
+      try {
+        do {
+          if (this.disposed || this.input !== input) return;
+          task.again = false;
+          task.started = true;
+          await this.read(input.request);
+        } while (task.again);
+      } finally { if (this.refreshTask === task) this.refreshTask = null; }
+    });
+    return task.promise;
+  }
+
+  private async read(input: ProtectionInventory) {
     const request = ++this.request;
     this.loading = true;
     try {
-      const state = await this.port.desktopProtectionState(input.request);
+      const state = await this.port.desktopProtectionState(input);
       if (request !== this.request || this.disposed) return;
       if (!state?.plan || !state.items || !Array.isArray(state.issues)) throw new Error('Protected quantities are unavailable. Retry before listing.');
       const quantity = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff_ffff;
