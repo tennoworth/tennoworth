@@ -21,7 +21,8 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
     owned.set('arcane_energize', { count: sessionSample ? 24 : 12, name: 'Arcane Energize', type: 'Arcanes', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
     owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mods', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
   }
-  // `large`: a long-time player's inventory, for performance work.
+  // Seed rows must not survive based on their position in the current snapshot.
+  if (scenario === 'large') owned.clear();
   largeSlugs.forEach((slug, i) => {
     const name = slug.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     owned.set(slug, { count: 1 + (i % 7), name, type: 'Misc', slug, subtype: null, kept_lvl: null, leveled: 0 });

@@ -1704,6 +1704,17 @@
           "supersedes": []
         },
         {
+          "id": "account-control-header-wrap",
+          "kind": "fixed",
+          "title": "Account controls stay on the right",
+          "body": "Sign in, Unlock and trade-status controls remain right-aligned when a narrow header wraps onto another row.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
           "id": "smaller-planner-idle-work",
           "kind": "improved",
           "title": "Less repeated work",

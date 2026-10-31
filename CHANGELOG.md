@@ -62,11 +62,13 @@ TennoWorth Desktop 0.8.114 is ready.
 
 Inventory scans no longer fill the market request queue with repeated quantity checks. This release also reduces background work and verifies downloaded market data before replacing your cached copy.
 
-## Changelog (5)
+## Changelog (6)
 
 ### Reliability
 
 - **Stable quantities after a scan** Fixed repeated quantity refreshes that could fill the market queue and make availability warnings flicker. Draft listing edits stay intact while quantities refresh. <!-- app-note {"id":"stable-scan-quantity-refresh","kind":"fixed"} -->
+
+- **Account controls stay on the right** Sign in, Unlock and trade-status controls remain right-aligned when a narrow header wraps onto another row. <!-- app-note {"id":"account-control-header-wrap","kind":"fixed"} -->
 
 ### Performance
 
