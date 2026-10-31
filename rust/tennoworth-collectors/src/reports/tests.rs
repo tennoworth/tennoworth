@@ -395,6 +395,42 @@ async fn http_accepts_valid_reports_and_refuses_anything_extra() {
 }
 
 #[tokio::test]
+async fn a_read_flood_does_not_block_submissions() {
+    // The published bands are public and anonymous; desktops depend on the
+    // write routes. Spending the read allowance must leave submissions open.
+    let state = Collector::with_limit(
+        Store::new(Connection::open_in_memory().unwrap()).unwrap(),
+        1,
+    );
+    state.tick().unwrap();
+    let (url, task) = serve(state).await;
+    let client = reqwest::Client::new();
+    for _ in 0..3 {
+        let _ = client
+            .get(format!("{url}/api/reports/prices"))
+            .send()
+            .await
+            .unwrap();
+    }
+    let limited = client
+        .get(format!("{url}/api/reports/prices"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(limited.status(), 429, "the read lane is saturated");
+    let erase = client
+        .post(format!("{url}/api/reports/erase"))
+        .json(
+            &json!({"v": contract::CONTRACT_VERSION, "week": "2026-W44", "secret": "a".repeat(64)}),
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(erase.status(), 204);
+    task.abort();
+}
+
+#[tokio::test]
 async fn a_saturated_quota_does_not_take_health_down() {
     let state = Collector::with_limit(
         Store::new(Connection::open_in_memory().unwrap()).unwrap(),

@@ -47,13 +47,15 @@ cannot detect every network or upstream outage. Aggregates are retained indefini
 ## Request quota
 
 Two public routes exist - `POST /api/usage/check-in` and `GET /api/usage/daily` -
-and they share one window of **20 requests per wall-clock second**, fixed in
-`REQUESTS_PER_WINDOW` (`rust/tennoworth-collectors/src/usage/mod.rs`). It is one counter for
-the whole service, not one per source: no client identifier is read or stored, so
+and each has its own window of **20 requests per wall-clock second**, fixed in
+`REQUESTS_PER_WINDOW` (`rust/tennoworth-collectors/src/usage/mod.rs`), so a flood
+of the public read cannot block check-ins. Each window is one counter for the
+whole service, not one per source: no client identifier is read or stored, so
 there is nothing to key it by, and that is deliberate (see "Data flow and
-consent"). The consequence worth knowing is that one sender can consume the window
+consent"). The consequence worth knowing is that one sender can consume a window
 for everyone. The ceiling bounds work; it is not a fairness mechanism and does not
-protect count integrity.
+protect count integrity. Per-source limits belong at the edge, which sees the
+address the origin never receives.
 
 It is a fixed one-second counter rather than a token bucket, so up to twice the
 quota can pass across a window boundary, and it is not configurable at runtime.

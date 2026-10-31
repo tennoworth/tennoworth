@@ -101,8 +101,9 @@ have no floor.
   the server's UTC day to one day after it.
 - One contributor id may hold 500 sales per week; past that the service answers
   429.
-- The public routes share one window of 20 requests per second, separate from
-  the usage counter's. Bodies over 16 KiB are refused.
+- Reads (`GET`) and submissions each have their own window of 20 requests per
+  second, separate from the usage counter's, so a flood of the public read
+  routes cannot block submissions. Bodies over 16 KiB are refused.
 - Published responses are recomputed at most every five minutes.
 
 ## What this does not protect against
