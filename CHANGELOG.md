@@ -54,6 +54,34 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.114 - 2026-10-31
+
+# 🔒 TennoWorth Desktop 0.8.114
+
+TennoWorth Desktop 0.8.114 is ready.
+
+Inventory scans no longer fill the market request queue with repeated quantity checks. This release also reduces background work and verifies downloaded market data before replacing your cached copy.
+
+## Changelog (5)
+
+### Reliability
+
+- **Stable quantities after a scan** Fixed repeated quantity refreshes that could fill the market queue and make availability warnings flicker. Draft listing edits stay intact while quantities refresh. <!-- app-note {"id":"stable-scan-quantity-refresh","kind":"fixed"} -->
+
+### Performance
+
+- **Less repeated work** Planners send smaller requests, quantity refresh bursts share their work, and hidden Settings and dismissed update notes stop unnecessary checks. <!-- app-note {"id":"smaller-planner-idle-work","kind":"improved"} -->
+
+### Security
+
+- **Verified market downloads** Market snapshots and price history must carry the server's valid signature before replacing cached data. If verification fails, the app keeps its previous copy. <!-- app-note {"id":"verified-market-artifacts","kind":"improved"} -->
+- Collector updates are signed and verified before installation on the server.
+- Public statistics reads have separate quotas from anonymous check-ins and price submissions, so read traffic cannot spend the submission allowance.
+
+## Updating
+
+TennoWorth checks for updates automatically. Downloads are available below.
+
 ## 0.8.113 - 2026-10-30
 
 # ⚡ TennoWorth Desktop 0.8.113
