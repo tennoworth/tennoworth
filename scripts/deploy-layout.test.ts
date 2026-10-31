@@ -168,6 +168,8 @@ case "$last" in
 esac
 `);
       writeFileSync(join(mocks, 'sha256sum'), '#!/bin/sh\nexit 0\n');
+      writeFileSync(join(mocks, 'minisign'), `#!/bin/sh\necho 'Trusted comment: tennoworth-collector ${binary} 0123abc'\n`);
+      writeFileSync(join(root, 'collector.pub'), 'fixture');
       writeFileSync(join(mocks, 'sleep'), '#!/bin/sh\nexit 0\n');
       writeFileSync(join(mocks, 'systemctl'), `#!/bin/sh
 if [ ! -f '${root}/restarted' ]; then
@@ -176,8 +178,11 @@ if [ ! -f '${root}/restarted' ]; then
 fi
 exit 0
 `);
-      for (const command of ['curl', 'sha256sum', 'sleep', 'systemctl']) chmodSync(join(mocks, command), 0o755);
-      const result = spawnSync('sh', [join(root, 'pull.sh'), name], { env: { ...process.env, PATH: `${mocks}:${process.env.PATH}` }, encoding: 'utf8' });
+      for (const command of ['curl', 'sha256sum', 'minisign', 'sleep', 'systemctl']) chmodSync(join(mocks, command), 0o755);
+      const result = spawnSync('sh', [join(root, 'pull.sh'), name], {
+        env: { ...process.env, PATH: `${mocks}:${process.env.PATH}`, COLLECTOR_SIGNING_PUB: join(root, 'collector.pub') },
+        encoding: 'utf8',
+      });
       if (failure === 'busy') {
         expect(result.status, result.stderr).toBe(0);
         expect(readFileSync(join(deploy, `bin/${binary}`), 'utf8')).toBe('new-binary');
@@ -197,7 +202,8 @@ describe('live data roots', () => {
   const handle = (source: string, matcher: string) => source.slice(source.indexOf(`handle ${matcher} {`), source.indexOf('}', source.indexOf(`handle ${matcher} {`)));
 
   test('pipeline output is served from the data directory, the tracked hotfix from the checkout', () => {
-    expect(caddy).toMatch(/@livedata path \/market\.json \/market-public\.json \/market-home\.json \/wfstat-catalog\.json \/history\.json\n/);
+    // The desktop fetches each signed artifact's .minisig from beside it.
+    expect(caddy).toMatch(/@livedata path \/market\.json \/market\.json\.minisig \/market-public\.json \/market-home\.json \/wfstat-catalog\.json \/history\.json \/history\.json\.minisig\n/);
     expect(handle(caddy, '@livedata')).toContain('root * /srv/wfm/data/public');
     expect(handle(caddy, '/definitions.json')).toContain('root * /srv/wfm/app/frontend/public');
     expect(handle(admin, '/market.json')).toContain('root * /srv/wfm/data/public');
@@ -933,9 +939,55 @@ describe('scrape pipeline delivery boundary', () => {
   });
 });
 
+describe.each(collectors)('$name collector signature', ({ name, binary }) => {
+  // pull-collector.sh runs as root. The checksum comes from the same release
+  // as the binary, so only the CI-held key's signature decides what installs.
+  const cases = [
+    ['a signature that does not verify', 'exit 1', true],
+    ['a signature for another binary', "echo 'Trusted comment: tennoworth-collector tennoworth-other 0123abc'", true],
+    ['no configured public key', `echo 'Trusted comment: tennoworth-collector ${binary} 0123abc'`, false],
+  ] as const;
+  for (const [why, minisign, withKey] of cases) {
+    test(`refuses ${why} and keeps the installed binary`, () => {
+      const root = mkdtempSync(join(tmpdir(), 'collector-sig-'));
+      directories.push(root);
+      const deploy = join(root, 'deploy');
+      const mocks = join(root, 'mocks');
+      mkdirSync(join(deploy, 'bin'), { recursive: true });
+      mkdirSync(mocks);
+      writeFileSync(join(deploy, `bin/${binary}`), 'old-binary');
+      const source = readFileSync(new URL('../deploy/bin/pull-collector.sh', import.meta.url), 'utf8');
+      writeFileSync(join(root, 'pull.sh'), source.replaceAll('/srv/wfm', deploy));
+      writeFileSync(join(mocks, 'curl'), '#!/bin/sh\nfor arg do last="$arg"; done\nprintf new-binary > "$last"\n');
+      writeFileSync(join(mocks, 'sha256sum'), '#!/bin/sh\nexit 0\n');
+      writeFileSync(join(mocks, 'minisign'), `#!/bin/sh\n${minisign}\n`);
+      writeFileSync(join(mocks, 'systemctl'), `#!/bin/sh\ntouch '${root}/restarted'\n`);
+      for (const command of ['curl', 'sha256sum', 'minisign', 'systemctl']) chmodSync(join(mocks, command), 0o755);
+      if (withKey) writeFileSync(join(root, 'collector.pub'), 'fixture');
+      const result = spawnSync('sh', [join(root, 'pull.sh'), name], {
+        env: { ...process.env, PATH: `${mocks}:${process.env.PATH}`, COLLECTOR_SIGNING_PUB: join(root, 'collector.pub') },
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(`Refusing to install ${binary}`);
+      expect(readFileSync(join(deploy, `bin/${binary}`), 'utf8')).toBe('old-binary');
+      expect(existsSync(join(root, 'restarted')), 'nothing restarts').toBe(false);
+    });
+  }
+
+  test('CI signs with the comment the box requires', () => {
+    const ci = readFileSync(new URL('../.github/workflows/collector-build.yml', import.meta.url), 'utf8');
+    const pull = readFileSync(new URL('../deploy/bin/pull-collector.sh', import.meta.url), 'utf8');
+    expect(ci).toContain('-t "tennoworth-collector $CRATE $GITHUB_SHA"');
+    expect(ci).toMatch(/environment: collector-release/);
+    expect(ci).toContain('dist/${{ inputs.crate }}.minisig');
+    expect(pull).toContain('"tennoworth-collector $binary "*)');
+  });
+});
+
 // ---- run-scrape.sh: a run that publishes nothing must not republish --------
 
-function runScrapeFixture(scrape: string) {
+function runScrapeFixture(scrape: string, env: Record<string, string> = {}) {
   const app = mkdtempSync(join(tmpdir(), 'run-scrape-'));
   directories.push(app);
   const publish = join(app, 'public'); mkdirSync(publish);
@@ -945,15 +997,49 @@ function runScrapeFixture(scrape: string) {
   const bin = join(app, 'scrape-stub');
   writeFileSync(
     bin,
-    ['#!/bin/sh', 'case "$1" in', `  scrape) ${scrape} ;;`, `  build) printf "%s\\n" "$*" > '${app}/build-args' ;;`, '  history) exit 0 ;;', 'esac', 'exit 0', ''].join('\n'),
+    [
+      '#!/bin/sh',
+      'case "$1" in',
+      `  scrape) touch '${app}/scraped'; ${scrape} ;;`,
+      `  build) printf "%s\\n" "$*" > '${app}/build-args'; printf '{"updated_at":"x"}' > '${publish}/market.json' ;;`,
+      '  history) exit 0 ;;',
+      'esac',
+      'exit 0',
+      '',
+    ].join('\n'),
   );
   chmodSync(bin, 0o755);
   const run = () => spawnSync('bash', [fileURLToPath(new URL('../deploy/bin/run-scrape.sh', import.meta.url))], {
-    env: { ...process.env, DATA: app, PUBLISH: publish, SCRAPE_BIN: bin, HISTORY: '0' },
+    env: { ...process.env, DATA: app, PUBLISH: publish, SCRAPE_BIN: bin, HISTORY: '0', SIGNING_KEY: '', ...env },
     encoding: 'utf8',
   });
   return { app, publish, run };
 }
+
+const hasMinisign = spawnSync('minisign', ['-v']).status === 0;
+
+describe('run-scrape signing', () => {
+  const fixture = JSON.parse(readFileSync(new URL('../tests/fixtures/artifact-signature/cases.json', import.meta.url), 'utf8'));
+
+  test('a configured key that cannot be read aborts before the scrape', () => {
+    const { app, run } = runScrapeFixture(REPLACE_CSV, { SIGNING_KEY: '/nonexistent/artifact-signing.key' });
+    const result = run();
+    expect(result.status).not.toBe(0);
+    expect(existsSync(join(app, 'scraped')), 'no hour of scraping toward an unsignable snapshot').toBe(false);
+  });
+
+  test.skipIf(!hasMinisign)('signs market.json with the comment the desktop requires', () => {
+    const keys = mkdtempSync(join(tmpdir(), 'artifact-key-'));
+    directories.push(keys);
+    execFileSync('minisign', ['-G', '-W', '-p', join(keys, 'k.pub'), '-s', join(keys, 'k.key')], { stdio: 'ignore' });
+    const { publish, run } = runScrapeFixture(REPLACE_CSV, { SIGNING_KEY: join(keys, 'k.key') });
+    const result = run();
+    expect(result.status, result.stderr).toBe(0);
+    const verified = execFileSync('minisign', ['-V', '-p', join(keys, 'k.pub'), '-m', join(publish, 'market.json'), '-x', join(publish, 'market.json.minisig')], { encoding: 'utf8' });
+    expect(verified).toContain(`Trusted comment: ${fixture.comment_prefix} market.json\n`);
+    expect(readdirSync(publish).filter((f) => f.endsWith('.tmp')), 'no partial signature left behind').toEqual([]);
+  });
+});
 
 const REPLACE_CSV =
   'rm -f wfm_results.csv; { printf "url_name,median_90d\\n"; i=0; while [ "$i" -lt 1000 ]; do printf "row%s,1\\n" "$i"; i=$((i+1)); done; } > wfm_results.csv';

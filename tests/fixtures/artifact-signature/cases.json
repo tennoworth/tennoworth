@@ -1,0 +1,10 @@
+{
+  "_comment": "Throwaway test key, not a production key. The box signs each artifact with the trusted comment '<comment_prefix> <file name>'; the desktop refuses a signature that names another file.",
+  "comment_prefix": "tennoworth-artifact",
+  "public_key": "RWTSTv2Pf0xYjvO0nwaNbvHlEuRrxO5iKuo6IYBoGgbJx7KsOOPiY2kP",
+  "body": "{\"updated_at\":\"2026-10-30T12:00:00Z\",\"items\":{\"ash_prime_set\":{\"low_sell\":60}}}",
+  "signatures": {
+    "market_json": "untrusted comment: signature from minisign secret key\nRUTSTv2Pf0xYjvUMh/gP43VU89sPAv3ktl27GCbDxabGxbKLcBY48jX7+k6D9YlmglFHKKUHjnE15Hrsc17DkIvDMCU2l9MCEwI=\ntrusted comment: tennoworth-artifact market.json\nWrIEOuuneY2zJSxMR+9HIVJOlN1wa48sjeJs7U5rCziISDpHl28G/NYxSxFfwN+hm/RlCPvxGm/xc9g8hmQiAw==\n",
+    "labelled_history_json": "untrusted comment: signature from minisign secret key\nRUTSTv2Pf0xYjvbe/yZlSb2aANaHBtFKl3VSwaH7BqSmcaLHex05ZrI4oY+nxmXuZaU/46XVcxE1v6kxQ0eJa1cglJQ6KuLnHgU=\ntrusted comment: tennoworth-artifact history.json\nT9Wxdzfq445Lbdcg3KtlmmGkzBIlX5MbKYj3RikrghAi4moE6glteUIPWPzg6Lu8qibSJiIqIqGZtnW3Kr6vDw==\n"
+  }
+}

@@ -130,20 +130,26 @@ fn test_only_items_do_not_hide_later_production_code() {
 #[test]
 fn raw_http_send_sites_are_classified() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let allowed = [
-        "wfm-client/src/transport.rs",
-        "wfm-client/src/policy.rs",
-        "game-acquisition/src/inventory.rs",
-        "tennoworth-desktop/src/services/market/cache.rs",
+    // Each classified file with the number of send sites it is expected to hold,
+    // so a new endpoint in a classified file still has to be classified here.
+    let allowed: &[(&str, usize)] = &[
+        ("wfm-client/src/transport.rs", 1),
+        ("wfm-client/src/policy.rs", 1),
+        ("game-acquisition/src/inventory.rs", 1),
+        // First-party artifacts from tennoworth.app, and each one's signature.
+        ("tennoworth-desktop/src/services/market/cache.rs", 2),
         // First-party, consent-gated counter: must not inherit WFM identity headers.
-        "tennoworth-desktop/src/services/telemetry/usage.rs",
+        ("tennoworth-desktop/src/services/telemetry/usage.rs", 1),
         // First-party, consent-gated price reports: same client as the counter.
-        "tennoworth-desktop/src/services/telemetry/reports/mod.rs",
-        "tennoworth-desktop/src/services/market/definitions.rs",
-        "wfm-scrape/src/ingest/catalog.rs",
-        "wfm-scrape/src/ingest/transport.rs",
+        (
+            "tennoworth-desktop/src/services/telemetry/reports/mod.rs",
+            1,
+        ),
+        ("tennoworth-desktop/src/services/market/definitions.rs", 1),
+        ("wfm-scrape/src/ingest/catalog.rs", 1),
+        ("wfm-scrape/src/ingest/transport.rs", 1),
     ];
-    fn check(directory: &Path, root: &Path, allowed: &[&str]) {
+    fn check(directory: &Path, root: &Path, allowed: &[(&str, usize)]) {
         for entry in std::fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
@@ -160,12 +166,15 @@ fn raw_http_send_sites_are_classified() {
                     || free > 0
                     || (compact.contains("reqwest") && compact.contains(".execute("))
                 {
+                    let Some((_, expected)) = allowed.iter().find(|(file, _)| *file == relative)
+                    else {
+                        panic!("Unclassified HTTP send site in {relative}; route WFM requests through the shared governor, and classify other providers.");
+                    };
                     assert_eq!(
                         compact.matches(".send()").count() + free,
-                        1,
+                        *expected,
                         "Raw HTTP send count changed in {relative}; classify the new endpoint"
                     );
-                    assert!(allowed.contains(&relative.as_str()), "Unclassified HTTP send site in {relative}; route WFM requests through the shared governor, and classify other providers.");
                 }
             }
         }
@@ -177,6 +186,6 @@ fn raw_http_send_sites_are_classified() {
         "wfm-scrape",
         "tennoworth-desktop",
     ] {
-        check(&root.join(member).join("src"), root, &allowed);
+        check(&root.join(member).join("src"), root, allowed);
     }
 }
