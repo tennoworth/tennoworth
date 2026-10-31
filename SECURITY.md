@@ -88,6 +88,19 @@ The product crosses the following trust boundaries:
    boundary the repo's public CI does not cover - compromising it would
    let an attacker serve malicious JS or a stale snapshot to visitors.
 
+   Two signatures narrow what sits between the box and its users:
+   - The box installs the opt-in collector binaries as root only when they
+     carry a Minisign signature from a key held in the `main`-only
+     `collector-release` environment, naming that binary. A token that can
+     edit release assets cannot produce one.
+   - The box signs `market.json` and `history.json` after every scrape with
+     its own key, which is not the offline WFM policy key. Release desktop
+     builds accept those files only when the signature verifies, and keep
+     their cached copy otherwise, so the Worker, tunnel or CDN cannot feed the
+     app prices. Release CI refuses to ship a build carrying the key while
+     the live pair does not verify under it. This does not protect against a
+     compromised box, which holds the key.
+
 ## What we commit to
 
 - **Your inventory stays on your machine.** The hosted site has no

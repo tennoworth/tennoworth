@@ -48,6 +48,9 @@ name: release-desktop
 
 env:
   TENNOWORTH_WFM_POLICY_PUBLIC_KEY: ${{ vars.TENNOWORTH_WFM_POLICY_PUBLIC_KEY }}
+  # The box's live-data key. Builds carrying it accept market.json and
+  # history.json only with the box's signature (services/market/cache.rs).
+  TENNOWORTH_ARTIFACT_PUBLIC_KEY: ${{ vars.TENNOWORTH_ARTIFACT_PUBLIC_KEY }}
 
 on:
   workflow_dispatch:
@@ -120,6 +123,23 @@ jobs:
           test -n "$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" || { echo "Configure the dedicated WFM policy public key before publication." >&2; exit 1; }
           curl --fail --silent --show-error --max-time 15 --max-filesize 65536 https://tennoworth.app/wfm-policy.json -o wfm-policy.json
           cargo run --manifest-path rust/Cargo.toml --release -p wfm-client --bin wfm-policy -- wfm-policy.json
+
+      # A release carrying the key refuses unsigned live data, so shipping it
+      # while the box does not sign would freeze every user on their cached
+      # prices. Prove the production pair verifies under this exact key first.
+      - name: Verify signed live data
+        run: |
+          set -euo pipefail
+          test -n "$TENNOWORTH_ARTIFACT_PUBLIC_KEY" || { echo "Configure TENNOWORTH_ARTIFACT_PUBLIC_KEY (the box's live-data public key) before publication." >&2; exit 1; }
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          printf 'untrusted comment: box live-data key\n%s\n' "$TENNOWORTH_ARTIFACT_PUBLIC_KEY" > "$RUNNER_TEMP/artifact.pub"
+          for name in market.json history.json; do
+            curl --fail --silent --show-error --max-time 60 "https://tennoworth.app/$name" -o "$RUNNER_TEMP/$name"
+            curl --fail --silent --show-error --max-time 15 --max-filesize 4096 "https://tennoworth.app/$name.minisig" -o "$RUNNER_TEMP/$name.minisig"
+            minisign -V -p "$RUNNER_TEMP/artifact.pub" -m "$RUNNER_TEMP/$name" -x "$RUNNER_TEMP/$name.minisig" \
+              | grep -qx "Trusted comment: tennoworth-artifact $name" \
+              || { echo "$name is not signed by the configured key for $name." >&2; exit 1; }
+          done
 
       # Production refreshes every two hours, while the committed pair is the
       # reproducible desktop fallback. Release preparation copies both under

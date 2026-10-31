@@ -72,6 +72,8 @@ anyhow = { workspace = true }
 game-acquisition = { path = "../game-acquisition" }
 wfm-trading = { path = "../wfm-trading" }
 wfm-client = { path = "../wfm-client" }
+# Verifies the box-signed market.json/history.json sidecars (already in the tree via wfm-client).
+minisign-verify = { workspace = true }
 # The sell-priority scoring (single source of truth, mirrored in sell-priority.ts)
 # used to rank the tray + notification sellables. Pure, no-dep crate.
 # `bundled` compiles SQLite from source - no system libsqlite3 dependency, so the

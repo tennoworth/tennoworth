@@ -24,6 +24,8 @@ fi
 echo "==> Base packages"
 apt-get update
 apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gpg
+# Signs the published live data and verifies the collector builds before install.
+apt-get install -y minisign
 
 echo "==> Caddy"
 if ! command -v caddy >/dev/null; then
@@ -83,6 +85,18 @@ chown -R root:root "$REPO"
 # "dubious ownership" unless the path was vouched for. Root owns it now, so the
 # exception that box once needed is removed rather than kept as a standing hole.
 git config --system --unset-all safe.directory "$REPO" 2>/dev/null || true
+
+echo "==> Signing keys"
+# /etc/tennoworth holds two keys a human places, never this script:
+#   artifact-signing.key  the box's own secret key for market.json and
+#                         history.json, readable by wfm only (the scrape signs)
+#   collector-signing.pub the public key of the CI-held collector key, checked
+#                         before a collector binary is installed as root
+# Generating the box key: `minisign -G -W -p artifact-signing.pub -s
+# artifact-signing.key`; its public half is built into release desktops.
+install -d -m 0755 -o root -g root /etc/tennoworth
+[ -f /etc/tennoworth/artifact-signing.key ] && chown wfm:wfm /etc/tennoworth/artifact-signing.key \
+  && chmod 0400 /etc/tennoworth/artifact-signing.key
 
 echo "==> Caddy config"
 if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'frontend/dist' /etc/caddy/Caddyfile; then
