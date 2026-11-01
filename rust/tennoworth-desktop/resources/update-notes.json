@@ -1,5 +1,5 @@
 {
-  "version": "0.8.113",
+  "version": "0.8.114",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1680,6 +1680,56 @@
           "kind": "fixed",
           "title": "Tray and overlay counts match the inventory table",
           "body": "The tray, Trade Session and relic overlay now recognise items with the same rules as the inventory table, so refined relics are no longer counted as intact ones.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.114",
+      "date": "2026-10-31",
+      "changes": [
+        {
+          "id": "stable-scan-quantity-refresh",
+          "kind": "fixed",
+          "title": "Stable quantities after a scan",
+          "body": "Fixed repeated quantity refreshes that could fill the market queue and make availability warnings flicker. Draft listing edits stay intact while quantities refresh.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "account-control-header-wrap",
+          "kind": "fixed",
+          "title": "Account controls stay on the right",
+          "body": "Sign in, Unlock and trade-status controls remain right-aligned when a narrow header wraps onto another row.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "smaller-planner-idle-work",
+          "kind": "improved",
+          "title": "Less repeated work",
+          "body": "Planners send smaller requests, quantity refresh bursts share their work, and hidden Settings and dismissed update notes stop unnecessary checks.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "verified-market-artifacts",
+          "kind": "improved",
+          "title": "Verified market downloads",
+          "body": "Market snapshots and price history must carry the server's valid signature before replacing cached data. If verification fails, the app keeps its previous copy.",
           "platforms": [
             "windows",
             "linux"
