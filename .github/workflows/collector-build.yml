@@ -5,6 +5,10 @@ name: collector-build
 # classification and publication they share.
 on:
   workflow_call:
+    secrets:
+      COLLECTOR_SIGNING_KEY:
+        description: Collector signing key from the main-only environment.
+        required: true
     inputs:
       crate:
         description: tennoworth-collectors binary that is published.
