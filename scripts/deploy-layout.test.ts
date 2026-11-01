@@ -977,6 +977,10 @@ describe.each(collectors)('$name collector signature', ({ name, binary }) => {
 
   test('CI signs with the comment the box requires', () => {
     const ci = readFileSync(new URL('../.github/workflows/collector-build.yml', import.meta.url), 'utf8');
+    const reusable = Bun.YAML.parse(ci) as any;
+    const caller = Bun.YAML.parse(readFileSync(new URL(`../.github/workflows/build-${name}.yml`, import.meta.url), 'utf8')) as any;
+    expect(reusable.on.workflow_call.secrets.COLLECTOR_SIGNING_KEY.required).toBe(true);
+    expect(caller.jobs.publish.secrets).toEqual({ COLLECTOR_SIGNING_KEY: '${{ secrets.COLLECTOR_SIGNING_KEY }}' });
     const pull = readFileSync(new URL('../deploy/bin/pull-collector.sh', import.meta.url), 'utf8');
     expect(ci).toContain('-t "tennoworth-collector $CRATE $GITHUB_SHA"');
     expect(ci).toMatch(/environment: collector-release/);
