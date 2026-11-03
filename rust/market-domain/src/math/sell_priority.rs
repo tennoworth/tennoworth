@@ -21,6 +21,10 @@
 /// `tests/fixtures/sell-priority/liquidity-boundary.json`, checked from
 /// market-domain so this crate stays dependency-free.
 pub const LIQUID_VOL: f64 = 5.0;
+/// The priority a row needs to be a Top pick; the evening digest uses the same
+/// bar so both name the same items. Pinned against `MIN_PICK_SCORE` in
+/// sell-priority.ts by `tests/fixtures/sell-priority/pick-floor.json`.
+pub const MIN_PICK_SCORE: f64 = 20.0;
 /// At/under this 48 h volume a listing barely moves - flagged `patience`.
 /// Mirrors `PATIENCE_VOL` in sell-priority.ts.
 const PATIENCE_VOL: f64 = 3.0;
@@ -152,6 +156,15 @@ pub fn score_row_weighted(owned: f64, m: &PricedEntry, usage_share: Option<f64>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_pick_floor_matches_the_typescript_side() {
+        let floor: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/sell-priority/pick-floor.json"
+        ))
+        .unwrap();
+        assert_eq!(floor["min_pick_score"].as_f64(), Some(MIN_PICK_SCORE));
+    }
 
     // Ported 1:1 from frontend/src/domain/sell-priority.test.ts so the two
     // suites move together.

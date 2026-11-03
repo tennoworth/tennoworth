@@ -153,6 +153,22 @@
      free to wrap to four lines grew the strip 48 to 64px between views. The
      Refresh menu repeats the full name, so the clamp hides nothing. */
   .statusbar .cell .file[data-shell] { max-width: 16rem; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  /* One-line fit steps, set by StatusStrip as data-fit. Hidden words stay in
+     the accessibility tree. */
+  .statusbar[data-fit="1"] .fit-1[data-shell],
+  .statusbar[data-fit="2"] :is(.fit-1, .fit-2)[data-shell],
+  .statusbar:is([data-fit="3"], [data-fit="4"]) :is(.fit-1, .fit-2, .fit-3)[data-shell] {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .statusbar[data-fit="4"][data-shell] { flex-wrap: nowrap; overflow: hidden; }
+  .statusbar[data-fit="4"] > *[data-shell] { flex-shrink: 0; }
+  .statusbar[data-fit="4"] > .cell.inv[data-shell] { flex-shrink: 1; flex-wrap: nowrap; }
+  .statusbar[data-fit="4"] > .cell.act[data-shell] { flex-shrink: 1; min-width: 3rem; overflow: hidden; }
+  .statusbar[data-fit="4"] .cell.inv .note[data-shell] { display: block; flex: 1 1 0; width: 0; min-width: 3rem; white-space: nowrap; text-overflow: ellipsis; }
+  .statusbar .cell .dot[data-shell] { flex: none; }
+  .statusbar .cell.act[data-shell] { flex-wrap: nowrap; }
+  .statusbar .cell.act .act-label[data-shell] { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .statusbar .cell .note[data-shell] { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
   .statusbar .cell .ducat[data-shell] { color: var(--ducat); }
   .statusbar .cell a[data-shell] { color: var(--accent); text-decoration: none; }
   .statusbar .cell a + a[data-shell] { margin-left: var(--s2); }
@@ -331,6 +347,8 @@
   .sfoot .project-link:hover[data-shell],
   .sfoot .feedback-trigger:hover[data-shell] { color: var(--fg); background: transparent; text-decoration: underline dotted; }
   .sfoot .ver[data-shell] { padding: 0 var(--s1); }
+  /* The item pictures' source, said once here rather than on each picture. */
+  .sfoot .credit[data-shell] { margin: 0; padding: 0 var(--s1); color: var(--muted); font-size: var(--text-caption); }
 
   /* Refresh ▾ in the strip: a 24px control inside the 40px bar. */
   .refresh-trigger[data-shell] {

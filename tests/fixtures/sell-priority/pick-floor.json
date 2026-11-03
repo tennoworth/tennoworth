@@ -1,0 +1,4 @@
+{
+  "_comment": "The priority a row needs to be a Top pick, and to appear in the evening sell digest, so both name the same items. Read by frontend/src/domain/sell-priority.parity.test.ts and rust/market-domain/src/math/sell_priority.rs.",
+  "min_pick_score": 20
+}

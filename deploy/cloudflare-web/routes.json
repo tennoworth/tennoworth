@@ -9,6 +9,8 @@
     "tennoworth.app/wfstat-catalog.json*",
     "tennoworth.app/definitions.json*",
     "tennoworth.app/history.json*",
+    "tennoworth.app/item-art/*",
+    "tennoworth.app/item-art.json*",
     "tennoworth.app/wfm-policy.json*",
     "tennoworth.app/announcements.json*",
     "tennoworth.app/api/*",

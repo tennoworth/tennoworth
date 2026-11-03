@@ -40,6 +40,8 @@ pub fn rank_sellables(db: &Db, market: &MarketData) -> Vec<SellableRow> {
             sellable_qty: sellable,
             price: sell_priority::clearing_price(&priced),
             score: score.sell_score,
+            patience: score.patience,
+            hold: entry.hold(),
         });
     }
 

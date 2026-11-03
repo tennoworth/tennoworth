@@ -13,6 +13,7 @@ use crate::{
 use chrono::{DateTime, Local, Timelike};
 use market_domain::{
     baro::{baro_value, BaroRequest},
+    math::sell_priority,
     planners::PlannerOwned,
 };
 use serde_json::Value;
@@ -369,24 +370,29 @@ pub fn digest(
     local_day: &str,
     local_hour: u32,
 ) -> Option<Candidate> {
+    // The same bar as Top picks: a slow book, a price near its 90-day low or a
+    // long-tail score is not an evening "sell this" line.
+    let picks: Vec<_> = rows
+        .iter()
+        .filter(|r| !r.patience && !r.hold && r.score >= sell_priority::MIN_PICK_SCORE)
+        .take(5)
+        .collect();
     if local_hour < 18
-        || rows.is_empty()
+        || picks.is_empty()
         || !fresh(string(market, "updated_at"), now)
         || !fresh(inventory_at, now)
     {
         return None;
     }
-    let opportunities: Vec<_> = rows
+    let opportunities: Vec<_> = picks
         .iter()
-        .take(5)
         .map(|r| format!("{} ×{}: ~{:.0}p each", r.name, r.sellable_qty, r.price))
         .collect();
     let mut candidate = Candidate::once(format!("digest:{local_day}"), "digest", "Today's sell opportunities".into(),
         format!("{}. Estimated market values, not guaranteed sales. Inventory: {inventory_at}. Prices: {}.", opportunities.join(" · "), string(market, "updated_at")), "sell", now);
     candidate.content = Some(NotificationContent::Digest(DigestNotification {
-        opportunities: rows
+        opportunities: picks
             .iter()
-            .take(5)
             .map(|r| DigestOpportunity {
                 name: r.name.clone(),
                 quantity: r.sellable_qty,
@@ -599,6 +605,8 @@ mod tests {
                 sellable_qty: row["sellable_qty"].as_i64().unwrap(),
                 price: row["price"].as_f64().unwrap(),
                 score: row["score"].as_f64().unwrap(),
+                patience: false,
+                hold: false,
             })
             .collect();
         let notice = digest(
@@ -746,7 +754,9 @@ mod tests {
             slug: "part".into(),
             sellable_qty: 2,
             price: 12.0,
-            score: 3.0,
+            score: 24.0,
+            patience: false,
+            hold: false,
         }];
         assert!(digest(&m, &rows, START, now, "2026-09-04", 17).is_none());
         let c = digest(&m, &rows, START, now, "2026-09-04", 18).unwrap();
@@ -756,6 +766,29 @@ mod tests {
         assert!(digest(&m, &rows, "", now, "2026-09-04", 18).is_none());
         assert!(digest(&m, &rows, START, now + DAY + 1, "2026-09-05", 18).is_none());
         assert!(!fresh(START, now - 1));
+    }
+    #[test]
+    fn digest_names_only_what_top_picks_would() {
+        let now = stamp(START).unwrap();
+        let m = json!({"updated_at": START});
+        let row = |name: &str, score: f64, patience: bool, hold: bool| sellables::SellableRow {
+            name: name.into(),
+            slug: name.to_lowercase(),
+            sellable_qty: 1,
+            price: 10.0,
+            score,
+            patience,
+            hold,
+        };
+        let rows = vec![
+            row("Slow", 90.0, true, false),
+            row("Low", 80.0, false, true),
+            row("Pick", 30.0, false, false),
+            row("Tail", 19.0, false, false),
+        ];
+        let c = digest(&m, &rows, START, now, "2026-09-04", 18).unwrap();
+        assert_eq!(c.body.split(". ").next(), Some("Pick ×1: ~10p each"));
+        assert!(digest(&m, &rows[..2], START, now, "2026-09-04", 18).is_none());
     }
     #[test]
     fn event_relevance_matches_the_frontend_fixture() {

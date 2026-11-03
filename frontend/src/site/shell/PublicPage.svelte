@@ -176,7 +176,7 @@
   </section>
   {#if decision}<Links />{/if}
   {#if kind === 'desktop'}<Faq />{/if}
-  <footer class="ui-toolbar public-footer"><a href="/">Market search</a><a href="https://github.com/tennoworth/tennoworth">Source code</a><span>Fan project. Not affiliated with Digital Extremes or warframe.market.</span>{#if theme}<ThemeSwitcher {theme} compact />{/if}</footer>
+  <footer class="ui-toolbar public-footer"><a href="/">Market search</a><a href="https://github.com/tennoworth/tennoworth">Source code</a><span>Fan project. Not affiliated with Digital Extremes or warframe.market. Item images from the Warframe Wiki, © Digital Extremes.</span>{#if theme}<ThemeSwitcher {theme} compact />{/if}</footer>
 </main>
 {#snippet itemLink(value: string)}
   {@const name = data.items.find(i => i.slug === value)?.name ?? value.replaceAll('_', ' ')}

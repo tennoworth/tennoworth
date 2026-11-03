@@ -96,10 +96,18 @@
 	# history.json (relics.run-derived, box-only state) is live data too.
 	# market-public.json is the slim copy the prerendered pages refresh from, and
 	# market-home.json the homepage's copy without desktop-only fields.
-	@livedata path /market.json /market.json.minisig /market-public.json /market-home.json /wfstat-catalog.json /history.json /history.json.minisig
+	# item-art.json is the slug → picture index `tennoworth-pipeline art` writes.
+	@livedata path /market.json /market.json.minisig /market-public.json /market-home.json /wfstat-catalog.json /history.json /history.json.minisig /item-art.json
 	handle @livedata {
 		root * /srv/wfm/data/public
 		header Cache-Control "public, max-age=300, must-revalidate"
+		file_server
+	}
+	# Item pictures from the Warframe wiki, named by content: a changed picture
+	# gets a new name, so each one can be cached for good.
+	handle /item-art/* {
+		root * /srv/wfm/data/public
+		header Cache-Control "public, max-age=31536000, immutable"
 		file_server
 	}
 	# The scan hotfix file is tracked, so it is served from the checkout: a

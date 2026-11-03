@@ -60,6 +60,10 @@ pub struct SellableRow {
     pub sellable_qty: i64,
     pub price: f64,
     pub score: f64,
+    /// Under 3 trades / 48 h: worth listing, too slow for a pick.
+    pub patience: bool,
+    /// Priced near its 90-day low; see `MarketEntry::hold`.
+    pub hold: bool,
 }
 
 /// The post-scan summary payload: how many items are worth listing and
@@ -84,6 +88,12 @@ struct MarketEntry {
     median_90d: f64,
     #[serde(default)]
     low5_avg: f64,
+    #[serde(default)]
+    top_buy: f64,
+    #[serde(default)]
+    donch_top_90d: f64,
+    #[serde(default)]
+    donch_bot_90d: f64,
     #[serde(default)]
     ducats: Option<i64>,
     #[serde(default)]
@@ -111,6 +121,19 @@ impl MarketEntry {
             median_now: self.median_now,
             median_90d: self.median_90d,
         }
+    }
+
+    /// Selling near the 90-day low: Top picks leave these out, and so does the digest.
+    fn hold(&self) -> bool {
+        let channel = market_domain::scoring::ScoringMarketEntry {
+            low_sell: Some(self.low_sell),
+            top_buy: Some(self.top_buy),
+            donch_top_90d: Some(self.donch_top_90d),
+            donch_bot_90d: Some(self.donch_bot_90d),
+            ..Default::default()
+        };
+        market_domain::scoring::timing(self.median_now, &channel)
+            == market_domain::scoring::Timing::Hold
     }
 }
 
@@ -826,6 +849,8 @@ mod tests {
             sellable_qty: qty,
             price,
             score,
+            patience: false,
+            hold: false,
         }
     }
 

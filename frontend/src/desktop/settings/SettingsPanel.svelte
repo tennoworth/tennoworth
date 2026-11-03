@@ -4,6 +4,7 @@
   import NotificationSettings from '../notifications/NotificationSettings.svelte';
   import ThemeSwitcher from '../../ui/ThemeSwitcher.svelte';
   import AppIconSetting from './AppIconSetting.svelte';
+  import { useDisplay } from '../../ui/display.svelte';
   import PresenceSettings from '../presence/PresenceSettings.svelte';
   import PresenceMark from '../presence/PresenceMark.svelte';
   import type { PresenceController } from '../presence/presence.svelte';
@@ -42,6 +43,7 @@
     onsectionshown?: () => void;
   }
   let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true }: Props = $props();
+  const display = useDisplay();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -366,6 +368,17 @@
         <div class="ui-setting-control"><ThemeSwitcher {theme} label="Colour mode" /></div>
       </div>
       {#if appIcon}<AppIconSetting {appIcon} />{/if}
+      {#if display}
+        <div class="ui-setting-row">
+          <div class="ui-setting-copy"><strong>Item lists</strong><p>Visual shows each item's picture in roomier rows. Compact keeps dense text rows and fits more on screen.</p></div>
+          <div class="ui-setting-control">
+            <div class="ui-segmented" role="group" aria-label="Item lists">
+              <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>Visual</button>
+              <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
+            </div>
+          </div>
+        </div>
+      {/if}
     </div>
     <div class="ui-section-group">
       <h4>Updates</h4>

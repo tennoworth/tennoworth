@@ -152,7 +152,10 @@ html[data-look="yorha"] {
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-lg: 0; --radius-panel: 0; --radius-ctl: 0; --radius-input: 0; --radius-tag: 0; --radius-pill: 0;
   --rule: dotted;
-  --shadow-pop: none;
+  /* Windows cast a flat, offset ink shadow: depth without blur or glow. */
+  --shadow-offset: rgba(52, 48, 31, 0.16);
+  --shadow-pop: 6px 6px 0 var(--shadow-offset);
+  --dot: rgba(70, 66, 47, 0.16);
   --hover: var(--panel-2);
   --hover-tint: var(--panel-2);
   --row-selected: color-mix(in srgb, var(--ink-bar) 10%, var(--panel));
@@ -199,6 +202,8 @@ html[data-look="yorha"][data-mode="dark"] {
   --row-selected: color-mix(in srgb, var(--ink-bar) 15%, var(--panel));
   --row-selected-hover: color-mix(in srgb, var(--ink-bar) 19%, var(--panel));
   --scrim: rgba(30, 25, 19, 0.55);
+  --shadow-offset: rgba(0, 0, 0, 0.4);
+  --dot: rgba(211, 199, 166, 0.08);
   color-scheme: dark;
 }
 
@@ -455,6 +460,29 @@ dialog.cryptobox footer {
 .shimmer-field > input { flex: 1 1 auto; min-width: 0; }
 .shimmer-field > canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .wrap.tw .scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+/* Overlay scrollbars (WebKitGTK, macOS) only show on hover, so a table that
+   scrolls sideways looked cut off. While more columns sit to the right, its
+   right edge fades out; scrolled to the end, or not scrollable at all, it does
+   not. Only the right edge: the item column is pinned on the left. */
+@property --scroll-fade-r { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes scroll-fade-r { from { --scroll-fade-r: 3rem; } 92% { --scroll-fade-r: 3rem; } to { --scroll-fade-r: 0px; } }
+/* The same cue downwards, for the sidebar's view list on a short window. */
+@property --scroll-fade-b { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes scroll-fade-b { from { --scroll-fade-b: 2rem; } 92% { --scroll-fade-b: 2rem; } to { --scroll-fade-b: 0px; } }
+@supports (animation-timeline: scroll()) {
+  .scroll:has(> table) {
+    animation: scroll-fade-r linear both;
+    animation-timeline: scroll(self inline);
+    -webkit-mask-image: linear-gradient(to left, transparent, #000 var(--scroll-fade-r));
+    mask-image: linear-gradient(to left, transparent, #000 var(--scroll-fade-r));
+  }
+  aside.sidebar nav {
+    animation: scroll-fade-b linear both;
+    animation-timeline: scroll(self block);
+    -webkit-mask-image: linear-gradient(to top, transparent, #000 var(--scroll-fade-b));
+    mask-image: linear-gradient(to top, transparent, #000 var(--scroll-fade-b));
+  }
+}
 .wrap.tw .body { padding: var(--s3) var(--inset); font-size: var(--text-caption); color: var(--muted); }
 .wrap.tw .body p { margin: 0; line-height: 1rem; }
 .wrap.tw .body p + p { margin-top: var(--s2); }
@@ -738,8 +766,7 @@ table.tw tr.busy td { color: var(--muted); }
    ========================================================================== */
 
 /* ---------- yorha ---------------------------------------------------------- */
-/* Schematic ground: 28px line grid in ink at ~7% plus a 9px diagonal hatch.
-   It sits on its own fixed, composited layer: painted on body, every scroll
+/* Paper ground: a dot grid in ink. It sits on its own fixed, composited layer: painted on body, every scroll
    of the transparent workspace re-rastered the three gradients beneath it. */
 html[data-look="yorha"]:not(.relic-overlay-surface) body::before {
   content: "";
@@ -748,13 +775,10 @@ html[data-look="yorha"]:not(.relic-overlay-surface) body::before {
   z-index: -1;
   pointer-events: none;
   will-change: transform;
-  background-image:
-    repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 28px),
-    repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 28px),
-    repeating-linear-gradient(-45deg, var(--hatch) 0 1px, transparent 1px 9px);
-  /* Page-sized gradient rasters can stretch in WebKit. The diagonal tile
-     spans one 9px period projected onto both axes (9 × sqrt(2)). */
-  background-size: 28px 28px, 28px 28px, 12.7279220614px 12.7279220614px;
+  /* A 14px dot grid. The tile is bounded because page-sized gradient rasters
+     can stretch in WebKit. */
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.3px);
+  background-size: 14px 14px;
 }
 html[data-look="yorha"] body {
   font-size: var(--text-body);
@@ -927,3 +951,62 @@ form.public-controls { align-items: end; }
 .public-prose dd { margin-block-end: var(--s3); font-family: var(--font-mono); }
 
 .selling-article > p { margin-block: 0; max-width: 64rem; line-height: var(--leading-body); }
+
+/* ---------- yorha: NieR devices ------------------------------------------- */
+/* Outer windows (panels, dialogs, popovers via --shadow-pop) cast the flat
+   offset shadow; a panel nested in another stays flat. */
+html[data-look="yorha"] main .wrap:not(.wrap .wrap),
+html[data-look="yorha"] main .ui-panel:not(.wrap .ui-panel),
+html[data-look="yorha"] dialog.cryptobox,
+html[data-look="yorha"] .modal { box-shadow: var(--shadow-pop); }
+/* Titles lead with a filled square, the selection marker's shape. */
+html[data-look="yorha"] :is(.wrap.tw > .rail :is(h2, h3), .picks-head h3, .view-header h2)::before {
+  content: ""; display: inline-block; width: 0.55em; height: 0.55em; margin-right: 0.6em;
+  background: currentColor; vertical-align: 0.06em;
+}
+/* The row cursor: a square in the first cell's gutter while a row is hovered
+   or holds focus. Drawn as a background layer so no cell changes position;
+   table.tw keeps its dotted rule as the second layer. */
+html[data-look="yorha"] .wrap tbody tr:is(:hover, :focus-within) > td:first-child {
+  background-image: linear-gradient(var(--fg), var(--fg));
+  background-size: 6px 6px; background-repeat: no-repeat; background-position: 4px 50%; background-origin: border-box;
+}
+html[data-look="yorha"] .wrap table.tw tbody tr:not(:first-child):is(:hover, :focus-within) > td:first-child {
+  background-image: linear-gradient(var(--fg), var(--fg)), linear-gradient(to right, var(--hairline) 1px, transparent 1px);
+  background-size: 6px 6px, 2px 1px; background-repeat: no-repeat, repeat-x; background-position: 4px 50%, 0 0;
+}
+/* Secondary buttons invert on hover, as the selection does. */
+html[data-look="yorha"] .btn:not(.primary, .link, .ghost):hover:not(:disabled) { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
+
+/* Item art for the Visual list display: an ink duotone that sits in the
+   paper (multiply) or glows faintly from the bench (screen), never a colour
+   photo beside the data. */
+.item-art { display: none; }
+html[data-density="visual"] .item-art {
+  display: inline-block; width: 1.75rem; height: 1.75rem; margin-right: var(--s2);
+  vertical-align: middle; flex: none;
+}
+.item-art img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* Keeps a picture beside its name, so a long name wraps beside it, not under it. */
+.item-id { display: inline-flex; align-items: center; min-width: 0; }
+html[data-look="yorha"] .item-art img { filter: grayscale(1) sepia(0.45) contrast(1.15) brightness(0.92); mix-blend-mode: multiply; }
+html[data-look="yorha"][data-mode="dark"] .item-art img { filter: grayscale(1) sepia(0.5) brightness(1.05); mix-blend-mode: screen; }
+
+/* Key legend: the last line of the workspace, held at the window's foot. */
+.key-legend {
+  position: sticky; bottom: calc(-1 * var(--s5)); z-index: var(--layer-chrome);
+  margin: auto calc(-1 * var(--s4)) calc(-1 * var(--s5));
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s1) var(--s4);
+  padding: var(--s2) var(--s4);
+  background: var(--bg); border-top: 1px solid var(--border);
+  font: 500 var(--text-caption)/1.4 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+}
+.key-legend kbd {
+  margin-right: 0.5em; padding: 0.1em 0.4em;
+  font: 600 var(--text-caption)/1.2 var(--font-mono); letter-spacing: 0; text-transform: none;
+  background: var(--ink-bar); color: var(--on-ink); border: 1px solid var(--ink-bar);
+}
+main.workspace:has(> .key-legend) { scroll-padding-bottom: 3rem; }
+/* Settings and FAQ cap their children at a reading width; the legend is chrome. */
+main.reading-view > .key-legend.key-legend { width: auto; max-width: none; }
+@media (max-width: 900px), (max-height: 480px) { .key-legend { display: none; } }

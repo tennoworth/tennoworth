@@ -281,8 +281,8 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   {:else}
     <div class="scroll" bind:this={historyEl}>
       <table class="tw fixed trade-history">
-        <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:17rem" /><col style="width:7rem" /><col style="width:11rem" /></colgroup>
-        <thead><tr><th>When</th><th>Trade</th><th class="l">Items</th><th>With</th><th class="r">Plat</th><th>Listing</th></tr></thead>
+        <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:11rem" /><col style="width:7rem" /><col style="width:8rem" /></colgroup>
+        <thead><tr><th>When</th><th>Trade</th><th class="l">Items</th><th class="l">With</th><th class="r">Plat</th><th>Listing</th></tr></thead>
         <tbody>
           {#each shown as t (t.id)}
             <tr>
@@ -318,7 +318,8 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   .outcomes { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
   .outcomes .note { margin: var(--s2) 0 0; font-size: var(--text-control); max-width: 70ch; }
   .outcomes .setting-line { border-block-end: 0; }
-  table.trade-history { min-width: 70rem; }
+  /* Fits the 1200px window; below that it scrolls in its box. */
+  table.trade-history { min-width: 56rem; }
   .outcome-groups { margin-top: var(--s2); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--s3) var(--s5); }
   .og { display: grid; gap: var(--s2); align-content: start; min-width: 0; }
   .og h4 { margin: 0; font-size: var(--text-control); font-weight: 600; color: var(--fg); }
