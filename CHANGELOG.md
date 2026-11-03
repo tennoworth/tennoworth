@@ -54,6 +54,36 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.115 - 2026-11-03
+
+# 🎨 TennoWorth Desktop 0.8.115
+
+TennoWorth Desktop 0.8.115 is ready.
+
+This release gives the app a new ink-and-paper look with item pictures in your lists, makes every table fit the window, and makes Sell, Relics and the evening digest agree with each other about what is worth selling.
+
+## Changelog (7)
+
+### Appearance
+
+- **A new look with item pictures** The app has a new ink-and-paper style, a keyboard legend, and a Visual list display that shows each item's picture next to its name. Switch to Compact in Settings or above the Sell table to hide them. Pictures come from the Warframe Wiki through TennoWorth and are kept on your computer after the first view. <!-- app-note {"id":"ink-paper-item-pictures","kind":"improved"} -->
+- **Tables fit the window** Wide tables scroll inside their own box and fade at the edge when more columns sit beyond it. My orders keeps its fix and Confirm buttons in view, and Ledger and Trade Session fit a 1200 px window. <!-- app-note {"id":"tables-fit-window","kind":"fixed"} -->
+
+### Selling
+
+- **Relic totals follow your decision** A relic marked Sell intact is valued at copies times its sell price, and the total adds up each row's own decision. <!-- app-note {"id":"relic-totals-follow-decision","kind":"fixed"} -->
+- **Sell shows how many items it is showing** The Sell view shows the filtered count against your whole inventory, with a hint that says which default filters apply. <!-- app-note {"id":"sell-filtered-count","kind":"improved"} -->
+- **The evening digest matches Top picks** The digest now uses the same rules as Top picks, so it no longer suggests items that Top picks would hold back. <!-- app-note {"id":"digest-matches-top-picks","kind":"fixed"} -->
+- **Today's trades at a glance** Top picks show the day's remaining trades as a gauge, list picks after the daily reset in one batch, and recount when warframe.market locks or unlocks. <!-- app-note {"id":"top-picks-trade-gauge","kind":"improved"} -->
+
+### Trading
+
+- **Ranked mod sales update the right listing** Selling a ranked mod now adjusts the listing for that rank and counts toward that listing's outcome. <!-- app-note {"id":"ranked-mod-sale-listing","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.114 - 2026-10-31
 
 # 🔒 TennoWorth Desktop 0.8.114
