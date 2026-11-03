@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import baroFixture from '../../../tests/fixtures/notifications/baro.json' with { type: 'json' };
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
+import desktopWindow from '../../../tests/fixtures/desktop-window.json' with { type: 'json' };
 
 // The committed snapshot is refreshed at every desktop release, so its own age
 // cannot be what makes the shell show a stale market.
@@ -430,6 +431,37 @@ test('selling tables label pick facts and retain readable item identities', asyn
 
 // A long pick name (Ivara Prime Neuroptics Blueprint) once wrapped its second
 // line back under the item picture instead of beside it.
+// The desktop opens at the fixture's size (shell/startup.rs reads the same
+// file). At the old 1200px window, Sell, Relics and Rivens scrolled sideways and
+// Sell's Stack value sat off-screen.
+test('every desktop table fits the window the app opens at', async ({ page }) => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  await page.route('**/item-art/*', route => route.fulfill({ body: png, contentType: 'image/png' }));
+  await page.route('**/item-art.json', route => route.fulfill({
+    json: { items: Object.fromEntries(Object.keys(baseMarket.items).map(slug => [slug, 'item-art/test.png'])) },
+  }));
+  await page.setViewportSize({ width: desktopWindow.width, height: desktopWindow.height });
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const sidebar = page.locator('.sidebar');
+  const views = await sidebar.getByRole('button').evaluateAll(buttons => buttons
+    .map(button => button.textContent?.trim().split(/\s+/)[0] ?? '')
+    .filter(Boolean));
+  expect(views).toContain('Sell');
+  const overflowing: string[] = [];
+  for (const view of views) {
+    const button = sidebar.getByRole('button', { name: new RegExp(`^${view}`) }).first();
+    if (!(await button.isVisible())) continue;
+    await button.click();
+    await page.waitForTimeout(150);
+    const wide = await page.locator('main .scroll').evaluateAll(boxes => boxes
+      .filter(box => (box as HTMLElement).offsetParent && box.scrollWidth > box.clientWidth + 1)
+      .map(box => `${box.scrollWidth}>${box.clientWidth}`));
+    if (wide.length) overflowing.push(`${view}: ${wide.join(', ')}`);
+  }
+  expect(overflowing).toEqual([]);
+});
+
 test('item names wrap beside their pictures, never under them', async ({ page }) => {
   // A 1x1 PNG for every item, so each row draws a picture.
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');

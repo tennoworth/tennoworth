@@ -46,7 +46,7 @@ for (const theme of ['light', 'dark'] as const) {
   });
 }
 
-// The window opens at 1200 px. A status word of a different length rewrapped
+// At 1200 px, a common resized width, a status word of a different length rewrapped
 // the strip there, and the whole window moved by a row on every change.
 for (const width of [1200, 1440]) test(`changing status never changes the status strip’s height at ${width}`, async ({ page }) => {
   await page.setViewportSize({ width, height: 800 });

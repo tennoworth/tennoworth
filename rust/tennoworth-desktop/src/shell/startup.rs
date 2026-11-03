@@ -31,6 +31,42 @@ fn health() -> Health {
     }
 }
 
+/// The main window opens wide enough for the Sell table's default columns, the
+/// widest fixed table, beside the sidebar; at 1200px they scrolled sideways and
+/// hid Stack value. `tests/fixtures/desktop-window.json` holds the same sizes for
+/// the browser test that checks every table fits.
+const OPENING_SIZE: (f64, f64) = (1400.0, 860.0);
+/// Half a 1920px screen, so snapping still works. The status strip fits one
+/// line at this width in every state; narrower, its fullest state would clip.
+const MIN_SIZE: (f64, f64) = (960.0, 480.0);
+
+/// A screen smaller than the opening size gets a window that fits its work
+/// area rather than one that opens partly off-screen.
+fn opening_size(work_area: Option<(f64, f64)>) -> (f64, f64) {
+    let (width, height) = OPENING_SIZE;
+    match work_area {
+        Some((w, h)) if w > 0.0 && h > 0.0 => {
+            (width.min(w).max(MIN_SIZE.0), height.min(h).max(MIN_SIZE.1))
+        }
+        _ => (width, height),
+    }
+}
+
+/// Logical work area of the screen the window opens on. Wayland reports no
+/// primary monitor, so any monitor stands in.
+fn work_area(app: &tauri::App) -> Option<(f64, f64)> {
+    let monitor = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| app.available_monitors().ok()?.into_iter().next())?;
+    let area = monitor
+        .work_area()
+        .size
+        .to_logical::<f64>(monitor.scale_factor());
+    Some((area.width, area.height))
+}
+
 /// Scan definitions also carry the overlay's reward-screen markers. Definitions
 /// only fetches and parses them; the overlay owns their rules, so a refusal is
 /// its verdict, reported with the scan's own.
@@ -303,13 +339,12 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             app.manage(crate::services::market::art::ArtStore::new(data_dir.join("item-art")));
             app.manage(MarketCache::new(data_dir));
 
+            let opening = opening_size(work_area(app));
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("TennoWorth")
-                .inner_size(1200.0, 800.0)
-                // Half a 1920px screen, so snapping still works. The status
-                // strip fits one line at this width in every state; narrower,
-                // its fullest state would clip.
-                .min_inner_size(960.0, 480.0);
+                .inner_size(opening.0, opening.1)
+                .min_inner_size(MIN_SIZE.0, MIN_SIZE.1)
+                .center();
             // Without an explicit icon the window (and its taskbar/switcher
             // entry) falls back to a generic WM avatar. The App icon setting's
             // last applied colour, so the window opens in it.
@@ -446,4 +481,29 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 std::process::exit(0);
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn window_sizes_match_the_shared_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/desktop-window.json"
+        ))
+        .unwrap();
+        let size = |key: &str| fixture[key].as_f64().unwrap();
+        assert_eq!(OPENING_SIZE, (size("width"), size("height")));
+        assert_eq!(MIN_SIZE, (size("min_width"), size("min_height")));
+    }
+
+    #[test]
+    fn the_window_fits_a_smaller_screen_but_not_below_its_minimum() {
+        assert_eq!(opening_size(None), OPENING_SIZE);
+        assert_eq!(opening_size(Some((2560.0, 1400.0))), OPENING_SIZE);
+        assert_eq!(opening_size(Some((1366.0, 728.0))), (1366.0, 728.0));
+        assert_eq!(opening_size(Some((800.0, 400.0))), MIN_SIZE);
+        assert_eq!(opening_size(Some((0.0, 0.0))), OPENING_SIZE);
+    }
 }
