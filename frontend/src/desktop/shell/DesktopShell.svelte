@@ -1,5 +1,6 @@
 <script lang="ts">
 import KeyboardNavigation from '../../ui/KeyboardNavigation.svelte';
+import KeyLegend from './KeyLegend.svelte';
 import { createDesktopSession } from './desktop-session.svelte';
 import { createSellWorkspace } from '../selling/sell-workspace.svelte';
 import StatusStrip from './StatusStrip.svelte';
@@ -12,7 +13,7 @@ import RelicPlannerView from '../relics/RelicPlannerView.svelte';
 import SetPicksView from '../selling/SetPicksView.svelte';
 import { ActivityLog } from './activity.svelte';
 import { ListingReceipts } from '../selling/receipts.svelte';
-import type { PlanResponse } from '../../contracts/data';
+import type { PlanResponse, TradeAllowance } from '../../contracts/data';
 
   import { loadMarket } from '../../adapters/market';
   import { loadCatalogs } from '../../adapters/catalogs';
@@ -38,7 +39,7 @@ import type { PlanResponse } from '../../contracts/data';
   import WatchlistPanel from '../watches/WatchlistPanel.svelte';
   import NotificationInbox from '../notifications/NotificationInbox.svelte';
   
-import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
+import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
   import LedgerPanel from '../ledger/LedgerPanel.svelte';
   import MarketBrowser from '../../features/market/MarketBrowser.svelte';
   import DesktopUpdateBanner from '../updates/DesktopUpdateBanner.svelte';
@@ -66,6 +67,7 @@ import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
   const APP_COMMIT = __APP_COMMIT__;
   import type { StateStore } from '../../contracts/state-store';
   import type { ThemeController } from '../../ui/theme';
+  import { DisplayController, provideDisplay } from '../../ui/display.svelte';
 
   import MetaDriftPanel from '../../features/market/MetaDriftPanel.svelte';
 
@@ -152,6 +154,8 @@ import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
   // The window and tray icon colour; follows the resolved colour mode for 'match'.
   const appIcon = untrack(() => new AppIconController({ store, theme, native: transport }));
   onMount(() => appIcon.start());
+  const display = untrack(() => new DisplayController(store));
+  provideDisplay(display);
   onMount(() => {
     const stopProtection = protection.start({
       listen: (event, cb) => listenForTauriEvent(event, cb),
@@ -169,6 +173,31 @@ import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
     const owned = inventory.resolved.owned;
     const snapshotId = inventory.nativeSnapshotId;
     untrack(() => void protection.setInventory(owned, snapshotId));
+  });
+  // Today's trades left and which items trade in bulk, for the Top picks trade
+  // split. A failed read leaves both unknown, which shows no split at all.
+  let tradeAllowance = $state<TradeAllowance | null>(null);
+  // null = unknown: the list needs an unlocked warframe.market session.
+  let bulkSlugs = $state<ReadonlySet<string> | null>(null);
+  let allowanceRequest = 0;
+  async function refreshAllowance() {
+    const current = ++allowanceRequest;
+    try {
+      const state = await notesServices.desktopTradeSessionState();
+      if (current !== allowanceRequest) return;
+      tradeAllowance = state?.allowance ?? null;
+      bulkSlugs = state?.supported_slugs == null ? null : new Set(state.bulk_slugs);
+    } catch {
+      if (current === allowanceRequest) { tradeAllowance = null; bulkSlugs = null; }
+    }
+  }
+  onMount(() => listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => void refreshAllowance()));
+  $effect(() => {
+    // A new scan carries a new remaining count; unlocking or locking
+    // warframe.market makes bulk status known or unknown.
+    void inventory.nativeSnapshotId;
+    void listing.wfmStatus?.unlocked;
+    untrack(() => void refreshAllowance());
   });
   $effect(() => {
     // The Rust loop keeps the state; this only mirrors whether a listing flow
@@ -536,7 +565,7 @@ import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
     {/if}
     {#if visited.has('sell') && !restoring}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'sell' && !restoring)}>
-      <SellPane keep={keepSection} {receipts} onmakevisible={makeReceiptVisible} onopenorders={() => filters.setView('orders')}
+      <SellPane keep={keepSection} {receipts} allSellable={defaultFacts.phase === 'done' && !guidanceUnavailable ? sellableCount : null} {tradeAllowance} {bulkSlugs} onmakevisible={makeReceiptVisible} onopenorders={() => filters.setView('orders')}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView={workspace.tableView}
         resolved={inventory.resolved} allocation={allocationMatches ? protection.state : null} {results} deltas={inventory.deltas} {totalPotential}
@@ -653,6 +682,7 @@ import { ANNOUNCEMENTS_CHANGED_EVENT } from '../../contracts/events';
     {/if}
 
     {/if}
+    {#if showWorkspace}<KeyLegend search={['sell', 'meta', 'orders', 'watches'].includes(effectiveView)} />{/if}
   </main>
   {#if showWorkspace}
   <!-- After main in source so a narrow window reaches its links at the page

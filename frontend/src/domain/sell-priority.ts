@@ -174,7 +174,8 @@ export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy }: BandS
 }
 
 // "Top picks" strip - the best rows to act on right now, out of everything
-// already scored above. `MIN_PICK_SCORE` is a first-pass guess, not a
+// already scored above; the evening digest uses the same bar (pick-floor.json).
+// `MIN_PICK_SCORE` is a first-pass guess, not a
 // threshold: 20 score points filters out the long tail of items that
 // technically clear sell_score > 0 but aren't worth a user's attention.
 // Tune from observed ranking quality rather than treating it as currency.

@@ -49,3 +49,29 @@ export interface SessionPlan {
   target: number | null;
   shortfall: number | null;
 }
+
+/** The fewest in-game trades that sell `quantity` copies under the lot rule
+ *  `validSessionLot` enforces: a bulk-tradable item moves up to MAX_PER_TRADE
+ *  copies per trade, anything else one per trade. Not a whole number of copies → 0. */
+export function tradesToSell(quantity: number, bulk: boolean): number {
+  if (!Number.isSafeInteger(quantity) || quantity <= 0) return 0;
+  return bulk ? Math.ceil(quantity / MAX_PER_TRADE) : quantity;
+}
+
+export interface TradeSplit<T> { today: T[]; later: T[]; used: number; laterTrades: number }
+
+/** Splits a best-first list at today's trades left. Rows stay in rank order: the
+ *  first row that no longer fits starts the after-the-reset part, even when a
+ *  smaller row further down would still fit, so the list never reorders. An
+ *  unknown allowance (`null`) is not treated as zero or as unlimited: nothing splits. */
+export function splitByTrades<T>(rows: T[], trades: (row: T) => number, remaining: number | null): TradeSplit<T> {
+  const total = rows.reduce((sum, row) => sum + trades(row), 0);
+  if (remaining == null || !Number.isFinite(remaining)) return { today: rows, later: [], used: total, laterTrades: 0 };
+  let used = 0, cut = rows.length;
+  for (let i = 0; i < rows.length; i++) {
+    const need = trades(rows[i]);
+    if (used + need > remaining) { cut = i; break; }
+    used += need;
+  }
+  return { today: rows.slice(0, cut), later: rows.slice(cut), used, laterTrades: total - used };
+}

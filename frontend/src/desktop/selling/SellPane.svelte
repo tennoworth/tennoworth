@@ -6,7 +6,8 @@
 
   import type { Snippet } from 'svelte';
   import type { ProtectionState } from '../../contracts/protection';
-  import type { OwnedRecord } from '../../contracts/data';
+  import type { OwnedRecord, TradeAllowance } from '../../contracts/data';
+  import { splitByTrades, tradesToSell } from '../../domain/trade-session';
   import type { ListingCandidate } from '../../contracts/listing';
   import type { EmptyReason } from '../../domain/filter-engine';
   import type { SellRow } from '../../contracts/selling';
@@ -18,6 +19,8 @@
     resolved: { owned: Map<string, OwnedRecord>; unresolved: Record<string, number> };
     allocation?: ProtectionState | null;
     results: SellRow[]; deltas: Map<string, number>; totalPotential: number;
+    /** Every sellable item, before this view's filters: the sidebar's count. */
+    allSellable?: number | null;
     prevSummary?: { owned: number; sellable: number; potential: number } | null;
     sinceScan?: { added: number; changed: number; removed: number } | null;
     ordersSummary?: { live: number; issues: number } | null;
@@ -49,6 +52,11 @@
     listingActionLabel?: string;
     oncheckListings?: () => void;
     onretryCalculation?: () => void;
+    /** Today's trades left, from the last scan; null while unknown. */
+    tradeAllowance?: TradeAllowance | null;
+    /** Items warframe.market trades in bulk (up to six per trade); null while
+     *  unknown (warframe.market locked), so trade counts are ranges. */
+    bulkSlugs?: ReadonlySet<string> | null;
   }
 
   let {
@@ -59,7 +67,7 @@
     activeTags = $bindable(),
     tableView = $bindable(),
 
-    resolved, results, deltas, totalPotential, allocation = null,
+    resolved, results, deltas, totalPotential, allSellable = null, allocation = null,
     prevSummary = null, sinceScan = null, ordersSummary = null,
     marketFreshness, marketStaleness, marketLoadError,
     listableRows, availableTags, availableTypes,
@@ -71,6 +79,7 @@
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow, receipts, onmakevisible, onopenorders,
     pendingBanner, keep, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
+  tradeAllowance = null, bulkSlugs = null,
   }: Props = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
@@ -175,6 +184,31 @@
     receiptKeys = shown;
   }
   const isSnoozed = (p: SellRow) => snoozedPicks.has(p.key ?? p.slug);
+  // Trades: each pick's count under the lot rule, and where today's trades run
+  // out. Hidden picks spend nothing; the split keeps rank order.
+  // Without the bulk list a count is a range (all bulk … none bulk), and a
+  // range cannot place the divider, so there is none.
+  const pickTrades = (p: SellRow) => tradesToSell(p.sellable, bulkSlugs?.has(p.slug) ?? false);
+  const pickTradeRange = (p: SellRow): [number, number] => bulkSlugs ? [pickTrades(p), pickTrades(p)] : [tradesToSell(p.sellable, true), tradesToSell(p.sellable, false)];
+  let tradesLeft = $derived(tradeAllowance?.remaining ?? null);
+  let tradeSplit = $derived(splitByTrades(picks.filter((p) => !isSnoozed(p)), pickTrades, bulkSlugs ? tradesLeft : null));
+  let picksCut = $derived(tradeSplit.later.length ? picks.indexOf(tradeSplit.later[0]) : null);
+  // The day as cells: what the picks use, what stays free, what was already
+  // traded. A day holds as many trades as the mastery rank, so without the rank
+  // there is no gauge; without bulk status the picks' share is unknown and
+  // only spent and free are drawn.
+  let gauge = $derived.by(() => {
+    const max = tradeAllowance?.mastery_rank ?? null;
+    if (max == null || max <= 0 || tradesLeft == null || tradesLeft > max) return null;
+    const plan = bulkSlugs ? tradeSplit.used : 0;
+    return [...Array(plan).fill('plan'), ...Array(tradesLeft - plan).fill('free'), ...Array(max - tradesLeft).fill('spent')] as string[];
+  });
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  function resetIn(now = Date.now()): string {
+    const d = new Date(now), left = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now;
+    const h = Math.floor(left / 3_600_000), m = Math.floor(left / 60_000) % 60;
+    return h ? `${h} h ${m} min` : `${m} min`;
+  }
   const listedReceipt = (p: SellRow) => receipts?.forRow(p.slug, p.subtype);
   const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
@@ -240,7 +274,7 @@
     </div>
     <div class="cell">
       <span class="k">{estimatedGuidance ? 'Opportunities' : 'Sellable'}</span>
-      <span class="v">{calculationReady ? sellableCount.toLocaleString() : 'Unavailable'}</span>
+      <span class="v" title="Items you can sell now among the rows these filters show{allSellable != null ? `, of ${allSellable.toLocaleString()} across the whole inventory (the sidebar count)` : ''}.">{calculationReady ? sellableCount.toLocaleString() : 'Unavailable'}{#if calculationReady && allSellable != null && allSellable !== sellableCount}<span class="unit">{` of ${allSellable.toLocaleString()}`}</span>{/if}</span>
       {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
     </div>
     <div class="cell">
@@ -346,6 +380,21 @@
     class="muted picks-exp"
     title="Same Priority as the table below - price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} priority points to clear the bar."
   >Best sells right now, ranked by priority - patience listings excluded.</span>
+  {#if tradesLeft != null}
+    <span class="muted picks-trades" role="status" title={tradesLeft > 0 && !bulkSlugs ? 'Unlock warframe.market to count each pick’s trades exactly.' : undefined}>
+      {#if gauge}<span class="trade-gauge" aria-hidden="true">{#each gauge as cell}<i class={cell}></i>{/each}</span>{/if}
+      <span>{#if tradesLeft === 0}No trades left today{:else if !bulkSlugs}{tradeAllowance?.confidence === 'estimated' ? 'About ' : ''}{plural(tradesLeft, 'trade')} left today{:else}Uses {tradeSplit.used} of {tradeAllowance?.confidence === 'estimated' ? 'about ' : ''}{plural(tradesLeft, 'trade')} today{/if}{#if tradeSplit.later.length}{' · '}{tradeSplit.later.length} after the reset{/if}</span>
+    </span>
+  {/if}
+{/snippet}
+
+{#snippet picksCutRow()}
+  {@const unlisted = tradeSplit.later.filter((p) => !listedReceipt(p))}
+  <span class="cut-label">After the reset · {resetIn()}</span>
+  <span class="muted">{tradesLeft === 0 ? 'No trades left today. ' : ''}{tradeSplit.later.length === 1 ? 'This needs' : 'These need'} {plural(tradeSplit.laterTrades, 'trade')}{tradesLeft ? `, more than the ${plural(tradesLeft - tradeSplit.used, 'trade')} still free today` : ''}. Listing is free; they can sell after 00:00 UTC.</span>
+  {#if unlisted.length}
+    <button type="button" class="pick-list cut-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(unlisted); }}>List {unlisted.length === 1 ? 'it' : `these ${unlisted.length}`} now</button>
+  {/if}
 {/snippet}
 
 {#snippet pickReasonCell(p: SellRow)}
@@ -358,9 +407,15 @@
       {#if onopenorders}· <button type="button" class="link" onclick={onopenorders}>My orders →</button>{/if}
     </div>
   {:else}
+  {@const [lo, hi] = pickTradeRange(p)}
   <div class="rs" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
     <span class="t">
       {pickReason(p)}
+      {#if lo > 0 && lo === hi}
+        <span class="pick-trade-count" title={bulkSlugs?.has(p.slug) ? 'Trades in bulk: up to 6 copies per trade.' : 'One copy per trade.'}>{plural(lo, 'trade')}{#if lo > 1}{' · '}{Math.round((p.clearing_price ?? p.low_sell) * p.sellable / lo)}p per trade{/if}</span>
+      {:else if lo > 0}
+        <span class="pick-trade-count" title="Bulk items move up to 6 copies per trade, others one. Which this is needs an unlocked warframe.market session.">{lo}–{hi} trades</span>
+      {/if}
     </span>
     {#if p.volume_48h < LIQUID_VOL}
       <span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
@@ -612,7 +667,7 @@
   picksPending={calculationPending}
   pickReceipt={(p) => isSnoozed(p) || !!listedReceipt(p)}
   listedFor={(r) => receipts?.listedFor(r.slug, r.subtype) || null}
-  {picksHead} pickActions={pickActionsCell} pickReason={pickReasonCell} {picksEmpty}
+  {picksHead} {picksCut} {picksCutRow} pickActions={pickActionsCell} pickReason={pickReasonCell} {picksEmpty}
   empty={emptyState} />
 
 <style>
@@ -677,7 +732,7 @@
   .link { font: inherit; color: var(--accent); background: transparent; border: none; padding: 0 var(--s1); cursor: pointer; }
   .link:hover { text-decoration: underline; background: transparent; }
 
-  .preset-hint { font-size: var(--text-caption); }
+  .preset-hint { font-size: var(--text-caption); min-width: 0; white-space: normal; }
 
   /* Filters disclosure - an inline toolbar item whose panel floats as a
      popover below the summary instead of pushing the toolbar's other
@@ -863,6 +918,16 @@
 
   .picks-exp { font-size: var(--text-caption); }
   .picks-count { font-size: var(--text-caption); white-space: nowrap; }
+  .picks-trades { font-size: var(--text-caption); display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s2); }
+  /* One cell per trade of the day: filled = the picks, outlined = free, faint = already traded. */
+  .trade-gauge { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+  .trade-gauge i { display: block; width: 0.25rem; height: 0.75rem; }
+  .trade-gauge i.plan { background: var(--accent); }
+  .trade-gauge i.free { box-shadow: inset 0 0 0 1px var(--accent); }
+  .trade-gauge i.spent { background: var(--hairline); }
+  .cut-list { margin-left: var(--s3); }
+  .pick-trade-count { display: block; font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); }
+  .cut-label { font-family: var(--font-ui); font-size: var(--text-caption); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; margin-right: var(--s3); }
   .picks-all-snoozed { margin: 0; }
   /* Reasons wrap while the adjacent actions retain their own space. */
   .rs { display: flex; align-items: center; gap: var(--s2); min-height: var(--row); font-size: var(--text-control); color: var(--muted); }

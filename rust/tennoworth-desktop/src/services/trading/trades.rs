@@ -7,12 +7,13 @@
 //! listing's quantity by the number sold (deleting it when that reaches
 //! zero), only on `sell` orders whose item name matches an item we gave away
 //! in a trade where we received plat, and never touches price or visibility.
-//! EE.log does not identify rank or subtype, so ranked mods/arcanes and relic
-//! refinements are never adjusted automatically. Untiered items are adjusted
-//! only when exactly one matching sell order exists.
+//! EE.log names a ranked mod or arcane with its rank ("Infernum (RARE RANK
+//! 0)"), so those adjust the order of that rank; a ranked item logged without
+//! one, and every relic refinement or other variant, is never adjusted. An
+//! item is adjusted only when exactly one matching sell order exists.
 
 use crate::services::unix_now;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
@@ -50,16 +51,75 @@ pub fn name_to_slug(unlocked: &Unlocked) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// Slugs whose WFM order identity includes information EE.log does not carry.
-/// Guessing here can decrement a different mod rank or relic refinement than
-/// the one the player actually traded, so these are never auto-adjusted.
-fn tiered_slugs(unlocked: &Unlocked) -> BTreeSet<String> {
+/// What a WFM order identity carries beyond the slug.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tier {
+    /// A rank, which EE.log prints for mods and arcanes.
+    Ranked,
+    /// A refinement or other variant, which EE.log never prints.
+    Subtyped,
+}
+
+/// Slugs whose WFM order identity includes a rank or variant. Guessing one
+/// can decrement a different mod rank or relic refinement than the one the
+/// player actually traded, so a sale adjusts these only when the log names it.
+fn tiered_slugs(unlocked: &Unlocked) -> BTreeMap<String, Tier> {
     unlocked
         .catalog
         .iter()
-        .filter(|(_, item)| item.max_rank.is_some() || !item.subtypes.is_empty())
-        .map(|(slug, _)| slug.clone())
+        .filter_map(|(slug, item)| {
+            let tier = if !item.subtypes.is_empty() {
+                Tier::Subtyped
+            } else {
+                item.max_rank?;
+                Tier::Ranked
+            };
+            Some((slug.clone(), tier))
+        })
         .collect()
+}
+
+/// EE.log names a mod or arcane with its rarity and rank, as in
+/// "Infernum (RARE RANK 0)"; other items by name alone. Returns the bare name
+/// and the rank when the line has one.
+pub fn split_rank(name: &str) -> (&str, Option<u64>) {
+    let name = name.trim();
+    let parsed = name
+        .strip_suffix(')')
+        .and_then(|rest| rest.rsplit_once(" ("))
+        .and_then(|(base, tag)| {
+            let mut words = tag.split_whitespace().rev();
+            let rank = words.next()?.parse::<u64>().ok()?;
+            (words.next()? == "RANK").then_some(())?;
+            let rarity: Vec<&str> = words.collect();
+            let is_rarity = !rarity.is_empty()
+                && rarity
+                    .iter()
+                    .all(|w| w.chars().all(|c| c.is_ascii_uppercase()));
+            is_rarity.then_some((base.trim_end(), rank))
+        });
+    match parsed {
+        Some((base, rank)) => (base, Some(rank)),
+        None => (name, None),
+    }
+}
+
+/// The order a given trade line can adjust: its slug and, for a ranked item,
+/// the rank the log printed. `Err` names why the line cannot be matched.
+fn sold_identity<'a>(
+    name: &str,
+    names: &'a BTreeMap<String, String>,
+    tiers: &BTreeMap<String, Tier>,
+) -> Result<(&'a String, Option<u64>), &'static str> {
+    let (base, rank) = split_rank(name);
+    let slug = names
+        .get(&base.to_lowercase())
+        .ok_or("item could not be resolved")?;
+    match tiers.get(slug) {
+        None => Ok((slug, None)),
+        Some(Tier::Ranked) => rank.map(|r| (slug, Some(r))).ok_or("rank is unknown"),
+        Some(Tier::Subtyped) => Err("refinement or variant is unknown"),
+    }
 }
 
 /// One of the user's sell orders, as much of it as the adjustment needs.
@@ -67,6 +127,7 @@ fn tiered_slugs(unlocked: &Unlocked) -> BTreeSet<String> {
 pub struct OwnSellOrder {
     pub id: String,
     pub slug: String,
+    pub rank: Option<u64>,
     pub quantity: i64,
 }
 
@@ -113,6 +174,7 @@ fn own_sell_orders_with_log(
             Some(OwnSellOrder {
                 id: order.id,
                 slug: meta.slug.clone(),
+                rank: order.rank,
                 quantity,
             })
         })
@@ -126,13 +188,13 @@ pub fn plan_adjustments(
     trade: &TradeEvent,
     names: &BTreeMap<String, String>,
     orders: &[OwnSellOrder],
-    tiered: &BTreeSet<String>,
+    tiers: &BTreeMap<String, Tier>,
 ) -> Vec<(OwnSellOrder, i64)> {
     if trade.kind != "sale" {
         return vec![];
     }
 
-    let mut sold_by_slug = BTreeMap::<String, i64>::new();
+    let mut sold_by_identity = BTreeMap::<(String, Option<u64>), i64>::new();
     for TradeItem {
         name,
         qty,
@@ -142,27 +204,27 @@ pub fn plan_adjustments(
         if direction != "given" {
             continue;
         }
-        let Some(slug) = names.get(&name.to_lowercase()) else {
+        let Ok((slug, rank)) = sold_identity(name, names, tiers) else {
             continue;
         };
-        if tiered.contains(slug) {
-            continue;
-        }
-        *sold_by_slug.entry(slug.clone()).or_default() += qty;
+        *sold_by_identity.entry((slug.clone(), rank)).or_default() += qty;
     }
 
-    let mut unique_order_by_slug = BTreeMap::<&str, Option<&OwnSellOrder>>::new();
+    let mut unique_order = BTreeMap::<(&str, Option<u64>), Option<&OwnSellOrder>>::new();
     for order in orders {
-        unique_order_by_slug
-            .entry(&order.slug)
+        unique_order
+            .entry((&order.slug, order.rank))
             .and_modify(|candidate| *candidate = None)
             .or_insert(Some(order));
     }
 
-    sold_by_slug
+    sold_by_identity
         .into_iter()
-        .filter_map(|(slug, sold)| {
-            let order = unique_order_by_slug.get(slug.as_str()).copied().flatten()?;
+        .filter_map(|((slug, rank), sold)| {
+            let order = unique_order
+                .get(&(slug.as_str(), rank))
+                .copied()
+                .flatten()?;
             Some((order.clone(), (order.quantity - sold).max(0)))
         })
         .collect()
@@ -172,20 +234,25 @@ fn adjustment_follow_up(
     trade: &TradeEvent,
     names: &BTreeMap<String, String>,
     orders: &[OwnSellOrder],
-    tiered: &BTreeSet<String>,
+    tiers: &BTreeMap<String, Tier>,
 ) -> Vec<String> {
     trade
         .items
         .iter()
         .filter(|item| item.direction == "given")
         .filter_map(|item| {
-            let reason = match names.get(&item.name.to_lowercase()) {
-                None => Some("item could not be resolved"),
-                Some(slug) if tiered.contains(slug) => Some("rank or refinement is unknown"),
-                Some(slug) if orders.iter().filter(|o| &o.slug == slug).count() > 1 => {
+            let reason = match sold_identity(&item.name, names, tiers) {
+                Err(reason) => Some(reason),
+                Ok((slug, rank))
+                    if orders
+                        .iter()
+                        .filter(|o| &o.slug == slug && o.rank == rank)
+                        .count()
+                        > 1 =>
+                {
                     Some("multiple matching sell orders")
                 }
-                _ => None,
+                Ok(_) => None,
             }?;
             Some(format!("{}: {reason}; review My Orders.", item.name))
         })
@@ -273,9 +340,9 @@ pub fn handle_trade(
                 Ok(body) => {
                     let orders = own_sell_orders(&body, &unlocked);
                     let names = name_to_slug(&unlocked);
-                    let tiered = tiered_slugs(&unlocked);
-                    follow_up.extend(adjustment_follow_up(&trade, &names, &orders, &tiered));
-                    for (order, new_qty) in plan_adjustments(&trade, &names, &orders, &tiered) {
+                    let tiers = tiered_slugs(&unlocked);
+                    follow_up.extend(adjustment_follow_up(&trade, &names, &orders, &tiers));
+                    for (order, new_qty) in plan_adjustments(&trade, &names, &orders, &tiers) {
                         // A delete answers with plain Ok; an update carries a per-order
                         // status that has to be read before anything is claimed.
                         let outcome: Result<bool, anyhow::Error> = if new_qty == 0 {
@@ -305,7 +372,8 @@ pub fn handle_trade(
                                     .items
                                     .iter()
                                     .find(|i| {
-                                        names.get(&i.name.to_lowercase()) == Some(&order.slug)
+                                        names.get(&split_rank(&i.name).0.to_lowercase())
+                                            == Some(&order.slug)
                                     })
                                     .map(|i| i.name.clone())
                                     .unwrap_or_else(|| order.slug.clone());
@@ -565,15 +633,28 @@ mod tests {
         m.insert("ash prime set".into(), "ash_prime_set".into());
         m
     }
-    fn untiered() -> BTreeSet<String> {
-        BTreeSet::new()
+    fn untiered() -> BTreeMap<String, Tier> {
+        BTreeMap::new()
     }
     fn order(id: &str, slug: &str, q: i64) -> OwnSellOrder {
         OwnSellOrder {
             id: id.into(),
             slug: slug.into(),
+            rank: None,
             quantity: q,
         }
+    }
+    fn ranked_order(id: &str, slug: &str, rank: u64, q: i64) -> OwnSellOrder {
+        OwnSellOrder {
+            rank: Some(rank),
+            ..order(id, slug, q)
+        }
+    }
+    fn tiers(entries: &[(&str, Tier)]) -> BTreeMap<String, Tier> {
+        entries
+            .iter()
+            .map(|(slug, tier)| (slug.to_string(), *tier))
+            .collect()
     }
     fn sale(items: Vec<(&str, i64, &str)>) -> TradeEvent {
         TradeEvent {
@@ -660,11 +741,13 @@ mod tests {
             OwnSellOrder {
                 id: "a".into(),
                 slug: "part".into(),
+                rank: None,
                 quantity: 2,
             },
             OwnSellOrder {
                 id: "b".into(),
                 slug: "part".into(),
+                rank: None,
                 quantity: 1,
             },
         ];
@@ -672,11 +755,11 @@ mod tests {
             &trade,
             &names,
             &orders,
-            &BTreeSet::from(["primed_flow".into()]),
+            &tiers(&[("primed_flow", Tier::Ranked)]),
         );
         assert_eq!(messages.len(), 3);
         assert!(messages.iter().all(|s| s.contains("review My Orders")));
-        assert!(messages.iter().any(|s| s.contains("rank or refinement")));
+        assert!(messages.iter().any(|s| s.contains("rank is unknown")));
         assert!(messages.iter().any(|s| s.contains("could not be resolved")));
         assert!(messages.iter().any(|s| s.contains("multiple matching")));
     }
@@ -755,7 +838,10 @@ mod tests {
             order("rank-0", "primed_flow", 3),
             order("radiant", "lith_c5_relic", 2),
         ];
-        let tiered = BTreeSet::from(["primed_flow".into(), "lith_c5_relic".into()]);
+        let tiered = tiers(&[
+            ("primed_flow", Tier::Ranked),
+            ("lith_c5_relic", Tier::Subtyped),
+        ]);
         let plan = plan_adjustments(
             &sale(vec![
                 ("Primed Flow", 1, "given"),
@@ -774,7 +860,7 @@ mod tests {
             order("rank-0", "primed_flow", 3),
             order("set", "loki_prime_set", 2),
         ];
-        let tiered = BTreeSet::from(["primed_flow".into()]);
+        let tiered = tiers(&[("primed_flow", Tier::Ranked)]);
         let plan = plan_adjustments(
             &sale(vec![
                 ("Primed Flow", 1, "given"),
@@ -832,8 +918,75 @@ mod tests {
         };
         assert_eq!(
             tiered_slugs(&unlocked),
-            BTreeSet::from(["lith_c5_relic".into(), "primed_flow".into()]),
+            tiers(&[
+                ("lith_c5_relic", Tier::Subtyped),
+                ("primed_flow", Tier::Ranked)
+            ]),
         );
+    }
+
+    #[test]
+    fn split_rank_reads_the_rarity_and_rank_the_game_prints() {
+        // Lines as EE.log wrote them for real mod sales.
+        assert_eq!(split_rank("Infernum (RARE RANK 0)"), ("Infernum", Some(0)));
+        assert_eq!(
+            split_rank("Brood's Oversurge (RARE RANK 0)"),
+            ("Brood's Oversurge", Some(0))
+        );
+        assert_eq!(
+            split_rank("Primed Flow (LEGENDARY RANK 10)"),
+            ("Primed Flow", Some(10))
+        );
+        assert_eq!(split_rank(" Lith C5 Relic "), ("Lith C5 Relic", None));
+        // Anything that is not exactly "(RARITY RANK n)" stays part of the name.
+        assert_eq!(split_rank("Thing (RANK 3)"), ("Thing (RANK 3)", None));
+        assert_eq!(
+            split_rank("Thing (Rare Rank 3)"),
+            ("Thing (Rare Rank 3)", None)
+        );
+        assert_eq!(
+            split_rank("Thing (RARE RANK x)"),
+            ("Thing (RARE RANK x)", None)
+        );
+    }
+
+    #[test]
+    fn a_ranked_sale_adjusts_the_order_of_the_rank_it_names() {
+        let tiered = tiers(&[("infernum", Tier::Ranked)]);
+        let infernum = BTreeMap::from([("infernum".to_string(), "infernum".to_string())]);
+        // Three single-copy sales, as logged, clear the rank-0 listing of three.
+        let orders = vec![
+            ranked_order("r0", "infernum", 0, 3),
+            ranked_order("r5", "infernum", 5, 1),
+        ];
+        let three = sale(vec![
+            ("Infernum (RARE RANK 0)", 1, "given"),
+            ("Infernum (RARE RANK 0)", 1, "given"),
+            ("Infernum (RARE RANK 0)", 1, "given"),
+        ]);
+        assert_eq!(
+            plan_adjustments(&three, &infernum, &orders, &tiered),
+            vec![(ranked_order("r0", "infernum", 0, 3), 0)]
+        );
+        assert!(adjustment_follow_up(&three, &infernum, &orders, &tiered).is_empty());
+        // A rank with no order of that rank, or no rank at all, adjusts nothing.
+        for line in ["Infernum (RARE RANK 3)", "Infernum"] {
+            let one = sale(vec![(line, 1, "given")]);
+            assert!(
+                plan_adjustments(&one, &infernum, &orders, &tiered).is_empty(),
+                "{line}"
+            );
+        }
+        // A relic stays untouched even if a line carried a rank.
+        let relic = sale(vec![("Lith C5 Relic (RARE RANK 0)", 1, "given")]);
+        let relic_orders = vec![order("relic", "lith_c5_relic", 2)];
+        assert!(plan_adjustments(
+            &relic,
+            &names(),
+            &relic_orders,
+            &tiers(&[("lith_c5_relic", Tier::Subtyped)])
+        )
+        .is_empty());
     }
 
     #[test]

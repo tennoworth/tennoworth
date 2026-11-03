@@ -5,8 +5,9 @@
 //! reports read the ledger rather than copying it. Nothing leaves the device.
 //!
 //! The ledger only knows trades the game logged while TennoWorth was running,
-//! and names items without rank or refinement, so a sale is matched to a
-//! listing by item alone and the summary calls its counts observed. A listing
+//! and names relics without refinement, so a sale is matched to a listing by
+//! item alone (a mod's printed rank is read off its name, not matched) and the
+//! summary calls its counts observed. A listing
 //! with no matching sale stays in the denominator: an unsold listing is the
 //! outcome this exists to show, not missing data.
 
@@ -229,7 +230,7 @@ pub fn summarize(
             (one_kind && total > 0 && sale.plat > 0).then(|| sale.plat as f64 / total as f64);
 
         for item in given {
-            let Some(slug) = resolve(item.name.trim()) else {
+            let Some(slug) = resolve(super::trades::split_rank(&item.name).0) else {
                 continue;
             };
             let Some(candidates) = by_slug.get(slug.as_str()) else {
@@ -555,6 +556,7 @@ mod tests {
         match name.to_lowercase().as_str() {
             "ash prime systems" => Some("ash_prime_systems".into()),
             "nova prime set" => Some("nova_prime_set".into()),
+            "infernum" => Some("infernum".into()),
             _ => None,
         }
     }
@@ -590,6 +592,26 @@ mod tests {
         assert_eq!(out.median_hours_to_first_sale, Some(6.0));
         assert_eq!(out.price_ratio, Some(1.0));
         assert_eq!(out.priced_quantity, 2);
+    }
+
+    #[test]
+    fn a_mod_sale_logged_with_its_rank_counts_for_its_listing() {
+        let listed = [listing(
+            0,
+            "infernum",
+            3,
+            15,
+            NOW - 2 * DAY,
+            ListingOrigin::Manual,
+        )];
+        let sales = [sale(
+            1,
+            NOW - 2 * DAY + HOUR,
+            15,
+            &[("Infernum (RARE RANK 0)", 1, "given")],
+        )];
+        let out = summarize(true, &listed, &sales, &resolve, NOW).manual;
+        assert_eq!((out.quantity_listed, out.quantity_sold), (3, 1));
     }
 
     #[test]

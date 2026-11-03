@@ -50,6 +50,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'app-icon': 'wfminv:app-icon-v1',
   calendar: 'wfminv:calendar-v1',
   keyboard: 'wfminv:keyboard-v1',
+  display: 'wfminv:display-v1',
 };
 
 // The SQLite `setting.key` the desktop store parks the reload-restore snapshot

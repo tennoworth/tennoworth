@@ -267,10 +267,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     {/if}
     {#if display.rows.length}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard focus is needed to scroll the wide table.) -->
-      <div class="wrap tw" tabindex="0" role="region" aria-label="Suggested listings; scroll for all columns">
-        <table class="tw fixed session-table">
-          <colgroup><col style="width:21%" /><col style="width:8%" /><col style="width:11%" /><col style="width:10%" /><col style="width:12%" /><col style="width:7%" /><col style="width:9%" /><col style="width:22%" /></colgroup>
-          <thead><tr><th class="l">Item</th><th>Quantity</th><th>Units / trade</th><th>Est. trades</th><th>Unit ask</th><th>Unit bid</th><th>Potential</th><th class="l">Why this item</th></tr></thead>
+      <div class="wrap tw"><div class="scroll" tabindex="0" role="region" aria-label="Suggested listings; scroll for all columns">
+        <table class="tw session-table">
+          <thead><tr><th class="l">Item</th><th title="Quantity to list">Qty</th><th title="Units per trade">Per trade</th><th title="Estimated trades">Trades</th><th>Unit ask</th><th>Unit bid</th><th>Potential</th><th class="l">Why this item</th></tr></thead>
           <tbody>
             {#each display.rows as row (row.key)}
               <tr>
@@ -287,7 +286,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
               </tr>
             {/each}
           </tbody>
-        </table>
+        </table></div>
       </div>
       <p class="muted">Estimated trades = quantity ÷ suggested units per trade, summed across the batch. Buyers may agree different quantities. Posting listings does not spend in-game trades.</p>
     {:else if !loading && !planning && !planningError}
@@ -317,9 +316,13 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   .sets-check { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-lg); }
   .allowance-status { font-size: var(--text-control); }
   .session-body { padding: var(--s3) var(--inset); }
-  .session-table { min-width: 70rem; }
+  /* Sized by content, so headers and figures are never cut off; Item takes
+     the rest and Why wraps when room runs short. Below the 1200px window the
+     table scrolls in its box. */
+  .session-table th.l:first-child { width: 100%; min-width: 9rem; }
+  .session-table th.l:last-child { width: auto; min-width: 8rem; }
   .reason { min-width: 18rem; white-space: normal; font-family: var(--font-body); }
-  small { display: block; font-family: var(--font-body); font-size: var(--text-caption); color: var(--muted); line-height: var(--leading-body); }
+  small { display: block; font-family: var(--font-body); font-size: var(--text-caption); color: var(--muted); line-height: var(--leading-body); white-space: normal; }
   h3 { font-size: var(--text-section); margin: 0; }
   p { margin: 0; }
   .ui-input { max-width: 12rem; }

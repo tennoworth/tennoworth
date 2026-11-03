@@ -114,8 +114,8 @@ describe('the table floor', () => {
   });
 
   it('charges only rendered facts when delta and advice are unavailable', () => {
-    expect(renderedFloor(['name', 'owned', 'delta', 'advice'], false)).toBe(26);
-    expect(renderedFloor(['name', 'owned', 'delta', 'advice'])).toBe(34.25);
+    expect(renderedFloor(['name', 'owned', 'delta', 'advice'], false)).toBe(27);
+    expect(renderedFloor(['name', 'owned', 'delta', 'advice'])).toBe(35.25);
   });
 
   it('never charges a preset for the Played column, which no preset shows', () => {

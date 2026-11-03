@@ -294,7 +294,11 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
 
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("TennoWorth")
-                .inner_size(1200.0, 800.0);
+                .inner_size(1200.0, 800.0)
+                // Half a 1920px screen, so snapping still works. The status
+                // strip fits one line at this width in every state; narrower,
+                // its fullest state would clip.
+                .min_inner_size(960.0, 480.0);
             // Without an explicit icon the window (and its taskbar/switcher
             // entry) falls back to a generic WM avatar. The App icon setting's
             // last applied colour, so the window opens in it.

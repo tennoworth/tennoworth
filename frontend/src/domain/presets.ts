@@ -30,7 +30,7 @@ export interface Preset {
 export const PRESETS: Record<string, Preset> = {
   default: {
     minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-    label: 'Default', hint: 'everything sellable, best first',
+    label: 'Default', hint: 'averaging 5p or more, best first · items you keep are dimmed',
     // What decides a sale right now. Avg, top buy, demand, played, ducats and
     // the value columns live in the presets that use them, or the Columns menu.
     columns: ['name', 'owned', 'delta', 'sell_score', 'low_sell', 'medians_7d', 'delta_90d_pct', 'volume_48h', 'advice', 'potential_plat'],

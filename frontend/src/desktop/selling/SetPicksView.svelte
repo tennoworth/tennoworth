@@ -5,6 +5,7 @@ import type { DomainResult } from './domain-result.svelte';
 import type { SetReco, Verdict } from '../../contracts/generated/domain';
 import { wfmItemUrl } from '../../ui/format';
 import BuildVsBuy from './BuildVsBuy.svelte';
+import ItemArt from '../../ui/ItemArt.svelte';
   let { inventory, setSurfaceAge, keepSection, guidanceUnavailable, setResult, setRecos, adviceMap, onretry }: {
     inventory: InventoryController;
     setSurfaceAge: string | null;
@@ -59,6 +60,7 @@ import BuildVsBuy from './BuildVsBuy.svelte';
             <tr data-shell>
               <td data-shell class="l set-name">
                 <span data-shell class="rank">{i + 1}</span>
+                <ItemArt slug={r.set_slug} />
                 <a data-shell href={wfmItemUrl(r.set_slug)} target="_blank" rel="noopener noreferrer">{r.set_name}</a>
                 <span data-shell class="kind kind-{r.kind}">
                   {#if r.kind === 'near-complete'}

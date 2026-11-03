@@ -182,7 +182,9 @@ pub fn mastery_band(by_mr: &[f64]) -> Option<MasteryBand> {
     Some(MasteryBand { from, to })
 }
 
-fn timing(price: f64, m: &ScoringMarketEntry) -> Timing {
+/// Where `price` sits in the 90-day channel. Top picks drop a `Hold` row, and
+/// the desktop digest reads this so it drops the same rows.
+pub fn timing(price: f64, m: &ScoringMarketEntry) -> Timing {
     let top = m.donch_top_90d.unwrap_or(0.0);
     let bot = m.donch_bot_90d.unwrap_or(0.0);
     if price <= 0.0 || top <= 0.0 || bot <= 0.0 || top <= bot {
