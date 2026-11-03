@@ -4,6 +4,8 @@
 //! - `build`: reads `wfm_results.csv`, fetches upstreams, reconciles with the
 //!   prior snapshot, and writes `market.json` + `wfstat-catalog.json`.
 //! - `scrape`: the full WFM scrape to `wfm_results.csv`.
+//! - `art`: download new or changed item pictures from the Warframe wiki into
+//!   `<publish>/item-art/` and write `<publish>/item-art.json`.
 //!
 //! Flags:
 //! - `--fixtures-dir <DIR>`: run offline using frozen fixture files.
@@ -20,11 +22,11 @@ use wfm_scrape::{clock, ingest::LiveHttp};
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let Some(command) = args.get(1) else {
-        eprintln!("usage: tennoworth-pipeline build|scrape|history [--fixtures-dir <DIR>] [--data-dir <DIR>] [--publish-dir <DIR>] [--now <ISO>]");
+        eprintln!("usage: tennoworth-pipeline build|scrape|history|art [--fixtures-dir <DIR>] [--data-dir <DIR>] [--publish-dir <DIR>] [--now <ISO>]");
         return std::process::ExitCode::FAILURE;
     };
     let live = extract_flag(&args, "--fixtures-dir").is_none();
-    let dirs = if live && command == "build" {
+    let dirs = if live && matches!(command.as_str(), "build" | "art") {
         match Dirs::resolve(
             extract_flag(&args, "--data-dir").map(PathBuf::from),
             extract_flag(&args, "--publish-dir").map(PathBuf::from),
@@ -40,7 +42,7 @@ fn main() -> std::process::ExitCode {
     };
     // The lock directory also holds the WFM cooldown and policy state, so
     // `scrape` and `build` must name the same one: the CSV's directory.
-    let _output_lock = if live && matches!(command.as_str(), "scrape" | "build") {
+    let _output_lock = if live && matches!(command.as_str(), "scrape" | "build" | "art") {
         let directory = match &dirs {
             Some(dirs) => dirs.data.clone(),
             None => PathBuf::from(
@@ -70,6 +72,7 @@ fn main() -> std::process::ExitCode {
             build(fixtures_path, now_arg.as_deref(), dirs.as_ref())
         }
         "scrape" => run_scrape_cmd(&args),
+        "art" => run_art_cmd(&args, dirs.as_ref()),
         _ => {
             eprintln!("unknown subcommand: {command}");
             return std::process::ExitCode::FAILURE;
@@ -115,6 +118,79 @@ fn acquire_output(directory: &Path) -> Result<std::fs::File, String> {
     wfm_client::policy::start(directory, wfm_client::policy::Component::Scraper)
         .map_err(|e| e.to_string())?;
     Ok(file)
+}
+
+/// Wire the `art` subcommand. Runs at most once per `--interval` (default
+/// 24h) however often it is called, so the scrape timer can call it every sweep.
+fn run_art_cmd(args: &[String], dirs: Option<&Dirs>) -> Result<(), String> {
+    use wfm_scrape::art;
+    let dirs = dirs.ok_or("art needs --data-dir and --publish-dir, or a checkout")?;
+    let now = extract_flag(args, "--now")
+        .map(|s| clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
+        .unwrap_or_else(|| Ok(Utc::now()))?;
+    let hours: i64 = extract_flag(args, "--interval-hours")
+        .map(|s| s.parse().map_err(|_| format!("bad --interval-hours: {s}")))
+        .transpose()?
+        .unwrap_or(24);
+    let mut opts = art::Options::default();
+    if let Some(b) = extract_flag(args, "--budget") {
+        opts.budget = b.parse().map_err(|_| format!("bad --budget: {b}"))?;
+    }
+
+    let state_path = dirs.data.join(art::STATE_FILE);
+    let mut state: art::State = match std::fs::read(&state_path) {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| {
+            format!(
+                "{}: {e} - move it aside to start over",
+                state_path.display()
+            )
+        })?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => art::State::default(),
+        Err(e) => return Err(format!("read {}: {e}", state_path.display())),
+    };
+    let recent = state
+        .last_run
+        .as_deref()
+        .and_then(clock::parse_stamp)
+        .is_some_and(|t| now - t < chrono::Duration::hours(hours));
+    if recent && !args.iter().any(|a| a == "--force") {
+        eprintln!("art: last run under {hours}h ago; nothing to do");
+        return Ok(());
+    }
+
+    let read_json = |p: &Path| -> Result<serde_json::Value, String> {
+        let bytes = std::fs::read(p).map_err(|e| format!("read {}: {e}", p.display()))?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("parse {}: {e}", p.display()))
+    };
+    let market = read_json(&dirs.publish.join("market.json"))?;
+    let sources: Vec<art::Source> =
+        serde_json::from_value(read_json(&dirs.data.join(art::SOURCES_FILE))?)
+            .map_err(|e| format!("{}: {e} - run `build` first", art::SOURCES_FILE))?;
+    let wanted = art::resolve(&market, &sources);
+    eprintln!("art: {} items have a wiki picture", wanted.len());
+
+    let fetch = art::LiveFetch::new()?;
+    let summary = art::run(
+        &wanted,
+        &mut state,
+        &fetch,
+        &dirs.publish,
+        now,
+        &opts,
+        &|d| std::thread::sleep(d),
+    )?;
+    let body = serde_json::to_vec(&state).map_err(|e| e.to_string())?;
+    let tmp = state_path.with_extension("json.tmp");
+    std::fs::write(&tmp, body).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &state_path).map_err(|e| format!("rename: {e}"))?;
+    eprintln!(
+        "art: {} requested · {} stored · {} unchanged · {} missing · {} published",
+        summary.requested, summary.stored, summary.unchanged, summary.missing, summary.published
+    );
+    if let Some(why) = summary.stopped {
+        eprintln!("art: stopped early ({why}); the next run resumes");
+    }
+    Ok(())
 }
 
 fn extract_flag(args: &[String], flag: &str) -> Option<String> {

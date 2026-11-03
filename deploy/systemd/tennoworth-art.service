@@ -1,0 +1,28 @@
+[Unit]
+Description=Refresh item pictures from the Warframe wiki
+Wants=network-online.target
+After=network-online.target
+
+OnFailure=tennoworth-alert@%n.service
+
+[Service]
+Type=oneshot
+User=wfm
+Group=wfm
+WorkingDirectory=/srv/wfm/data/scrape
+# Reads market.json and the sources list build saves, then asks the wiki for at
+# most 600 thumbnails, one a second (src/art.rs). Its own unit so those minutes
+# never count against the sweep's timeout.
+ExecStart=/srv/wfm/bin/tennoworth-pipeline art --data-dir /srv/wfm/data/scrape --publish-dir /srv/wfm/data/public
+TimeoutStartSec=3600
+Nice=10
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/wfm/data/scrape /srv/wfm/data/public
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallFilter=@system-service

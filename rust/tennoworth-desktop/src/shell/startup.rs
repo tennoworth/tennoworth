@@ -91,6 +91,16 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
         .manage(crate::shell::tray::TrayState::default())
         .manage(crate::shell::update::UpdateState::default())
         .manage(Arc::new(WfmSession::new()))
+        // Item pictures by slug (`art://localhost/<slug>`); the lookup may hit
+        // the network, so it runs off the webview's thread.
+        .register_asynchronous_uri_scheme_protocol("art", |ctx, request, responder| {
+            let app = ctx.app_handle().clone();
+            let path = request.uri().path().to_string();
+            tauri::async_runtime::spawn_blocking(move || {
+                let store = app.try_state::<crate::services::market::art::ArtStore>();
+                responder.respond(crate::services::market::art::respond(store.as_deref(), &path));
+            });
+        })
         .invoke_handler(tauri::generate_handler![
             crate::shell::app_icon::set_app_icon,
             crate::shell::update_notes::update_notes,
@@ -290,6 +300,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 std::process::exit(0);
             }
 
+            app.manage(crate::services::market::art::ArtStore::new(data_dir.join("item-art")));
             app.manage(MarketCache::new(data_dir));
 
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())

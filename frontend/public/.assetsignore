@@ -8,3 +8,5 @@
 /history.json
 /wfm-policy.json
 /announcements.json
+/item-art.json
+/item-art/*

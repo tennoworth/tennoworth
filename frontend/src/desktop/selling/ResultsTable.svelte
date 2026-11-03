@@ -494,24 +494,26 @@
     {@const rowKey = r.key ?? r.slug}
     <span class="name-clip">
       <ItemArt slug={r.slug} />
-      <a
-        href={wfmItemUrl(r.slug)}
-        target="_blank"
-        rel="noopener noreferrer"
-        >{r.name || r.slug}</a
-      >
-      {#each badges.slice(0, BADGE_CAP) as b}
-        <span class="tag {b.cls}" title={b.title}>{b.label}</span>
-      {/each}
-      {#if badges.length > BADGE_CAP}
-        {@const hiddenCount = badges.length - BADGE_CAP}
-        <button
-          type="button"
-          class="tag badge-overflow-btn"
-          onclick={(e) => toggleBadgeOverflow(rowKey, e)}
-          aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
-        >+{hiddenCount}</button>
-      {/if}
+      <span class="name-text">
+        <a
+          href={wfmItemUrl(r.slug)}
+          target="_blank"
+          rel="noopener noreferrer"
+          >{r.name || r.slug}</a
+        >
+        {#each badges.slice(0, BADGE_CAP) as b}
+          <span class="tag {b.cls}" title={b.title}>{b.label}</span>
+        {/each}
+        {#if badges.length > BADGE_CAP}
+          {@const hiddenCount = badges.length - BADGE_CAP}
+          <button
+            type="button"
+            class="tag badge-overflow-btn"
+            onclick={(e) => toggleBadgeOverflow(rowKey, e)}
+            aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
+          >+{hiddenCount}</button>
+        {/if}
+      </span>
     </span>
     {#if badges.length > BADGE_CAP && openBadgeOverflow === rowKey}
       <span class="badge-overflow-popover" role="tooltip">
@@ -1007,6 +1009,9 @@
   /* Keep the full item identity readable even at the column's width floor. */
   td.col-name { position: relative; color: var(--fg); font-weight: 500; overflow: visible; }
   .name-clip { display: block; white-space: normal; overflow-wrap: anywhere; padding-block: var(--s1); }
+  /* With a picture, the name and its tags wrap beside it, never under it. */
+  :global(html[data-density='visual']) .name-clip { display: flex; align-items: center; }
+  .name-text { min-width: 0; }
   /* Pick rows: rank glyph, bold name, reason spanning the trailing columns
      with the parent's List/× at its right end. */
   .pick-rank {
