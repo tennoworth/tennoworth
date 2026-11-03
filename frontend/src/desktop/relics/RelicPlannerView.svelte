@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
 import type { DomainResult } from '../selling/domain-result.svelte';
 import type { RelicPlanEntry } from '../../contracts/generated/domain';
 import { plat, wfmItemUrl } from '../../ui/format';
@@ -83,12 +84,12 @@ function verdictText(decision: RelicDecision): string {
           <!-- One row per relic, so thirty relics compare down columns instead
                of filling thirty cards. The refinement ladder is four cells on
                one scale per row; the recommended rung is the inverted cell. -->
-          <div data-shell class="scroll">
+          <div data-shell class="scroll" use:fitTable>
           <table data-shell class="tw relic-table">
             <thead data-shell><tr data-shell>
               <th data-shell class="l relic-name">Relic</th><th data-shell>Own</th><th data-shell class="l">Decision</th>
-              <th data-shell>Intact</th><th data-shell>Exceptional</th><th data-shell>Flawless</th><th data-shell>Radiant</th>
-              <th data-shell>Expected</th><th data-shell>Or sell</th><th data-shell class="l why">Why</th>
+              <th data-shell>Intact</th><th data-shell data-drop="1">Exceptional</th><th data-shell data-drop="1">Flawless</th><th data-shell>Radiant</th>
+              <th data-shell>Expected</th><th data-shell data-drop="3">Or sell</th><th data-shell class="l why" data-drop="2">Why</th>
             </tr></thead>
             <tbody data-shell>
             {#each relicVisible as p (p.relic_slug)}

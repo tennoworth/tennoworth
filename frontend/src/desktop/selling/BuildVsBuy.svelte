@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   // Build it or buy it, for one prime set.
   //
   // The set-vs-parts spread was already computed; what was missing is the
@@ -85,7 +86,7 @@
     </p>
   </header>
 
-  <div class="scroll">
+  <div class="scroll" use:fitTable>
     <table>
       <thead>
         <tr>

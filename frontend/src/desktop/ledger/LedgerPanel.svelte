@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopEelogStatus, desktopListTrades, desktopListingOutcomes, desktopSetListingOutcomes, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy } from 'svelte';
@@ -208,7 +209,7 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
           {#if weekMedian !== null && weekMedian > 0}<p class="caption">Dotted line: the median finished week, {plat(weekMedian)}p.</p>{/if}
           <details class="table-view">
             <summary>Show as table</summary>
-            <div class="scroll">
+            <div class="scroll" use:fitTable>
               <table class="tw week-table">
                 <thead><tr><th class="l" scope="col">Week of</th><th class="r" scope="col">Realised</th><th class="r" scope="col">Sales</th></tr></thead>
                 <tbody>
@@ -279,7 +280,7 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
   {:else if trades.length === 0}
     <div class="ui-notice">No trades recorded yet. Complete a trade in-game with TennoWorth running and it appears here.</div>
   {:else}
-    <div class="scroll" bind:this={historyEl}>
+    <div class="scroll" use:fitTable bind:this={historyEl}>
       <table class="tw fixed trade-history">
         <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:11rem" /><col style="width:7rem" /><col style="width:8rem" /></colgroup>
         <thead><tr><th>When</th><th>Trade</th><th class="l">Items</th><th class="l">With</th><th class="r">Plat</th><th>Listing</th></tr></thead>

@@ -204,7 +204,7 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, dotted inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
 | Prompt banners | `PromptBanner.svelte` offers something optional that is safe to ignore, such as an opt-in or a support link. It uses the neutral panel with no toned edge, because an invitation is not a warning, and says that ignoring it changes nothing. Its title names the benefit, the body states what happens, and the actions are the accept action, an optional link to the full control, and Not now. A launch shows at most one prompt, never while that launch's automatic “What’s new” is pending or open, and asks are at least a week apart across prompts. Each prompt sets its own delay, launch minimum, gap and ask limit, and may wait for an update launch for its first ask (`features/prompt-policies.ts`, highest priority first); showing it counts as an ask, so ignoring it equals Not now, and accepting retires it. Prompts stay out of first run and active trading, and step aside on the view that already holds the full control. Select Prompt banner in the living styleguide's Data state control |
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |
-| Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region. Overlay scrollbars hide that a table scrolls, so a scroll box holding a table fades its right edge while more columns sit beyond it, and drops the fade at the end or when the table fits; the sidebar's view list fades its bottom edge the same way on a short window. Prefer content-sized columns (no `fixed` layout) where numbers and buttons have a natural width, so the item and prose columns take the rest and the table fits the 1200px window; a table's fixed minimum must not exceed what that window leaves it. An item picture and its name sit together in `.item-id`, so a long name wraps beside the picture, not under it. Pictures carry no per-image credit; their source is credited once in the sidebar foot and the site footer. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted. A sortable header is a button inside its `th`, which carries `aria-sort`, and its column is wide enough for the label plus the sort arrow. Column explanations live in one Column guide dialog beside the Columns menu, not in per-header popovers. A table's action column sits beside the item, so Top Picks keeps List and hide in view while price and reason scroll. Select Sell table in the living styleguide's Data state control for the production pattern |
+| Tables | Preserve meaningful columns and item identity; align comparable numbers. Every table fits its pane through the shared fit steps (see Fitting tables), so the page and the table do not scroll sideways at any supported width. Overlay scrollbars hide that a table scrolls, so a scroll box holding a table that still overflows (enlarged text) fades its right edge while more columns sit beyond it, and drops the fade at the end or when the table fits; the sidebar's view list fades its bottom edge the same way on a short window. Prefer content-sized columns (no `fixed` layout) where numbers and buttons have a natural width, so the item and prose columns take the rest. An item picture and its name sit together in `.item-id`, so a long name wraps beside the picture, not under it. Pictures carry no per-image credit; their source is credited once in the sidebar foot and the site footer. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted. A sortable header is a button inside its `th`, which carries `aria-sort`, and its column is wide enough for the label plus the sort arrow. Column explanations live in one Column guide dialog beside the Columns menu, not in per-header popovers. A table's action column sits beside the item, so Top Picks keeps List and hide in view while price and reason scroll. Select Sell table in the living styleguide's Data state control for the production pattern |
 | Sparklines | `Sparkline.svelte` draws recent medians in ink, a dotted `--faint` rule at the 90-day median, and an endpoint dot coloured by the move against that median. The baseline shares the line's scale, so its distance from the line is honest |
 | Meters | `Meter.svelte` shows a share of a whole: a short label, the value in words ("9 of 14"), and an `--ink-bar` fill on one square `--panel-2` track. The words carry the value; a share with nothing to judge yet keeps an empty track and says why ("too recent"). Used for Ledger listing outcomes and Baro's ducats from spares. Select Meters in the living styleguide's Data state control |
 | Range bars | A spread drawn on a shared scale: a `--muted` hairline from minimum to maximum over a dotted `--faint` track, and a 2px ink tick at the median. Every row in the column uses the same scale (Rivens' DE weekly band: 1p to 10,000p, logarithmic), so rows compare down the column. The values stay as text beside the bar, which is decorative to assistive technology |
@@ -343,7 +343,7 @@ four cells on one scale with the chosen rung inverted, picked only for a crack
 or refine verdict). My orders is one listings table: listing health is a
 column and a row state with each fix beside the item, and Live ask and bid are
 always reserved so a live check fills cells rather than moving controls.
-Analytical tables scroll locally when needed. Long histories (Ledger trades,
+Analytical tables fit their pane (Fitting tables). Long histories (Ledger trades,
 Rivens, Notifications) show 100 entries a page through the shared
 `Pager.svelte`: the range shown, Prev and Next, and the page count, under the
 list. A page change brings the list's top back into view, and narrowing a
@@ -415,6 +415,38 @@ repeats the choice beside Columns. Pictures are an ink duotone (multiply on
 paper, screen on the dark bench) so they never read as colour beside the
 data; they are decorative, and a missing picture keeps its slot so names stay
 aligned. The hosted site has no setting and draws no pictures.
+
+### Fitting tables
+
+Every table fits the pane it sits in, from the 960px desktop minimum and from
+320px on the hosted site, in the same steps. `use:fitTable`
+([table-fit.ts](../frontend/src/ui/table-fit.ts)) on the table's `.scroll` box
+measures and sets `data-fit`; shared rules in `app.css` do the rest.
+
+1. Step 0 is the table as designed.
+2. Step 1 narrows it: designed minimum widths and `fixed` layout give way, cells
+   tighten, headers wrap, the item column keeps an 8rem floor (6rem on a phone)
+   and other text columns 6rem, and names wrap beside their picture.
+3. Each later step hides one more rank of columns. A table ranks its own
+   columns with `data-drop="1|2|3"` on the header cell (rank 1 hides first);
+   the rank reaches the body cells and `<col>` by position. Unranked columns
+   never hide: the item, the quantity owned, the price and value a row is
+   about, and the column that is the point of the table.
+4. A dotted line under the table names what is hidden ("Hidden to fit this
+   window: Trend, Δ 90d.") and says widening the window shows it. It is text,
+   not colour, and the Columns menu still lists the column.
+
+Rank by what the decision needs: context and trends hide before prices, and
+explanations before the numbers they explain (Relics hides its middle ladder
+rungs, then Why, and keeps Or sell beside a Sell intact decision). Sell's
+inventory table has fixed column widths, so it works the same steps out from
+those widths instead of measuring; its columns carry the rank in `ColumnDef`.
+At the default 1200px window only Sell's Trend hides; at 960px Sell keeps Item,
+Own, Priority, Low ask and Stack value. A table that still cannot fit, such as
+enlarged text, scrolls inside its own box as the last resort. `design-system.spec.ts`
+checks every desktop view from 960 to 1920px and the hosted pages from 320 to
+1440px for sideways overflow. Select Dense data in the living styleguide to see
+the steps.
 
 ### Row cursor and button hover
 
@@ -531,20 +563,22 @@ row pattern and read-state toggle.
 ## Resizing contract
 
 - The page must not require horizontal scrolling to reach ordinary navigation,
-  notices, or actions. Wide data tables may scroll locally; their last column
-  must remain reachable by keyboard and pointer.
+  notices, or actions. Tables fit their pane (Fitting tables); one that still
+  overflows scrolls locally, with its last column reachable by keyboard and
+  pointer.
 - Essential item identity wraps. Truncation is only acceptable for secondary
   content when the full value is available through an accessible interaction;
   a hover-only tooltip is not sufficient.
 - Let toolbars, status strips, headings, and mode groups grow vertically.
   Fixed single-line heights must not clip wrapped content.
 - Base layout changes on available space and actual content. Test immediately
-  around breakpoints, not only a few named device sizes. Do not automatically
-  turn every table into cards or hide columns on small screens. Choose columns
-  by task instead: each Sell preset names its own column set, and the Columns
-  menu lets people add or remove columns per preset, with a reset. When a
-  column is the point of a table, place it next to the item name so narrow
-  windows reach it without scrolling (Meta Drift's Δ share).
+  around breakpoints, not only a few named device sizes. Do not turn tables
+  into cards. Columns hide only through the shared fit steps, by each table's
+  declared ranks and with the note that names them; never by an ad hoc media
+  query. Choose columns by task as well: each Sell preset names its own column
+  set, and the Columns menu lets people add or remove columns per preset, with
+  a reset. When a column is the point of a table, leave it unranked and place
+  it next to the item name (Meta Drift's Δ share).
 - Account for short windows as well as narrow ones. Flex/grid children must
   not collapse whole panels, and sticky controls must not obscure rows or focus.
 - Bound floating surfaces to the viewport and give their bodies usable scroll
@@ -649,7 +683,7 @@ Open `/?styleguide` on the development server for the living reference in
 [Styleguide.svelte](../frontend/src/dev/styleguide/Styleguide.svelte). It consumes
 production tokens and shared patterns, not copied mock CSS, and is excluded
 from production builds. It shows both themes, interaction and failure states,
-long content, a locally scrolling table, and an editable native dialog. Theme
+long content, a table that fits its pane, and an editable native dialog. Theme
 choices and sample edits do not persist or invoke account operations. It is an
 reference for the approved visual direction, not a separate design system.
 
@@ -825,8 +859,8 @@ the production dialog with a fictional upgrade state.
 
 Public decision pages reuse the hosted shell palette, reading typography,
 `.ui-panel`, title rails, `.ui-toolbar`, and `table.tw`. Prose caps its reading
-width; numerical comparisons stay tables with local horizontal scrolling and
-keyboard skip/scroll controls. No separate marketing palette or decorative
+width; numerical comparisons stay tables that fit their pane, with keyboard
+skip/scroll controls. No separate marketing palette or decorative
 hero is introduced. Shared selling-guide navigation links the homepage, sets,
 ducats and equally visible Windows/Linux download information.
 

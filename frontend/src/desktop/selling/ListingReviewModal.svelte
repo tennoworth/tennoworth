@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { onMount, onDestroy } from 'svelte';
   import { useDesktopServices } from '../shell/desktop-context';
   import { createListingReview, type ListingReviewInput } from './listing-review.svelte';
@@ -103,7 +104,7 @@
           {/if}
         </div>
 
-        <div class="scroll">
+        <div class="scroll" use:fitTable>
           <table>
             <thead>
               <tr>
@@ -242,7 +243,7 @@
           {/if}
           Updated orders keep their existing visibility and price history.
         </p>
-        <div class="scroll">
+        <div class="scroll" use:fitTable>
           <table>
             <thead><tr><th></th><th>Item</th><th>Detail</th></tr></thead>
             <tbody>

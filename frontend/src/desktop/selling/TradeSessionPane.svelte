@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent, evaluateTradeSession } = useDesktopServices();
   import { onMount, onDestroy, untrack, type Snippet } from 'svelte';
@@ -267,9 +268,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     {/if}
     {#if display.rows.length}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard focus is needed to scroll the wide table.) -->
-      <div class="wrap tw"><div class="scroll" tabindex="0" role="region" aria-label="Suggested listings; scroll for all columns">
+      <div class="wrap tw"><div class="scroll" use:fitTable tabindex="0" role="region" aria-label="Suggested listings; scroll for all columns">
         <table class="tw session-table">
-          <thead><tr><th class="l">Item</th><th title="Quantity to list">Qty</th><th title="Units per trade">Per trade</th><th title="Estimated trades">Trades</th><th>Unit ask</th><th>Unit bid</th><th>Potential</th><th class="l">Why this item</th></tr></thead>
+          <thead><tr><th class="l">Item</th><th title="Quantity to list">Qty</th><th title="Units per trade">Per trade</th><th title="Estimated trades">Trades</th><th>Unit ask</th><th data-drop="1">Unit bid</th><th>Potential</th><th class="l">Why this item</th></tr></thead>
           <tbody>
             {#each display.rows as row (row.key)}
               <tr>

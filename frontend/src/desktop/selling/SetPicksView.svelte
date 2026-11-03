@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
 import type { Snippet } from 'svelte';
 import type { InventoryController } from '../inventory/controller.svelte';
 import type { DomainResult } from './domain-result.svelte';
@@ -51,7 +52,7 @@ import ItemArt from '../../ui/ItemArt.svelte';
           <!-- A table like every other ranked list, so net plat and set volume
                compare down a column. The verb is a plain "Do" column: the old
                uppercase LIST read as a button and was only a label. -->
-          <div data-shell class="scroll">
+          <div data-shell class="scroll" use:fitTable>
           <table data-shell class="tw set-table">
             <thead data-shell><tr data-shell><th data-shell class="l set-name">Set</th><th data-shell class="l verb">Do</th><th data-shell>Net</th><th data-shell>Set vol 48h</th><th data-shell class="l reco-detail">What it takes</th></tr></thead>
             <tbody data-shell>

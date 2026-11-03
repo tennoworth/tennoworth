@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { tableNavigation } from '../../ui/keyboard.svelte';
   import ItemHistory from '../../site/pages/ItemHistory.svelte';
   import DecisionSummary from '../../site/pages/DecisionSummary.svelte';
@@ -188,7 +189,7 @@
   </section>
 
   <section class="wrap tw" aria-labelledby="table-title">
-    <div class="rail"><h3 id="table-title">03 / Dense data, complete names</h3><span class="exp">The table scrolls locally; the page does not</span></div>
+    <div class="rail"><h3 id="table-title">03 / Dense data, complete names</h3><span class="exp">The table fits its pane: it narrows, then hides ranked columns and names them</span></div>
     {#if dataState === 'estimates'}
       <div class="specimens ui-stack"><h2>Estimated opportunities</h2><p class="numeric">Known estimated value: 30p</p><p class="ui-notice" data-tone="good">✓ Keep rules applied to this inventory. Existing WFM listings still need checking.</p><p class="ui-notice" data-tone="bad"><strong>! We can’t calculate what you can sell yet</strong> Invalid inventory quantities block sale totals. Scan game again.</p><p class="ui-notice" data-tone="warn">Estimates honor inventory protection. Current WFM listings are not accounted for. Quantities unavailable for 1 item; known totals exclude it.</p><div class="ui-toolbar"><button class="btn" disabled>List on WFM</button><button class="btn primary" onclick={() => message = 'Recheck protection before listing. Imported backups require a game scan; review edits are kept.'}>Recheck protection</button></div></div>
     {:else if dataState === 'loading'}
@@ -199,8 +200,8 @@
       <div class="specimens ui-stack"><h2>{dataState === 'empty' ? 'No inventory yet' : 'No matching items'}</h2><p>{dataState === 'empty' ? 'Scan the game to see owned items. This reference uses sample data only.' : 'Try a shorter name or reset the filter.'}</p><div><button class="btn" onclick={() => { dataState = 'populated'; filter = ''; }}>Show sample inventory</button></div></div>
     {:else}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users must be able to scroll the wide table.) -->
-      <div class="scroll" tabindex="0" role="region" aria-label="Sample inventory table">
-        <table class="tw fixed reference-table"><thead><tr><th scope="col" class="l">Item</th><th scope="col">Owned</th><th scope="col">Unit price</th><th scope="col" class="l">Context</th></tr></thead><tbody>
+      <div class="scroll" use:fitTable tabindex="0" role="region" aria-label="Sample inventory table">
+        <table class="tw fixed reference-table"><thead><tr><th scope="col" class="l">Item</th><th scope="col">Owned</th><th scope="col">Unit price</th><th scope="col" class="l" data-drop="1">Context</th></tr></thead><tbody>
           {#each visibleRows as row}
             <tr><td class="l identity">{row.name}</td><td>{row.owned}</td><td>{row.price === null ? 'Unknown' : `${row.price} p`}</td><td class="reason context">{row.note}</td></tr>
           {/each}
