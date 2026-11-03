@@ -269,9 +269,11 @@
   /* A row with something to fix carries the caution edge; the words in the
      Health cell say what, the edge only repeats it. */
   tr.attn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
-  /* Item and Health split the slack; Health wraps rather than widening the table. */
-  .orders table.tw th.l { width: 55%; min-width: 9rem; }
-  .orders table.tw th.health { width: 45%; min-width: 12rem; }
+  /* Item and Health split the slack; Health wraps rather than widening the
+     table. The minimums leave room for a classic 15px scrollbar (Windows) at
+     1200px with Delete's Confirm open. */
+  .orders table.tw th.l { width: 55%; min-width: 8rem; }
+  .orders table.tw th.health { width: 45%; min-width: 10rem; }
   /* Beats the shared td.l wrapping, which stacked the fix buttons over the item. */
   .orders table.tw td.fix { white-space: nowrap; overflow-wrap: normal; text-align: left; }
   td.fix .btn + .btn { margin-left: var(--s1); }
