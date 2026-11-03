@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   republish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # The measurement below waits for each dispatched publisher to finish, and the
     # web build is the slow one.
     timeout-minutes: 45

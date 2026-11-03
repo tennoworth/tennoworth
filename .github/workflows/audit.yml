@@ -36,7 +36,7 @@ jobs:
   # required check permanently pending. Classify inside the workflow so every
   # PR still gets a completed gate, but irrelevant builds never start.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       # Every filter output carries the unclassified term, so a change no filter
       # recognizes makes every surface applicable without repeating that OR in
@@ -216,7 +216,7 @@ jobs:
       needs.changes.outputs.frontend_deps == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: frontend
@@ -234,12 +234,18 @@ jobs:
       # Keyed on the lockfile, which is what pins the Playwright version, and
       # restore-only on pull requests for the same scope reason setup-rust
       # documents. Reaches the cache through the develop trigger only.
+      # The OS release is in the key too: Playwright downloads a WebKit built
+      # for the runner's Ubuntu, and `install` keeps whatever the cache holds,
+      # so a 24.04 WebKit restored onto 26.04 failed to launch (libicudata.so.74).
+      - name: Read runner OS release
+        id: os-release
+        run: echo "release=$(. /etc/os-release && echo "$ID-$VERSION_ID")" >> "$GITHUB_OUTPUT"
       - name: Restore responsive-test browsers
         id: playwright-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/bun.lock') }}
+          key: ${{ runner.os }}-${{ steps.os-release.outputs.release }}-playwright-${{ hashFiles('frontend/bun.lock') }}
       - name: Install responsive-test browsers
         run: bunx playwright install --with-deps chromium webkit
       - name: Save responsive-test browsers
@@ -299,7 +305,7 @@ jobs:
       needs.changes.outputs.frontend_deps == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: frontend
@@ -325,7 +331,7 @@ jobs:
       needs.changes.outputs.rust_audit == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: rust
@@ -349,7 +355,7 @@ jobs:
       needs.changes.outputs.rust_deps == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: rust
@@ -368,7 +374,7 @@ jobs:
       needs.changes.outputs.rust_deps == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: rust
@@ -396,6 +402,17 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
           libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
           librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev patchelf
+      # The image ships several LLVMs and no unversioned clang. bindgen loads the
+      # newest libclang but takes its header paths from whichever clang-N it
+      # finds, and a mismatched pair cannot parse leptonica's <stdatomic.h>
+      # ("unknown type name 'atomic_int'"). Point both at the same release.
+      - name: Use one LLVM release for bindgen
+        run: |
+          llvm="$(ls -d /usr/lib/llvm-[0-9]* | sort -V | tail -n 1)"
+          clang="/usr/bin/clang-${llvm##*-}"
+          test -d "$llvm/lib" && test -x "$clang"
+          echo "LIBCLANG_PATH=$llvm/lib" >> "$GITHUB_ENV"
+          echo "CLANG_PATH=$clang" >> "$GITHUB_ENV"
       - name: Stage pinned overlay OCR model
         uses: ./.github/actions/stage-tessdata
       # Covers the retired Python parity gates: wfm-scrape's fixture integration
@@ -445,7 +462,7 @@ jobs:
       needs.changes.outputs.version == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -462,7 +479,7 @@ jobs:
       needs.changes.outputs.rust_deps == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     defaults:
       run:
         working-directory: rust
@@ -474,6 +491,17 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
           libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
           librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev patchelf
+      # The image ships several LLVMs and no unversioned clang. bindgen loads the
+      # newest libclang but takes its header paths from whichever clang-N it
+      # finds, and a mismatched pair cannot parse leptonica's <stdatomic.h>
+      # ("unknown type name 'atomic_int'"). Point both at the same release.
+      - name: Use one LLVM release for bindgen
+        run: |
+          llvm="$(ls -d /usr/lib/llvm-[0-9]* | sort -V | tail -n 1)"
+          clang="/usr/bin/clang-${llvm##*-}"
+          test -d "$llvm/lib" && test -x "$clang"
+          echo "LIBCLANG_PATH=$llvm/lib" >> "$GITHUB_ENV"
+          echo "CLANG_PATH=$clang" >> "$GITHUB_ENV"
       - name: cargo fmt
         run: cargo fmt --all --check
       - name: cargo clippy
@@ -485,7 +513,7 @@ jobs:
       needs.changes.outputs.market_data == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -503,7 +531,7 @@ jobs:
       needs.changes.outputs.deploy == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -556,7 +584,7 @@ jobs:
       needs.changes.outputs.instructions == 'true' ||
       needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -572,7 +600,7 @@ jobs:
   # commit that touches nothing else.
   attribution-check:
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -604,7 +632,7 @@ jobs:
       - deploy-validation
       - instruction-check
       - attribution-check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Require every applicable check to pass
         env:

@@ -83,7 +83,7 @@ jobs:
   # that is going to fail on a version mismatch should fail in 30 seconds, not
   # after two ~8-minute builds.
   preflight:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       version: ${{ steps.check.outputs.version }}
       sha: ${{ steps.check.outputs.sha }}
@@ -577,7 +577,7 @@ jobs:
   # so even this job's own download and setup steps cannot read them.
   sign:
     needs: [preflight, build-windows, build-linux]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     environment: desktop-release
@@ -666,7 +666,7 @@ jobs:
   # environment, so no build step can read it.
   publish:
     needs: [preflight, build-windows, build-linux, sign]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     environment: desktop-release
@@ -897,7 +897,7 @@ jobs:
   # the rolling manifest lets installed clients discover that version.
   desktop-latest:
     needs: [preflight, publish]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     env:

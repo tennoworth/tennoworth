@@ -48,7 +48,7 @@ jobs:
   # Keep the workflow present for every PR: job-level skipping still produces a
   # completed required gate, unlike workflow-level path filters.
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     outputs:
       desktop: ${{ steps.filter.outputs.desktop == 'true' || steps.unclassified.outputs.value == 'true' }}
     steps:
@@ -281,7 +281,7 @@ jobs:
   ui-gate:
     if: ${{ always() }}
     needs: [changes, probe-smoke, probe-smoke-linux]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - name: Require the applicable probe to pass
         env:

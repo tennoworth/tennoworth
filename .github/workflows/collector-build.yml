@@ -41,7 +41,7 @@ jobs:
     # the parse below are each things that can fail, and the recovery path cannot
     # depend on the machinery it exists to recover from.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:
