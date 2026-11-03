@@ -734,7 +734,7 @@
     {/if}
     {#if display}
       <div class="ui-segmented density-seg" role="group" aria-label="Item lists">
-        <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>Visual</button>
+        <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')} title="Item pictures: Warframe Wiki · © Digital Extremes">Visual</button>
         <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
       </div>
     {/if}

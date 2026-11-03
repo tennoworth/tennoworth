@@ -348,7 +348,6 @@
   .sfoot .feedback-trigger:hover[data-shell] { color: var(--fg); background: transparent; text-decoration: underline dotted; }
   .sfoot .ver[data-shell] { padding: 0 var(--s1); }
   /* The item pictures' source, said once here rather than on each picture. */
-  .sfoot .credit[data-shell] { margin: 0; padding: 0 var(--s1); color: var(--muted); font-size: var(--text-caption); }
 
   /* Refresh ▾ in the strip: a 24px control inside the 40px bar. */
   .refresh-trigger[data-shell] {
