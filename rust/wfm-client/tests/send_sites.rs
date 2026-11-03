@@ -146,8 +146,12 @@ fn raw_http_send_sites_are_classified() {
             1,
         ),
         ("tennoworth-desktop/src/services/market/definitions.rs", 1),
+        // First-party item pictures from tennoworth.app, cached on disk.
+        ("tennoworth-desktop/src/services/market/art.rs", 1),
         ("wfm-scrape/src/ingest/catalog.rs", 1),
         ("wfm-scrape/src/ingest/transport.rs", 1),
+        // Warframe wiki thumbnails: paced, budgeted and conditional (art.rs).
+        ("wfm-scrape/src/art.rs", 1),
     ];
     fn check(directory: &Path, root: &Path, allowed: &[(&str, usize)]) {
         for entry in std::fs::read_dir(directory).unwrap() {
