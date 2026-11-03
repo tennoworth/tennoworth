@@ -54,6 +54,25 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.116 - 2026-11-03
+
+# 🎨 TennoWorth Desktop 0.8.116
+
+TennoWorth Desktop 0.8.116 is ready.
+
+This release removes sideways scrolling from tables: every table now fits the window, hides its least important columns when space runs out, and tells you which ones it hid. It also moves the item-picture credit next to the setting that turns pictures on.
+
+## Changelog (2)
+
+### Appearance
+
+- **Tables fit the window without scrolling sideways** Every table first tightens and wraps its text. If that is not enough, it hides its least important columns and names them in a line under the table. Item, Own, the price and Stack value always stay, and widening the window brings hidden columns back. <!-- app-note {"id":"tables-fit-without-scrolling","kind":"improved","supersedes":["tables-fit-window"]} -->
+- **The picture credit moved to Settings** The Warframe Wiki credit for item pictures now sits under Settings › Item lists, beside the Visual and Compact switch, instead of in the sidebar. <!-- app-note {"id":"picture-credit-in-settings","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.115 - 2026-11-03
 
 # 🎨 TennoWorth Desktop 0.8.115
