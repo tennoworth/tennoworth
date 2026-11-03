@@ -2,6 +2,7 @@
 import type { DomainResult } from '../selling/domain-result.svelte';
 import type { RelicPlanEntry } from '../../contracts/generated/domain';
 import { plat, wfmItemUrl } from '../../ui/format';
+import ItemArt from '../../ui/ItemArt.svelte';
 import { REFINE_WORTH_IT } from '../../domain/relic-ev';
 import type { RelicDecision } from '../../contracts/generated/domain';
   let { relicShowAll = $bindable(false), relicResult, relicSurfaceAge, relicPlan, onretry }: {
@@ -16,7 +17,12 @@ let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_
 // Every figure is a SOLO crack; a squad of four changes the maths.
 const RUNGS = ['intact', 'exceptional', 'flawless', 'radiant'] as const;
 let ownedTotal = $derived(relicPlan.reduce((n, p) => n + p.owned, 0));
-let expectedTotal = $derived(relicPlan.reduce((n, p) => n + p.epp_owned, 0));
+// What following a row's decision is worth: selling intact where that clears
+// more, otherwise cracking. A Sell intact row priced at its crack value
+// undercounted the advice it gave, and the total with it.
+const sellsIntact = (p: RelicPlanEntry) => p.decision?.verdict === 'sell-intact' && p.sell_now > 0;
+const advisedValue = (p: RelicPlanEntry) => (sellsIntact(p) ? p.sell_now * p.owned : p.epp_owned);
+let expectedTotal = $derived(relicPlan.reduce((n, p) => n + advisedValue(p), 0));
 function rung(decision: RelicDecision | null | undefined, refinement: string) {
   return decision?.ladder.find((l) => l.refinement === refinement) ?? null;
 }
@@ -62,7 +68,7 @@ function verdictText(decision: RelicDecision): string {
           <div data-shell class="vh-end">
             <div data-shell class="ui-totals" role="group" aria-label="Relics summary">
               <div data-shell class="cell"><span data-shell class="k">Relics</span><span data-shell class="v">{relicPlan.length} · ×{ownedTotal}</span></div>
-              <div data-shell class="cell"><span data-shell class="k">Expected</span><span data-shell class="v" title="Expected value of cracking every relic you own; any single crack varies.">≈{plat(expectedTotal)}<span data-shell class="unit">p</span></span></div>
+              <div data-shell class="cell"><span data-shell class="k">Expected</span><span data-shell class="v" title="Following each relic's decision: selling intact where that clears more, cracking the rest. Refining gains are not included; any single crack varies.">≈{plat(expectedTotal)}<span data-shell class="unit">p</span></span></div>
             </div>
           </div>
         {/if}
@@ -88,7 +94,7 @@ function verdictText(decision: RelicDecision): string {
             {#each relicVisible as p (p.relic_slug)}
               {@const max = ladderMax(p.decision)}
               <tr data-shell>
-                <td data-shell class="l relic-name"><a data-shell href={wfmItemUrl(p.relic_slug)} target="_blank" rel="noopener noreferrer">{p.relic_name}</a></td>
+                <td data-shell class="l relic-name"><span class="item-id"><ItemArt slug={p.relic_slug} /><a data-shell href={wfmItemUrl(p.relic_slug)} target="_blank" rel="noopener noreferrer">{p.relic_name}</a></span></td>
                 <td data-shell>×{p.owned}</td>
                 <td data-shell class="l"><span data-shell class="tag solid">{verdictWord(p.decision)}</span></td>
                 {#each RUNGS as refinement (refinement)}
@@ -98,7 +104,7 @@ function verdictText(decision: RelicDecision): string {
                     {#if r}<span data-shell class="lv">{r.ev.toFixed(1)}</span><span data-shell class="lbar" aria-hidden="true"><i data-shell style="width:{Math.max(4, (r.ev / max) * 100)}%"></i></span>{:else}<span data-shell class="muted">-</span>{/if}
                   </td>
                 {/each}
-                <td data-shell class="price" title="Expected value of cracking every one you own; any single crack varies.">≈{plat(p.epp_owned)}<span data-shell class="unit">p</span></td>
+                <td data-shell class="price" title={sellsIntact(p) ? `Selling all ${p.owned} intact at ${plat(p.sell_now)}p each.` : 'Expected value of cracking every one you own; any single crack varies.'}>≈{plat(advisedValue(p))}<span data-shell class="unit">p</span></td>
                 <td data-shell class:bad-text={p.sell_now > p.epp} title="What this relic clears at sold intact on WFM, no cracking. When this beats the crack EV, selling wins.">{#if p.sell_now > 0}{plat(p.sell_now)}<span data-shell class="unit">p ea</span>{:else}<span data-shell class="muted">-</span>{/if}</td>
                 <td data-shell class="l why">
                   {#if p.decision}{verdictText(p.decision)}{/if}

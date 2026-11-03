@@ -19,7 +19,7 @@ import { fileURLToPath } from 'url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// The one directive that differs between the hosted and desktop builds.
+// The two directives that differ between the hosted and desktop builds.
 // The hosted site is informational: everything it loads is baked same-origin,
 // so there are no loopback or third-party connect origins.
 const HOSTED_CONNECT_SRC = "connect-src 'self'";
@@ -28,6 +28,11 @@ const HOSTED_CONNECT_SRC = "connect-src 'self'";
 // definitions and usage requests to tennoworth.app are made in Rust, and the
 // webview only fetches its own bundled files.
 const DESKTOP_CONNECT_SRC = "connect-src 'self' ipc://localhost http://ipc.localhost";
+// Item pictures: the site serves them same-origin (/item-art/). The desktop
+// asks its own `art` protocol (Rust caches them from tennoworth.app), which
+// Tauri exposes as `art://localhost` and, on Windows, `http://art.localhost`.
+const HOSTED_IMG_SRC = "img-src 'self' data:";
+const DESKTOP_IMG_SRC = "img-src 'self' data: art://localhost http://art.localhost";
 
 const DIRECTIVES = [
   "default-src 'self'",
@@ -36,7 +41,7 @@ const DIRECTIVES = [
   HOSTED_CONNECT_SRC,
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  HOSTED_IMG_SRC,
   "font-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -47,8 +52,12 @@ const DIRECTIVES = [
 const full = DIRECTIVES.join('; ');
 const metaDirectives = DIRECTIVES.filter((d) => !d.startsWith('frame-ancestors'));
 
-// The desktop header: same directives with the connect-src swapped.
-const desktop = DIRECTIVES.map((d) => (d === HOSTED_CONNECT_SRC ? DESKTOP_CONNECT_SRC : d)).join('; ');
+// The desktop header: same directives with connect-src and img-src swapped.
+const DESKTOP_SWAPS = new Map([
+  [HOSTED_CONNECT_SRC, DESKTOP_CONNECT_SRC],
+  [HOSTED_IMG_SRC, DESKTOP_IMG_SRC],
+]);
+const desktop = DIRECTIVES.map((d) => DESKTOP_SWAPS.get(d) ?? d).join('; ');
 
 // The meta tag's content spans multiple indented lines; both the source and the
 // Vite-built index.html keep that formatting, so one regex rewrites either.

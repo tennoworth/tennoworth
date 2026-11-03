@@ -5,6 +5,10 @@ name: collector-build
 # classification and publication they share.
 on:
   workflow_call:
+    secrets:
+      COLLECTOR_SIGNING_KEY:
+        description: Collector signing key from the main-only environment.
+        required: true
     inputs:
       crate:
         description: tennoworth-collectors binary that is published.
@@ -41,7 +45,7 @@ jobs:
     # the parse below are each things that can fail, and the recovery path cannot
     # depend on the machinery it exists to recover from.
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     outputs:

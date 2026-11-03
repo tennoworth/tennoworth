@@ -148,7 +148,7 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
         : null,
     trade_session_state: {
       set_recipes: scenario === 'session-sets' ? { akbolto_prime_set: sampleRecipe } : {},
-      allowance: { remaining: scenario === 'zero-trades' ? 0 : scenario === 'unknown-trades' ? null : 24,
+      allowance: { remaining: scenario === 'zero-trades' ? 0 : scenario === 'few-trades' ? 3 : scenario === 'unknown-trades' ? null : 24,
         mastery_rank: scenario === 'unknown-trades' ? null : 24, observed_at: now - 120, utc_day: Math.floor(now / 86400), snapshot_id: 1,
         confidence: scenario === 'estimated-trades' ? 'estimated' : scenario === 'unknown-trades' ? 'unknown' : 'scanned',
         reason: null, monitoring: true },
@@ -181,6 +181,11 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       return null;
     }
     if (command === 'wfm_logout') { responses.wfm_auth_status = { logged_in: false, unlocked: false }; return null; }
+    // The trade samples know bulk status only while warframe.market is unlocked, as the app does.
+    if (command === 'trade_session_state' && ['few-trades', 'zero-trades', 'estimated-trades'].includes(scenario)) {
+      const unlocked = (responses.wfm_auth_status as { unlocked: boolean }).unlocked;
+      return { ...structuredClone(responses.trade_session_state as object), supported_slugs: unlocked ? [...owned.keys(), 'arcane_energize'] : null };
+    }
     if (command === 'protection_state') {
       const unknown = scenario === 'protection-error' || !(responses.wfm_auth_status as { unlocked: boolean }).unlocked;
       const listed = new Map((responses.fetch_orders as Array<{quantity:number,slug:string}>).map(row => [row.slug, row.quantity]));

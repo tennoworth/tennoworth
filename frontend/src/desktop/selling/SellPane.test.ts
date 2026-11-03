@@ -67,6 +67,45 @@ describe('SellPane', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /clear/ })).toBeTruthy());
   });
 
+  it('splits the picks where today\'s trades run out, and not when the allowance is unknown', async () => {
+    const allowance = { remaining: 3, mastery_rank: 12, observed_at: 1, utc_day: 1, snapshot_id: 1, confidence: 'scanned' as const, reason: null, monitoring: true };
+    // Two non-bulk copies take 2 trades; nine bulk copies take 2 more, past the 3 left.
+    const results = [row(), row({ key: 'k2', slug: 'arcane_energize', name: 'Arcane Energize', sellable: 9, sell_score: 40 })];
+    renderPane({ results, tradeAllowance: allowance, bulkSlugs: new Set(['arcane_energize']) });
+    expect(screen.getByText(/Uses 2 of 3 trades today · 1 after the reset/)).toBeTruthy();
+    expect(screen.getByText(/After the reset/)).toBeTruthy();
+    expect(screen.getAllByText(/^2 trades · \d+p per trade$/)).toHaveLength(2);
+    // Hiding the first pick frees its trades, so the second now fits today.
+    await fireEvent.click(screen.getByRole('button', { name: 'Hide Accelerated Blast for this session' }));
+    await waitFor(() => expect(screen.queryByText(/After the reset/)).toBeNull());
+    cleanup();
+    renderPane({ results, tradeAllowance: { ...allowance, remaining: null }, bulkSlugs: new Set(['arcane_energize']) });
+    expect(screen.queryByText(/After the reset/)).toBeNull();
+    expect(screen.queryByText(/trades left today/)).toBeNull();
+    cleanup();
+    // Bulk status unknown (warframe.market locked): ranges, and no guessed divider.
+    renderPane({ results, tradeAllowance: allowance, bulkSlugs: null });
+    expect(screen.getByText('2–9 trades')).toBeTruthy();
+    expect(screen.queryByText(/After the reset/)).toBeNull();
+    expect(screen.getByText('3 trades left today').closest('[title]')?.getAttribute('title')).toMatch(/count each pick’s trades exactly/);
+  });
+
+  it('lists the picks after the reset in one batch and draws the day as a gauge', async () => {
+    const allowance = { remaining: 3, mastery_rank: 12, observed_at: 1, utc_day: 1, snapshot_id: 1, confidence: 'scanned' as const, reason: null, monitoring: true };
+    const later = [row({ key: 'k2', slug: 'arcane_energize', name: 'Arcane Energize', sellable: 9, sell_score: 40 }), row({ key: 'k3', slug: 'galvanized_chamber', name: 'Galvanized Chamber', sellable: 1, sell_score: 30 })];
+    const openListingFlow = vi.fn();
+    const view = renderPane({ results: [row(), ...later], tradeAllowance: allowance, bulkSlugs: new Set(['arcane_energize']), openListingFlow });
+    await fireEvent.click(screen.getByRole('button', { name: 'List these 2 now' }));
+    expect(openListingFlow).toHaveBeenCalledWith(later);
+    // 12 trades a day: the picks use 2, 1 stays free, 9 are already spent.
+    const count = (kind: string) => view.container.querySelectorAll(`.trade-gauge i.${kind}`).length;
+    expect([count('plan'), count('free'), count('spent')]).toEqual([2, 1, 9]);
+    cleanup();
+    // Without the rank the day's size is unknown, so no gauge.
+    const unranked = renderPane({ results: [row(), ...later], tradeAllowance: { ...allowance, mastery_rank: null }, bulkSlugs: new Set(['arcane_energize']) });
+    expect(unranked.container.querySelector('.trade-gauge')).toBeNull();
+  });
+
   it('hides a pick behind an Undo receipt that keeps its slot', async () => {
     renderPane();
     expect(screen.getByRole('button', { name: 'List Accelerated Blast on WFM' })).toBeTruthy();
@@ -120,4 +159,14 @@ it('shows native failure as unavailable values with a retry action', async () =>
   expect(summary.textContent).toContain('Unavailable');
   await fireEvent.click(screen.getByRole('button', { name: 'Retry calculations' }));
   expect(retry).toHaveBeenCalledOnce();
+});
+
+it('shows the filtered sellable count against the whole inventory', () => {
+  renderPane({ allSellable: 480 });
+  expect(screen.getByRole('group', { name: 'Sell summary' }).textContent).toMatch(/Sellable\s*\d+ of 480/);
+});
+
+it('hides the total when the filters show every sellable item', () => {
+  renderPane({ allSellable: null });
+  expect(screen.getByRole('group', { name: 'Sell summary' }).textContent).not.toMatch(/ of \d/);
 });

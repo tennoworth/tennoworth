@@ -150,7 +150,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
   <Links />
   <footer data-shell class="sitefoot">
     <KeyboardNavigation {store} />
-    <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
+    <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us. Item images from the Warframe Wiki, © Digital Extremes.</span>
     {#if market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
     <a data-shell href="#trust">Trust &amp; safety</a>
     <a data-shell href={reportUrl} target="_blank" rel="noopener noreferrer">Report a problem</a>

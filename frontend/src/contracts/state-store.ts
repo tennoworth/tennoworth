@@ -35,7 +35,9 @@ export type SettingKey =
   /** Calendar view and hidden event kinds (JSON, features/calendar). */
   | 'calendar'
   /** User-selected character shortcuts; keyboard layout data is never persisted. */
-  | 'keyboard';
+  | 'keyboard'
+  /** How item lists draw: 'visual' (item art, roomier rows) or 'compact'. */
+  | 'display';
 
 
 /** The scalar settings every build persists. */

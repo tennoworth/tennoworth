@@ -71,6 +71,22 @@ pub fn build(
         path_to_info_complete,
     } = catalog::fetch(http.as_ref(), fixtures_dir, &catalog_out, &prior)?;
 
+    // The item → wiki-file list for `art`, taken from the copy just fetched so
+    // that step never downloads the 44 MB list again. Private: beside the CSV,
+    // not published. A failed fetch keeps the previous list.
+    if fixtures_dir.is_none() {
+        if let Some(raw) = wfstat_raw.as_ref() {
+            let data = csv_path
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            match crate::art::write_sources(&data.join(crate::art::SOURCES_FILE), raw) {
+                Ok(n) => eprintln!("  {n} item-art sources saved"),
+                Err(e) => eprintln!("  warning: item-art sources: {e}"),
+            }
+        }
+    }
+
     // ---- Digital Extremes first-party ingest -------------------------------
     // Runs after path_to_info because every DE join resolves `/Lotus/...`
     // through it. Costs 490 bytes on a cycle where nothing changed: the export

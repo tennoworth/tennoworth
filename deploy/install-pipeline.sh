@@ -195,6 +195,7 @@ $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
 $SCP -q "$ARTIFACT" "$HOST:$STAGING/tennoworth-pipeline"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/bin/run-scrape.sh deploy/systemd/tennoworth-scrape.service deploy/systemd/tennoworth-scrape.timer "$HOST:$STAGING/"
+$SCP -q deploy/systemd/tennoworth-art.service deploy/systemd/tennoworth-art.timer "$HOST:$STAGING/"
 $SCP -q deploy/bin/host-check.sh deploy/systemd/tennoworth-host-check.service deploy/systemd/tennoworth-host-check.timer "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
@@ -209,6 +210,8 @@ install -m 0755 "$STAGING/wfm-policy" "$RELEASES/$REVISION/wfm-policy"
 install -m 0755 "$STAGING/run-scrape.sh" "$RELEASES/$REVISION/run-scrape.sh"
 install -m 0644 "$STAGING/tennoworth-scrape.service" "$RELEASES/$REVISION/tennoworth-scrape.service"
 install -m 0644 "$STAGING/tennoworth-scrape.timer" "$RELEASES/$REVISION/tennoworth-scrape.timer"
+install -m 0644 "$STAGING/tennoworth-art.service" "$RELEASES/$REVISION/tennoworth-art.service"
+install -m 0644 "$STAGING/tennoworth-art.timer" "$RELEASES/$REVISION/tennoworth-art.timer"
 install -m 0755 "$STAGING/host-check.sh" "$RELEASES/$REVISION/host-check.sh"
 install -m 0644 "$STAGING/tennoworth-host-check.service" "$RELEASES/$REVISION/tennoworth-host-check.service"
 install -m 0644 "$STAGING/tennoworth-host-check.timer" "$RELEASES/$REVISION/tennoworth-host-check.timer"
@@ -255,6 +258,8 @@ install -m 0755 "$RELEASES/$REVISION/wfm-policy" "/srv/wfm/bin/wfm-policy"
 install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
 install -m 0644 "$RELEASES/$REVISION/tennoworth-scrape.service" /etc/systemd/system/tennoworth-scrape.service
 install -m 0644 "$RELEASES/$REVISION/tennoworth-scrape.timer" /etc/systemd/system/tennoworth-scrape.timer
+install -m 0644 "$RELEASES/$REVISION/tennoworth-art.service" /etc/systemd/system/tennoworth-art.service
+install -m 0644 "$RELEASES/$REVISION/tennoworth-art.timer" /etc/systemd/system/tennoworth-art.timer
 install -m 0755 "$RELEASES/$REVISION/host-check.sh" "/srv/wfm/host-check.sh"
 install -m 0644 "$RELEASES/$REVISION/tennoworth-host-check.service" /etc/systemd/system/tennoworth-host-check.service
 install -m 0644 "$RELEASES/$REVISION/tennoworth-host-check.timer" /etc/systemd/system/tennoworth-host-check.timer
@@ -316,6 +321,9 @@ RECORD
 restore_timer
 
 $SSH "$HOST" "systemctl enable --now tennoworth-host-check.timer"
+# Item pictures (tennoworth-pipeline art): daily, and harmless before the first
+# sweep - it exits when market.json or the sources list is not there yet.
+$SSH "$HOST" "systemctl enable --now tennoworth-art.timer"
 # The dashboard's pipeline jobs. The job path template ships with the
 # dashboard, so only a box that has it gets the instances.
 $SSH "$HOST" "if [ -f /etc/systemd/system/tennoworth-job@.path ]; then systemctl enable --now tennoworth-job@scrape.path tennoworth-job@host-check.path; fi"

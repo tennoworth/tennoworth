@@ -5,6 +5,7 @@
   import { useDesktopServices } from '../shell/desktop-context';
   import { createOrdersController, type OrdersInput } from './controller.svelte';
   import Toast from '../../ui/Toast.svelte';
+  import ItemArt from '../../ui/ItemArt.svelte';
   import { LIQUID_VOL } from '../../domain/sell-priority';
   import { MAX_PLATINUM } from '../../domain/limits';
   let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, marketStaleness = null, onsummary, banner, active = true, activity }: OrdersInput & { banner?: Snippet; activity?: ActivityLog } = $props();
@@ -136,29 +137,20 @@
     <div class="line"><span class="exp">No active listings.</span></div>
   {:else if controller.orders.length > 0}
     <div class="scroll">
-      <table class="tw fixed">
-        <colgroup>
-          <col />
-          <col style="width:6.5rem" />
-          <col style="width:4rem" />
-          <col style="width:3rem" />
-          <col style="width:9rem" />
-          <col style="width:5.5rem" />
-          <col style="width:5.5rem" />
-          <col style="width:15rem" />
-          <col style="width:5rem" />
-          <col style="width:4.5rem" />
-        </colgroup>
+      <!-- Sized by content: numbers and buttons take what they need, Item and
+           Health share the rest, so the table fits the panel instead of
+           scrolling its last column out of view. -->
+      <table class="tw">
         <thead>
           <tr>
             <th class="l">Item</th>
-            <th class="l"><span class="sr-only">Fix</span></th>
+            <th class="fix"><span class="sr-only">Fix</span></th>
             <th>Type</th>
             <th>Qty</th>
             <th>Lot price</th>
             <th title="Lowest other online ask for this exact tier (live check)">Live ask</th>
             <th title="Highest online bid for this exact tier (live check)">Live bid</th>
-            <th class="l">Health</th>
+            <th class="l health">Health</th>
             <th>Visible</th>
             <th></th>
           </tr>
@@ -169,7 +161,7 @@
             {@const t = controller.liveTop.quotes.size > 0 ? controller.liveForOrder(o) : null}
             {@const issues = controller.queue.filter((q) => q.id === o.id)}
             <tr class:busy class:attn={issues.length > 0} class:confirming={controller.confirmId === o.id || (controller.healthConfirmId === o.id && issues.length > 0)}>
-              <td class="l">{controller.itemName(o)}</td>
+              <td class="l"><span class="item-id">{#if o.slug}<ItemArt slug={o.slug} />{/if}<span>{controller.itemName(o)}</span></span></td>
               <td class="l act fix">
                 {#each issues as q (q.key)}
                   {#if q.kind === 'health'}
@@ -274,13 +266,18 @@
   .chip.warn { color: var(--warn); border-color: var(--warn); }
   .chip.bad { color: var(--bad); border-color: var(--bad); }
   .line.bad { color: var(--bad); }
-  /* Fixed columns total 58rem; the floor leaves Item at least 14rem before the panel scrolls. */
-  .orders table { min-width: 72rem; }
   /* A row with something to fix carries the caution edge; the words in the
      Health cell say what, the edge only repeats it. */
   tr.attn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
-  td.fix { white-space: nowrap; }
+  /* Item and Health split the slack; Health wraps rather than widening the
+     table. The minimums leave room for a classic 15px scrollbar (Windows) at
+     1200px with Delete's Confirm open. */
+  .orders table.tw th.l { width: 55%; min-width: 8rem; }
+  .orders table.tw th.health { width: 45%; min-width: 10rem; }
+  /* Beats the shared td.l wrapping, which stacked the fix buttons over the item. */
+  .orders table.tw td.fix { white-space: nowrap; overflow-wrap: normal; text-align: left; }
   td.fix .btn + .btn { margin-left: var(--s1); }
+  .orders table.tw td.act { white-space: nowrap; }
   td.health-cell { font-family: var(--font-body); font-size: var(--text-caption); white-space: normal; color: var(--muted); }
   td.health-cell .issue { display: block; }
   td.health-cell .issue.warn { color: var(--warn); }

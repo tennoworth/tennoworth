@@ -1026,7 +1026,18 @@ mod tests {
                 .is_some_and(|exe| exe.starts_with(stand_in_dir()))
     }
 
-    /// A stand-in game: a copy of `sleep` named like the Proton executable.
+    /// The stand-in game's body: it idles until killed. Runs only inside a
+    /// renamed copy of this test binary, started by the test below.
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "runs only as the stand-in game process"]
+    fn stand_in_game_idles() {
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
+
+    /// A stand-in game: a copy of this test binary named like the Proton
+    /// executable. Not a copy of `sleep`: where that is a multi-call binary
+    /// (uutils coreutils, Ubuntu 26.04) a renamed copy refuses to run.
     /// Finding it, keeping it through the single-pid fast path, and losing it
     /// when it exits is the contract presence and the scanner rely on.
     #[cfg(target_os = "linux")]
@@ -1035,8 +1046,13 @@ mod tests {
         let dir = stand_in_dir();
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("Warframe.x64.exe");
-        std::fs::copy("/bin/sleep", &exe).unwrap();
-        let mut game = std::process::Command::new(&exe).arg("30").spawn().unwrap();
+        std::fs::copy(std::env::current_exe().unwrap(), &exe).unwrap();
+        let mut game = std::process::Command::new(&exe)
+            .args(["--ignored", "--exact", "scan::tests::stand_in_game_idles"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
 
         let mut sys = System::new();
         let mut last = None;

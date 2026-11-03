@@ -53,6 +53,45 @@ import type { PresenceController } from '../presence/presence.svelte';
     };
   }
 
+  // The workspace strip stays one line at every desktop width and in every
+  // state. When it would wrap, it hides its least useful words a step at a
+  // time (fit-1 first); they stay readable to assistive technology, and the
+  // Refresh menu repeats the scan name. The last step stops wrapping and lets
+  // the activity message shorten, unless even that would clip. Narrow
+  // windows keep the stacked strip.
+  const FIT_STEPS = 4;
+  function fitOneLine(node: HTMLElement, enabled: boolean) {
+    const wide = matchMedia('(min-width: 901px)');
+    let frame = 0;
+    const fit = () => {
+      frame = 0;
+      if (!enabled || !wide.matches) { delete node.dataset.fit; return; }
+      const line = parseFloat(getComputedStyle(node).minHeight) + 1.5;
+      let step = 0;
+      node.dataset.fit = '0';
+      while (step < FIT_STEPS && node.getBoundingClientRect().height > line) node.dataset.fit = String(++step);
+      // Enlarged text can leave even the last step too wide; wrapping then
+      // beats clipping status off the edge.
+      if (step === FIT_STEPS && node.scrollWidth > node.clientWidth + 1) node.dataset.fit = String(FIT_STEPS - 1);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(fit); };
+    const resize = new ResizeObserver(schedule);
+    resize.observe(node);
+    const content = new MutationObserver(schedule);
+    content.observe(node, { childList: true, subtree: true, characterData: true });
+    wide.addEventListener('change', schedule);
+    void document.fonts?.ready.then(schedule);
+    fit();
+    return {
+      update(value: boolean) { enabled = value; fit(); },
+      destroy() {
+        resize.disconnect(); content.disconnect(); wide.removeEventListener('change', schedule);
+        if (frame) cancelAnimationFrame(frame);
+        delete node.dataset.fit;
+      },
+    };
+  }
+
   let moreOpen = $state(false);
   let moreTrigger = $state<HTMLButtonElement>();
   export function focusMore() { moreTrigger?.focus(); }
@@ -102,7 +141,7 @@ import type { PresenceController } from '../presence/presence.svelte';
        inventory age, market age, orders to fix, Baro, WFM session. Rare
        inventory actions (Export / Restore / Clear) live one click deeper in
        the Refresh menu. -->
-  <header data-shell class="statusbar" class:shell-strip={inShell} use:headerClearance={inShell}>
+  <header data-shell class="statusbar" class:shell-strip={inShell} use:headerClearance={inShell} use:fitOneLine={inShell}>
     <div data-shell class="brand">
       <h1 data-shell>TennoWorth</h1>
       {#if !inShell}<span data-shell class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
@@ -111,12 +150,12 @@ import type { PresenceController } from '../presence/presence.svelte';
       <div data-shell class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
         {#if inventory.inventoryName}
           <span data-shell class="dot {inventory.refreshFailed ? 'stale' : inventoryFreshness}" role="img" aria-label={inventory.refreshFailed ? 'Inventory refresh failed' : `Inventory recorded ${inventoryStaleness ?? 'at an unknown time'}`}></span>
-          <span data-shell>{inventory.source === 'import' ? 'Imported' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Saved scan' : 'Inventory'}</span>
-          <b data-shell class="file" title={inventory.inventoryName}>{inventory.inventoryName}</b>
+          <span data-shell class="fit-2">{inventory.source === 'import' ? 'Imported' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Saved scan' : 'Inventory'}</span>
+          <b data-shell class="file fit-1" title={inventory.inventoryName}>{inventory.inventoryName}</b>
           {#if inventoryTimestamp}
-            <time data-shell datetime={inventoryTimestamp} title={new Date(inventoryTimestamp).toLocaleString()}>{shortStamp(inventoryTimestamp)} · {inventoryStaleness}</time>
+            <time data-shell datetime={inventoryTimestamp} title={new Date(inventoryTimestamp).toLocaleString()}><span data-shell class="fit-2">{shortStamp(inventoryTimestamp)} · </span>{inventoryStaleness}</time>
           {:else}<span data-shell>Timestamp unavailable</span>{/if}
-          {#if inventory.refreshFailed}<span data-shell class="note bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell class="note">No tradeable items found; showing saved inventory</span>{/if}
+          {#if inventory.refreshFailed}<span data-shell class="note bad" title="Last refresh failed">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell class="note" title="No tradeable items found; showing saved inventory">No tradeable items found; showing saved inventory</span>{/if}
         {:else}
           <span data-shell class="dot" aria-hidden="true"></span>
           <span data-shell>{inventory.restored ? 'No inventory yet' : 'Loading saved scan…'}</span>
@@ -164,13 +203,13 @@ import type { PresenceController } from '../presence/presence.svelte';
     
     <div data-shell class="cell">
       {#if marketFreshness === 'stale'}
-        <span data-shell>Market</span>
+        <span data-shell class="fit-3">Market</span>
         <span data-shell class="tag stale">Stale · {marketStaleness}</span>
       {:else}
         <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-        <span data-shell>Market</span>
+        <span data-shell class="fit-3">Market</span>
         <b data-shell>{marketStaleness ?? '-'}</b>
-        {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
+        {#if marketFreshness !== 'unknown'}<span data-shell class="fit-1">· {marketFreshness}</span>{/if}
       {/if}
     </div>
     <!-- In the workspace, orders to fix and Baro's countdown are sidebar
@@ -208,11 +247,11 @@ import type { PresenceController } from '../presence/presence.svelte';
       {#if activity?.current}
         <div data-shell class="cell act {activity.current.tone}" role="status" aria-live="polite">
           <span data-shell class="dot" aria-hidden="true"></span>
-          <span data-shell>{activity.current.label}</span>
+          <span data-shell class="act-label" title={activity.current.label}>{activity.current.label}</span>
         </div>
       {/if}
       <div data-shell class="cell end">
-        <span data-shell>WFM</span>
+        <span data-shell class="fit-3">WFM</span>
         {#if listing.wfmStatus && !listing.wfmStatus.unlocked}
           <!-- The state, then the click that moves it on, so the step is visible. -->
           <span data-shell class="wfm-state">{listing.wfmStatus.logged_in ? 'Locked' : 'Signed out'}</span>
@@ -222,7 +261,7 @@ import type { PresenceController } from '../presence/presence.svelte';
         {:else}
           <b data-shell>{wfmLabel}</b>
         {/if}
-        {#if listing.ordersSummary}<span data-shell>· {listing.ordersSummary.live} live</span>{/if}
+        {#if listing.ordersSummary}<span data-shell class="fit-2">· {listing.ordersSummary.live} live</span>{/if}
       </div>
     {/if}
   </header>

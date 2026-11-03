@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh item pictures from the Warframe wiki once a day
+
+[Timer]
+OnCalendar=*-*-* 04:20:00 UTC
+# Spread over the hour so we are not a fixed-time load on the wiki.
+RandomizedDelaySec=60m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

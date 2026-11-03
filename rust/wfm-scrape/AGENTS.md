@@ -101,6 +101,18 @@ The fixture regression gates in `tests/` (`build_gate`, `scrape_gate`,
 `tests/fixtures/{scrape,build}` - cargo rebuilds the binary first, so a stale
 one cannot green them.
 
+`art` (`src/art.rs`) keeps the item pictures the site and the desktop show. It
+reads `market.json` and `item-art-sources.json` (which a live `build` saves
+beside the CSV from the warframestat list it already fetched), asks the
+Warframe wiki for 64px thumbnails, stores them content-named under
+`<publish>/item-art/`, and writes `<publish>/item-art.json` (slug → path, plus
+the credit line). The wiki is someone else's site, and the art Digital
+Extremes': keep the request pattern polite - `/images/thumb/` paths only, one
+request a second, a per-run budget, conditional rechecks after a month, misses
+retried after a month, and a 429 or server error ends the run. It runs from
+its own daily `tennoworth-art.timer`, never the sweep. Credit the source once,
+in the app's and site's footers, not on each picture.
+
 `--stats-cache <FILE> --stats-interval <6h>` (`src/scrape/stats_cache.rs`) reuses an
 item's statistics between sweeps while its book is still read every sweep. It
 refreshes on the policy that replay validated: first sight, an unusable cached

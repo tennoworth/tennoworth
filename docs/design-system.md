@@ -36,6 +36,10 @@ Warframe. Reduce decision time, not increase time spent managing the app.
 - Use compact analytical layouts, square edges, dotted secondary dividers,
   and restrained filled title rails. Avoid ornamental card grids, rounded
   pills, decorative gradients, glows, and entrance animations.
+- Depth is a flat offset: outer windows (panels, dialogs, menus) cast a 6px
+  `--shadow-offset` shadow down and right, with no blur. A panel nested in
+  another stays flat. A filled square is the one marker shape: it leads view
+  and rail titles, the active nav item and the hovered or focused row.
 - Give each task surface a clear heading, relevant context, and an obvious
   primary action. Use filled emphasis selectively; secondary actions are
   quieter but remain legible and discoverable.
@@ -55,7 +59,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 |---|---|---|
 | Surfaces | `--bg`, `--panel`, `--panel-2` | Page, panel, and secondary surface |
 | Text | `--fg`, `--muted` | Primary and supporting readable content |
-| Decoration | `--faint`, `--hairline`, `--grid`, `--hatch` | Nonessential ornament only; `--faint` never colours readable text, missing-data dashes included |
+| Decoration | `--faint`, `--hairline`, `--dot`, `--grid`, `--hatch` | Nonessential ornament only; `--faint` never colours readable text, missing-data dashes included |
 | Boundaries | `--border`, `--rule` | Solid outer outlines, dotted inner dividers |
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
 | Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted`, `--rail-edge` | Panel, card, FAQ and dialog title rails. Light: the ink bar. Dark: a raised `--panel-2` band under a 2px rag rule, because the ink fill is reserved for selected state |
@@ -65,7 +69,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--text-statement`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
 | Rhythm | `--s1` through `--s6`, `--inset`, `--gutter`, `--stack`, `--cell` | Shared spacing and contextual insets |
 | Density | `--ctl-xs`, `--ctl`, `--ctl-lg`, `--row`, `--row-cf`, `--head`, `--rail`, `--bar`, `--strip` | Baseline sizes, not clipping constraints |
-| Shape and layering | `--radius-*`, `--shadow-pop`, `--scrim` | Square active-theme shapes and restrained overlay separation |
+| Shape and layering | `--radius-*`, `--shadow-offset`, `--shadow-pop`, `--scrim` | Square active-theme shapes and restrained overlay separation |
 | Stacking | `--layer-chrome`, `--layer-menu`, `--layer-popover`, `--layer-modal`, `--layer-toast` | Header, menus, floating panels, review overlays, and notifications |
 
 - IBM Plex Sans Condensed (`--font-ui`) is for headings and short labels. Uppercase and
@@ -147,12 +151,22 @@ either its comparable totals in a `.ui-totals` strip or its primary action
 rather than stretching to opposite window edges. The lede wraps before the end slot does. A view
 does not hide its description in a hover-only info mark.
 
-In the workspace the status strip holds to one line on wide windows: the scan
-cell takes the slack and a long scan name or status note wraps inside its own
-box. The scan name stops at two lines with an ellipsis, and the Refresh menu
-shows it in full; a name free to wrap further grew the strip from 48 to 64px
-when My orders added its live count. When the cells still do not fit, a whole cell moves to a second line; a
-cell never shrinks below its content and paints over its neighbour. Orders to
+In the workspace the status strip is one line at every sidebar width (above
+900px) and in every state; a strip that broke onto a second line looked like a
+layout fault. The scan cell takes the slack, and a long scan name or status note
+stops at two lines inside the strip's own height. When the cells still do not
+fit, the strip sheds words in steps (`data-fit`, set by StatusStrip): first the
+scan name and the market's freshness word, then the absolute scan time, the
+source label and the live order count, then the Market and WFM labels. Each
+stays in the accessibility tree, the status dots carry freshness, and the
+Refresh menu repeats the scan name. The last step stops wrapping and lets the
+status note and the activity message end in an ellipsis, with the full text in
+the tree; when even that would clip (enlarged text), the strip wraps instead.
+This is the one intentional exception to strips growing vertically.
+The desktop window's minimum width is 960px, where the strip's fullest state
+still fits; the narrow stacked strip remains for the hosted preview and
+small browser windows. A cell never shrinks below its content and paints over
+its neighbour. Orders to
 fix and Baro's countdown are sidebar badges beside the views they open; the
 strip keeps them only on the first-run landing, which has no sidebar. The
 strip's activity cell is the one place scans, listing sends, visibility
@@ -174,7 +188,7 @@ details stay available. Its expanded listing review scrolls as a whole in short 
 while keeping a usable table region; before/after order details must not collapse
 the editable rows. The keyboard boundary also handles focus moving to the document
 when a focused refresh button temporarily disables itself.
-Below 900px the sidebar foot (project links, feedback and the build label)
+Below 900px the sidebar foot (project links, feedback, the item-image credit and the build label)
 follows the workspace instead of preceding it, and at phone width the brand
 heading is visually hidden, so a short window reaches its first decision.
 The shell measures its wrapped status header into `--sticky-header-clearance`;
@@ -190,7 +204,7 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, dotted inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
 | Prompt banners | `PromptBanner.svelte` offers something optional that is safe to ignore, such as an opt-in or a support link. It uses the neutral panel with no toned edge, because an invitation is not a warning, and says that ignoring it changes nothing. Its title names the benefit, the body states what happens, and the actions are the accept action, an optional link to the full control, and Not now. A launch shows at most one prompt, never while that launch's automatic “What’s new” is pending or open, and asks are at least a week apart across prompts. Each prompt sets its own delay, launch minimum, gap and ask limit, and may wait for an update launch for its first ask (`features/prompt-policies.ts`, highest priority first); showing it counts as an ask, so ignoring it equals Not now, and accepting retires it. Prompts stay out of first run and active trading, and step aside on the view that already holds the full control. Select Prompt banner in the living styleguide's Data state control |
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |
-| Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted. A sortable header is a button inside its `th`, which carries `aria-sort`, and its column is wide enough for the label plus the sort arrow. Column explanations live in one Column guide dialog beside the Columns menu, not in per-header popovers. A table's action column sits beside the item, so Top Picks keeps List and hide in view while price and reason scroll. Select Sell table in the living styleguide's Data state control for the production pattern |
+| Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region. Overlay scrollbars hide that a table scrolls, so a scroll box holding a table fades its right edge while more columns sit beyond it, and drops the fade at the end or when the table fits; the sidebar's view list fades its bottom edge the same way on a short window. Prefer content-sized columns (no `fixed` layout) where numbers and buttons have a natural width, so the item and prose columns take the rest and the table fits the 1200px window; a table's fixed minimum must not exceed what that window leaves it. An item picture and its name sit together in `.item-id`, so a long name wraps beside the picture, not under it. Pictures carry no per-image credit; their source is credited once in the sidebar foot and the site footer. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted. A sortable header is a button inside its `th`, which carries `aria-sort`, and its column is wide enough for the label plus the sort arrow. Column explanations live in one Column guide dialog beside the Columns menu, not in per-header popovers. A table's action column sits beside the item, so Top Picks keeps List and hide in view while price and reason scroll. Select Sell table in the living styleguide's Data state control for the production pattern |
 | Sparklines | `Sparkline.svelte` draws recent medians in ink, a dotted `--faint` rule at the 90-day median, and an endpoint dot coloured by the move against that median. The baseline shares the line's scale, so its distance from the line is honest |
 | Meters | `Meter.svelte` shows a share of a whole: a short label, the value in words ("9 of 14"), and an `--ink-bar` fill on one square `--panel-2` track. The words carry the value; a share with nothing to judge yet keeps an empty track and says why ("too recent"). Used for Ledger listing outcomes and Baro's ducats from spares. Select Meters in the living styleguide's Data state control |
 | Range bars | A spread drawn on a shared scale: a `--muted` hairline from minimum to maximum over a dotted `--faint` track, and a 2px ink tick at the median. Every row in the column uses the same scale (Rivens' DE weekly band: 1p to 10,000p, logarithmic), so rows compare down the column. The values stay as text beside the bar, which is decorative to assistive technology |
@@ -355,7 +369,19 @@ options, and `.ui-panel-footer` groups actions and supporting details.
 These patterns are demonstrated in the living reference’s Aligned preferences
 section. Watches separates creation from monitoring; Ledger separates totals,
 listing automation, and trade history. Top picks labels its decision facts
-independently of the inventory’s optional analytical columns.
+independently of the inventory’s optional analytical columns. Each pick names
+the trades it needs under the listing lot rule (bulk items six per trade,
+others one), and the head states how many of today’s trades the picks use.
+Where they run out, a full-width “After the reset” row divides the picks
+without reordering them; the picks below it are muted, stay listable, and the
+row states their trades and lists the unlisted ones in one review (“List these
+2 now”). Beside the head count, a gauge draws the day as one cell per trade
+(the day holds as many as the mastery rank): filled for the picks, outlined
+for the rest still free, faint for trades already made. Without the rank there
+is no gauge; without bulk status it draws only free and made. An unknown allowance shows neither the count nor the
+divider, never a guessed split; an estimated one says “about”. Bulk status
+comes from the warframe.market catalog, so while it is locked each pick shows
+a range (“4–24 trades”) and there is no divider.
 
 Scan-only guidance labels its heading and value as estimates and uses one
 contextual notice explaining that current WFM listings are not accounted for.
@@ -371,13 +397,40 @@ so a new batch can be prepared. Hide prior listing
 totals when current listings are unknown. The living styleguide includes an
 Estimates state.
 
-The schematic page background uses bounded repeating tiles. WebKit can stretch
-a page-sized gradient raster on long surfaces even when computed CSS matches
-Chromium. The grid repeats every 28px; the diagonal’s 9px period projects to a
-12.7279220614px square tile. Keep the bounded sizes and verify the actual
+The page ground is a 14px dot grid in `--dot` on a bounded repeating tile.
+WebKit can stretch a page-sized gradient raster on long surfaces even when
+computed CSS matches Chromium, so keep the tile bounded and verify the actual
 rendering in both engines when changing the pattern. The pattern lives on a
 fixed, composited layer behind the page rather than on `body`, so scrolling
-the workspace does not re-raster it.
+the workspace does not re-raster it. `--grid` and `--hatch` remain for the
+calendar's weekend and out-of-month cells.
+
+### Visual and compact lists
+
+Settings → This app → Item lists chooses how desktop item lists draw, saved as
+the `display` setting and stamped on `html[data-density]`. Visual, the
+default, puts a 28px item picture before the name and uses `--row-cf` rows on
+Sell. Compact hides pictures and keeps `--row` rows. The Sell count bar
+repeats the choice beside Columns. Pictures are an ink duotone (multiply on
+paper, screen on the dark bench) so they never read as colour beside the
+data; they are decorative, and a missing picture keeps its slot so names stay
+aligned. The hosted site has no setting and draws no pictures.
+
+### Row cursor and button hover
+
+A hovered or focus-holding table row shows a 6px `--fg` square in its first
+cell's gutter, drawn as a background layer so nothing moves; `table.tw` keeps
+its dotted rule as the second layer. Secondary `.btn` controls invert to the
+ink pair on hover, matching the selected state.
+
+### Key legend
+
+The desktop workspace ends in one sticky line listing the keys that work on
+the view on screen: the search key where the view has a search field, the view
+picker, F6 and help. It reads the user's own bindings and omits character keys
+when they are disabled. It is decorative to assistive technology (Keyboard
+shortcuts is the accessible reference), reserves scroll padding so focus is
+never hidden under it, and is hidden below 900px wide or 480px tall.
 
 Dense tables scroll often, so in `table.tw` the dotted row rule is a
 1px-on/1px-off background tile on each cell instead of a dotted border; it

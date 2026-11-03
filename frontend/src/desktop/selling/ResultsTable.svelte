@@ -10,6 +10,8 @@
 
   import type { ProtectionState } from '../../contracts/protection';
   import type { SellRow as Row } from '../../contracts/selling';
+  import { useDisplay } from '../../ui/display.svelte';
+  import ItemArt from '../../ui/ItemArt.svelte';
 
   interface ColumnDef {
     key: string;
@@ -59,6 +61,10 @@
     /** Calculations are still running: hold the picks panel's place with
      *  placeholder rows, so the table does not drop when they arrive. */
     picksPending?: boolean;
+    /** Index of the first pick that no longer fits in today's trades; a
+     *  divider row from `picksCutRow` goes above it. */
+    picksCut?: number | null;
+    picksCutRow?: Snippet;
     /** A pick row that is a receipt (hidden with Undo, or just listed). */
     pickReceipt?: (r: Row) => boolean;
     /** Quantity listed this session for a slug, shown beside Own. */
@@ -71,7 +77,7 @@
   let {
     results, allocation = null, quantityStatus = false, estimatedGuidance = false, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined, columnsCustomized = false, oncolumnschange = undefined,
     scope = undefined, filters = undefined, categories = undefined, narrow = undefined, cta = undefined,
-    picks = null, picksHead = undefined, pickActions = undefined, pickReason = undefined, picksEmpty = undefined, pickReceipt = undefined, listedFor = undefined, picksPending = false,
+    picks = null, picksCut = null, picksCutRow = undefined, picksHead = undefined, pickActions = undefined, pickReason = undefined, picksEmpty = undefined, pickReceipt = undefined, listedFor = undefined, picksPending = false,
     empty = undefined,
   }: Props = $props();
 
@@ -86,7 +92,7 @@
   // Compact/Comfortable row-height toggle. Session-only (not persisted) -
   // Compact is the new denser default; Comfortable restores today's shipped
   // 8px cell padding for anyone who preferred the old row height.
-  let density = $state<'compact' | 'comfortable'>('compact');
+  const display = useDisplay();
 
   // Pill filter - the badges rendered next to item names double as filterable
   // facets. Multi-select is OR ("show me peaks and holds"); empty = no filter.
@@ -260,7 +266,7 @@
   // actually renders.
   const ALL_COLUMNS: ColumnDef[] = [
     { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
-    { key: 'owned',          label: 'Own',      align: 'right', width: 6 },
+    { key: 'owned',          label: 'Own',      align: 'right', width: 7 },
     { key: 'delta',          label: 'Δ',        align: 'right', width: 2.75 },
     { key: 'sell_score',     label: 'Priority', align: 'right', width: 6.25 },
     { key: 'avg_price',      label: 'Avg',      align: 'right', width: 4 },
@@ -487,24 +493,27 @@
     {@const badges = rowBadges(r)}
     {@const rowKey = r.key ?? r.slug}
     <span class="name-clip">
-      <a
-        href={wfmItemUrl(r.slug)}
-        target="_blank"
-        rel="noopener noreferrer"
-        >{r.name || r.slug}</a
-      >
-      {#each badges.slice(0, BADGE_CAP) as b}
-        <span class="tag {b.cls}" title={b.title}>{b.label}</span>
-      {/each}
-      {#if badges.length > BADGE_CAP}
-        {@const hiddenCount = badges.length - BADGE_CAP}
-        <button
-          type="button"
-          class="tag badge-overflow-btn"
-          onclick={(e) => toggleBadgeOverflow(rowKey, e)}
-          aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
-        >+{hiddenCount}</button>
-      {/if}
+      <ItemArt slug={r.slug} />
+      <span class="name-text">
+        <a
+          href={wfmItemUrl(r.slug)}
+          target="_blank"
+          rel="noopener noreferrer"
+          >{r.name || r.slug}</a
+        >
+        {#each badges.slice(0, BADGE_CAP) as b}
+          <span class="tag {b.cls}" title={b.title}>{b.label}</span>
+        {/each}
+        {#if badges.length > BADGE_CAP}
+          {@const hiddenCount = badges.length - BADGE_CAP}
+          <button
+            type="button"
+            class="tag badge-overflow-btn"
+            onclick={(e) => toggleBadgeOverflow(rowKey, e)}
+            aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
+          >+{hiddenCount}</button>
+        {/if}
+      </span>
     </span>
     {#if badges.length > BADGE_CAP && openBadgeOverflow === rowKey}
       <span class="badge-overflow-popover" role="tooltip">
@@ -519,8 +528,9 @@
       {@const quantity = allocation?.items[r.slug]}
       {@const sellText = quantity?.estimated == null ? null : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? null}
       {@const keepText = quantity?.protected == null ? 'keep unknown' : `keep ${quantity.protected}`}
-      <!-- Short on the row, so a missing quantity does not wrap it to three lines; the full wording is the label. -->
-      <span class="quantity-note" aria-label="sell {sellText ?? 'unavailable'}, {keepText}" title="Sell {sellText ?? 'unavailable'} · {keepText}">/ sell {sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText}{#if quantity?.protected != null && quantity.protected > 0}{` · keep ${quantity.protected}`}{/if}</span>
+      <!-- Only the sell count on the row: with the keep count too it wrapped
+           the row or was cut off. The full wording is the label. -->
+      <span class="quantity-note" aria-label="sell {sellText ?? 'unavailable'}, {keepText}" title="Sell {sellText ?? 'unavailable'} · {keepText}">/ sell {sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText}</span>
     {:else if r.sellable < r.owned}
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
       <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0}{' · '}{/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
@@ -612,7 +622,7 @@
   <section class="wrap picks" aria-label="Top picks">
     <div class="rail picks-head"><h3 class="pending-title">Top picks</h3><span class="exp" role="status">Calculating sale values… Your filters remain available.</span></div>
     <div class="scroll" aria-hidden="true">
-    <table class:comfortable={density === 'comfortable'} class="picks-table pending">
+    <table class="picks-table pending">
       <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
       <thead><tr><th class="left">Item</th><th class="left"></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
       <tbody>
@@ -638,12 +648,15 @@
     {#if picksOpen}
       {#if picks.length > 0}
         <div class="scroll" use:tableNavigation={'Top picks table'}>
-        <table class:comfortable={density === 'comfortable'} class="picks-table">
+        <table class="picks-table">
           <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
           <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
-              <tr class="pick" class:receipt={pickReceipt?.(p)}>
+              {#if i === picksCut && picksCutRow}
+                <tr class="pick-cut"><td colspan="5">{@render picksCutRow()}</td></tr>
+              {/if}
+              <tr class="pick" class:receipt={pickReceipt?.(p)} class:later={picksCut != null && i >= picksCut}>
                 <td class="left col-name">
                   <span class="pick-rank">{i + 1}</span>
                   {@render cell(p, columns[0], rowDelta(p))}
@@ -719,6 +732,12 @@
         {/if}
       </div>
     {/if}
+    {#if display}
+      <div class="ui-segmented density-seg" role="group" aria-label="Item lists">
+        <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>Visual</button>
+        <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
+      </div>
+    {/if}
     {@render cta?.()}
   </div>
 
@@ -726,7 +745,7 @@
     <div class="empty-slot">{@render empty()}</div>
   {:else}
   <div class="scroll" use:tableNavigation={'Inventory table'}>
-  <table class:comfortable={density === 'comfortable'} style="min-width:{floorRem}rem">
+  <table style="min-width:{floorRem}rem">
     {@render colgroup()}
     <thead>
       <tr>
@@ -795,18 +814,6 @@
           disabled={currentPage >= maxPage}
         >Next ›</button>
         <span class="pager-spacer"></span>
-        <div class="ui-segmented density-seg" role="group" aria-label="Row density">
-          <button
-            type="button"
-            aria-pressed={density === 'compact'}
-            onclick={() => (density = 'compact')}
-          >Compact</button>
-          <button
-            type="button"
-            aria-pressed={density === 'comfortable'}
-            onclick={() => (density = 'comfortable')}
-          >Comfortable</button>
-        </div>
         <div class="ui-segmented pagesize-seg" role="group" aria-label="Rows per page">
           {#each [20, 40, 60, 80, 100] as n}
             <button
@@ -831,6 +838,8 @@
      List still in view beside the item. */
   .picks-table { min-width: 40rem; }
   .picks-table td.reason { white-space: normal; }
+  .picks-table tr.pick-cut td { padding: var(--s1) var(--inset); border-top: 1px solid var(--border); background: var(--panel-2); font-size: var(--text-caption); white-space: normal; }
+  .picks-table tr.later { color: var(--muted); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .picks-table th, .picks-table td { padding-block: var(--s1); }
   .wrap.picks { margin-bottom: var(--stack); overflow: hidden; }
@@ -899,7 +908,7 @@
     font-size: var(--text-control);
   }
   /* Beside the count on the same line, so rows keep one height; missing quantities are unavailable, not errors. */
-  .quantity-note { font: var(--text-caption)/var(--leading-control) var(--font-body); color: var(--muted); white-space: normal; }
+  .quantity-note { font: var(--text-caption)/var(--leading-control) var(--font-body); color: var(--muted); white-space: nowrap; }
   .formula { color: var(--muted); font-size: var(--text-caption); white-space: normal; }
   .quantity-note.listed { color: var(--fg); }
   .pending-title { margin: 0; }
@@ -965,7 +974,7 @@
   }
   th:first-child, td:first-child { padding-left: var(--inset); }
   th:last-child, td:last-child { padding-right: var(--inset); }
-  /* Rows are fixed 32px boxes (comfortable 36); the head is 28. */
+  /* Rows are fixed 32px boxes (36 in the Visual display); the head is 28. */
   td {
     height: var(--row);
     border-bottom: 1px var(--rule) var(--hairline);
@@ -974,7 +983,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  table.comfortable td { height: var(--row-cf); }
+  :global(html[data-density='visual']) td { height: var(--row-cf); }
   tbody tr:last-child td { border-bottom: none; }
   /* Numeric columns render in tabular monospace so digits lock to a grid a
      trader can scan down, not just read left-to-right. Item/badges/trend
@@ -1000,6 +1009,9 @@
   /* Keep the full item identity readable even at the column's width floor. */
   td.col-name { position: relative; color: var(--fg); font-weight: 500; overflow: visible; }
   .name-clip { display: block; white-space: normal; overflow-wrap: anywhere; padding-block: var(--s1); }
+  /* With a picture, the name and its tags wrap beside it, never under it. */
+  :global(html[data-density='visual']) .name-clip { display: flex; align-items: center; }
+  .name-text { min-width: 0; }
   /* Pick rows: rank glyph, bold name, reason spanning the trailing columns
      with the parent's List/× at its right end. */
   .pick-rank {

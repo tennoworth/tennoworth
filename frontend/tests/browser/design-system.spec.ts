@@ -428,6 +428,37 @@ test('selling tables label pick facts and retain readable item identities', asyn
   await expect(page.getByRole('columnheader', { name: /Stack value/ })).toBeInViewport();
 });
 
+// A long pick name (Ivara Prime Neuroptics Blueprint) once wrapped its second
+// line back under the item picture instead of beside it.
+test('item names wrap beside their pictures, never under them', async ({ page }) => {
+  // A 1x1 PNG for every item, so each row draws a picture.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  await page.route('**/item-art/*', route => route.fulfill({ body: png, contentType: 'image/png' }));
+  await page.route('**/item-art.json', async route => {
+    const market = JSON.parse(readFileSync(new URL('../../public/market.json', import.meta.url), 'utf8')) as { items: Record<string, unknown> };
+    await route.fulfill({ json: { items: Object.fromEntries(Object.keys(market.items).map(slug => [slug, 'item-art/test.png'])) } });
+  });
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  await page.locator('.sidebar').getByRole('button', { name: /^Sell/ }).click();
+  await page.getByRole('button', { name: 'Visual', exact: true }).first().click();
+  const pictures = page.locator('.picks-table .item-art img, .results .item-art img');
+  await expect(pictures.first()).toBeVisible();
+  for (const width of [360, 800, 1200]) {
+    await page.setViewportSize({ width, height: 800 });
+    const under = await page.locator('.item-art').evaluateAll(slots => slots
+      .filter(slot => (slot as HTMLElement).offsetParent !== null)
+      .flatMap(slot => {
+        const art = slot.getBoundingClientRect();
+        const text = slot.nextElementSibling;
+        return [...(text?.getClientRects() ?? [])]
+          .filter(line => line.width > 0 && line.left < art.right - 0.5)
+          .map(() => text?.textContent?.trim().slice(0, 40));
+      }));
+    expect({ width, under }).toEqual({ width, under: [] });
+  }
+});
+
 // Top Picks was a 1024px table with List in its last column, so any window
 // narrower than ~1100px had to scroll sideways to act on a pick.
 test('a pick can be listed without scrolling sideways at any width', async ({ page }) => {

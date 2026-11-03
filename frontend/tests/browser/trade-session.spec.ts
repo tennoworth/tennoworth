@@ -141,3 +141,19 @@ for (const scenario of ['zero-trades', 'unknown-trades']) {
     await expect(page.getByText(scenario === 'zero-trades' ? /No trades remaining/ : 'Trade allowance unknown', { exact: scenario !== 'zero-trades' })).toBeVisible();
   });
 }
+
+test('Top picks recount their trades when warframe.market locks', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample=few-trades');
+  const sidebar = page.locator('.sidebar');
+  await sidebar.getByRole('button', { name: /^Sell/ }).click();
+  await expect(page.locator('tr.pick-cut')).toHaveCount(1);
+  await expect(page.getByText('4 trades · 5p per trade')).toBeVisible();
+  await sidebar.getByRole('button', { name: /^Settings/ }).click();
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.getByRole('button', { name: 'Confirm log out' }).click();
+  // Signed out, Sell becomes the estimated Opportunities view over the same picks.
+  await sidebar.getByRole('button', { name: /^Opportunities/ }).click();
+  // Bulk status is unknown again: ranges, and no guessed divider.
+  await expect(page.getByText('1–4 trades')).toBeVisible();
+  await expect(page.locator('tr.pick-cut')).toHaveCount(0);
+});

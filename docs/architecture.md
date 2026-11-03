@@ -293,6 +293,11 @@ statistics cache, WFM cooldown and policy copy) is in `/srv/wfm/data/scrape`,
 what the site serves is in `/srv/wfm/data/public`, and the checkout is
 root-owned and only fast-forwards. The tracked `frontend/public/market.json` is
 the bootstrap copy local runs and releases start from.
+Item pictures are fetched from the Warframe wiki by a separate daily step
+(`tennoworth-pipeline art`) into `/srv/wfm/data/public/item-art/` with an
+`item-art.json` index; the site loads them same-origin, and the desktop through
+its `art` protocol, which caches them from tennoworth.app. Neither client asks
+the wiki.
 Freshness is attached to the evidence actually fetched. Unavailable, malformed,
 unchanged, and authoritative-empty inputs are distinct outcomes.
 

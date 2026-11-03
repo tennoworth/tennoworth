@@ -4,3 +4,7 @@ dist-desktop
 .DS_Store
 *.local
 .vite
+
+# Written by `tennoworth-pipeline art` on a local run (PUBLISH=frontend/public).
+/public/item-art.json
+/public/item-art/

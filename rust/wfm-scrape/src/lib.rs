@@ -1,5 +1,6 @@
 //! The host market pipeline - the only implementation: `scrape` sweeps WFM to CSV, `build`
-//! renders `market.json` and `wfstat-catalog.json`.
+//! renders `market.json` and `wfstat-catalog.json`, `art` keeps the item pictures
+//! it re-serves from the Warframe wiki.
 //!
 //! GROUND RULES:
 //! - The build is NOT a pure transform; its failure semantics are contract.
@@ -14,6 +15,7 @@
 //!   frozen inputs in tests/fixtures/{scrape,build}/ - never
 //!   byte-diff, never live endpoints outside the one opt-in liveness test.
 
+pub mod art;
 pub mod clock;
 pub mod coerce;
 pub mod ingest;

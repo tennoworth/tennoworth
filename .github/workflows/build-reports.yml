@@ -12,6 +12,8 @@ permissions:
 jobs:
   publish:
     uses: ./.github/workflows/collector-build.yml
+    secrets:
+      COLLECTOR_SIGNING_KEY: ${{ secrets.COLLECTOR_SIGNING_KEY }}
     with:
       crate: tennoworth-reports
       module: reports

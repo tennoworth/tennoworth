@@ -203,8 +203,10 @@ describe('live data roots', () => {
 
   test('pipeline output is served from the data directory, the tracked hotfix from the checkout', () => {
     // The desktop fetches each signed artifact's .minisig from beside it.
-    expect(caddy).toMatch(/@livedata path \/market\.json \/market\.json\.minisig \/market-public\.json \/market-home\.json \/wfstat-catalog\.json \/history\.json \/history\.json\.minisig\n/);
+    expect(caddy).toMatch(/@livedata path \/market\.json \/market\.json\.minisig \/market-public\.json \/market-home\.json \/wfstat-catalog\.json \/history\.json \/history\.json\.minisig \/item-art\.json\n/);
     expect(handle(caddy, '@livedata')).toContain('root * /srv/wfm/data/public');
+    expect(handle(caddy, '/item-art/*')).toContain('root * /srv/wfm/data/public');
+    expect(handle(caddy, '/item-art/*')).toContain('immutable');
     expect(handle(caddy, '/definitions.json')).toContain('root * /srv/wfm/app/frontend/public');
     expect(handle(admin, '/market.json')).toContain('root * /srv/wfm/data/public');
   });
@@ -399,7 +401,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   // The script stages these from the checkout with relative paths, as it does
   // from the repository root.
   for (const unit of ['run-scrape.sh', 'tennoworth-scrape.service', 'tennoworth-scrape.timer',
-    'host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer']) {
+    'tennoworth-art.service', 'tennoworth-art.timer', 'host-check.sh', 'tennoworth-host-check.service', 'tennoworth-host-check.timer']) {
     write(join(root, 'deploy', deployDir(unit), unit), `# ${unit}\n`);
   }
   if (options.runCheck) {
@@ -722,6 +724,7 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     expect(calls).not.toContain('start wfm-archive-receipt-pull.service');
     expect(calls).toContain('disable --now wfm-observations-check.timer tennoworth-job-readiness.path');
     expect(calls).toContain('enable --now tennoworth-host-check.timer');
+    expect(calls).toContain('enable --now tennoworth-art.timer');
     expect(calls).toContain('enable --now tennoworth-job@scrape.path tennoworth-job@host-check.path');
     expect(calls).toContain('start tennoworth-host-check.service');
     // A box from before the unit rename: its sweep schedule is held, then removed
@@ -977,6 +980,10 @@ describe.each(collectors)('$name collector signature', ({ name, binary }) => {
 
   test('CI signs with the comment the box requires', () => {
     const ci = readFileSync(new URL('../.github/workflows/collector-build.yml', import.meta.url), 'utf8');
+    const reusable = Bun.YAML.parse(ci) as any;
+    const caller = Bun.YAML.parse(readFileSync(new URL(`../.github/workflows/build-${name}.yml`, import.meta.url), 'utf8')) as any;
+    expect(reusable.on.workflow_call.secrets.COLLECTOR_SIGNING_KEY.required).toBe(true);
+    expect(caller.jobs.publish.secrets).toEqual({ COLLECTOR_SIGNING_KEY: '${{ secrets.COLLECTOR_SIGNING_KEY }}' });
     const pull = readFileSync(new URL('../deploy/bin/pull-collector.sh', import.meta.url), 'utf8');
     expect(ci).toContain('-t "tennoworth-collector $CRATE $GITHUB_SHA"');
     expect(ci).toMatch(/environment: collector-release/);
