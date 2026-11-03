@@ -101,6 +101,8 @@ for (const theme of ['light', 'dark'] as const) {
         }).map(button => button.textContent));
         expect(small, `${view} shared control targets at ${width}`).toEqual([]);
         const collapsed = await page.locator('main table:visible th').evaluateAll(headers => headers.filter(header => {
+          // Hidden by the fit steps (and named in the fit note), not collapsed.
+          if (header.getClientRects().length === 0) return false;
           return header.textContent?.trim() && header.getBoundingClientRect().width < 20;
         }).map(header => header.textContent));
         expect(collapsed, `${view} column headings at ${width}`).toEqual([]);
@@ -430,6 +432,66 @@ test('selling tables label pick facts and retain readable item identities', asyn
 
 // A long pick name (Ivara Prime Neuroptics Blueprint) once wrapped its second
 // line back under the item picture instead of beside it.
+// Tables fit their pane in shared steps (ui/table-fit.ts): narrow first, then
+// hide ranked columns with a note naming them. Sideways scrolling inside a
+// table used to start at the default 1200px window and hid Sell's Stack value.
+async function overflowingTables(page: Page) {
+  return page.locator('.scroll:has(> table)').evaluateAll(boxes => boxes
+    .filter(box => (box as HTMLElement).offsetParent && box.scrollWidth > box.clientWidth + 1)
+    .map(box => `${box.getAttribute('aria-label') ?? box.querySelector('th')?.textContent?.trim()}: +${box.scrollWidth - box.clientWidth}px at step ${(box as HTMLElement).dataset.fit}`));
+}
+
+test('every desktop table fits its pane from the minimum window up', async ({ page }) => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  await page.route('**/item-art/*', route => route.fulfill({ body: png, contentType: 'image/png' }));
+  await page.route('**/item-art.json', route => route.fulfill({
+    json: { items: Object.fromEntries(Object.keys(baseMarket.items).map(slug => [slug, 'item-art/test.png'])) },
+  }));
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const sidebar = page.locator('.sidebar');
+  const views = await sidebar.getByRole('button').evaluateAll(buttons => buttons
+    .map(button => button.textContent?.trim().split(/\s+/)[0] ?? '')
+    .filter(Boolean));
+  const failures: string[] = [];
+  for (const width of [960, 1080, 1200, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const view of views) {
+      const button = sidebar.getByRole('button', { name: new RegExp(`^${view}`) }).first();
+      if (!(await button.isVisible())) continue;
+      await button.click();
+      await page.waitForTimeout(150);
+      failures.push(...(await overflowingTables(page)).map(f => `${width}px ${view} - ${f}`));
+    }
+  }
+  expect(failures).toEqual([]);
+  // At the minimum window Sell keeps its decision columns and says what it hid.
+  await page.setViewportSize({ width: 960, height: 800 });
+  await sidebar.getByRole('button', { name: /^Sell/ }).click();
+  const inventory = page.locator('.scroll:has(> table.fit-planned)');
+  await expect(inventory).toHaveAttribute('data-fit-note', /^Hidden to fit this window: .*Trend/);
+  for (const kept of ['Item', 'Own', 'Priority', 'Low ask', 'Stack value']) {
+    await expect(inventory.locator('thead th', { hasText: new RegExp(`^${kept}`) })).toBeVisible();
+  }
+  await expect(inventory.locator('thead th', { hasText: /^Trend/ })).toHaveCount(0);
+  await page.setViewportSize({ width: 1920, height: 800 });
+  await expect(inventory).not.toHaveAttribute('data-fit-note', /./);
+});
+
+test('every hosted table fits from phone width up', async ({ page }) => {
+  const failures: string[] = [];
+  for (const url of ['/', '/?q=prime']) {
+    await page.goto(url);
+    await expect(page.locator('.scroll:has(> table)').first()).toBeVisible({ timeout: 30_000 });
+    for (const width of [320, 375, 600, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(150);
+      failures.push(...(await overflowingTables(page)).map(f => `${url} ${width}px - ${f}`));
+    }
+  }
+  expect(failures).toEqual([]);
+});
+
 test('item names wrap beside their pictures, never under them', async ({ page }) => {
   // A 1x1 PNG for every item, so each row draws a picture.
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');

@@ -543,6 +543,33 @@ table.tw td.act { text-align: right; overflow: visible; }
    scrolling, and every .tw table already scrolls locally. */
 table.tw td.act .btn { white-space: nowrap; overflow-wrap: normal; }
 table.tw td.reason { font-family: var(--font-body); text-align: left; color: var(--muted); font-size: var(--text-caption); }
+
+/* Fitting tables (ui/table-fit.ts sets the step). From step 1 a table drops
+   its designed minimum width and fixed column layout, cells tighten, headers
+   wrap, and text columns keep only a small floor (the item column a larger one); later steps hide each rank of
+   `data-drop` columns. `!important` beats component-scoped and inline
+   table minimums, which only describe step 0. */
+.scroll[data-fit]:not([data-fit="0"]) > table:not(.fit-planned) { min-width: 0 !important; table-layout: auto; }
+.scroll[data-fit]:not([data-fit="0"]) > table.tw { --cell: var(--s2); }
+.scroll[data-fit]:not([data-fit="0"]) > table.tw th { white-space: normal; height: auto; min-height: var(--head); padding-block: var(--s1); overflow-wrap: normal; }
+.scroll[data-fit]:not([data-fit="0"]) > table.tw :is(th, td) { min-width: 0; }
+.scroll[data-fit]:not([data-fit="0"]) > table.tw th.l { min-width: 6rem; }
+/* The first column is the item (or whatever a row is): it keeps the larger
+   floor in every table, `table.tw` or not. */
+.scroll[data-fit]:not([data-fit="0"]) > table th:first-child:not(:empty) { min-width: 8rem; }
+@media (max-width: 35rem) { .scroll[data-fit]:not([data-fit="0"]) > table th:first-child:not(:empty) { min-width: 6rem; } }
+.scroll:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(th, td, col)[data-drop="1"],
+.scroll:is([data-fit="3"], [data-fit="4"]) :is(th, td, col)[data-drop="2"],
+.scroll[data-fit="4"] :is(th, td, col)[data-drop="3"] { display: none; }
+.scroll[data-fit-note]::after {
+  content: attr(data-fit-note);
+  position: sticky; left: 0;
+  display: block;
+  padding: var(--s2) var(--inset);
+  border-top: 1px var(--rule) var(--hairline);
+  font: var(--text-caption)/var(--leading-body) var(--font-body);
+  color: var(--muted);
+}
 table.tw td.reason.warn { color: var(--warn); }
 table.tw td.reason.bad { color: var(--bad); }
 

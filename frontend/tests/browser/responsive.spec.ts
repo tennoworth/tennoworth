@@ -59,8 +59,11 @@ async function statusSpills(page: Page): Promise<string[]> {
 }
 
 async function assertReadableTableLabels(page: Page): Promise<void> {
+  // A column the fit steps hid is not drawn at all; it is named in the
+  // table's fit note instead, and is not a collapsed label.
   const collapsed = await page.locator('table:visible th.l, table:visible td.l, table:visible td.col-name').evaluateAll((cells) =>
     cells
+      .filter((cell) => cell.getClientRects().length > 0)
       .map((cell) => ({
         text: (cell.textContent ?? '').trim(),
         width: cell.getBoundingClientRect().width,
@@ -155,7 +158,7 @@ test.describe('hosted responsive layout', () => {
     }
   });
 
-  test('search results and horizontally dense reports keep local scroll', async ({ page }) => {
+  test('search results fit a phone by hiding ranked columns, and say which', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 480 });
     await page.goto('/');
     await expect(page.getByTestId('market-browser')).toBeVisible();
@@ -164,12 +167,11 @@ test.describe('hosted responsive layout', () => {
     await assertDocumentFits(page);
     await assertReadableTableLabels(page);
 
-    const horizontalTables = page.locator('.scroll').filter({ has: page.locator('table') });
-    await expect(horizontalTables.first()).toBeVisible();
-    const scrollable = await horizontalTables.evaluateAll((regions) =>
-      regions.some((region) => region.scrollWidth > region.clientWidth),
-    );
-    expect(scrollable).toBe(true);
+    const results = page.getByRole('region', { name: /^Search results table/ });
+    await expect(results).toBeVisible();
+    expect(await results.evaluate((region) => region.scrollWidth <= region.clientWidth + 1)).toBe(true);
+    await expect(results).toHaveAttribute('data-fit-note', /^Hidden to fit this window: .*Trend/);
+    for (const kept of ['Low ask', 'Δ 90d']) await expect(results.getByRole('columnheader', { name: new RegExp(`^${kept}`) })).toBeVisible();
   });
 
   test('movers show the price on a phone without scrolling the table', async ({ page }) => {
@@ -262,7 +264,8 @@ test('populated workspaces keep their content through width and height changes',
       await assertReadableTableLabels(page);
       for (const region of await page.locator('main .scroll:visible').all()) {
         await region.evaluate(element => { element.scrollLeft = element.scrollWidth; });
-        const lastCell = region.locator('thead tr').first().locator('th').last();
+        // The last column drawn: a ranked column hidden to fit has no box.
+        const lastCell = region.locator('thead tr').first().locator('th:visible').last();
         if (await lastCell.count()) {
           const cellBox = await lastCell.boundingBox();
           const regionBox = await region.boundingBox();

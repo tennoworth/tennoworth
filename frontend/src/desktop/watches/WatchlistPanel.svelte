@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopAddWatch, desktopCheckWatchesNow, desktopDeleteWatch, desktopListWatches, listenForTauriEvent } = useDesktopServices();
@@ -225,7 +226,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   {:else if watches.length === 0}
     <div class="ui-notice">No watches yet. Pick an item above.</div>
   {:else}
-    <div class="scroll">
+    <div class="scroll" use:fitTable>
       <table class="tw fixed">
         <colgroup><col /><col style="width:10rem" /><col style="width:11rem" /><col style="width:8rem" /><col style="width:7rem" /></colgroup>
         <thead><tr><th class="l">Item</th><th>Condition</th><th>Last seen</th><th>Status</th><th>Action</th></tr></thead>

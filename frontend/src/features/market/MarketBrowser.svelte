@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { pilotItems, itemPath } from './pages';
   import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import { buildMetaDrift } from '../../domain/meta-drift';
@@ -256,7 +257,7 @@
      locally, shows it without scrolling; volume is the part that scrolls away. -->
 {#snippet miniTable(rows: BrowseRow[], sortedKey: 'delta' | 'avg', ducats: boolean, emptyText: string, label: string)}
   {#if rows.length}
-    <div class="scroll" use:tableNavigation={label}>
+    <div class="scroll" use:fitTable use:tableNavigation={label}>
     <table class="tw fixed mini-table" class:with-ducats={ducats}>
       <colgroup>
         <col />
@@ -270,9 +271,9 @@
         <th class="l">Item</th>
         <th class:sorted={sortedKey === 'avg'} title="Average of recent WFM sales">Avg</th>
         <th class:sorted={sortedKey === 'delta'} title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
-        <th title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
-        <th title="Trades completed in the last 48 hours">Vol 48h</th>
-        {#if ducats}<th title="Ducat value at Baro Ki’Teer">Ducats</th>{/if}
+        <th data-drop="1" title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
+        <th data-drop="3" title="Trades completed in the last 48 hours">Vol 48h</th>
+        {#if ducats}<th data-drop="2" title="Ducat value at Baro Ki’Teer">Ducats</th>{/if}
       </tr></thead>
       <tbody>
         {#each rows as r (r.slug)}
@@ -331,7 +332,7 @@
     {/if}
     {#if query.trim()}
       {#if results.length}
-        <div class="scroll" use:tableNavigation={'Search results table'}>
+        <div class="scroll" use:fitTable use:tableNavigation={'Search results table'}>
         <table class="tw fixed results">
           <colgroup>
             <col />
@@ -350,16 +351,16 @@
           <thead><tr>
             <th class="l">Item · {results.length} {results.length === 1 ? 'match' : 'matches'}</th>
             <th title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
-            <th title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
-            <th title="Average of recent WFM sales - list below it to sell faster">Avg</th>
+            <th data-drop="1" title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
+            <th data-drop="2" title="Average of recent WFM sales - list below it to sell faster">Avg</th>
             <th title="Lowest current online sell listing">Low ask</th>
-            <th title="Highest current online buy offer">Top buy</th>
-            <th title="Trades completed in the last 48 hours">Vol 48h</th>
-            <th title="Live buyers ÷ live sellers - > 1 means buyers outnumber sellers">Demand</th>
-            <th title="Ducat value at Baro Ki’Teer">Ducats</th>
-            <th class="ghost g1" title="How many you own - filled by the desktop scan">Own</th>
-            <th class="ghost" title="Priority from price, likely sell-through, and bounded DE usage - filled by the desktop scan">Priority</th>
-            <th class="ghost" title="Sellable copies × the 48 h average trade price - filled by the desktop scan">Stack value</th>
+            <th data-drop="2" title="Highest current online buy offer">Top buy</th>
+            <th data-drop="3" title="Trades completed in the last 48 hours">Vol 48h</th>
+            <th data-drop="1" title="Live buyers ÷ live sellers - > 1 means buyers outnumber sellers">Demand</th>
+            <th data-drop="2" title="Ducat value at Baro Ki’Teer">Ducats</th>
+            <th data-drop="1" class="ghost g1" title="How many you own - filled by the desktop scan">Own</th>
+            <th data-drop="1" class="ghost" title="Priority from price, likely sell-through, and bounded DE usage - filled by the desktop scan">Priority</th>
+            <th data-drop="1" class="ghost" title="Sellable copies × the 48 h average trade price - filled by the desktop scan">Stack value</th>
           </tr></thead>
           <tbody>
             {#each results as r (r.slug)}
@@ -446,7 +447,7 @@
           </p>
         </div>
         {#if baroStock.length}
-          <div class="scroll" use:tableNavigation={'Baro stock table'}>
+          <div class="scroll" use:fitTable use:tableNavigation={'Baro stock table'}>
           <table class="tw fixed baro-stock">
             <colgroup><col /><col style="width:4rem" /><col style="width:4.5rem" /></colgroup>
             <thead><tr>
@@ -498,7 +499,7 @@
             <h3>Riven disposition changes</h3>
             <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
           </div>
-      <div class="scroll" use:tableNavigation={'Riven dispositions table'}>
+      <div class="scroll" use:fitTable use:tableNavigation={'Riven dispositions table'}>
       <table class="tw fixed dispo-table">
         <colgroup><col /><col style="width:8rem" /><col style="width:4rem" /><col style="width:5rem" /></colgroup>
         <thead><tr>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   // Baro's manifest, priced.
   //
   // The stock comes from DE's worldState, which publishes it when the visit is
@@ -160,7 +161,7 @@
   {/if}
 
   {#if valueResult.phase === 'done'}
-  <div class="scroll">
+  <div class="scroll" use:fitTable>
     <table>
       <thead>
         <tr>
