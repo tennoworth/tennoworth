@@ -562,6 +562,8 @@ jobs:
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-i
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-test_instance
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-publisher
+          # tennoworth-art.service runs the pipeline binary directly.
+          sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-pipeline
           systemd-analyze verify deploy/systemd/*.service deploy/systemd/*.timer
       - name: CSP copies agree
         run: bun scripts/sync-csp.ts --check
