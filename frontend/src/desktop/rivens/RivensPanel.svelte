@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopRivenComps } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
@@ -232,7 +233,7 @@
   {#if sorted.length === 0}
     <div class="line"><span class="exp">No rivens in your scanned inventory. Crack some relics or buy veiled ones.</span></div>
   {:else}
-    <div class="scroll" bind:this={tableEl}>
+    <div class="scroll" use:fitTable bind:this={tableEl}>
       <table class="tw fixed">
         <colgroup>
           <col style="width:9rem" />
@@ -245,7 +246,7 @@
         </colgroup>
         <thead>
           <tr>
-            <th class="l">Weapon</th><th class="l"><span class="sr-only">Actions</span></th><th class="l">Stats</th><th>Rolls</th><th>Rank</th>
+            <th class="l">Weapon</th><th class="l"><span class="sr-only">Actions</span></th><th class="l">Stats</th><th>Rolls</th><th data-drop="1">Rank</th>
             <th class="l">Dispo</th><th title="DE’s weekly trade band: median, then min–max. The bars share one 1p–10,000p log scale.">DE weekly</th>
           </tr>
         </thead>

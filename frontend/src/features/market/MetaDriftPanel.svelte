@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
   import type { Market } from '../../contracts/data';
   import { buildMetaDrift, formatDeltaPp, type OnlyRow } from '../../domain/meta-drift';
@@ -54,12 +55,12 @@
   </div>
 
   {#if tab !== 'only'}
-    <div class="scroll">
+    <div class="scroll" use:fitTable>
       <table class="tw fixed">
         <!-- Δ share sits beside the name: it is the point of the table, and a
              narrow window must reach it without scrolling. -->
         <colgroup><col /><col style="width:6rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
-        <thead><tr><th class="l">Name</th><th>Δ share</th><th>{model.priorYear}</th><th>{model.currentYear}</th><th class="l">Category</th><th>Low ask</th><th>Vol 48h</th></tr></thead>
+        <thead><tr><th class="l">Name</th><th>Δ share</th><th data-drop="3">{model.priorYear}</th><th>{model.currentYear}</th><th class="l" data-drop="1">Category</th><th data-drop="2">Low ask</th><th data-drop="1">Vol 48h</th></tr></thead>
         <tbody>
           {#each trim(driftRows) as row (row.slug)}
             <tr><td class="l">{row.name}</td><td class:up={row.deltaPp >= 0} class:down={row.deltaPp < 0}><strong>{formatDeltaPp(row.deltaPp)}</strong></td><td>{row.priorShare.toFixed(2)}%</td><td>{row.currentShare.toFixed(2)}%</td><td class="l">{row.category}</td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>
@@ -91,9 +92,9 @@
 {#snippet onlyTable(title: string, rows: OnlyRow[])}
   <div class="only-card">
     <h4>{title}</h4>
-    <div class="scroll"><table class="tw fixed">
+    <div class="scroll" use:fitTable><table class="tw fixed">
       <colgroup><col /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
-      <thead><tr><th class="l">Name</th><th class="l">Category</th><th>Share</th><th>Low ask</th><th>Vol 48h</th></tr></thead>
+      <thead><tr><th class="l">Name</th><th class="l" data-drop="2">Category</th><th>Share</th><th>Low ask</th><th data-drop="1">Vol 48h</th></tr></thead>
       <tbody>{#each trim(rows) as row (row.slug)}<tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.share.toFixed(2)}%</td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>{:else}<tr><td colspan="5" class="empty">No matching items.</td></tr>{/each}</tbody>
     </table></div>
   </div>

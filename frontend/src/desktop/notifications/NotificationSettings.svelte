@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopNotificationPreferences, desktopSaveNotificationPreferences, desktopTestNotification } = useDesktopServices();
   import { onMount } from 'svelte';
@@ -51,7 +52,7 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
       <div class="ui-setting-copy"><label for="notification-popups">Desktop popups</label><p>Pause popups to keep alerts in your inbox without interruptions. Operating-system settings may also suppress popups.</p></div>
       <label class="ui-setting-check"><input id="notification-popups" type="checkbox" checked={preferences.popups} disabled={busy} onchange={(e) => change(e)} /><span>Enabled</span></label>
     </div>
-    <div class="scroll">
+    <div class="scroll" use:fitTable>
       <table class="tw categories">
         <thead><tr><th>Alert</th><th>Inbox</th><th>Popup</th></tr></thead>
         <tbody>

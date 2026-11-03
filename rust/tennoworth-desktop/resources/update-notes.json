@@ -1,5 +1,5 @@
 {
-  "version": "0.8.115",
+  "version": "0.8.116",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1813,6 +1813,36 @@
           "kind": "fixed",
           "title": "Ranked mod sales update the right listing",
           "body": "Selling a ranked mod now adjusts the listing for that rank and counts toward that listing's outcome.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.116",
+      "date": "2026-11-03",
+      "changes": [
+        {
+          "id": "tables-fit-without-scrolling",
+          "kind": "improved",
+          "title": "Tables fit the window without scrolling sideways",
+          "body": "Every table first tightens and wraps its text. If that is not enough, it hides its least important columns and names them in a line under the table. Item, Own, the price and Stack value always stay, and widening the window brings hidden columns back.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": [
+            "tables-fit-window"
+          ]
+        },
+        {
+          "id": "picture-credit-in-settings",
+          "kind": "improved",
+          "title": "The picture credit moved to Settings",
+          "body": "The Warframe Wiki credit for item pictures now sits under Settings › Item lists, beside the Visual and Compact switch, instead of in the sidebar.",
           "platforms": [
             "windows",
             "linux"

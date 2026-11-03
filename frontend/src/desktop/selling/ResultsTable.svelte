@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitNote, fitStep, fitTable, hidesAt, MAX_DROP_RANK, paneWidth as watchPaneWidth } from '../../ui/table-fit';
   import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import DemandCell from './DemandCell.svelte';
   import ColumnGuide from './ColumnGuide.svelte';
@@ -19,6 +20,8 @@
     align: 'left' | 'right';
     width: number;   // rem; 0 = takes the remainder
     noSort?: boolean;
+    /** Hides from fit step `drop + 1` when the pane is too narrow (ui/table-fit.ts). */
+    drop?: number;
   }
 
   interface Props {
@@ -267,20 +270,20 @@
   const ALL_COLUMNS: ColumnDef[] = [
     { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
     { key: 'owned',          label: 'Own',      align: 'right', width: 7 },
-    { key: 'delta',          label: 'Δ',        align: 'right', width: 2.75 },
+    { key: 'delta',          label: 'Δ',        align: 'right', width: 2.75, drop: 3 },
     { key: 'sell_score',     label: 'Priority', align: 'right', width: 6.25 },
-    { key: 'avg_price',      label: 'Avg',      align: 'right', width: 4 },
+    { key: 'avg_price',      label: 'Avg',      align: 'right', width: 4, drop: 2 },
     { key: 'low_sell',       label: 'Low ask',  align: 'right', width: 5.75 },
-    { key: 'top_buy',        label: 'Top buy',  align: 'right', width: 5.75 },
-    { key: 'medians_7d',     label: 'Trend',    align: 'left',  width: 4.5, noSort: true },
-    { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 4.5 },
-    { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 5.5 },
-    { key: 'ratio',          label: 'Demand',   align: 'right', width: 5.75 },
-    { key: 'usage',          label: 'Played',   align: 'left',  width: 7.5, noSort: true },
-    { key: 'advice',         label: 'Advice',   align: 'left',  width: 5.5 },
+    { key: 'top_buy',        label: 'Top buy',  align: 'right', width: 5.75, drop: 2 },
+    { key: 'medians_7d',     label: 'Trend',    align: 'left',  width: 4.5, noSort: true, drop: 1 },
+    { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 4.5, drop: 2 },
+    { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 5.5, drop: 3 },
+    { key: 'ratio',          label: 'Demand',   align: 'right', width: 5.75, drop: 1 },
+    { key: 'usage',          label: 'Played',   align: 'left',  width: 7.5, noSort: true, drop: 1 },
+    { key: 'advice',         label: 'Advice',   align: 'left',  width: 5.5, drop: 3 },
     { key: 'ducats',         label: 'Ducats',   align: 'right', width: 5.5 },
-    { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 5 },
-    { key: 'raw_value',      label: 'Raw value', align: 'right', width: 7 },
+    { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 5, drop: 3 },
+    { key: 'raw_value',      label: 'Raw value', align: 'right', width: 7, drop: 3 },
     { key: 'potential_plat', label: 'Stack value', align: 'right', width: 8.5 },
   ];
 
@@ -322,10 +325,19 @@
    *  Item is the one column a trader cannot do without, so it gets a floor
    *  rather than the leftovers. */
   const ITEM_FLOOR_REM = 20;
+  /** From fit step 1 Item gives up part of its floor and long names wrap. */
+  const ITEM_NARROW_REM = 13;
 
-  let floorRem = $derived(
-    columns.reduce((sum, c) => sum + (c.width ?? 0), 0) + ITEM_FLOOR_REM,
-  );
+  // The same fit steps as every other table, worked out from the declared
+  // widths: fixed layout cannot be measured into fitting.
+  let paneWidth = $state(0);
+  const rootRem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const floorAt = (step: number) => columns.reduce((sum, c) => sum + (hidesAt(c.drop ?? 0, step) ? 0 : c.width ?? 0), 0)
+    + (step === 0 ? ITEM_FLOOR_REM : ITEM_NARROW_REM);
+  let fitAt = $derived(paneWidth > 0 ? fitStep((step) => floorAt(step) * rootRem() <= paneWidth + 1, MAX_DROP_RANK + 1) : 0);
+  let shownColumns = $derived(columns.filter((c) => !hidesAt(c.drop ?? 0, fitAt)));
+  let fittedNote = $derived(fitNote(columns.filter((c) => hidesAt(c.drop ?? 0, fitAt)).map((c) => c.label)));
+  let floorRem = $derived(floorAt(fitAt));
 
   // A preset can carry a default sort (the Ducats preset ranks by plat-per-100-
   // ducats ascending - best ducat trades first). Re-passing an equivalent
@@ -476,7 +488,7 @@
 
 {#snippet colgroup()}
   <colgroup>
-    {#each columns as col (col.key)}
+    {#each shownColumns as col (col.key)}
       <col style={col.width ? `width:${col.width}rem` : undefined} />
     {/each}
   </colgroup>
@@ -624,7 +636,7 @@
     <div class="scroll" aria-hidden="true">
     <table class="picks-table pending">
       <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
-      <thead><tr><th class="left">Item</th><th class="left"></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
+      <thead><tr><th class="left">Item</th><th class="left"></th><th class="right">Low ask</th><th class="right" data-drop="1">Vol 48h</th><th class="left">Why list now</th></tr></thead>
       <tbody>
         {#each { length: 3 } as _, i (i)}
           <tr class="pick"><td class="left col-name"><span class="ph"></span></td><td class="left pick-act"><span class="ph btn-ph"></span></td><td class="right"><span class="ph short"></span></td><td class="right"><span class="ph short"></span></td><td class="left reason"><span class="ph-line"><span class="ph"></span></span></td></tr>
@@ -647,10 +659,10 @@
     </div>
     {#if picksOpen}
       {#if picks.length > 0}
-        <div class="scroll" use:tableNavigation={'Top picks table'}>
+        <div class="scroll" use:fitTable use:tableNavigation={'Top picks table'}>
         <table class="picks-table">
           <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
-          <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
+          <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right" data-drop="1">Vol 48h</th><th class="left">Why list now</th></tr></thead>
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
               {#if i === picksCut && picksCutRow}
@@ -734,7 +746,7 @@
     {/if}
     {#if display}
       <div class="ui-segmented density-seg" role="group" aria-label="Item lists">
-        <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>Visual</button>
+        <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')} title="Item pictures: Warframe Wiki · © Digital Extremes">Visual</button>
         <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
       </div>
     {/if}
@@ -744,12 +756,12 @@
   {#if results.length === 0 && empty}
     <div class="empty-slot">{@render empty()}</div>
   {:else}
-  <div class="scroll" use:tableNavigation={'Inventory table'}>
-  <table style="min-width:{floorRem}rem">
+  <div class="scroll" use:tableNavigation={'Inventory table'} use:watchPaneWidth={(width) => (paneWidth = width)} data-fit={fitAt} data-fit-note={fittedNote}>
+  <table class="fit-planned" style="min-width:{floorRem}rem">
     {@render colgroup()}
     <thead>
       <tr>
-        {#each columns as col (col.key)}
+        {#each shownColumns as col (col.key)}
           <th
             class={col.align}
             class:active={sortKey === col.key}
@@ -772,7 +784,7 @@
       {#each paged as r (r.key ?? r.slug)}
         {@const d = rowDelta(r)}
         <tr class:row-dim={r.sellable <= 0}>
-{#each columns as col (col.key)}
+          {#each shownColumns as col (col.key)}
             <td class="{col.align} col-{col.key}">{@render cell(r, col, d)}</td>
           {/each}
         </tr>

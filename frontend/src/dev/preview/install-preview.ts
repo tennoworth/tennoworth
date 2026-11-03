@@ -51,7 +51,7 @@ export async function installPreview() {
     check_update: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
     refresh_history: { updated: false, body: null },
     refresh_market: { updated: false, status: 'offline' },
-    list_watches: [], list_trades: [], list_notifications: [],
+    fetch_orders: [], list_watches: [], list_trades: [], list_notifications: [],
     get_notification_preferences: { popups: true, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true }])) },
     try_silent_unlock: false,
     wfm_remember_available: true,

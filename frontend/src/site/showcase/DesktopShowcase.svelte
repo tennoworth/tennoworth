@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import FeatureRail from './FeatureRail.svelte';
   import CopyButton from '../../ui/CopyButton.svelte';
   import { plat, wfmItemUrl } from '../../ui/format';
@@ -100,7 +101,7 @@
 
 {#snippet handoffRows()}
       {#if rows.length}
-        <div class="scroll">
+        <div class="scroll" use:fitTable>
         <table class="tw fixed handoff-table">
           <colgroup>
             <col />
@@ -115,12 +116,12 @@
           </colgroup>
           <thead><tr>
             <th class="l">Item</th>
-            <th>Avg</th>
-            <th>Δ 90d</th>
-            <th>Trend</th>
-            <th>Vol 48h</th>
+            <th data-drop="2">Avg</th>
+            <th data-drop="3">Δ 90d</th>
+            <th data-drop="1">Trend</th>
+            <th data-drop="1">Vol 48h</th>
             <th class="you y1" title="How many you own - read from your inventory by the scan">Own</th>
-            <th class="you" title="Priority from price × likely sell-through × bounded DE usage; not expected plat/day">Priority</th>
+            <th data-drop="3" class="you" title="Priority from price × likely sell-through × bounded DE usage; not expected plat/day">Priority</th>
             <th class="you" title="Sellable copies × the 48 h average trade price">Stack value</th>
             <th class="you"></th>
           </tr></thead>

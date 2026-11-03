@@ -697,7 +697,6 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
       <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
       Send feedback
     </button>
-    <p data-shell class="credit">Item images: Warframe Wiki · © Digital Extremes. Not affiliated.</p>
     <div data-shell class="ver" title="build {APP_COMMIT}" data-testid="app-version">{versionLabel}</div>
   </div>
   {/if}

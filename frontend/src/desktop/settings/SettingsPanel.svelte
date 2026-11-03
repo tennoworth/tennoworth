@@ -370,7 +370,7 @@
       {#if appIcon}<AppIconSetting {appIcon} />{/if}
       {#if display}
         <div class="ui-setting-row">
-          <div class="ui-setting-copy"><strong>Item lists</strong><p>Visual shows each item's picture in roomier rows. Compact keeps dense text rows and fits more on screen.</p></div>
+          <div class="ui-setting-copy"><strong>Item lists</strong><p>Visual shows each item's picture in roomier rows. Compact keeps dense text rows and fits more on screen.</p><p class="credit">Item pictures: Warframe Wiki · © Digital Extremes. TennoWorth is not affiliated with either.</p></div>
           <div class="ui-setting-control">
             <div class="ui-segmented" role="group" aria-label="Item lists">
               <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>Visual</button>
@@ -418,6 +418,7 @@
 <style>
   .settings { display: flex; flex-direction: column; gap: var(--s4); }
   .lede { margin: 0; color: var(--muted); }
+  .credit { font-size: var(--text-caption); }
   .inset { padding: 0 var(--inset) var(--s4); }
   .exp { margin: 0; font-size: var(--text-control); line-height: var(--leading-body); color: var(--muted); max-width: 85ch; }
   .shortcut { width: 100%; font-family: var(--font-mono); }

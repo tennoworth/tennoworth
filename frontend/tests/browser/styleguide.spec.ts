@@ -10,6 +10,8 @@ test('reference stays readable in both themes and narrow, short, wide windows', 
     await expect(page.locator('html')).toHaveAttribute('data-mode', mode.toLowerCase());
     for (const width of [320, 560, 901, 1440]) {
       await page.setViewportSize({ width, height: 480 });
+      // Tables refit on the next frame after a resize.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const clipped = await page.evaluate(() => {
         const root = document.documentElement;
         const elements = [...document.querySelectorAll('.styleguide .rail, .styleguide .btn, .styleguide .ui-notice')];
@@ -19,11 +21,16 @@ test('reference stays readable in both themes and narrow, short, wide windows', 
         };
       });
       expect(clipped).toEqual({ pageOverflow: false, contents: [] });
-      const columns = await page.getByRole('region', { name: 'Sample inventory table' }).getByRole('columnheader').evaluateAll(headers => headers.map(header => ({
+      const sample = page.getByRole('region', { name: 'Sample inventory table' });
+      const columns = await sample.getByRole('columnheader').evaluateAll(headers => headers.filter(header => header.getClientRects().length > 0).map(header => ({
         text: header.textContent, width: header.getBoundingClientRect().width,
         clipped: header.scrollWidth > header.clientWidth + 1,
       })));
-      expect(columns).toHaveLength(4);
+      // The ranked Context column may hide to fit; the rest never do, and a
+      // hidden column is named under the table.
+      expect(columns.map(column => column.text)).toEqual(expect.arrayContaining(['Item', 'Owned', 'Unit price']));
+      if (columns.length < 4) await expect(sample).toHaveAttribute('data-fit-note', /Context/);
+      else await expect(sample).not.toHaveAttribute('data-fit-note', /./);
       for (const column of columns) {
         expect(column.width, `${column.text} collapsed`).toBeGreaterThanOrEqual(64);
         expect(column.clipped, `${column.text} clipped`).toBe(false);

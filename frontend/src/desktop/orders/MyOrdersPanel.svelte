@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
   import { onDestroy, untrack, type Snippet } from 'svelte';
   import type { ActivityLog } from '../shell/activity.svelte';
@@ -136,7 +137,7 @@
   {:else if controller.phase === 'done' && controller.orders.length === 0}
     <div class="line"><span class="exp">No active listings.</span></div>
   {:else if controller.orders.length > 0}
-    <div class="scroll">
+    <div class="scroll" use:fitTable>
       <!-- Sized by content: numbers and buttons take what they need, Item and
            Health share the rest, so the table fits the panel instead of
            scrolling its last column out of view. -->
@@ -145,11 +146,11 @@
           <tr>
             <th class="l">Item</th>
             <th class="fix"><span class="sr-only">Fix</span></th>
-            <th>Type</th>
+            <th data-drop="1">Type</th>
             <th>Qty</th>
             <th>Lot price</th>
             <th title="Lowest other online ask for this exact tier (live check)">Live ask</th>
-            <th title="Highest online bid for this exact tier (live check)">Live bid</th>
+            <th data-drop="2" title="Highest online bid for this exact tier (live check)">Live bid</th>
             <th class="l health">Health</th>
             <th>Visible</th>
             <th></th>
