@@ -565,9 +565,16 @@ test('relic totals read as expected value across the owned copies', async ({ pag
   await page.goto('/?preview-desktop&sample');
   await previewShell(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Relics/ }).click();
-  const expected = page.locator('.relic-table tbody tr').first().locator('td.price');
-  await expect(expected).toContainText(/≈\d+p/);
-  await expect(expected).toHaveAttribute('title', /Expected value of cracking every one you own/);
+  // Which relics are worth cracking follows the snapshot, so check every row's
+  // wording against its own decision rather than assuming the first row's.
+  const prices = page.locator('.relic-table tbody tr td.price');
+  await expect(prices.first()).toBeVisible();
+  const cells = await prices.evaluateAll(tds => tds.map(td => ({ title: td.getAttribute('title') ?? '', text: td.textContent ?? '' })));
+  for (const cell of cells) {
+    if (/Selling all \d+ intact/.test(cell.title)) continue;
+    expect(cell.title).toMatch(/Expected value of cracking every one you own/);
+    expect(cell.text).toMatch(/≈\d+p/);
+  }
   await expect(page.locator('.relic-table')).not.toContainText(/\dp total/);
 });
 
@@ -919,7 +926,8 @@ test('riven bands draw the median inside their min-max range on one shared scale
   await page.goto('/?preview-desktop&sample');
   await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
   const bands = page.locator('.band');
-  await expect(bands.first()).toContainText('2–2700p');
+  // The range itself is DE's weekly data from the snapshot.
+  await expect(bands.first()).toContainText(/\d+–\d+p/);
   for (const band of await bands.all()) {
     const span = (await band.locator('.range .span').boundingBox())!;
     const mid = (await band.locator('.range .mid').boundingBox())!;

@@ -1,5 +1,5 @@
 {
-  "version": "0.8.114",
+  "version": "0.8.115",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1730,6 +1730,89 @@
           "kind": "improved",
           "title": "Verified market downloads",
           "body": "Market snapshots and price history must carry the server's valid signature before replacing cached data. If verification fails, the app keeps its previous copy.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.115",
+      "date": "2026-11-03",
+      "changes": [
+        {
+          "id": "ink-paper-item-pictures",
+          "kind": "improved",
+          "title": "A new look with item pictures",
+          "body": "The app has a new ink-and-paper style, a keyboard legend, and a Visual list display that shows each item's picture next to its name. Switch to Compact in Settings or above the Sell table to hide them. Pictures come from the Warframe Wiki through TennoWorth and are kept on your computer after the first view.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "tables-fit-window",
+          "kind": "fixed",
+          "title": "Tables fit the window",
+          "body": "Wide tables scroll inside their own box and fade at the edge when more columns sit beyond it. My orders keeps its fix and Confirm buttons in view, and Ledger and Trade Session fit a 1200 px window.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "relic-totals-follow-decision",
+          "kind": "fixed",
+          "title": "Relic totals follow your decision",
+          "body": "A relic marked Sell intact is valued at copies times its sell price, and the total adds up each row's own decision.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-filtered-count",
+          "kind": "improved",
+          "title": "Sell shows how many items it is showing",
+          "body": "The Sell view shows the filtered count against your whole inventory, with a hint that says which default filters apply.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "digest-matches-top-picks",
+          "kind": "fixed",
+          "title": "The evening digest matches Top picks",
+          "body": "The digest now uses the same rules as Top picks, so it no longer suggests items that Top picks would hold back.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "top-picks-trade-gauge",
+          "kind": "improved",
+          "title": "Today's trades at a glance",
+          "body": "Top picks show the day's remaining trades as a gauge, list picks after the daily reset in one batch, and recount when warframe.market locks or unlocks.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "ranked-mod-sale-listing",
+          "kind": "fixed",
+          "title": "Ranked mod sales update the right listing",
+          "body": "Selling a ranked mod now adjusts the listing for that rank and counts toward that listing's outcome.",
           "platforms": [
             "windows",
             "linux"
