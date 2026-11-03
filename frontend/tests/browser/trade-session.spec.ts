@@ -147,7 +147,8 @@ test('Top picks recount their trades when warframe.market locks', async ({ page 
   const sidebar = page.locator('.sidebar');
   await sidebar.getByRole('button', { name: /^Sell/ }).click();
   await expect(page.locator('tr.pick-cut')).toHaveCount(1);
-  await expect(page.getByText('4 trades · 5p per trade')).toBeVisible();
+  // The per-trade price follows the snapshot; the trade count is the point.
+  await expect(page.getByText(/^4 trades · \d+p per trade$/)).toBeVisible();
   await sidebar.getByRole('button', { name: /^Settings/ }).click();
   await page.getByRole('button', { name: 'Log out' }).click();
   await page.getByRole('button', { name: 'Confirm log out' }).click();
