@@ -108,7 +108,10 @@ pub fn publish(app: &AppHandle, candidate: Candidate) -> Result<bool, String> {
 fn wants_in_game(prefs: &Preferences, category: &str) -> bool {
     prefs.popups
         && IN_GAME_CATEGORIES.contains(&category)
-        && prefs.categories.get(category).is_some_and(|pref| pref.in_game)
+        && prefs
+            .categories
+            .get(category)
+            .is_some_and(|pref| pref.in_game)
 }
 
 pub fn send(app: &AppHandle, candidate: Candidate) {
@@ -209,6 +212,9 @@ mod tests {
         let stored = r#"{"popups":true,"categories":{"watches":{"enabled":true,"native":false}}}"#;
         let prefs: Preferences = serde_json::from_str(stored).unwrap();
         assert!(!prefs.copy_whisper);
-        assert!(prefs.categories.get("watches").is_some_and(|p| !p.in_game && !p.native));
+        assert!(prefs
+            .categories
+            .get("watches")
+            .is_some_and(|p| !p.in_game && !p.native));
     }
 }
