@@ -89,11 +89,19 @@ pub(crate) fn whisper(
         .chars()
         .filter(|c| !c.is_control() && *c != '"')
         .collect();
-    let label = match (rank, subtype.filter(|s| !s.is_empty())) {
-        (Some(rank), _) => format!("{item} (rank {rank})"),
-        (None, Some(subtype)) => format!("{item} ({subtype})"),
-        (None, None) => item,
+    // The site leads with the variant ("Intact Axi A5 Relic") and follows
+    // with the rank ("Abating Link (rank 0)").
+    let mut label = match subtype.filter(|s| !s.is_empty()) {
+        Some(subtype) => {
+            let mut chars = subtype.chars();
+            let first = chars.next().map(|c| c.to_uppercase().collect::<String>());
+            format!("{}{} {item}", first.unwrap_or_default(), chars.as_str())
+        }
+        None => item,
     };
+    if let Some(rank) = rank {
+        label = format!("{label} (rank {rank})");
+    }
     Some(format!(
         "/w {player} Hi! I want to {verb}: \"{label}\" for {price} platinum. (warframe.market) - TennoWorth"
     ))
@@ -274,6 +282,18 @@ mod tests {
         );
     }
 
+    /// Also copied from the site (2026-11-04): the refinement leads the name
+    /// (Radiant too). For several copies the site writes `x6 "…"` and the
+    /// total; a watch is about one copy, so the whisper asks for one.
+    #[test]
+    fn a_relic_whisper_leads_with_its_refinement_as_the_site_does() {
+        let site = "/w Voidz361 Hi! I want to buy: \"Intact Axi A5 Relic\" for 7 platinum. (warframe.market)";
+        assert_eq!(
+            whisper("sell", "Voidz361", "Axi A5 Relic", None, Some("intact"), 7),
+            Some(format!("{site} - TennoWorth"))
+        );
+    }
+
     #[test]
     fn whispers_follow_the_market_format_and_name_this_app() {
         assert_eq!(
@@ -286,7 +306,7 @@ mod tests {
         );
         assert!(
             whisper("buy", "B", "Lith A1 Relic", None, Some("radiant"), 9)
-                .is_some_and(|w| w.contains("\"Lith A1 Relic (radiant)\""))
+                .is_some_and(|w| w.contains("\"Radiant Lith A1 Relic\""))
         );
     }
 
