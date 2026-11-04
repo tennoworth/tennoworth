@@ -12,7 +12,7 @@ import { WATCH_OFFER_FRESH_SECS, type WatchOffer } from '../../contracts/desktop
 const nowSecs = () => Math.floor(Date.now() / 1000);
 const offer = (over: Partial<WatchOffer> = {}): WatchOffer => ({
   watch_id: 1, slug: 'ash_prime_set', name: 'Ash Prime Set', side: 'sell', threshold: 120, price: 110, rank: null, subtype: null,
-  player: 'Seller', whisper: '/w Seller Hi! I want to buy: "Ash Prime Set" for 110 platinum. (warframe.market via TennoWorth)',
+  player: 'Seller', whisper: '/w Seller Hi! I want to buy: "Ash Prime Set" for 110 platinum. (warframe.market) - TennoWorth',
   seen_at: nowSecs() - 90, rechecked_at: null, still_listed: null, ...over,
 });
 

@@ -106,7 +106,7 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
   // banner a price-watch hit leaves for the player who switches to the app.
   let watchOffer: Record<string, unknown> | null = scenario.startsWith('watch-offer') ? {
     watch_id: 1, slug: 'pyrana_prime_set', name: 'Pyrana Prime Set', side: 'sell', threshold: 70, price: 65, rank: null, subtype: null,
-    player: 'Sample_Seller', whisper: '/w Sample_Seller Hi! I want to buy: "Pyrana Prime Set" for 65 platinum. (warframe.market via TennoWorth)',
+    player: 'Sample_Seller', whisper: '/w Sample_Seller Hi! I want to buy: "Pyrana Prime Set" for 65 platinum. (warframe.market) - TennoWorth',
     seen_at: now - 120, rechecked_at: null, still_listed: null,
   } : null;
   const responses: Record<string, unknown> = {

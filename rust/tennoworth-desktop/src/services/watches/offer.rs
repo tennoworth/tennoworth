@@ -65,8 +65,10 @@ fn is_whisperable(player: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
-/// The whisper warframe.market's own "copy" produces, naming this app as its
-/// rules ask of third-party tools. `side` is the watch's side.
+/// The whisper warframe.market's own copy button produces, unchanged, with this
+/// app's name after it: its terms (section 11) require a copy/paste message
+/// "in the same format as seen on the Site" that includes the application
+/// name. `side` is the watch's side.
 pub(crate) fn whisper(
     side: &str,
     player: &str,
@@ -93,7 +95,7 @@ pub(crate) fn whisper(
         (None, None) => item,
     };
     Some(format!(
-        "/w {player} Hi! I want to {verb}: \"{label}\" for {price} platinum. (warframe.market via TennoWorth)"
+        "/w {player} Hi! I want to {verb}: \"{label}\" for {price} platinum. (warframe.market) - TennoWorth"
     ))
 }
 
@@ -261,15 +263,26 @@ mod tests {
         }
     }
 
+    /// Copied from the site's own whisper button (2026-11-04); this app may
+    /// only add its name after it.
+    #[test]
+    fn a_ranked_mod_whisper_is_the_site_text_with_the_app_name_after_it() {
+        let site = "/w victor896 Hi! I want to buy: \"Abating Link (rank 0)\" for 13 platinum. (warframe.market)";
+        assert_eq!(
+            whisper("sell", "victor896", "Abating Link", Some(0), None, 13),
+            Some(format!("{site} - TennoWorth"))
+        );
+    }
+
     #[test]
     fn whispers_follow_the_market_format_and_name_this_app() {
         assert_eq!(
             whisper("sell", "Seller_1", "Ash Prime Set", None, None, 110).as_deref(),
-            Some("/w Seller_1 Hi! I want to buy: \"Ash Prime Set\" for 110 platinum. (warframe.market via TennoWorth)")
+            Some("/w Seller_1 Hi! I want to buy: \"Ash Prime Set\" for 110 platinum. (warframe.market) - TennoWorth")
         );
         assert_eq!(
             whisper("buy", "Buyer.2", "Primed Flow", Some(10), None, 90).as_deref(),
-            Some("/w Buyer.2 Hi! I want to sell: \"Primed Flow (rank 10)\" for 90 platinum. (warframe.market via TennoWorth)")
+            Some("/w Buyer.2 Hi! I want to sell: \"Primed Flow (rank 10)\" for 90 platinum. (warframe.market) - TennoWorth")
         );
         assert!(
             whisper("buy", "B", "Lith A1 Relic", None, Some("radiant"), 9)
