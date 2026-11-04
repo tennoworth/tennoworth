@@ -95,3 +95,26 @@ fn the_overlay_can_only_read_its_result() {
         }
     }
 }
+
+#[test]
+fn the_game_notice_can_only_read_its_notice() {
+    let notice: serde_json::Value =
+        serde_json::from_str(&read("capabilities/game-notice.json")).unwrap();
+    assert_eq!(notice["windows"], serde_json::json!(["game-notice"]));
+    assert_eq!(
+        notice["permissions"],
+        serde_json::json!([permission("current_game_notice")])
+    );
+    for file in
+        std::fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities")).unwrap()
+    {
+        let capability: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(file.unwrap().path()).unwrap()).unwrap();
+        if capability["identifier"] != "game-notice" {
+            assert!(
+                !capability["windows"].to_string().contains("game-notice"),
+                "only the game-notice capability may name the notice window"
+            );
+        }
+    }
+}

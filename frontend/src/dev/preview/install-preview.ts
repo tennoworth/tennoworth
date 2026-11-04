@@ -52,7 +52,8 @@ export async function installPreview() {
     refresh_history: { updated: false, body: null },
     refresh_market: { updated: false, status: 'offline' },
     fetch_orders: [], list_watches: [], list_trades: [], list_notifications: [],
-    get_notification_preferences: { popups: true, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true }])) },
+    get_notification_preferences: { popups: true, copy_whisper: false, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true, in_game: false }])) },
+    latest_watch_offer: null, current_game_notice: null,
     try_silent_unlock: false,
     wfm_remember_available: true,
     get_usage_preferences: { enabled: false, available: false },
@@ -129,7 +130,7 @@ export async function installPreview() {
       if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem('routine-checklist'));
       if (cmd === 'set_setting') { localStorage.setItem('routine-checklist', String(args.value)); return Promise.resolve(null); }
     }
-    if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'fetch_orders', 'list_watches', 'list_trades', 'listing_outcomes', 'set_listing_outcomes', 'get_pending_plan', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'bulk_visibility', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
+    if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'fetch_orders', 'list_watches', 'list_trades', 'listing_outcomes', 'set_listing_outcomes', 'get_pending_plan', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'bulk_visibility', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification', 'latest_watch_offer', 'dismiss_watch_offer', 'copy_watch_whisper', 'recheck_watch_offer'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }
     if (cmd === 'protection_state') {
       const snapshot = JSON.parse(localStorage.getItem('last-owned-v2') ?? '{"owned":[]}') as { owned: Array<[string, OwnedRecord]> };

@@ -15,6 +15,8 @@ pub(super) fn present_overlay(
     height: u32,
     result: &RelicOverlayResult,
 ) -> Result<(), String> {
+    // A reward screen outranks any in-game notice.
+    super::notice::hide(app);
     #[cfg(target_os = "linux")]
     if std::env::var_os("WAYLAND_DISPLAY").is_some() {
         let geometry = wayland::OverlayGeometry {

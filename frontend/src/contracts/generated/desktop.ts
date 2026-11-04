@@ -62,6 +62,20 @@ export type DigestNotification = { opportunities: Array<DigestOpportunity>, inve
 
 export type DigestOpportunity = { name: string, quantity: number, price: number, };
 
+export type GameNotice = { id: string,
+/**
+ * The kind of notice, e.g. "Price watch".
+ */
+title: string,
+/**
+ * The evidence, e.g. "Ash Prime Set is listed at 110p by PlayerX".
+ */
+detail: string,
+/**
+ * What to do next, e.g. "Whisper copied - press Ctrl+V in chat".
+ */
+hint: string | null, };
+
 export type ListingOutcomes = { enabled: boolean, window_days: number, session: OutcomeGroup, manual: OutcomeGroup, };
 
 export type NotificationContent = { "kind": "announcement" } & AnnouncementNotification | { "kind": "baro" } & BaroNotification | { "kind": "digest" } & DigestNotification;
@@ -147,6 +161,29 @@ detail: string | null, settings: PresenceSettings, };
 
 export type Restrictions = { spacing_ms: number, concurrency: number, contract_spacing_ms: number, watch_interval_ms: number, pause_all: boolean, pause_background: boolean, pause_contracts: boolean, pause_mutations: boolean, pause_websockets: boolean, };
 
+export type WatchOffer = { watch_id: number, slug: string, name: string,
+/**
+ * The watch's side: 'sell' watches asks (the player buys), 'buy' watches
+ * bids (the player sells).
+ */
+side: string, threshold: number, price: number, rank: number | null, subtype: string | null,
+/**
+ * The other player's in-game name.
+ */
+player: string, whisper: string,
+/**
+ * Unix seconds when the order was seen.
+ */
+seen_at: number,
+/**
+ * Unix seconds of the one recheck, once it has run.
+ */
+rechecked_at: number | null,
+/**
+ * The recheck's answer: does an order at or past the threshold remain?
+ */
+still_listed: boolean | null, };
+
 export type WatchOutcome = { id: number, slug: string, name: string, side: string, threshold: number,
 /**
  * The price the watch is judged against (lowest other ask for 'sell',
@@ -193,9 +230,15 @@ export const RELIC_OVERLAY_UPDATE_EVENT = "relic-overlay:update" as const;
 
 export const RELIC_OVERLAY_HIDE_EVENT = "relic-overlay:hide" as const;
 
+export const WATCH_OFFER_EVENT = "watch-offer-changed" as const;
+
 export const PRESENCE_CHANGED_EVENT = "presence-changed" as const;
 
 export const RELIC_RECOMMENDATION_CONFIDENCE = 0.9 as const;
+
+export const WATCH_OFFER_FRESH_SECS = 900 as const;
+
+export const IN_GAME_CATEGORIES = ["watches"] as const;
 
 export const AUTO_SCAN_CADENCE_CHOICES = [15, 30, 60] as const;
 

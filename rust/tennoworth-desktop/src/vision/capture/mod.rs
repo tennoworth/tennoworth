@@ -13,7 +13,7 @@ pub(crate) struct CapturedFrame {
 /// Which rule picked the captured window, named in the capture log.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum WindowRule {
+pub(super) enum WindowRule {
     GamePid,
     ExactTitle,
     TitleContains,
@@ -40,7 +40,7 @@ impl WindowRule {
 /// title of exactly "Warframe" is the game's own; the substring is the last
 /// resort.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
-fn pick_game_window(
+pub(super) fn pick_game_window(
     candidates: &[(Option<u32>, String)],
     game_pid: Option<u32>,
 ) -> Option<(usize, WindowRule)> {

@@ -2,7 +2,7 @@ import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
 import { isMarket } from '../domain/market';
-import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, ListingOutcomes, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome, PresenceChoice, PresenceSettings, PresenceStatus } from '../contracts/desktop';
+import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, ListingOutcomes, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome, PresenceChoice, PresenceSettings, PresenceStatus, WatchOffer, GameNotice } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
 export async function desktopAnnouncements(): Promise<import('../contracts/generated/desktop').AnnouncementFeed | null> {
@@ -415,6 +415,27 @@ export async function desktopTestNotification(): Promise<string> {
 
 export async function currentOverlayResult(): Promise<import('../contracts/data').RelicOverlayResult | null> {
   return resolveInvoke()<import('../contracts/data').RelicOverlayResult | null>('current_overlay_result');
+}
+
+export async function currentGameNotice(): Promise<GameNotice | null> {
+  return resolveInvoke()<GameNotice | null>('current_game_notice');
+}
+
+export async function desktopLatestWatchOffer(): Promise<WatchOffer | null> {
+  try { return await resolveInvoke()<WatchOffer | null>('latest_watch_offer'); } catch (e) { rethrowInvoke(e); }
+}
+
+export async function desktopDismissWatchOffer(): Promise<void> {
+  try { await resolveInvoke()<void>('dismiss_watch_offer'); } catch (e) { rethrowInvoke(e); }
+}
+
+export async function desktopCopyWatchWhisper(): Promise<void> {
+  try { await resolveInvoke()<void>('copy_watch_whisper'); } catch (e) { rethrowInvoke(e); }
+}
+
+/** At most one warframe.market request per offer; Rust answers repeats from memory. */
+export async function desktopRecheckWatchOffer(): Promise<WatchOffer | null> {
+  try { return await resolveInvoke()<WatchOffer | null>('recheck_watch_offer'); } catch (e) { rethrowInvoke(e); }
 }
 
 export async function desktopAccessStatus(): Promise<import('../contracts/generated/desktop').AccessStatus> {

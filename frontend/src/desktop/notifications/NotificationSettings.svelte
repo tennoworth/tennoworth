@@ -4,7 +4,7 @@
   const { desktopNotificationPreferences, desktopSaveNotificationPreferences, desktopTestNotification } = useDesktopServices();
   import { onMount } from 'svelte';
   
-import { NOTIFICATION_CATEGORIES } from '../../contracts/desktop';
+import { NOTIFICATION_CATEGORIES, IN_GAME_CATEGORIES } from '../../contracts/desktop';
 import { type NotificationPreferences, type NotificationCategory } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
   let preferences = $state<NotificationPreferences | null>(null);
@@ -28,7 +28,9 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
     catch (e) { error = humanError(e); }
     finally { busy = false; }
   }
-  function change(event: Event, category?: NotificationCategory, field: 'enabled' | 'native' = 'enabled') {
+  const offersInGame = (category: NotificationCategory) => (IN_GAME_CATEGORIES as readonly string[]).includes(category);
+  const anyInGame = $derived(!!preferences && NOTIFICATION_CATEGORIES.some(k => offersInGame(k) && preferences!.categories[k].in_game));
+  function change(event: Event, category?: NotificationCategory, field: 'enabled' | 'native' | 'in_game' = 'enabled') {
     if (!preferences) return;
     const control = event.currentTarget as HTMLInputElement;
     const next = control.checked;
@@ -36,6 +38,13 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
     void save(category
       ? { ...preferences, categories: { ...preferences.categories, [category]: { ...preferences.categories[category], [field]: next } } }
       : { ...preferences, popups: next });
+  }
+  function changeCopy(event: Event) {
+    if (!preferences) return;
+    const control = event.currentTarget as HTMLInputElement;
+    const next = control.checked;
+    control.checked = preferences.copy_whisper;
+    void save({ ...preferences, copy_whisper: next });
   }
   async function test() {
     busy = true; error = ''; message = '';
@@ -54,17 +63,23 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
     </div>
     <div class="scroll" use:fitTable>
       <table class="tw categories">
-        <thead><tr><th>Alert</th><th>Inbox</th><th>Popup</th></tr></thead>
+        <thead><tr><th>Alert</th><th>Inbox</th><th>Popup</th><th>In game</th></tr></thead>
         <tbody>
           {#each NOTIFICATION_CATEGORIES as category}
             <tr>
               <td><strong>{labels[category]}</strong>{#if timing[category]}<small>{timing[category]}</small>{/if}</td>
               <td><input type="checkbox" aria-label={`${labels[category]} in inbox`} checked={preferences.categories[category].enabled} disabled={busy} onchange={(e) => change(e, category, 'enabled')} /></td>
               <td><input type="checkbox" aria-label={`${labels[category]} popup`} checked={preferences.categories[category].native} disabled={busy || !preferences.popups || !preferences.categories[category].enabled} onchange={(e) => change(e, category, 'native')} /></td>
+              <td>{#if offersInGame(category)}<input type="checkbox" aria-label={`${labels[category]} in game`} checked={preferences.categories[category].in_game} disabled={busy || !preferences.popups || !preferences.categories[category].enabled} onchange={(e) => change(e, category, 'in_game')} />{:else}<span class="visually-hidden">Not offered</span>{/if}</td>
             </tr>
           {/each}
         </tbody>
       </table>
+    </div>
+    <p class="inset in-game-note">In game shows a short card over Warframe instead of a popup while the game is the window in front, and a popup otherwise. The card never takes focus or clicks. On Linux this needs Warframe running through XWayland, as Steam’s Proton does.</p>
+    <div class="ui-setting-row">
+      <div class="ui-setting-copy"><label for="notification-copy-whisper">Copy the whisper in game</label><p>When a price watch names the player, the card puts a ready warframe.market whisper on your clipboard, so you can press Ctrl+V in chat. This replaces what you had copied. Off, the whisper waits in TennoWorth with a Copy button.</p></div>
+      <label class="ui-setting-check"><input id="notification-copy-whisper" type="checkbox" checked={preferences.copy_whisper} disabled={busy || !anyInGame} onchange={changeCopy} /><span>Enabled</span></label>
     </div>
   {:else if !error}<p class="inset" role="status">Loading notification preferences…</p>{/if}
   <p class="inset footnote">Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days.</p>
@@ -77,6 +92,8 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   .notice { margin: 0 var(--inset) var(--s4); }
   .rail + .notice { margin-top: var(--s4); }
   .scroll { border-top: 1px var(--rule) var(--border); }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .in-game-note { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--border); }
   /* Category names are reading text that wraps, not truncated data. */
   .categories td:first-child { height: auto; padding-block: var(--s2); text-align: left; white-space: normal; font-family: var(--font-body); color: var(--fg); }
   .categories th:first-child { text-align: left; }

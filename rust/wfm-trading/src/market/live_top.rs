@@ -76,6 +76,12 @@ pub struct LiveTop {
     pub own_ask: Option<f64>,
     #[serde(default)]
     pub own_bid: Option<f64>,
+    /// In-game name of whoever holds `low_sell` / `top_buy`, so a price watch
+    /// can say who to whisper. `None` when WFM omitted the user.
+    #[serde(default)]
+    pub low_sell_by: Option<String>,
+    #[serde(default)]
+    pub top_buy_by: Option<String>,
     /// Set when this one lookup failed (item unknown to WFM, network blip);
     /// the batch keeps going and the UI shows the row as "no live data".
     #[serde(default)]
@@ -96,6 +102,8 @@ impl LiveTop {
             top_buy: None,
             own_ask: None,
             own_bid: None,
+            low_sell_by: None,
+            top_buy_by: None,
             error: Some(e),
             buyer_book: None,
         }
@@ -220,34 +228,52 @@ pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value, me: Option<&str>) -
     if data.get("sell").is_none() && data.get("buy").is_none() {
         bail!("unexpected /top shape for {}: no sell/buy arrays", q.slug);
     }
-    // (others' prices, my price if present)
-    let side = |name: &str| -> (Vec<f64>, Option<f64>) {
-        let mut others = Vec::new();
-        let mut mine = None;
-        for o in data
-            .get(name)
-            .and_then(|v| v.as_array())
-            .into_iter()
-            .flatten()
-        {
-            let Some(p) = o
-                .get("platinum")
-                .and_then(|p| p.as_f64())
-                .and_then(|p| wfm_client::unit_price(p, o.get("perTrade")))
-            else {
-                continue;
-            };
-            if is_own_order(o, me) {
-                mine =
-                    Some(mine.map_or(p, |m: f64| if name == "sell" { m.min(p) } else { m.max(p) }));
-            } else {
-                others.push(p);
+    // (others' prices, my price if present, who holds the best other price)
+    let side =
+        |name: &str| -> (Vec<f64>, Option<f64>, Option<String>) {
+            let mut others = Vec::new();
+            let mut mine = None;
+            let mut best: Option<(f64, Option<String>)> = None;
+            for o in data
+                .get(name)
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+            {
+                let Some(p) = o
+                    .get("platinum")
+                    .and_then(|p| p.as_f64())
+                    .and_then(|p| wfm_client::unit_price(p, o.get("perTrade")))
+                else {
+                    continue;
+                };
+                if is_own_order(o, me) {
+                    mine = Some(
+                        mine.map_or(p, |m: f64| if name == "sell" { m.min(p) } else { m.max(p) }),
+                    );
+                } else {
+                    let better = best.as_ref().is_none_or(|(held, _)| {
+                        if name == "sell" {
+                            p < *held
+                        } else {
+                            p > *held
+                        }
+                    });
+                    if better {
+                        let by = o
+                            .get("user")
+                            .and_then(|u| u.get("ingameName"))
+                            .and_then(|v| v.as_str())
+                            .map(String::from);
+                        best = Some((p, by));
+                    }
+                    others.push(p);
+                }
             }
-        }
-        (others, mine)
-    };
-    let (mut sells, own_ask) = side("sell");
-    let (mut buys, own_bid) = side("buy");
+            (others, mine, best.and_then(|(_, by)| by))
+        };
+    let (mut sells, own_ask, low_sell_by) = side("sell");
+    let (mut buys, own_bid, top_buy_by) = side("buy");
     sells.sort_unstable_by(f64::total_cmp);
     buys.sort_unstable_by(|a, b| b.total_cmp(a));
     Ok(LiveTop {
@@ -260,6 +286,8 @@ pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value, me: Option<&str>) -
         buys,
         own_ask,
         own_bid,
+        low_sell_by,
+        top_buy_by,
         error: None,
         buyer_book: buyer_orders(q, data, me),
     })
@@ -511,6 +539,29 @@ mod tests {
         let t2 = parse_top(&q("primed_flow", Some(0), None), &body, None).unwrap();
         assert_eq!(t2.own_ask, None);
         assert_eq!(t2.low_sell, Some(12.0));
+    }
+
+    #[test]
+    fn names_who_holds_the_best_other_ask_and_bid() {
+        let body = json!({"data":{
+            "sell":[
+                {"platinum":12,"user":{"ingameName":"Prowly","slug":"prowly"}},
+                {"platinum":15,"user":{"ingameName":"Slower","slug":"slower"}},
+                {"platinum":14,"user":{"ingameName":"Seller","slug":"seller"}}],
+            "buy":[
+                {"platinum":9,"user":{"ingameName":"Buyer","slug":"buyer"}},
+                {"platinum":11,"user":{"ingameName":"prowly","slug":"prowly"}},
+                {"platinum":4}]}});
+        let t = parse_top(&q("primed_flow", Some(0), None), &body, Some("Prowly")).unwrap();
+        assert_eq!(
+            t.low_sell_by.as_deref(),
+            Some("Seller"),
+            "never my own order"
+        );
+        assert_eq!(t.top_buy_by.as_deref(), Some("Buyer"));
+        let anonymous = json!({"data":{"sell":[{"platinum":3}],"buy":[]}});
+        let t = parse_top(&q("x", None, None), &anonymous, None).unwrap();
+        assert_eq!((t.low_sell, t.low_sell_by), (Some(3.0), None));
     }
 
     /// The wiring gate: if the stamp ever goes back to a clock read taken while

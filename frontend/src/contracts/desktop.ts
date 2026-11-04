@@ -155,6 +155,9 @@ export interface LiveTop {
    *  best ask that is NOT yours. */
   own_ask?: number | null;
   own_bid?: number | null;
+  /** In-game name of whoever holds `low_sell` / `top_buy`. */
+  low_sell_by?: string | null;
+  top_buy_by?: string | null;
   /** Set when this one lookup failed; the row simply has no live data. */
   error?: string | null;
   buyer_book?: {
@@ -244,7 +247,8 @@ export interface NewWatch {
   threshold: number;
 }
 
-export type { WatchOutcome } from './generated/desktop';
+export type { WatchOutcome, WatchOffer, GameNotice } from './generated/desktop';
+export { IN_GAME_CATEGORIES, WATCH_OFFER_FRESH_SECS } from './generated/desktop';
 
 // ---- Trade ledger (desktop only; EE.log detection) ----
 
@@ -299,13 +303,16 @@ export type NotificationTarget = 'sell' | 'orders' | 'ledger' | 'watches' | 'bar
 export interface NotificationEntry {
   id: number; category: NotificationCategory; title: string; body: string;
   target: NotificationTarget; created_at: number; read: boolean;
-  delivery: 'pending' | 'sent' | 'failed' | 'inbox_only';
+  delivery: 'pending' | 'sent' | 'failed' | 'inbox_only' | 'in_game';
   content?: NotificationContent | null;
 }
 
 export interface NotificationPreferences {
   popups: boolean;
-  categories: Record<NotificationCategory, { enabled: boolean; native: boolean }>;
+  /** `in_game` only takes effect for IN_GAME_CATEGORIES. */
+  categories: Record<NotificationCategory, { enabled: boolean; native: boolean; in_game: boolean }>;
+  /** Copy a notification's ready whisper when its card shows in game. */
+  copy_whisper: boolean;
 }
 
 export const NOTIFICATION_CATEGORIES = ['trades', 'watches', 'baro', 'calendar', 'digest', 'announcements'] as const;

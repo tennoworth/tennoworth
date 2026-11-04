@@ -43,6 +43,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   import LedgerPanel from '../ledger/LedgerPanel.svelte';
   import MarketBrowser from '../../features/market/MarketBrowser.svelte';
   import DesktopUpdateBanner from '../updates/DesktopUpdateBanner.svelte';
+  import WatchOfferBanner from '../watches/WatchOfferBanner.svelte';
   import { UpdateController } from '../updates/update-controller.svelte';
   import WfmAuthDialogs from '../account/WfmAuthDialogs.svelte';
   import ExportImportDialogs from '../inventory/ExportImportDialogs.svelte';
@@ -780,6 +781,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
       </div>
     </div>
   {/if}
+  <WatchOfferBanner onwatches={() => filters.setView('watches')} />
   <!-- Kept out of first run and of trading, where it would compete with the task. -->
   <PriceSharingPrompt {transport} session={prompts} active={promptsActive && effectiveView !== 'settings'} onsettings={() => { settingsSection = 'price-sharing'; filters.setView('settings'); }} />
   <SupportPrompt session={prompts} active={promptsActive} />

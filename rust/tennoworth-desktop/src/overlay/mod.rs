@@ -7,6 +7,7 @@
 //! overlay webview.
 
 mod lifecycle;
+pub(crate) mod notice;
 mod presentation;
 mod recognition;
 #[cfg(test)]

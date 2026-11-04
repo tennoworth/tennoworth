@@ -1,5 +1,6 @@
 pub(crate) mod announcements;
 pub(crate) mod browser;
+pub(crate) mod clipboard;
 pub(crate) mod game_log;
 pub(crate) mod inventory;
 pub(crate) mod market;

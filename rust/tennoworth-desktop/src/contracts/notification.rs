@@ -68,15 +68,28 @@ pub const CATEGORIES: &[&str] = &[
     "announcements",
 ];
 
+/// Categories that can show a card over the focused game. Only these offer
+/// the setting; adding one is a deliberate product decision, because a card
+/// interrupts play where a popup does not.
+pub const IN_GAME_CATEGORIES: &[&str] = &["watches"];
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CategoryPreference {
     pub enabled: bool,
     pub native: bool,
+    /// Show a card over Warframe instead of a popup while the game is in
+    /// front. Off unless chosen; settings saved before it existed read as off.
+    #[serde(default)]
+    pub in_game: bool,
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Preferences {
     pub popups: bool,
     pub categories: BTreeMap<String, CategoryPreference>,
+    /// Put a notification's ready whisper on the clipboard when its card is
+    /// shown in game. Off unless chosen: it replaces what the player copied.
+    #[serde(default)]
+    pub copy_whisper: bool,
 }
 impl Default for Preferences {
     fn default() -> Self {
@@ -90,10 +103,12 @@ impl Default for Preferences {
                         CategoryPreference {
                             enabled: true,
                             native: true,
+                            in_game: false,
                         },
                     )
                 })
                 .collect(),
+            copy_whisper: false,
         }
     }
 }
@@ -125,6 +140,8 @@ pub struct Candidate {
     pub body: String,
     pub target: String,
     pub content: Option<NotificationContent>,
+    /// A ready in-game whisper for the player this notification is about.
+    pub whisper: Option<String>,
 }
 impl Candidate {
     pub fn once(
@@ -145,6 +162,7 @@ impl Candidate {
             body,
             target: target.into(),
             content: None,
+            whisper: None,
         }
     }
 }

@@ -356,8 +356,10 @@ account, then This app: appearance, updates, usage sharing and price sharing). S
 before the controls that change it. Troubleshooting detail and full privacy
 terms sit in disclosures, and diagnostics open with their warning in view when
 enabled. The inbox's settings link opens the page at Notifications. Category
-preferences are a table with Inbox and Popup columns, and each category's
-timing sits under its name. Settings → Updates and the update banner read one
+preferences are a table with Inbox, Popup and In game columns, and each
+category's timing sits under its name. In game is offered only where it is
+worth interrupting play (price watches); other rows leave the cell empty.
+Pausing popups pauses In game too. Settings → Updates and the update banner read one
 shared update state: a check from Settings offers Install update and then
 Restart now in that row, with install failures beside it, so nobody has to
 scroll back to the banner.
@@ -627,6 +629,29 @@ Names and facts wrap; card width accounts for the user-selected scale before
 transforming, so increasing scale does not widen a card beyond its reward slot.
 The separately native-rendered overlay backend is not styled by CSS: changing
 these tokens does not certify that renderer or live capture/game placement.
+
+### In-game notice
+
+A notification the player chose to see In game appears as one card over the
+focused game window: top right, below the mission area, 420 by 88 units on a
+1080p window and scaled with it. It uses the reward card's `--reward-*`
+palette (`html.game-notice-surface` shares the token block) and its 3px
+`--reward-value` edge marks that it suggests an action. Three lines, each one
+line and ellipsized because the surface is sized before its text is known: the
+category in caption capitals, the evidence, and the next step ("Whisper copied
+· press Ctrl+V in chat", or "Switch to TennoWorth to copy the whisper"). It has
+no buttons, never takes focus or clicks, and leaves after 10 seconds or when a
+newer notice replaces it; there is no queue, so nothing is shown late. A reward
+screen outranks it. The native Wayland renderer draws the same layout in
+`wayland.rs`; changing the webview card does not change that one.
+
+When the player switches to the app, the latest price-watch hit waits as a
+banner in the shared `general-banner` pattern with the action edge, like the
+update banner: who and what at which price, the whisper in mono so it can be
+selected, Copy whisper, Watches and Dismiss. It says how long ago the order was
+seen, rechecks warframe.market once when the app comes to the front, and says
+whether the order is still there; it leaves after 15 minutes. The desktop
+preview takes `&sample=watch-offer` (and `watch-offer-gone`) to show it.
 
 Keep native window behavior and Windows/Linux constraints explicit. If native
 and frontend implementations must share a value or calculation, use the

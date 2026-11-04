@@ -41,19 +41,22 @@ rust/
       game_log/              EE.log tailer, trade recording, trade allowance
       trading/               trade ledger, listing outcomes, order edits, protection
       wfm/                   signed-in session, sign-in window, presence
-      watches/               order-book poll and live order stream
+      watches/               order-book poll, live order stream, ready whisper offer
       market/                snapshot cache, scan definitions, sellable ranking
       telemetry/             opt-in check-in and price reports
       notifications/         notification delivery and clock-driven reminders
+      clipboard.rs           the process-lifetime clipboard owner
     persistence/             schema, record types, table operations, key storage
     game_events.rs           EE.log lines published to whoever subscribes
     vision/
       capture/               platform frame acquisition
+      focus/                 is the game the focused window (Windows, X11)
       frame.rs, ocr.rs       crop and encode, Tesseract worker, TSV lines
-    overlay/                 in-game reward feature
+    overlay/                 in-game reward feature and in-game notices
       recognition/           reward layout, matching, result assembly
       presentation/          native windows and Wayland presentation
       lifecycle.rs           capture exclusion and current-result identity
+      notice.rs              notification cards over the focused game
   game-acquisition/          process scan, memory read, DE inventory fetch
   wfm-trading/src/
     auth.rs                  sign-in and the encrypted JWT envelope
@@ -268,6 +271,20 @@ including Wayland-specific rendering. Lifecycle state keeps capture exclusion
 separate from the identity of the currently displayed result: finishing a
 capture must not implicitly clear or replace that identity.
 
+In-game notices reach the overlay the same way the game's log does: startup
+installs `overlay::notice::deliver` into the notifications service's
+`InGameDelivery`, so the service never names the overlay. A notification is
+stored first and delivered second; the card is shown only while the game is the
+focused window, and anything that stops it (another window in front, a desktop
+that cannot tell, a reward card up, the hourly cap) falls back to the popup.
+Focus is read from `GetForegroundWindow` on Windows and `_NET_ACTIVE_WINDOW` on
+X11. A native Wayland window in front reads as "not the game"; Warframe under
+Proton is an XWayland window, so it is still seen when focused. The notice has
+its own window or layer surface, never the reward card's, and a reward card
+always hides it. A price watch's whisper costs no extra warframe.market
+traffic: the stream and the poll already carry the player's name, and the one
+recheck runs only when the player opens the app while the offer is fresh.
+
 `game-acquisition` and `wfm-trading` stay usable without terminal prompts or a
 Tauri dependency, and acquisition never talks to warframe.market. `wfm-client` shares transport primitives, not an abstraction that
 combines anonymous scraping with authenticated order mutation. `market-domain`'s
@@ -377,7 +394,7 @@ TENNOWORTH_UPDATE_BINDINGS=1 cargo test -p tennoworth-desktop desktop_bindings_m
 ```
 
 The desktop binding pilot covers command errors, WFM access status, watch
-notification payloads, automatic-scan settings, trade presence settings and
+notification payloads, watch offers and in-game notices, automatic-scan settings, trade presence settings and
 status, account orders, the app icon colours and outcome, and event names. Existing commands outside that pilot keep
 their current adapters; all newly migrated calculations use the generated
 request/response registry. Generation preserves serialized optionality and field

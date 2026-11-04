@@ -6,6 +6,8 @@ fn desktop_bindings_match_rust() {
     types.add::<wfm_client::governor::AccessStatus>();
     types.add::<crate::contracts::command_error::CmdError>();
     types.add::<crate::services::watches::poll::WatchOutcome>();
+    types.add::<crate::services::watches::offer::WatchOffer>();
+    types.add::<crate::overlay::notice::GameNotice>();
     types.add::<crate::services::inventory::auto_scan::AutoScanSettings>();
     types.add::<crate::services::inventory::auto_scan::AutoScanStatus>();
     types.add::<crate::services::wfm::presence::PresenceChoice>();
@@ -66,6 +68,10 @@ fn desktop_bindings_match_rust() {
         ("RELIC_OVERLAY_UPDATE_EVENT", crate::overlay::EVENT_UPDATE),
         ("RELIC_OVERLAY_HIDE_EVENT", crate::overlay::EVENT_HIDE),
         (
+            "WATCH_OFFER_EVENT",
+            crate::services::watches::offer::EVENT_WATCH_OFFER,
+        ),
+        (
             "PRESENCE_CHANGED_EVENT",
             crate::services::wfm::presence::EVENT_PRESENCE_CHANGED,
         ),
@@ -78,6 +84,17 @@ fn desktop_bindings_match_rust() {
     ));
     // The cadences the setting offers live in Rust; the selector reads them from
     // here rather than repeating the list, so the two cannot drift.
+    // How long the app's banner keeps a watch offer; the banner hides it at the
+    // same moment Rust stops returning it.
+    expected.push_str(&format!(
+        "\nexport const WATCH_OFFER_FRESH_SECS = {:?} as const;\n",
+        crate::services::watches::offer::OFFER_FRESH_SECS
+    ));
+    // Which notification categories offer "Show in game".
+    expected.push_str(&format!(
+        "\nexport const IN_GAME_CATEGORIES = {:?} as const;\n",
+        crate::contracts::notification::IN_GAME_CATEGORIES
+    ));
     expected.push_str(&format!(
         "\nexport const AUTO_SCAN_CADENCE_CHOICES = {:?} as const;\n",
         crate::services::inventory::auto_scan::CADENCE_CHOICES

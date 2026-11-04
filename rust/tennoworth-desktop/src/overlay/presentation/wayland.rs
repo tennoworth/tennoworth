@@ -1,8 +1,12 @@
-//! Native Wayland presentation for the relic reward overlay.
+//! Native Wayland presentation for the relic reward overlay and in-game notices.
 //!
 //! A regular `xdg_toplevel` cannot promise stacking or non-activation under
 //! Wayland. This backend uses layer-shell for those compositor-owned semantics
 //! and keeps the existing Tauri window as the compatibility fallback.
+//!
+//! The reward card and the notice card are separate layer surfaces with their
+//! own workers, so hiding one (the reward card's 20-second timer, a notice's
+//! shorter one) can never take the other down.
 
 use std::ffi::CString;
 use std::fs::File;
@@ -44,6 +48,7 @@ use wayland_protocols_wlr::layer_shell::v1::client::{
     zwlr_layer_surface_v1::{self, Anchor, KeyboardInteractivity, ZwlrLayerSurfaceV1},
 };
 
+use crate::overlay::notice::GameNotice;
 use crate::overlay::RelicOverlayResult;
 
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(3);
@@ -66,15 +71,52 @@ struct XOutput {
     height: u32,
 }
 
+/// What a layer surface draws.
+#[derive(Debug, Clone)]
+enum Content {
+    Relic(RelicOverlayResult),
+    Notice(GameNotice),
+}
+
+/// The two independent surfaces this backend can show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Slot {
+    Relic,
+    Notice,
+}
+
+impl Slot {
+    fn client(self) -> &'static Mutex<Option<ClientHandle>> {
+        match self {
+            Self::Relic => &CLIENT,
+            Self::Notice => &NOTICE_CLIENT,
+        }
+    }
+
+    fn namespace(self) -> &'static str {
+        match self {
+            Self::Relic => "tennoworth-relic-overlay",
+            Self::Notice => "tennoworth-game-notice",
+        }
+    }
+
+    fn thread_name(self) -> &'static str {
+        match self {
+            Self::Relic => "relic-wayland-overlay",
+            Self::Notice => "notice-wayland-overlay",
+        }
+    }
+}
+
 enum Command {
     Show {
         geometry: OverlayGeometry,
         x_output: Option<XOutput>,
-        result: RelicOverlayResult,
+        content: Content,
         reply: mpsc::SyncSender<Result<(), String>>,
     },
     Update {
-        result: RelicOverlayResult,
+        content: Content,
         reply: mpsc::SyncSender<Result<(), String>>,
     },
     Hide,
@@ -86,14 +128,31 @@ struct ClientHandle {
 }
 
 static CLIENT: LazyLock<Mutex<Option<ClientHandle>>> = LazyLock::new(|| Mutex::new(None));
+static NOTICE_CLIENT: LazyLock<Mutex<Option<ClientHandle>>> = LazyLock::new(|| Mutex::new(None));
 
 pub fn available() -> bool {
-    std::env::var_os("WAYLAND_DISPLAY").is_some() && ensure_client().is_ok()
+    std::env::var_os("WAYLAND_DISPLAY").is_some() && ensure_client(Slot::Relic).is_ok()
 }
 
 pub fn show(geometry: OverlayGeometry, result: &RelicOverlayResult) -> Result<(), String> {
-    ensure_client()?;
-    let guard = CLIENT.lock().unwrap_or_else(|error| error.into_inner());
+    show_content(Slot::Relic, geometry, Content::Relic(result.clone()))
+}
+
+/// Show an in-game notice on its own layer surface.
+pub fn show_notice(geometry: OverlayGeometry, notice: &GameNotice) -> Result<(), String> {
+    show_content(Slot::Notice, geometry, Content::Notice(notice.clone()))
+}
+
+pub fn hide_notice() {
+    hide_slot(Slot::Notice);
+}
+
+fn show_content(slot: Slot, geometry: OverlayGeometry, content: Content) -> Result<(), String> {
+    ensure_client(slot)?;
+    let guard = slot
+        .client()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     let client = guard
         .as_ref()
         .ok_or_else(|| "Wayland overlay worker is unavailable".to_string())?;
@@ -103,7 +162,7 @@ pub fn show(geometry: OverlayGeometry, result: &RelicOverlayResult) -> Result<()
         .send(Command::Show {
             geometry,
             x_output: x_output_for_geometry(geometry),
-            result: result.clone(),
+            content,
             reply: reply_tx,
         })
         .map_err(|_| "Wayland overlay worker stopped".to_string())?;
@@ -128,7 +187,7 @@ pub fn update(result: &RelicOverlayResult) -> Result<bool, String> {
     client
         .tx
         .send(Command::Update {
-            result: result.clone(),
+            content: Content::Relic(result.clone()),
             reply: reply_tx,
         })
         .map_err(|_| "Wayland overlay worker stopped".to_string())?;
@@ -139,7 +198,14 @@ pub fn update(result: &RelicOverlayResult) -> Result<bool, String> {
 }
 
 pub fn hide() {
-    let guard = CLIENT.lock().unwrap_or_else(|error| error.into_inner());
+    hide_slot(Slot::Relic);
+}
+
+fn hide_slot(slot: Slot) {
+    let guard = slot
+        .client()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     if let Some(client) = guard.as_ref() {
         client.active.store(false, Ordering::Release);
         let _ = client.tx.send(Command::Hide);
@@ -154,21 +220,24 @@ pub fn is_active() -> bool {
         .is_some_and(|client| client.active.load(Ordering::Acquire))
 }
 
-fn ensure_client() -> Result<(), String> {
-    let mut guard = CLIENT.lock().unwrap_or_else(|error| error.into_inner());
+fn ensure_client(slot: Slot) -> Result<(), String> {
+    let mut guard = slot
+        .client()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
     if guard.is_none() {
         let (tx, rx) = mpsc::channel();
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
         let active = Arc::new(AtomicBool::new(false));
         let thread_active = active.clone();
         std::thread::Builder::new()
-            .name("relic-wayland-overlay".into())
+            .name(slot.thread_name().into())
             .spawn(move || {
-                let result = run_worker(rx, thread_active.clone(), &ready_tx);
+                let result = run_worker(slot, rx, thread_active.clone(), &ready_tx);
                 thread_active.store(false, Ordering::Release);
                 if let Err(error) = result {
                     let _ = ready_tx.try_send(Err(error.clone()));
-                    eprintln!("tennoworth: Wayland relic overlay stopped: {error}");
+                    eprintln!("tennoworth: Wayland {} stopped: {error}", slot.namespace());
                 }
             })
             .map_err(|error| format!("starting Wayland overlay worker: {error}"))?;
@@ -214,11 +283,12 @@ struct SurfaceState {
     logical_height: i32,
     scale_120: u32,
     configured: bool,
-    result: RelicOverlayResult,
+    content: Content,
     buffers: Vec<BufferSlot>,
 }
 
 struct WaylandState {
+    slot: Slot,
     qh: QueueHandle<WaylandState>,
     compositor: WlCompositor,
     shm: WlShm,
@@ -230,6 +300,7 @@ struct WaylandState {
 }
 
 fn run_worker(
+    slot: Slot,
     rx: mpsc::Receiver<Command>,
     active: Arc<AtomicBool>,
     ready_tx: &mpsc::SyncSender<Result<(), String>>,
@@ -257,6 +328,7 @@ fn run_worker(
         .ok();
 
     let mut state = WaylandState {
+        slot,
         qh: qh.clone(),
         compositor,
         shm,
@@ -307,7 +379,7 @@ fn run_worker(
                 Command::Show {
                     geometry,
                     x_output,
-                    result,
+                    content,
                     reply,
                 } => {
                     let outcome = map_surface(
@@ -316,13 +388,13 @@ fn run_worker(
                         &mut state,
                         geometry,
                         x_output.as_ref(),
-                        result,
+                        content,
                     );
                     active.store(outcome.is_ok(), Ordering::Release);
                     let _ = reply.send(outcome);
                 }
-                Command::Update { result, reply } => {
-                    let outcome = update_surface(&mut state, result);
+                Command::Update { content, reply } => {
+                    let outcome = update_surface(&mut state, content);
                     if outcome.is_err() {
                         active.store(false, Ordering::Release);
                     }
@@ -365,7 +437,7 @@ fn map_surface(
     state: &mut WaylandState,
     geometry: OverlayGeometry,
     x_output: Option<&XOutput>,
-    result: RelicOverlayResult,
+    content: Content,
 ) -> Result<(), String> {
     unmap_surface(state);
     let (output_index, local_x, local_y, logical_width, logical_height) =
@@ -384,7 +456,7 @@ fn map_surface(
         &surface,
         Some(&output.output),
         Layer::Overlay,
-        "tennoworth-relic-overlay".into(),
+        state.slot.namespace().into(),
         &qh,
         (),
     );
@@ -410,7 +482,7 @@ fn map_surface(
         logical_height,
         scale_120: initial_scale_120(&output),
         configured: false,
-        result,
+        content,
         buffers: Vec::new(),
     });
     surface.commit();
@@ -440,9 +512,9 @@ fn map_surface(
     render_current_surface(state)
 }
 
-fn update_surface(state: &mut WaylandState, result: RelicOverlayResult) -> Result<(), String> {
+fn update_surface(state: &mut WaylandState, content: Content) -> Result<(), String> {
     if let Some(surface) = state.surface.as_mut() {
-        surface.result = result;
+        surface.content = content;
     } else {
         return Err("Wayland layer surface is not visible".into());
     }
@@ -474,13 +546,22 @@ fn render_current_surface(state: &mut WaylandState) -> Result<(), String> {
         .iter_mut()
         .find(|slot| !slot.busy)
         .ok_or_else(|| "Wayland overlay buffers are still in use".to_string())?;
-    draw_overlay(
-        &slot.image,
-        &surface.result,
-        surface.logical_width,
-        surface.logical_height,
-        scale,
-    )?;
+    match &surface.content {
+        Content::Relic(result) => draw_overlay(
+            &slot.image,
+            result,
+            surface.logical_width,
+            surface.logical_height,
+            scale,
+        )?,
+        Content::Notice(notice) => draw_notice(
+            &slot.image,
+            notice,
+            surface.logical_width,
+            surface.logical_height,
+            scale,
+        )?,
+    }
     slot.busy = true;
     if let Some(viewport) = surface.viewport.as_ref() {
         viewport.set_destination(surface.logical_width, surface.logical_height);
@@ -836,6 +917,81 @@ fn draw_overlay(
                 true,
             )?;
         }
+    }
+    image.flush();
+    Ok(())
+}
+
+/// The in-game notice: one card filling its surface. The layout mirrors the
+/// webview card (`GameNoticeCard.svelte`) - title, the evidence line, and an
+/// optional hint, each on one line and ellipsized rather than wrapped, because
+/// the surface is sized before the text is known.
+fn draw_notice(
+    image: &ImageSurface,
+    notice: &GameNotice,
+    logical_width: i32,
+    logical_height: i32,
+    buffer_scale: f64,
+) -> Result<(), String> {
+    let context =
+        Context::new(image).map_err(|error| format!("creating Cairo notice context: {error}"))?;
+    // Laid out on a card NOTICE_HEIGHT units tall, scaled to the surface the
+    // compositor gave us, so a large game window gets a proportionally larger card.
+    let units = (f64::from(logical_height) / crate::overlay::notice::NOTICE_HEIGHT).max(0.5);
+    context.scale(buffer_scale * units, buffer_scale * units);
+    context.set_operator(Operator::Source);
+    context.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+    context
+        .paint()
+        .map_err(|error| format!("clearing Cairo notice surface: {error}"))?;
+    context.set_operator(Operator::Over);
+    let width = f64::from(logical_width) / units - 2.0;
+    let height = crate::overlay::notice::NOTICE_HEIGHT - 2.0;
+    rounded_rectangle(&context, 1.0, 1.0, width, height, 7.0);
+    REWARD_SURFACE.set_source(&context);
+    context.fill_preserve().map_err(cairo_error)?;
+    REWARD_BORDER.set_source(&context);
+    context.set_line_width(1.0);
+    context.stroke().map_err(cairo_error)?;
+    // The 3px edge marks a notice that asks for an action (design-system.md).
+    REWARD_VALUE.set_source(&context);
+    context.rectangle(1.0, 1.0, 3.0, height);
+    context.fill().map_err(cairo_error)?;
+    let text_width = width - 30.0;
+    draw_text(
+        &context,
+        &notice.title,
+        16.0,
+        22.0,
+        11.0,
+        FontWeight::Bold,
+        text_width,
+        REWARD_MUTED.rgb(),
+        true,
+    )?;
+    draw_text(
+        &context,
+        &notice.detail,
+        16.0,
+        46.0,
+        15.0,
+        FontWeight::Bold,
+        text_width,
+        REWARD_FG.rgb(),
+        false,
+    )?;
+    if let Some(hint) = notice.hint.as_deref() {
+        draw_text(
+            &context,
+            hint,
+            16.0,
+            70.0,
+            12.0,
+            FontWeight::Normal,
+            text_width,
+            REWARD_VALUE.rgb(),
+            false,
+        )?;
     }
     image.flush();
     Ok(())
