@@ -16,7 +16,7 @@
 #   PUBLISH  what the site serves (default /srv/wfm/data/public). A local run
 #            sets DATA=. PUBLISH=frontend/public from the repository root.
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/tennoworth-pipeline)
-#   STATS_INTERVAL  how long an item's statistics are reused (default 6h);
+#   STATS_INTERVAL  how long an item's statistics are reused (default 24h);
 #               empty fetches every item's statistics every sweep
 #   STATS_CACHE   where reused statistics are kept (default stats-cache.json,
 #               beside the CSV)
@@ -69,9 +69,12 @@ SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
 # Daily medians move once a day and the 48-hour figures drift slowly, while
 # the order book moves every sweep. A replay of the since-retired observation corpus
 # (317 sweeps, 2026-09-16 to 2026-10-13) put six hours at 42% fewer requests
-# with under 1% of top-100 candidates hidden past one extra sweep. A missing
-# or unreadable cache only costs a full refresh.
-STATS_INTERVAL="${STATS_INTERVAL-6h}"
+# with under 1% of top-100 candidates hidden past one extra sweep. A day
+# matches how often the daily medians change and turns four full statistics
+# refreshes a day into one; the other refresh triggers (first sight, an empty
+# book, a reappearance) still fetch early. A missing or unreadable cache only
+# costs a full refresh.
+STATS_INTERVAL="${STATS_INTERVAL-24h}"
 STATS_CACHE="${STATS_CACHE:-stats-cache.json}"
 [ -n "$STATS_INTERVAL" ] && SCRAPE_ARGS+=(--stats-cache "$STATS_CACHE" --stats-interval "$STATS_INTERVAL")
 

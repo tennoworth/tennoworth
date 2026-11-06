@@ -162,9 +162,9 @@
         <summary data-shell>How current are the prices?</summary>
         <p data-shell>
           Our production box scrapes <a data-shell href="https://warframe.market">warframe.market</a>
-          every 2 hours and serves the resulting <code data-shell>market.json</code>
+          every 3 hours and serves the resulting <code data-shell>market.json</code>
           directly. The dot next to “Market data” is green if the snapshot is
-          under 3 h old, amber under 24 h, red after.
+          under 4 h old, amber under 24 h, red after.
         </p>
       </details>
       <details data-shell>

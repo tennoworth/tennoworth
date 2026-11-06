@@ -1,6 +1,6 @@
 //! Live top-of-book prices from warframe.market v2 - `/orders/item/{slug}/top`.
 //!
-//! The Sell view prices from `market.json`, a snapshot up to two hours old
+//! The Sell view prices from `market.json`, a snapshot up to three hours old
 //! that narrows each item to one tier (rank 0 / one relic refinement) with
 //! our own filtering over the whole order book. WFM's `top` endpoint answers
 //! the exact question the listing modal asks - "what are the ≤5 best asks

@@ -59,9 +59,18 @@ of 2026-09-09, whose scraper restrictions are the compiled defaults above.
 | Requests per sweep | 6,438 | 1 catalog + 3,840 statistics + 2,597 orders, from the run's own summary |
 | Sweep wall time | 60-89 minutes that day | `journalctl -u tennoworth-scrape.service` |
 | Floor if nothing else were spent | 54 minutes | 6,438 x 500 ms |
-| Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/systemd/tennoworth-scrape.timer` |
-| Statistics reuse | an item's statistics are reused for up to 6 hours and refetched at the first sweep after that, or sooner when the validated policy triggers; books every sweep | `deploy/bin/run-scrape.sh`, `stats_cache.rs` |
+| Cadence | every 3 hours plus up to 10 minutes of jitter (every 2 hours until 2026-11) | `deploy/systemd/tennoworth-scrape.timer` |
+| Statistics reuse | an item's statistics are reused for up to 24 hours (6 hours until 2026-11) and refetched at the first sweep after that, or sooner when the validated policy triggers; books every sweep | `deploy/bin/run-scrape.sh`, `stats_cache.rs` |
 | Mean over a day | ~0.9 request starts per second before statistics reuse; the offline replay of the 2026-09/10 corpus projected about 42% fewer requests with it | derived from the rows above |
+
+Measured on 2026-11-05/06 under the old schedule (twelve sweeps, six-hour
+statistics), from each run's `sweep metrics:` line: 48,094 requests in 24 hours,
+0.56 a second on average, no throttles and one retry. Four sweeps refreshed
+every item's statistics (about 6,490 requests and 108 minutes each); the other
+eight read the books and a few due statistics (about 2,760 requests and 45
+minutes). The current schedule is eight sweeps a day with one full statistics
+refresh: about 8 x 2,760 + 3,780 = 25,800 requests, roughly 0.3 a second and 46%
+fewer. Refresh this paragraph from the metrics once it has run for a day.
 
 The item loop runs one worker per request the policy allows in flight, rather
 than one at a time: the same 176-request sample took 111 s serially and 91 s with
