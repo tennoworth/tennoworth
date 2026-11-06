@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { pickOption } from '../pick-option';
 
 test('reference stays readable in both themes and narrow, short, wide windows', async ({ page }, testInfo) => {
   const errors: string[] = [];
@@ -81,7 +82,7 @@ test('reference stays readable in both themes and narrow, short, wide windows', 
 
 test('the Sell table reference sorts by keyboard and opens its Column guide', async ({ page }) => {
   await page.goto('/?styleguide');
-  await page.getByRole('combobox', { name: 'Data state' }).selectOption('sell');
+  await pickOption(page.getByRole('combobox', { name: 'Data state' }), 'sell');
   const ask = page.getByRole('button', { name: 'Low ask', exact: true });
   await ask.focus();
   await page.keyboard.press('Enter');
@@ -100,16 +101,16 @@ test('states, local filtering, modal editing, and keyboard focus are usable', as
   await expect(page.getByRole('heading', { name: 'No matching items' })).toBeVisible();
   await page.getByRole('button', { name: 'Show sample inventory' }).click();
   const state = page.getByRole('combobox', { name: 'Data state' });
-  await state.selectOption('empty');
+  await pickOption(state, 'empty');
   await expect(page.getByRole('heading', { name: 'No inventory yet' })).toBeVisible();
-  await state.selectOption('estimates');
+  await pickOption(state, 'estimates');
   await expect(page.getByRole('heading', { name: 'Estimated opportunities' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Recheck protection', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Recheck protection');
-  await state.selectOption('loading');
+  await pickOption(state, 'loading');
   await expect(page.getByText('Loading sample inventory…')).toBeVisible();
-  await state.selectOption('error');
+  await pickOption(state, 'error');
   await expect(page.getByRole('alert')).toContainText('Saved items remain available');
   await expect(page.getByText('Last refresh failed', { exact: true })).toBeVisible();
   await expect(page.locator('time')).toHaveAttribute('datetime', '2026-09-08T12:00:00Z');

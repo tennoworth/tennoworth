@@ -4,6 +4,7 @@
 // The preview transport carries the same payloads the Rust loop does, so this
 // exercises the real styled surface and the real event wiring between them.
 import { expect, test } from '@playwright/test';
+import { pickOption } from '../pick-option';
 
 async function openSettings(page: import('@playwright/test').Page) {
   await page.goto('/?preview-desktop&sample');
@@ -25,18 +26,18 @@ for (const theme of ['light', 'dark'] as const) {
     await toggle.check();
     const cadence = section.getByRole('combobox', { name: /Scan every/ });
     await expect(cadence).toBeVisible();
-    await expect(cadence).toHaveValue('30');
+    await expect(cadence).toHaveAttribute('data-value', '30');
     // The loop republishes the stored preferences, so the status cannot keep
     // claiming "manual only" once scanning is on.
     await expect(section).toContainText('Waiting for Warframe');
 
-    await cadence.selectOption('60');
-    await expect(cadence).toHaveValue('60');
+    await pickOption(cadence, '60');
+    await expect(cadence).toHaveAttribute('data-value', '60');
 
     for (const width of [1440, 760, 320]) {
       await page.setViewportSize({ width, height: 600 });
       await expect(toggle).toBeChecked();
-      await expect(cadence).toHaveValue('60');
+      await expect(cadence).toHaveAttribute('data-value', '60');
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
   });

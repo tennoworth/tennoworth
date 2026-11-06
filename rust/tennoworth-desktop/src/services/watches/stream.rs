@@ -38,6 +38,18 @@ const BACKOFF_MAX: Duration = Duration::from_secs(15 * 60);
 /// How stale the in-memory watch list may get before an event re-reads it.
 const WATCH_CACHE_TTL: Duration = Duration::from_secs(60);
 
+/// When the current stream connection delivered its first order; `None` while
+/// it is down. The poll pass reads it to decide how long it may wait.
+static LIVE_SINCE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+
+pub fn live_since() -> Option<Instant> {
+    *LIVE_SINCE.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn set_live(since: Option<Instant>) {
+    *LIVE_SINCE.lock().unwrap_or_else(|e| e.into_inner()) = since;
+}
+
 struct WatchCache {
     watches: Vec<Watch>,
     read_at: Instant,
@@ -170,6 +182,10 @@ fn run(app: AppHandle) {
         let me2 = me.clone();
         let mut cache = WatchCache::fresh(&app.state::<Db>());
         let mut on_order = move |o: NewOrder| {
+            // A delivered order, not the handshake, proves the stream is live.
+            if live_since().is_none() {
+                set_live(Some(Instant::now()));
+            }
             let Some(ItemMeta { name: _, slug }) = id_to_item.get(&o.item_id) else {
                 return; // item newer than the cached catalog - poll path covers it
             };
@@ -217,7 +233,9 @@ fn run(app: AppHandle) {
 
         eprintln!("tennoworth: watch stream connecting ({platform})");
         let connected_at = Instant::now();
-        match run_new_orders_stream(&platform, &mut on_order, &|| false) {
+        let ended = run_new_orders_stream(&platform, &mut on_order, &|| false);
+        set_live(None);
+        match ended {
             Ok(()) => continue,
             Err(e) => {
                 // A connection that lived a while earned a fresh backoff; only

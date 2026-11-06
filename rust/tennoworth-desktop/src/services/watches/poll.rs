@@ -3,7 +3,9 @@
 //! WFM has no native alerts; the gap is filled today by a Discord bot, a
 //! browser extension and one Windows-only app. Ours runs in the desktop's
 //! background: every [`CHECK_INTERVAL`] it asks WFM's public `top` endpoint
-//! for the exact tier of each watch (≤100 watches, sharing the WFM budget),
+//! for the exact tier of each watch (≤[`MAX_WATCHES`], sharing the WFM budget),
+//! or every [`STREAM_CHECK_INTERVAL`] while the live order stream has stayed
+//! up since the last pass ([`pass_delay`]),
 //! evaluates, records what it saw, and fires ONE desktop
 //! notification per watch per [`REARM_AFTER`] - a watch that stays satisfied
 //! re-arms rather than nags. Evaluation is pure ([`evaluate`]) and tested;
@@ -15,7 +17,7 @@
 
 use crate::services::unix_now;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 use wfm_trading::market::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
@@ -23,15 +25,21 @@ use wfm_trading::market::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 use crate::persistence::{Db, Watch};
 use crate::services::wfm::session::WfmSession;
 
-/// How often the background pass runs. WFM's rules ask for no tight polling;
-/// 10 min × ≤100 watches is well inside "polite".
+/// How often the background pass runs while the live order stream is down,
+/// or a watch has not been checked yet.
 pub const CHECK_INTERVAL: Duration = Duration::from_secs(10 * 60);
+/// How often it runs while the stream has stayed up since the last pass. The
+/// stream reports new orders within seconds, so this pass only has to catch
+/// what it cannot see: an existing order repriced or coming back online.
+pub const STREAM_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
 /// First pass after launch - long enough not to compete with startup work.
 pub const FIRST_CHECK_DELAY: Duration = Duration::from_secs(45);
 /// A satisfied watch notifies again only after this long (seconds).
 pub const REARM_AFTER_SECS: i64 = 6 * 60 * 60;
-/// Cap on watches per pass - a whole-market sweep is the scraper's job.
-pub const MAX_WATCHES: usize = 100;
+/// Cap on watches - a whole-market sweep is the scraper's job. At most this
+/// many `top` requests per pass, so a day costs at most 4,320 with the stream
+/// down and 720 with it up.
+pub const MAX_WATCHES: usize = 30;
 
 pub const EVENT_WATCH_FIRED: &str = "watch-fired";
 
@@ -231,6 +239,23 @@ pub fn notify_watch(
     }
 }
 
+/// The wait after a pass that finished at `finished`. The long interval holds
+/// only while the stream has been live since before that pass ended and every
+/// watch has been checked once; `policy` (the signed watch interval) can only
+/// lengthen it.
+pub(crate) fn pass_delay(
+    stream_live_since: Option<Instant>,
+    finished: Instant,
+    unchecked: bool,
+    policy: Duration,
+) -> Duration {
+    let base = match stream_live_since {
+        Some(since) if since <= finished && !unchecked => STREAM_CHECK_INTERVAL,
+        _ => CHECK_INTERVAL,
+    };
+    base.max(policy)
+}
+
 /// Start the background checker. Detached thread: sleeps, runs a pass, sleeps.
 /// Nothing here can take the app down - every failure is logged and the loop
 /// simply tries again next interval.
@@ -253,15 +278,25 @@ pub fn start_checker(app: AppHandle) {
                 if fired > 0 {
                     eprintln!("tennoworth: watch pass fired {fired}");
                 }
-                let finished = std::time::Instant::now();
+                let finished = Instant::now();
                 let jitter = wfm_client::governor::jitter(60_000);
                 loop {
-                    let delay = CHECK_INTERVAL.max(Duration::from_millis(
+                    let unchecked = app
+                        .state::<Db>()
+                        .list_watches()
+                        .is_ok_and(|w| w.iter().any(|w| w.last_checked_at.is_none()));
+                    let policy = Duration::from_millis(
                         wfm_client::governor::process()
                             .status()
                             .restrictions
                             .watch_interval_ms,
-                    )) + jitter;
+                    );
+                    let delay = pass_delay(
+                        crate::services::watches::stream::live_since(),
+                        finished,
+                        unchecked,
+                        policy,
+                    ) + jitter;
                     let remaining = delay.saturating_sub(finished.elapsed());
                     if remaining.is_zero() {
                         break;
@@ -277,6 +312,52 @@ pub fn start_checker(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stream_that_stayed_up_stretches_the_pass_to_an_hour() {
+        let finished = Instant::now();
+        let earlier = finished.checked_sub(Duration::from_secs(5)).unwrap();
+        let none = Duration::ZERO;
+        assert_eq!(
+            pass_delay(Some(earlier), finished, false, none),
+            STREAM_CHECK_INTERVAL
+        );
+        assert_eq!(
+            pass_delay(Some(finished), finished, false, none),
+            STREAM_CHECK_INTERVAL
+        );
+    }
+
+    #[test]
+    fn a_down_reconnected_or_unchecked_stream_keeps_the_ten_minute_pass() {
+        let finished = Instant::now();
+        let none = Duration::ZERO;
+        assert_eq!(pass_delay(None, finished, false, none), CHECK_INTERVAL);
+        // Live again only after the pass: orders may have been missed while it was down.
+        let later = finished + Duration::from_secs(1);
+        assert_eq!(
+            pass_delay(Some(later), finished, false, none),
+            CHECK_INTERVAL
+        );
+        // A new watch gets its first look at existing orders on the short pass.
+        let earlier = finished.checked_sub(Duration::from_secs(5)).unwrap();
+        assert_eq!(
+            pass_delay(Some(earlier), finished, true, none),
+            CHECK_INTERVAL
+        );
+    }
+
+    #[test]
+    fn the_signed_policy_only_ever_lengthens_the_wait() {
+        let finished = Instant::now();
+        let day = Duration::from_secs(24 * 60 * 60);
+        assert_eq!(pass_delay(None, finished, false, day), day);
+        assert_eq!(pass_delay(Some(finished), finished, false, day), day);
+        assert_eq!(
+            pass_delay(None, finished, false, Duration::from_secs(1)),
+            CHECK_INTERVAL
+        );
+    }
 
     fn watch(side: &str, threshold: i64, last_fired_at: Option<i64>) -> Watch {
         Watch {

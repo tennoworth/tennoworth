@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
+  import Select from '../../ui/Select.svelte';
   import type { Market } from '../../contracts/data';
   import { buildMetaDrift, formatDeltaPp, type OnlyRow } from '../../domain/meta-drift';
 
@@ -48,10 +49,7 @@
     </div>
     </div>
     <label class="ui-field meta-search"><span>Equipment</span><input bind:value={query} use:searchShortcut placeholder="Search equipment" /></label>
-    <label class="ui-field"><span>Category</span><select bind:value={category}>
-      <option value="all">All categories</option>
-      {#each model.categories as value}<option value={value}>{value}</option>{/each}
-    </select></label>
+    <div class="ui-field"><span>Category</span><Select label="Category" value={category} options={[{ value: 'all', label: 'All categories' }, ...model.categories.map((value) => ({ value, label: value }))]} onchange={(next) => (category = next)} /></div>
   </div>
 
   {#if tab !== 'only'}
@@ -104,7 +102,7 @@
   .meta-drift { min-width: 0; }
   .intro { padding: .75rem 1rem; border-bottom: 1px dotted var(--hairline); line-height: 1.45; }
   .controls { display: flex; flex-wrap: wrap; gap: var(--s3); padding: var(--s3) var(--inset); align-items: end; border-bottom: 1px dotted var(--hairline); }
-  input, select { font: inherit; font-size: var(--text-control); min-height: var(--ctl-lg); border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); color: inherit; padding: var(--s1) var(--s2); }
+  input, .controls :global(.ui-select) { font: inherit; font-size: var(--text-control); min-height: var(--ctl-lg); border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); color: inherit; padding: var(--s1) var(--s2); }
   input { width: 100%; min-width: 0; }
   .meta-search { flex: 1 1 15rem; }
   .only-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hairline); }

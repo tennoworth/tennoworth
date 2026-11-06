@@ -121,7 +121,7 @@ describe('humanBuildTime', () => {
 describe('marketFreshness', () => {
   const now = Date.parse('2026-10-02T12:00:00Z');
   it.each([
-    [0, 'fresh'], [3, 'fresh'], [3 + 1 / 3.6e6, 'aging'],
+    [0, 'fresh'], [4, 'fresh'], [4 + 1 / 3.6e6, 'aging'],
     [24, 'aging'], [24 + 1 / 3.6e6, 'stale'], [-1, 'fresh'],
   ] as const)('classifies a snapshot aged %s hours as %s', (hours, expected) => {
     expect(marketFreshness(new Date(now - hours * 3.6e6).toISOString(), now)).toBe(expected);

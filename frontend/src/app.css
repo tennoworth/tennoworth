@@ -336,7 +336,7 @@ dialog.cryptobox h3 {
   font-weight: 600;
 }
 dialog.cryptobox header p { margin: 0; font-size: var(--text-control); line-height: 1.5; }
-dialog.cryptobox label {
+dialog.cryptobox :is(label, .field) {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -346,8 +346,7 @@ dialog.cryptobox label {
   color: var(--muted);
 }
 dialog.cryptobox input[type="password"],
-dialog.cryptobox input[type="email"],
-dialog.cryptobox select {
+dialog.cryptobox input[type="email"] {
   font: inherit;
   color: var(--fg);
   background: var(--bg);
@@ -358,10 +357,11 @@ dialog.cryptobox select {
   max-width: 100%;
 }
 dialog.cryptobox input[type="password"]:focus,
-dialog.cryptobox input[type="email"]:focus,
-dialog.cryptobox select:focus {
+dialog.cryptobox input[type="email"]:focus {
   border-color: var(--accent);
 }
+/* Inside the field's uppercase label, the chosen option keeps its own case. */
+dialog.cryptobox .ui-select { background: var(--bg); text-transform: none; letter-spacing: normal; }
 dialog.cryptobox .err {
   color: var(--bad);
   font-size: var(--text-caption);
@@ -754,6 +754,41 @@ table.tw tr.busy td { color: var(--muted); }
 .ui-field > :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--bad); }
 .ui-field > small { font-size: var(--text-caption); color: var(--muted); }
 .ui-input { font: inherit; font-size: var(--text-control); line-height: var(--leading-control); color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-input); min-height: var(--ctl-lg); min-width: 0; max-width: 100%; padding: var(--s1) var(--s2); }
+/* The drawn dropdown (ui/Select.svelte). The field is a text input's box with
+   a trailing ▾, the open list is a menu (panel-2, ink outline, offset shadow),
+   and the picked option is the ink inversion. The list sits in the top layer
+   or fixed to the window, so it is sized and placed in script. */
+.ui-select {
+  appearance: none; display: inline-flex; align-items: center; gap: var(--s2);
+  min-width: 0; max-width: 100%; min-height: var(--ctl-lg); padding: var(--s1) var(--s2);
+  font: inherit; font-size: var(--text-control); line-height: var(--leading-control); text-align: left;
+  color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-input); cursor: pointer;
+}
+.ui-select:hover:not(:disabled), .ui-select[aria-expanded="true"] { border-color: var(--fg); }
+.ui-select:focus-visible { outline-offset: -1px; }
+.ui-select:disabled { color: var(--muted); border-style: dotted; cursor: not-allowed; }
+.ui-select-value { display: inline-grid; flex: 1 1 auto; min-width: 0; }
+.ui-select-value > * { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select-sizer { visibility: hidden; }
+.ui-select-caret { flex: 0 0 auto; font-family: var(--font-ui); color: var(--muted); }
+.ui-select:hover:not(:disabled) .ui-select-caret, .ui-select[aria-expanded="true"] .ui-select-caret { color: var(--fg); }
+.ui-select-list {
+  position: fixed; inset: auto; z-index: var(--layer-popover); box-sizing: border-box;
+  width: max-content; max-width: min(36rem, calc(100vw - 16px)); margin: 0; padding: var(--s1) 0; overflow-y: auto; overscroll-behavior: contain;
+  list-style: none; font: var(--text-control)/var(--leading-control) var(--font-body); color: var(--fg);
+  background: var(--panel-2); border: 1px solid var(--fg); border-radius: var(--radius-ctl); box-shadow: var(--shadow-pop);
+}
+/* Long item names wrap rather than widen the list past the window. */
+.ui-select-list > li {
+  display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl);
+  padding: var(--s1) var(--s3) var(--s1) var(--s2); overflow-wrap: anywhere; cursor: pointer;
+}
+/* The row cursor: a filled square marks the option the keyboard or pointer is on. */
+.ui-select-list > li::before { content: ""; flex: 0 0 auto; width: 6px; height: 6px; }
+.ui-select-list > li[data-active] { background: var(--panel); }
+.ui-select-list > li[data-active]::before { background: var(--fg); }
+.ui-select-list > li[aria-selected="true"] { background: var(--ink-bar); color: var(--on-ink); font-weight: 600; }
+.ui-select-list > li[aria-selected="true"][data-active]::before { background: var(--on-ink); }
 .ui-notice { margin: 0; padding: var(--s2) var(--s3); border: 1px var(--rule) var(--border); border-left: 3px solid var(--border); color: var(--fg); background: var(--panel); overflow-wrap: anywhere; }
 .ui-notice[data-tone="good"] { border-left-color: var(--good); }
 .ui-notice[data-tone="warn"] { border-left-color: var(--warn); }
@@ -974,7 +1009,7 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 .public-table table { min-width: 34rem; width: 100%; }
 .public-table th, .public-table td { padding: var(--cell); text-align: right; }
 .public-table th:first-child, .public-table td:first-child { text-align: left; min-width: 12rem; }
-.public-controls label { display: grid; gap: var(--s2); }
+.public-controls :is(label, .order-by) { display: grid; gap: var(--s2); }
 /* The 404 search: its button sits on the input's line, not centred on the label. */
 form.public-controls { align-items: end; }
 .public-prose dd { margin-block-end: var(--s3); font-family: var(--font-mono); }

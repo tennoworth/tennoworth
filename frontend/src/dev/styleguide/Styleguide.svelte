@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fitTable } from '../../ui/table-fit';
+  import Select from '../../ui/Select.svelte';
   import { tableNavigation } from '../../ui/keyboard.svelte';
   import ItemHistory from '../../site/pages/ItemHistory.svelte';
   import DecisionSummary from '../../site/pages/DecisionSummary.svelte';
@@ -105,6 +106,7 @@
   let notificationRead = $state(false);
   let exampleEnabled = $state(true);
   let exampleShortcut = $state('Ctrl+Shift+O');
+  const DATA_STATES = [{ value: 'populated', label: 'Populated' }, { value: 'empty', label: 'Empty' }, { value: 'loading', label: 'Loading' }, { value: 'error', label: 'Error' }, { value: 'notifications', label: 'Alerts' }, { value: 'estimates', label: 'Estimates' }, { value: 'usage', label: 'Community usage' }, { value: 'meters', label: 'Meters' }, { value: 'updates', label: 'Update notes' }, { value: 'token', label: 'WFM token sign-in' }, { value: 'frame', label: 'View header' }, { value: 'sell', label: 'Sell table' }, { value: 'prompt', label: 'Prompt banner' }, { value: 'announcements', label: 'Market announcements' }, { value: 'app-icon', label: 'App icon' }, { value: 'shimmer', label: 'Field shimmer' }, { value: 'presence', label: 'Trade presence' }, { value: 'calendar', label: 'Calendar' }, { value: 'keyboard', label: 'Keyboard navigation' }];
   let dataState = $state('populated');
   let shimmerPulse = $state(0);
   let selected = $state('Fast Cash');
@@ -182,7 +184,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="meters">Meters</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="frame">View header</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="announcements">Market announcements</option><option value="app-icon">App icon</option><option value="shimmer">Field shimmer</option><option value="presence">Trade presence</option><option value="calendar">Calendar</option><option value="keyboard">Keyboard navigation</option></select></label>
+        <div class="ui-field"><span>Data state</span><Select label="Data state" value={dataState} options={DATA_STATES} onchange={(next) => (dataState = next)} /></div>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>

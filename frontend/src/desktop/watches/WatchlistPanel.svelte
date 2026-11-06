@@ -6,13 +6,14 @@
   import { onMount, onDestroy } from 'svelte';
 
 import { WATCH_FIRED_EVENT } from '../../contracts/events';
-import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/desktop';
+import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../../contracts/desktop';
   
   import { buildBrowseIndex, searchItems, type BrowseRow } from '../../domain/market-browse';
   import { humanError } from '../../contracts/errors';
   import { plat } from '../../ui/format';
   import type { Market } from '../../contracts/data';
   import Toast from '../../ui/Toast.svelte';
+  import Select from '../../ui/Select.svelte';
   import { createToastQueue } from '../../ui/toast-queue.svelte';
 
   interface Props {
@@ -203,13 +204,10 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
         </ul>
       {/if}
     </div>
-    <label class="ui-field">
+    <div class="ui-field">
       <span>Notify when</span>
-      <select class="ui-input" bind:value={side} onchange={onSideChange}>
-        <option value="sell">Lowest ask is ≤</option>
-        <option value="buy">Highest bid is ≥</option>
-      </select>
-    </label>
+      <Select label="Notify when" value={side} options={[{ value: 'sell', label: 'Lowest ask is ≤' }, { value: 'buy', label: 'Highest bid is ≥' }]} onchange={(next) => { side = next; onSideChange(); }} />
+    </div>
     <label class="ui-field threshold">
       <span>Target price (p)</span>
       <input class="ui-input" type="number" min="1" bind:value={threshold} disabled={!picked} />
@@ -217,10 +215,10 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
     <button class="btn primary" onclick={add} disabled={!picked || threshold < 1 || adding}>Add watch</button>
   </div>
 
-    <div class="foot">Checks online orders every 10 minutes, excluding your own. At most one notification per watch every 6 hours.</div>
+    <div class="foot">New listings alert within seconds. Existing orders, excluding your own, are rechecked every 10 minutes, or hourly while the live feed is connected. At most one notification per watch every 6 hours.</div>
   </section>
   <section class="wrap tw" aria-labelledby="watch-list-title">
-    <div class="rail"><h3 id="watch-list-title">Your watches</h3><span class="exp">{watches.length} of 100</span></div>
+    <div class="rail"><h3 id="watch-list-title">Your watches</h3><span class="exp">{watches.length} of {MAX_WATCHES}</span></div>
   {#if loadError}
     <div class="ui-notice" data-tone="bad" role="alert">Couldn't load watches: {loadError}</div>
   {:else if watches.length === 0}
@@ -286,8 +284,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   .scroll { overflow: auto; }
   @media (max-width: 35rem) {
     .pick { flex-basis: 100%; min-width: 0; }
-    .add > label { min-width: 0; }
-    .add select { max-width: 100%; }
+    .add > .ui-field { min-width: 0; }
   }
   table { min-width: 52rem; }
   td:last-child .btn { white-space: nowrap; }

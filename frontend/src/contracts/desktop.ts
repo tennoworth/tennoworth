@@ -26,7 +26,7 @@ export interface MarketRefreshResult {
  */
 export type { AutoScanSettings, AutoScanStatus } from './generated/desktop';
 export type { ListingOutcomes, OutcomeGroup } from './generated/desktop';
-export { AUTO_SCAN_CADENCE_CHOICES, APP_ICON_COLOURS } from './generated/desktop';
+export { AUTO_SCAN_CADENCE_CHOICES, APP_ICON_COLOURS, MAX_WATCHES } from './generated/desktop';
 import type { AutoScanSettings, AutoScanStatus, NotificationContent, AppIconOutcome } from './generated/desktop';
 import type { APP_ICON_COLOURS } from './generated/desktop';
 export type { AppIconOutcome } from './generated/desktop';

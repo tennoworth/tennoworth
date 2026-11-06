@@ -99,6 +99,11 @@ fn desktop_bindings_match_rust() {
         "\nexport const AUTO_SCAN_CADENCE_CHOICES = {:?} as const;\n",
         crate::services::inventory::auto_scan::CADENCE_CHOICES
     ));
+    // How many price watches the app keeps; the panel shows "n of" this.
+    expected.push_str(&format!(
+        "\nexport const MAX_WATCHES = {:?} as const;\n",
+        crate::services::watches::poll::MAX_WATCHES
+    ));
     // warframe.market's "keep status for" choices, in minutes.
     expected.push_str(&format!(
         "\nexport const PRESENCE_KEEP_FOR_CHOICES = {:?} as const;\n",

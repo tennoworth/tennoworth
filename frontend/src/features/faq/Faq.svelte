@@ -80,8 +80,10 @@
           contact link in the <code data-shell>User-Agent</code> - warframe.market's API
           rules require it, and we follow them). Traffic is polite by
           construction: at most two requests start per second with no more than
-          two in flight, price watches re-check every 10 minutes, and riven
-          comps stay under warframe.market's 10 searches per minute.
+          two in flight, price watches listen to warframe.market's live order
+          feed and re-check existing orders every 10 minutes (hourly while the
+          feed is connected, at most 30 watches), and riven comps stay under
+          warframe.market's 10 searches per minute.
           <strong data-shell>Prices and new listings only ever change when you click</strong>
           - the app never auto-bids, never auto-undercuts, and never reprices
           without you. The two automatic actions are both off until you enable
@@ -162,9 +164,9 @@
         <summary data-shell>How current are the prices?</summary>
         <p data-shell>
           Our production box scrapes <a data-shell href="https://warframe.market">warframe.market</a>
-          every 2 hours and serves the resulting <code data-shell>market.json</code>
+          every 3 hours and serves the resulting <code data-shell>market.json</code>
           directly. The dot next to “Market data” is green if the snapshot is
-          under 3 h old, amber under 24 h, red after.
+          under 4 h old, amber under 24 h, red after.
         </p>
       </details>
       <details data-shell>
