@@ -1,5 +1,6 @@
 <script lang="ts">
   import ResultsTable from './ResultsTable.svelte';
+  import Select from '../../ui/Select.svelte';
   import { PRESETS } from '../../domain/presets';
   import { selectPicks, MIN_PICK_SCORE, LIQUID_VOL } from '../../domain/sell-priority';
 
@@ -492,15 +493,10 @@
           Keep copies
           <input type="number" data-testid="reserve-copies" value={reserveCopies} oninput={setReserveCopies} min="0" step="1" style="width:50px" />
         </label>
-        <label>
+        <span class="field">
           Type
-          <select bind:value={typeFilter}>
-            <option value="all">All</option>
-            {#each availableTypes as t}
-              <option value={t}>{TYPE_LABELS[t] ?? t}</option>
-            {/each}
-          </select>
-        </label>
+          <Select label="Type" value={typeFilter} options={[{ value: 'all', label: 'All' }, ...availableTypes.map((t) => ({ value: t, label: TYPE_LABELS[t] ?? t }))]} onchange={(next) => (typeFilter = next)} />
+        </span>
         <label title="Hides a row when you have a copy of that mod in `Upgrades` at this rank or higher. 5 ≈ regular maxed (most mods cap at lvl 5). 10 ≈ only Primed/Galvanized maxed. 0 ≈ also hide unranked instances (e.g. rivens). 11 disables the filter.">
           Hide upgraded copies at rank ≥
           <input type="number" bind:value={hideAtLvl} min="0" max="11" step="1" style="width:55px" />
@@ -711,14 +707,6 @@
   .card.empty strong { font-weight: 600; }
   .card.empty p { margin: 4px 0 0 0; }
   .card.empty button { flex-shrink: 0; }
-  select {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-input);
-    padding: 5px 8px;
-  }
   code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 1em; }
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
@@ -799,7 +787,7 @@
     box-shadow: var(--shadow-pop);
   }
   .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-  .filters label {
+  .filters :is(label, .field) {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -808,7 +796,8 @@
     color: var(--muted);
     text-transform: uppercase;
   }
-  .filters input, .filters select { text-transform: none; letter-spacing: 0; }
+  .filters input, .filters :global(.ui-select) { text-transform: none; letter-spacing: 0; }
+  .filters :global(.ui-select) { min-height: var(--ctl); background: var(--bg); }
 
 
   /* First-session sell onboarding - above the stats strip, dismissed once. */

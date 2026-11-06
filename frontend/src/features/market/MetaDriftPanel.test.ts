@@ -36,7 +36,8 @@ describe('MetaDriftPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Losses' }));
     expect(screen.getByText('Loss Gear')).toBeTruthy();
     expect(screen.getByText('-3.00 pp')).toBeTruthy();
-    await fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Primary' } });
+    await fireEvent.click(screen.getByRole('combobox', { name: 'Category' }));
+    await fireEvent.click(screen.getByRole('option', { name: 'Primary' }));
     expect(screen.queryByText('Loss Gear')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Only in year data' }));
     expect(screen.getByText('Only in 2025 data')).toBeTruthy();

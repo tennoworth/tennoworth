@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { pickOption } from '../pick-option';
 
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} notification inbox and preferences remain usable`, async ({ page }, testInfo) => {
@@ -76,7 +77,7 @@ test('a calendar reminder opens the Calendar view its button names', async ({ pa
 
 test('notification row reference uses both themes and preserves its read toggle', async ({ page }, testInfo) => {
   await page.goto('/?styleguide');
-  await page.getByRole('combobox', { name: 'Data state' }).selectOption('notifications');
+  await pickOption(page.getByRole('combobox', { name: 'Data state' }), 'notifications');
   const reference = page.getByRole('region', { name: 'Notification row reference' });
   for (const mode of ['Light', 'Dark']) {
     await page.getByRole('button', { name: mode, exact: true }).click();

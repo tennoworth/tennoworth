@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tableNavigation } from '../../ui/keyboard.svelte';
   import { onMount } from 'svelte';
+  import Select from '../../ui/Select.svelte';
   import type { PublicData } from '../pages/model';
   import type { PublicMarket } from '../../contracts/data';
   import { replacesMarket } from '../../domain/market';
@@ -127,7 +128,7 @@
         <p>A tradeable set is a collection of its required components. Do not craft components expecting the finished equipment to remain tradeable; check each item’s trading requirements in game. <a href="https://forums.warframe.com/announcement/44-trading-guide-faq-tips-guidelines/">Read Digital Extremes’ trading guide</a>.</p>
       {/if}
       {#if kind === 'ducats'}
-        <div class="ui-toolbar public-controls"><label>Find a Prime part <input class="ui-input" type="search" disabled={!enhanced} bind:value={query} /></label><label>Order by <select class="ui-input" disabled={!enhanced} bind:value={sort}><option value="cost">Lowest platinum per 100 ducats</option><option value="name">Item name</option></select></label></div>
+        <div class="ui-toolbar public-controls"><label>Find a Prime part <input class="ui-input" type="search" disabled={!enhanced} bind:value={query} /></label><span class="order-by">Order by <Select label="Order by" disabled={!enhanced} value={sort} options={[{ value: 'cost', label: 'Lowest platinum per 100 ducats' }, { value: 'name', label: 'Item name' }]} onchange={(next) => (sort = next)} /></span></div>
         <p>Showing up to 60 priced parts. Platinum per 100 ducats = daily median ÷ ducats × 100. Items without a positive price or ducat value are excluded.</p>
         <div class="public-table" use:tableNavigation={"Ducat opportunity costs"}><table class="tw"><thead><tr><th>Prime part</th><th>Daily median</th><th>Ducats</th><th>Platinum per 100 ducats</th></tr></thead><tbody>{#each rows as row}<tr><td>{@render itemLink(row.slug)}</td><td>{price(row.price)}</td><td>{row.ducats}</td><td>{price(row.price! / row.ducats! * 100)}</td></tr>{:else}<tr><td colspan="4">No priced parts match this search.</td></tr>{/each}</tbody></table></div>
       {/if}

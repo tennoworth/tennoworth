@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { pickOption } from '../pick-option';
 
 test('drafts stay private, publish is reviewed, edits keep identity, and withdrawal clears the feed', async ({ page, request }) => {
   await page.goto('/admin.html#announcements');
@@ -167,7 +168,7 @@ test('official dates are reviewed, published into the feed, corrected in place a
   const panel = page.getByRole('region', { name: 'Official dates' });
   const title = `Devstream ${Date.now()}`;
   const start = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 16);
-  await panel.getByLabel('Event kind').selectOption('devstream');
+  await pickOption(panel.getByLabel('Event kind'), 'devstream');
   await panel.getByLabel('Event title').fill(title);
   await panel.getByLabel('Event starts at (UTC)').fill(start);
   // Without an approved source the date cannot be reviewed.

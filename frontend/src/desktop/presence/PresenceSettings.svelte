@@ -3,12 +3,13 @@
   // the game, and how long a status picked by hand is kept.
   import { PRESENCE_KEEP_FOR_CHOICES, type PresenceChoice } from '../../contracts/desktop';
   import type { PresenceController } from './presence.svelte';
+  import Select from '../../ui/Select.svelte';
   import { PRESENCE_CHOICES, PRESENCE_LABEL, keepForLabel, presenceLine, presenceProblem, presenceUsable } from './presence';
 
   let { presence }: { presence: PresenceController } = $props();
 
   const keepChoices: (number | null)[] = [null, ...PRESENCE_KEEP_FOR_CHOICES];
-  const closedChoices: PresenceChoice[] = ['invisible', 'online'];
+  const closedChoices = (['invisible', 'online'] as PresenceChoice[]).map((choice) => ({ value: choice, label: PRESENCE_LABEL[choice] }));
 
   let status = $derived(presence.status);
   let usable = $derived(presenceUsable(status));
@@ -44,10 +45,8 @@
       <div class="ui-setting-copy"><label for="presence-follow">Follow the game</label><p>Online in game from the moment you log in to Warframe until you quit. If you change your status yourself, here or on warframe.market, following pauses until your next game session.</p></div>
       <div class="ui-setting-control">
         <label class="ui-setting-check"><input id="presence-follow" type="checkbox" checked={status.settings.followGame} disabled={presence.savingSettings} onchange={(e) => void presence.saveSettings({ ...status.settings, followGame: e.currentTarget.checked })}><span>Enabled</span></label>
-        <label for="presence-closed" class="status">When Warframe closes</label>
-        <select id="presence-closed" class="ui-input" value={status.settings.whenClosed} disabled={presence.savingSettings || !status.settings.followGame} onchange={(e) => void presence.saveSettings({ ...status.settings, whenClosed: e.currentTarget.value as PresenceChoice })}>
-          {#each closedChoices as choice (choice)}<option value={choice}>{PRESENCE_LABEL[choice]}</option>{/each}
-        </select>
+        <span id="presence-closed-label" class="status">When Warframe closes</span>
+        <Select id="presence-closed" labelledby="presence-closed-label" value={status.settings.whenClosed} options={closedChoices} disabled={presence.savingSettings || !status.settings.followGame} onchange={(choice) => void presence.saveSettings({ ...status.settings, whenClosed: choice })} />
       </div>
     </div>
     <div class="ui-setting-row">
