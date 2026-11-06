@@ -1,5 +1,5 @@
 {
-  "version": "0.8.116",
+  "version": "0.8.117",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1843,6 +1843,56 @@
           "kind": "improved",
           "title": "The picture credit moved to Settings",
           "body": "The Warframe Wiki credit for item pictures now sits under Settings › Item lists, beside the Visual and Compact switch, instead of in the sidebar.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.117",
+      "date": "2026-11-06",
+      "changes": [
+        {
+          "id": "watch-card-over-game",
+          "kind": "improved",
+          "title": "Price watches can show over the game",
+          "body": "Turn on In game for price watches in Settings › Notifications. While Warframe is the focused window, a fired watch shows a short card over the game instead of a desktop popup. If you allow it, the card copies a warframe.market whisper for that player, so you press Ctrl+V in chat. Back in the app, a banner keeps the offer for 15 minutes. On Linux the card needs Warframe running through XWayland, as Steam's Proton does.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "lighter-price-watches",
+          "kind": "improved",
+          "title": "Lighter price watches",
+          "body": "While the live order feed is running, watches are rechecked once an hour instead of every 10 minutes, and the app keeps up to 30 watches. If you already have more, the first 30 are checked; delete some to add new ones. The watch list shows how many of the 30 you use.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "presence-online-promise",
+          "kind": "improved",
+          "title": "What Online in game promises",
+          "body": "Presence settings now explain that warframe.market treats Online in game as a promise to answer whispers and trade within 15 minutes, so set Invisible when you can't trade.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "drawn-dropdowns",
+          "kind": "improved",
+          "title": "Dropdowns match the app",
+          "body": "Every dropdown is now drawn in the app's own style in both themes, instead of the white system box Linux showed. They work with the keyboard as before.",
           "platforms": [
             "windows",
             "linux"

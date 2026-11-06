@@ -54,6 +54,30 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.117 - 2026-11-06
+
+# 🎮 TennoWorth Desktop 0.8.117
+
+TennoWorth Desktop 0.8.117 is ready.
+
+This release lets a price watch reach you while you play: a fired watch can show as a small card over Warframe, with a ready whisper to paste into chat. Dropdowns now match the app's look on every system, price watches ask warframe.market for less, and the presence settings explain what Online in game promises other traders.
+
+## Changelog (4)
+
+### Trading
+
+- **Price watches can show over the game** Turn on In game for price watches in Settings › Notifications. While Warframe is the focused window, a fired watch shows a short card over the game instead of a desktop popup. If you allow it, the card copies a warframe.market whisper for that player, so you press Ctrl+V in chat. Back in the app, a banner keeps the offer for 15 minutes. On Linux the card needs Warframe running through XWayland, as Steam's Proton does. <!-- app-note {"id":"watch-card-over-game","kind":"improved"} -->
+- **Lighter price watches** While the live order feed is running, watches are rechecked once an hour instead of every 10 minutes, and the app keeps up to 30 watches. If you already have more, the first 30 are checked; delete some to add new ones. The watch list shows how many of the 30 you use. <!-- app-note {"id":"lighter-price-watches","kind":"improved"} -->
+- **What Online in game promises** Presence settings now explain that warframe.market treats Online in game as a promise to answer whispers and trade within 15 minutes, so set Invisible when you can't trade. <!-- app-note {"id":"presence-online-promise","kind":"improved"} -->
+
+### Appearance
+
+- **Dropdowns match the app** Every dropdown is now drawn in the app's own style in both themes, instead of the white system box Linux showed. They work with the keyboard as before. <!-- app-note {"id":"drawn-dropdowns","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.116 - 2026-11-03
 
 # 🎨 TennoWorth Desktop 0.8.116
