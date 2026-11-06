@@ -811,7 +811,10 @@ changes the strip's width or height.
 Settings shows the status first on the warframe.market summary card, with the
 session on its second line. The account panel's Trade presence group holds the
 status as a `.ui-segmented` choice, Follow the game with the status chosen for
-when Warframe closes, and keep status for. Keep status for is disabled, with its
+when Warframe closes, and keep status for. Follow the game's description
+states warframe.market's rule that Online in game means answering and trading
+within 15 minutes, in plain text before it is enabled: a caution, not something
+to fix, so it takes no tone. Keep status for is disabled, with its
 reason, while following manages the status. A status picked by hand pauses
 following until the next game session: a warn-toned notice says so and offers
 Follow the game now. A refusal from warframe.market, such as an unverified
