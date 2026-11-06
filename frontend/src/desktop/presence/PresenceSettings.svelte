@@ -41,7 +41,7 @@
       </div>
     </div>
     <div class="ui-setting-row">
-      <div class="ui-setting-copy"><label for="presence-follow">Follow the game</label><p>Online in game from the moment you log in to Warframe until you quit. If you change your status yourself, here or on warframe.market, following pauses until your next game session.</p></div>
+      <div class="ui-setting-copy"><label for="presence-follow">Follow the game</label><p>Online in game from the moment you log in to Warframe until you quit. If you change your status yourself, here or on warframe.market, following pauses until your next game session.</p><p>warframe.market's rules treat Online in game as a promise to answer whispers and trade within 15 minutes. A long mission or AFK breaks it and can get you reported, so set Invisible yourself when you can't trade.</p></div>
       <div class="ui-setting-control">
         <label class="ui-setting-check"><input id="presence-follow" type="checkbox" checked={status.settings.followGame} disabled={presence.savingSettings} onchange={(e) => void presence.saveSettings({ ...status.settings, followGame: e.currentTarget.checked })}><span>Enabled</span></label>
         <label for="presence-closed" class="status">When Warframe closes</label>
