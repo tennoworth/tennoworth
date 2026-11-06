@@ -6,7 +6,9 @@ there is no account registry, central request proxy, or fleet-wide quota.
 
 The compiled defaults are in `tests/fixtures/pacing.json`: 500 ms between HTTP
 starts, two outstanding requests, 6.1 seconds between contract searches, and a
-ten-minute watch interval. The waiting queue holds at most 128 requests. A waiting
+ten-minute watch interval. While the live order stream has stayed connected
+since the last pass and every watch has been checked once, the watch pass
+waits an hour instead; at most 30 watches are kept. The waiting queue holds at most 128 requests. A waiting
 background request gets a turn after four foreground requests. Cached quotes,
 contract results and own orders last 15, 60 and 5 seconds respectively; final
 listing validation always makes a fresh read.

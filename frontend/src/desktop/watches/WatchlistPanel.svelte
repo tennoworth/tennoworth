@@ -6,7 +6,7 @@
   import { onMount, onDestroy } from 'svelte';
 
 import { WATCH_FIRED_EVENT } from '../../contracts/events';
-import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/desktop';
+import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../../contracts/desktop';
   
   import { buildBrowseIndex, searchItems, type BrowseRow } from '../../domain/market-browse';
   import { humanError } from '../../contracts/errors';
@@ -215,10 +215,10 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
     <button class="btn primary" onclick={add} disabled={!picked || threshold < 1 || adding}>Add watch</button>
   </div>
 
-    <div class="foot">Checks online orders every 10 minutes, excluding your own. At most one notification per watch every 6 hours.</div>
+    <div class="foot">New listings alert within seconds. Existing orders, excluding your own, are rechecked every 10 minutes, or hourly while the live feed is connected. At most one notification per watch every 6 hours.</div>
   </section>
   <section class="wrap tw" aria-labelledby="watch-list-title">
-    <div class="rail"><h3 id="watch-list-title">Your watches</h3><span class="exp">{watches.length} of 100</span></div>
+    <div class="rail"><h3 id="watch-list-title">Your watches</h3><span class="exp">{watches.length} of {MAX_WATCHES}</span></div>
   {#if loadError}
     <div class="ui-notice" data-tone="bad" role="alert">Couldn't load watches: {loadError}</div>
   {:else if watches.length === 0}
