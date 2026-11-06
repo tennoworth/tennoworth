@@ -488,6 +488,8 @@ declare global {
   interface Window {
     __TENNOWORTH_RELIC_OVERLAY_UPDATE__?: (result: RelicOverlayResult) => void;
     __TENNOWORTH_RELIC_OVERLAY_HIDE__?: () => void;
+    /** Rust pushes the in-game notice here; `null` hides it. */
+    __TENNOWORTH_GAME_NOTICE__?: (notice: import('./desktop').GameNotice | null) => void;
   }
 }
 

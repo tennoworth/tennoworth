@@ -29,15 +29,20 @@ installDesktopExternalLinkHandler();
 // component init with no default-value flash - in the browser and the desktop
 // build alike. hydrate() never rejects; if it somehow did we still mount rather
 // than leave a blank window.
-const overlaySurface = new URLSearchParams(location.search).get('surface') === 'relic-overlay';
+const surface = new URLSearchParams(location.search).get('surface');
+const overlaySurface = surface === 'relic-overlay';
+const noticeSurface = surface === 'game-notice';
 document.documentElement.classList.toggle('relic-overlay-surface', overlaySurface);
+document.documentElement.classList.toggle('game-notice-surface', noticeSurface);
 const store = createStateStore();
 // Keep the overlay's transparent, scroll-locked document CSS out of the hosted
 // page's initial bundle. A conditional mount does not isolate a static import's
 // component CSS: Svelte still emits it globally even when that branch never runs.
 const styleguideSurface = import.meta.env.DEV && new URLSearchParams(location.search).has('styleguide');
-const app = styleguideSurface && !overlaySurface
+const app = styleguideSurface && !overlaySurface && !noticeSurface
   ? import('./dev/styleguide/Styleguide.svelte').then(({ default: Styleguide }) => mount(Styleguide, { target }))
+  : noticeSurface
+  ? Promise.all([import('./desktop/notice/GameNoticeCard.svelte'), import('./adapters/services')]).then(([{ default: GameNoticeCard }, { createDesktopServices }]) => mount(GameNoticeCard, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
   : overlaySurface
   ? Promise.all([import('./desktop/relics/RelicOverlay.svelte'), import('./adapters/services')]).then(([{ default: RelicOverlay }, { createDesktopServices }]) => mount(RelicOverlay, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
   : store.hydrate().then(() => {

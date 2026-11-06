@@ -185,7 +185,15 @@ pub fn run_pass(app: &AppHandle) -> Vec<WatchOutcome> {
         });
         let mut o = evaluate(w, top, now);
         if o.fire {
-            o.fire = notify_watch(app, &o, now);
+            let holder = top.and_then(|t| match w.side.as_str() {
+                "sell" => t.low_sell_by.as_deref(),
+                _ => t.top_buy_by.as_deref(),
+            });
+            let offer = o
+                .price
+                .zip(holder)
+                .and_then(|(price, player)| super::offer::offer_for(w, price, player, now));
+            o.fire = notify_watch(app, &o, offer, now);
         }
         let fired_at = if o.fire { Some(now) } else { None };
         if let Err(e) = db.record_watch_check(w.id, o.price, now, fired_at) {
@@ -199,7 +207,14 @@ pub fn run_pass(app: &AppHandle) -> Vec<WatchOutcome> {
     out
 }
 
-pub fn notify_watch(app: &AppHandle, outcome: &WatchOutcome, now: i64) -> bool {
+/// `offer` names who to whisper when the order said; a fired watch with one
+/// becomes the app's ready-to-copy offer.
+pub fn notify_watch(
+    app: &AppHandle,
+    outcome: &WatchOutcome,
+    offer: Option<super::offer::WatchOffer>,
+    now: i64,
+) -> bool {
     let mut candidate = crate::services::notifications::Candidate::once(
         format!("watch:{}", outcome.id),
         "watches",
@@ -209,8 +224,14 @@ pub fn notify_watch(app: &AppHandle, outcome: &WatchOutcome, now: i64) -> bool {
         now,
     );
     candidate.cooldown = REARM_AFTER_SECS;
+    candidate.whisper = offer.as_ref().map(|o| o.whisper.clone());
     match crate::services::notifications::publish(app, candidate) {
-        Ok(fired) => fired,
+        Ok(fired) => {
+            if let Some(offer) = offer.filter(|_| fired) {
+                super::offer::remember(app, offer);
+            }
+            fired
+        }
         Err(e) => {
             eprintln!("tennoworth: watch notification failed: {e}");
             false
@@ -366,6 +387,8 @@ mod tests {
             top_buy,
             own_ask: None,
             own_bid: None,
+            low_sell_by: None,
+            top_buy_by: None,
             error: None,
             buyer_book: None,
         }

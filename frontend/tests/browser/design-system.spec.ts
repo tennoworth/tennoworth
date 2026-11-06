@@ -73,6 +73,33 @@ async function unevenSelection(page: Page) {
 
 const views = ['Sell', 'Trade Session', 'Set picks', 'Relics', 'Rivens', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
 
+test('in-game notice is a passive, transparent card whose lines stay inside it', async ({ page }, testInfo) => {
+  await page.goto('/?preview-desktop&surface=game-notice');
+  await page.waitForFunction(() => typeof window.__TENNOWORTH_GAME_NOTICE__ === 'function');
+  // The window is the card: Rust sizes it to 420x88 on a 1080p game.
+  await page.setViewportSize({ width: 420, height: 88 });
+  await page.evaluate(() => window.__TENNOWORTH_GAME_NOTICE__?.({
+    id: 'notification-1', title: 'TennoWorth price watch',
+    detail: 'A Very Long Prime Set Name That Cannot Fit is listed at 110p (you wanted ≤ 120p)',
+    hint: 'Whisper copied · press Ctrl+V in chat',
+  }));
+  const card = page.locator('.card');
+  await expect(card).toBeVisible();
+  const outside = await card.evaluate(el => {
+    const box = el.getBoundingClientRect();
+    return [...el.children].filter(line => {
+      const r = line.getBoundingClientRect();
+      return r.left < box.left || r.right > box.right + 0.5 || r.bottom > box.bottom + 0.5 || line.scrollHeight > line.clientHeight + 1;
+    }).map(line => line.textContent);
+  });
+  expect(outside).toEqual([]);
+  await expect(page.locator('.surface')).toHaveCSS('pointer-events', 'none');
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await page.screenshot({ path: testInfo.outputPath('game-notice.png') });
+  await page.evaluate(() => window.__TENNOWORTH_GAME_NOTICE__?.(null));
+  await expect(card).toHaveCount(0);
+});
+
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} migrated screens retain content and shared control targets`, async ({ page }, testInfo) => {
     await page.emulateMedia({ colorScheme: theme });

@@ -41,6 +41,11 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopListingOutcomes(): Promise<ListingOutcomes>;
   desktopSetListingOutcomes(enabled: boolean): Promise<void>;
   currentOverlayResult(): Promise<import('./data').RelicOverlayResult | null>;
+  currentGameNotice(): Promise<import('./desktop').GameNotice | null>;
+  desktopLatestWatchOffer(): Promise<import('./desktop').WatchOffer | null>;
+  desktopDismissWatchOffer(): Promise<void>;
+  desktopCopyWatchWhisper(): Promise<void>;
+  desktopRecheckWatchOffer(): Promise<import('./desktop').WatchOffer | null>;
   desktopNotificationPreferences(): Promise<NotificationPreferences>;
   desktopSaveNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences>;
   desktopTestNotification(): Promise<string>;

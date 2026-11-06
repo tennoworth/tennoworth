@@ -64,6 +64,13 @@ tauri-plugin-opener = "2"
 # Rust owns the global fallback shortcut so the hidden overlay window needs no
 # global-shortcut capability.
 tauri-plugin-global-shortcut = "2"
+# Puts a ready warframe.market whisper on the clipboard for in-game prompts and
+# the Copy whisper button. Text only (no image support). On Linux it speaks
+# X11, deliberately without the Wayland data-control feature: Warframe runs
+# under Proton through XWayland and pastes from the X11 clipboard, which any
+# background client may own, while native Wayland only lets the focused client
+# set the selection.
+arboard = { version = "3.7", default-features = false }
 # Local-time digest scheduling and RFC3339 schedule parsing on Windows/Linux.
 chrono = { workspace = true }
 serde = { workspace = true }

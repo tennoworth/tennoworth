@@ -208,7 +208,14 @@ fn run(app: AppHandle) {
                 satisfied: true,
                 fire: true,
             };
-            outcome.fire = crate::services::watches::poll::notify_watch(&app2, &outcome, now);
+            let offer = outcome
+                .price
+                .zip(o.user_name.as_deref())
+                .and_then(|(price, player)| {
+                    crate::services::watches::offer::offer_for(w, price, player, now)
+                });
+            outcome.fire =
+                crate::services::watches::poll::notify_watch(&app2, &outcome, offer, now);
             if let Err(e) =
                 db.record_watch_check(w.id, outcome.price, now, outcome.fire.then_some(now))
             {
@@ -346,6 +353,8 @@ mod tests {
                 top_buy: Some(7.2),
                 own_ask: None,
                 own_bid: None,
+                low_sell_by: None,
+                top_buy_by: None,
                 error: None,
                 buyer_book: None,
             };

@@ -207,7 +207,9 @@ html[data-look="yorha"][data-mode="dark"] {
   color-scheme: dark;
 }
 
-/* The game HUD needs a stable dark surface even when the desktop uses paper. */
+/* The game HUD needs a stable dark surface even when the desktop uses paper.
+   The in-game notice shares the reward card's palette. */
+html.game-notice-surface,
 html.relic-overlay-surface {
   --reward-surface: #1e1913f2;
   --reward-fg: #D3C7A6;
@@ -830,7 +832,7 @@ table.tw tr.busy td { color: var(--muted); }
 /* ---------- yorha ---------------------------------------------------------- */
 /* Paper ground: a dot grid in ink. It sits on its own fixed, composited layer: painted on body, every scroll
    of the transparent workspace re-rastered the three gradients beneath it. */
-html[data-look="yorha"]:not(.relic-overlay-surface) body::before {
+html[data-look="yorha"]:not(.relic-overlay-surface, .game-notice-surface) body::before {
   content: "";
   position: fixed;
   inset: 0;

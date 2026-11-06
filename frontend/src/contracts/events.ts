@@ -39,6 +39,9 @@ export {
 /** The user's warframe.market status changed (a PresenceStatus). */
 export { PRESENCE_CHANGED_EVENT } from './generated/desktop';
 
+/** The latest price-watch offer changed or was dismissed (no payload). */
+export { WATCH_OFFER_EVENT } from './generated/desktop';
+
 /** The relic overlay window's result and hide pushes. */
 export { RELIC_OVERLAY_UPDATE_EVENT, RELIC_OVERLAY_HIDE_EVENT } from './generated/desktop';
 

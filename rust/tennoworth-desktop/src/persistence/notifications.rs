@@ -147,5 +147,6 @@ fn normalize_preferences(
     Preferences {
         popups: stored.popups,
         categories,
+        copy_whisper: stored.copy_whisper,
     }
 }

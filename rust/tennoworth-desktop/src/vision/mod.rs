@@ -5,5 +5,6 @@
 //! crops and recognizes, and imports none of them.
 
 pub(crate) mod capture;
+pub(crate) mod focus;
 pub(crate) mod frame;
 pub(crate) mod ocr;

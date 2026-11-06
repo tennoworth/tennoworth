@@ -89,6 +89,8 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             })
             .build())
         .manage(crate::shell::tray::TrayState::default())
+        .manage(crate::overlay::notice::NoticeState::default())
+        .manage(crate::services::watches::offer::OfferState::default())
         .manage(crate::shell::update::UpdateState::default())
         .manage(Arc::new(WfmSession::new()))
         // Item pictures by slug (`art://localhost/<slug>`); the lookup may hit
@@ -147,6 +149,10 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::commands::watches::add_watch,
             crate::commands::watches::delete_watch,
             crate::commands::watches::check_watches_now,
+            crate::services::watches::offer::latest_watch_offer,
+            crate::services::watches::offer::dismiss_watch_offer,
+            crate::services::watches::offer::copy_watch_whisper,
+            crate::services::watches::offer::recheck_watch_offer,
             crate::commands::trades::list_trades,
             crate::commands::trades::eelog_status,
             crate::commands::trades::listing_outcomes,
@@ -179,6 +185,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             overlay::update_overlay_settings,
             overlay::overlay_status,
             overlay::current_overlay_result,
+            crate::overlay::notice::current_game_notice,
             overlay::preview_relic_overlay,
             overlay::setup_overlay_capture,
             overlay::scan_overlay_now,
@@ -223,6 +230,10 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 overlay::OverlayState::new(&app.handle().clone(), &app.state::<Db>());
             app.manage(overlay_state);
             overlay::register_configured_shortcut(&app.handle().clone());
+            let in_game = crate::services::notifications::InGameDelivery::default();
+            let notice_app = app.handle().clone();
+            in_game.install(move |request| overlay::notice::deliver(&notice_app, request));
+            app.manage(in_game);
             let game_events = Arc::new(GameEvents::default());
             let overlay_app = app.handle().clone();
             game_events.subscribe(move |event| match event {
