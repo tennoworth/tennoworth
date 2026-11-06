@@ -199,6 +199,8 @@ export const RELIC_RECOMMENDATION_CONFIDENCE = 0.9 as const;
 
 export const AUTO_SCAN_CADENCE_CHOICES = [15, 30, 60] as const;
 
+export const MAX_WATCHES = 30 as const;
+
 export const PRESENCE_KEEP_FOR_CHOICES = [30, 60, 120, 240] as const;
 
 export const APP_ICON_COLOURS = ["blue", "ink", "rag"] as const;
