@@ -83,7 +83,7 @@ export async function revalidatePublicMarket(current: PublicMarket): Promise<Pub
 }
 
 /** A returning visitor gets a check at most this often; the snapshot itself
- *  is rebuilt about every two hours. */
+ *  is rebuilt about every three hours. */
 export const HOSTED_RETURN_MIN_INTERVAL_MS = 10 * 60 * 1000;
 
 /**

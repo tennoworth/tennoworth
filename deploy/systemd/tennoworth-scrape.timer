@@ -1,11 +1,13 @@
 [Unit]
-Description=Run the WFM scrape every 2 hours
+Description=Run the WFM scrape every 3 hours
 
 [Timer]
-# systemd calendar syntax (NOT cron): 0/2 = every 2h starting at 00. `*/2` is
+# systemd calendar syntax (NOT cron): 0/3 = every 3h starting at 00. `*/3` is
 # cron and makes systemd refuse the whole unit. systemd also has no inline
 # comments, so each note is on its own line above its directive.
-OnCalendar=0/2:00
+# Every 3h, not 2h: eight sweeps a day instead of twelve. Each sweep reads
+# every live book, so this is a third fewer order-book reads from WFM.
+OnCalendar=0/3:00
 # jitter so we're not a predictable load on WFM
 RandomizedDelaySec=600
 # catch up one missed run after downtime/reboot

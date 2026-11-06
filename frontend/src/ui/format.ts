@@ -129,7 +129,8 @@ export function marketFreshness(
 ): 'unknown' | 'fresh' | 'aging' | 'stale' {
   if (!updatedAt) return 'unknown';
   const hours = (now - new Date(updatedAt).getTime()) / 3.6e6;
-  if (hours <= 3) return 'fresh';
+  // A sweep every 3 hours, plus its jitter and run time, publishes inside 4.
+  if (hours <= 4) return 'fresh';
   if (hours <= 24) return 'aging';
   return 'stale';
 }
