@@ -3,6 +3,7 @@
   // Access. They go straight into the public feed after an explicit review,
   // with no draft stage, because a date either is announced or is not.
   import type { Publisher } from './api';
+  import Select from '../ui/Select.svelte';
   import type { DashboardState, EventChange, EventContent } from '../contracts/generated/publisher';
   import type { OfficialEvent } from '../contracts/generated/desktop';
   import { parseAnnouncements } from '../domain/announcements';
@@ -97,7 +98,7 @@
     <h3>{editing ? 'Correct this date' : 'Add an official date'}</h3>
     <fieldset disabled={busy}>
       <div class="pair">
-        <label class="ui-field">Event kind<select bind:value={form.kind} onchange={() => { review = null; }}>{#each limits.event_kinds as kind (kind)}<option value={kind}>{KIND_LABEL[kind] ?? kind}</option>{/each}</select></label>
+        <div class="ui-field"><span>Event kind</span><Select label="Event kind" value={form.kind} options={limits.event_kinds.map((kind) => ({ value: kind, label: KIND_LABEL[kind] ?? kind }))} onchange={(next) => { form.kind = next; review = null; }} /></div>
         <label class="ui-field">Event title<input bind:value={form.title} maxlength={limits.max_title} oninput={() => { review = null; }} /></label>
       </div>
       <div class="pair">

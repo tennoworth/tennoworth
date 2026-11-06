@@ -13,6 +13,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   import { plat } from '../../ui/format';
   import type { Market } from '../../contracts/data';
   import Toast from '../../ui/Toast.svelte';
+  import Select from '../../ui/Select.svelte';
   import { createToastQueue } from '../../ui/toast-queue.svelte';
 
   interface Props {
@@ -203,13 +204,10 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
         </ul>
       {/if}
     </div>
-    <label class="ui-field">
+    <div class="ui-field">
       <span>Notify when</span>
-      <select class="ui-input" bind:value={side} onchange={onSideChange}>
-        <option value="sell">Lowest ask is ≤</option>
-        <option value="buy">Highest bid is ≥</option>
-      </select>
-    </label>
+      <Select label="Notify when" value={side} options={[{ value: 'sell', label: 'Lowest ask is ≤' }, { value: 'buy', label: 'Highest bid is ≥' }]} onchange={(next) => { side = next; onSideChange(); }} />
+    </div>
     <label class="ui-field threshold">
       <span>Target price (p)</span>
       <input class="ui-input" type="number" min="1" bind:value={threshold} disabled={!picked} />
@@ -286,8 +284,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   .scroll { overflow: auto; }
   @media (max-width: 35rem) {
     .pick { flex-basis: 100%; min-width: 0; }
-    .add > label { min-width: 0; }
-    .add select { max-width: 100%; }
+    .add > .ui-field { min-width: 0; }
   }
   table { min-width: 52rem; }
   td:last-child .btn { white-space: nowrap; }

@@ -3,6 +3,7 @@
   import PriceReportSettings from './PriceReportSettings.svelte';
   import NotificationSettings from '../notifications/NotificationSettings.svelte';
   import ThemeSwitcher from '../../ui/ThemeSwitcher.svelte';
+  import Select from '../../ui/Select.svelte';
   import AppIconSetting from './AppIconSetting.svelte';
   import { useDisplay } from '../../ui/display.svelte';
   import PresenceSettings from '../presence/PresenceSettings.svelte';
@@ -166,6 +167,8 @@
   // `revert` puts the control back to the stored value. A failed save leaves the
   // settings unchanged, so nothing re-renders and the control would keep showing
   // a value that was never stored - and the next click would send its opposite.
+  const cadenceOptions = AUTO_SCAN_CADENCE_CHOICES.map((minutes) => ({ value: minutes, label: `every ${minutes} minutes` }));
+
   async function saveAutoScan(next: AutoScanSettings, revert: (stored: AutoScanSettings) => void) {
     if (!autoScan) return;
     savingAutoScan = true;
@@ -287,7 +290,7 @@
           <div class="ui-setting-control">
             <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} disabled={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, enabled: input.checked }, (stored) => (input.checked = stored.enabled)); }}><span>Enabled</span></label>
             {#if autoScan.settings.enabled}
-              <select id="auto-scan-cadence" class="ui-input" aria-label="Scan every" value={autoScan.settings.cadenceMinutes} disabled={savingAutoScan} onchange={(event) => { const select = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: Number(select.value) }, (stored) => (select.value = String(stored.cadenceMinutes))); }}>{#each AUTO_SCAN_CADENCE_CHOICES as minutes}<option value={minutes}>every {minutes} minutes</option>{/each}</select>
+              <Select id="auto-scan-cadence" label="Scan every" value={autoScan.settings.cadenceMinutes} options={cadenceOptions} disabled={savingAutoScan} onchange={(minutes) => void saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: minutes }, () => {})} />
             {/if}
           </div>
         </div>

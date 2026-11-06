@@ -394,9 +394,9 @@ describe('SettingsPanel automatic scanning', () => {
     const { controller, port } = await autoScan({ enabled: true, cadenceMinutes: 15, adoptAutomatically: true });
     render(SettingsPanel, { props: { theme, autoScan: controller } });
 
-    const select = screen.getByRole('combobox', { name: /Scan every/ }) as HTMLSelectElement;
-    expect([...select.options].map((option) => Number(option.value))).toEqual([...AUTO_SCAN_CADENCE_CHOICES]);
-    await fireEvent.change(select, { target: { value: '60' } });
+    await fireEvent.click(screen.getByRole('combobox', { name: /Scan every/ }));
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(AUTO_SCAN_CADENCE_CHOICES.map((minutes) => `every ${minutes} minutes`));
+    await fireEvent.click(screen.getByRole('option', { name: 'every 60 minutes' }));
     expect(port.updateAutoScanSettings).toHaveBeenCalledWith({ enabled: true, cadenceMinutes: 60, adoptAutomatically: true });
   });
 
@@ -420,9 +420,11 @@ describe('SettingsPanel automatic scanning', () => {
     await screen.findByText(/database is locked/);
     expect(adopt.checked).toBe(true);
 
-    const select = screen.getByRole('combobox', { name: /Scan every/ }) as HTMLSelectElement;
-    await fireEvent.change(select, { target: { value: '60' } });
-    await waitFor(() => expect(select.value).toBe('30'));
+    const select = screen.getByRole('combobox', { name: /Scan every/ });
+    await fireEvent.click(select);
+    await fireEvent.click(screen.getByRole('option', { name: 'every 60 minutes' }));
+    expect(port.updateAutoScanSettings).toHaveBeenLastCalledWith({ enabled: true, cadenceMinutes: 60, adoptAutomatically: true });
+    await waitFor(() => expect(select.textContent).toContain('every 30 minutes'));
   });
 
   it('reports what the loop is doing, including a failure and a paused scan', async () => {

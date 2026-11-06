@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Market, OwnedRecord } from '../../contracts/data';
   import type { ProtectionController } from './protection.svelte';
+  import Select from '../../ui/Select.svelte';
   let { controller, owned, market, onconnect, reserveCopies, onsetKeep, unavailableCount, unavailable, onscan, scanning = false }: { controller: ProtectionController; owned: Map<string, OwnedRecord>; market: Market | null; onconnect(): void; reserveCopies: number; onsetKeep(value: number): Promise<void>; unavailableCount: number; unavailable: boolean; onscan(): void; scanning?: boolean } = $props();
   let editing = $state(false);
   let dialog: HTMLDialogElement;
@@ -16,6 +17,12 @@
   let choices = $derived([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic') && market?.items[row.slug])
     .filter((row, i, rows) => rows.findIndex(other => other.slug === row.slug) === i).sort((a, b) => a.name.localeCompare(b.name)));
   let filteredChoices = $derived(choices.filter(row => row.name.toLowerCase().includes(search.toLowerCase())));
+  let goalOptions = $derived([
+    { value: '', label: 'No saved crafting goal' },
+    ...(goal && !market?.set_to_parts?.[goal] ? [{ value: goal, label: `${goal} · recipe unresolved` }] : []),
+    ...Object.entries(market?.set_to_parts ?? {}).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([slug, set]) => ({ value: slug, label: set.name })),
+  ]);
+  let itemOptions = $derived([{ value: '', label: 'Choose an owned item' }, ...filteredChoices.map(row => ({ value: row.slug, label: row.name }))]);
   let goalName = $derived(controller.savedPlan?.goal ? (market?.set_to_parts?.[controller.savedPlan.goal]?.name ?? controller.savedPlan.goal) : null);
   let manualCount = $derived(Object.keys(controller.savedPlan?.reserves ?? {}).length);
   let conflicts = $derived(Object.values(controller.state?.items ?? {}).some(row => row.protected + (row.listed ?? 0) > row.owned));
@@ -102,20 +109,14 @@
   {#if editing}
     <div class="ui-stack">
       {#if !controller.savedPlan}<p class="ui-notice" data-tone="warn">Saved item rules could not be loaded. Saving replaces them; re-enter every item and crafting goal you want to keep.</p>{/if}
-      <label class="ui-field">Keep parts for a set
-        <select class="ui-input" aria-label="Keep parts for a set" bind:value={goal} disabled={controller.saving}>
-          <option value="">No saved crafting goal</option>
-          {#if goal && !market?.set_to_parts?.[goal]}<option value={goal}>{goal} · recipe unresolved</option>{/if}
-          {#each Object.entries(market?.set_to_parts ?? {}).sort((a, b) => a[1].name.localeCompare(b[1].name)) as [slug, set]}
-            <option value={slug}>{set.name}</option>
-          {/each}
-        </select>
-      </label>
+      <div class="ui-field"><span>Keep parts for a set</span>
+        <Select label="Keep parts for a set" value={goal} options={goalOptions} onchange={(next) => (goal = next)} disabled={controller.saving} />
+      </div>
       <label class="ui-field">Find an owned item<input class="ui-input" type="search" bind:value={search} placeholder="Search by item name" /></label>
       <div class="ui-toolbar">
-        <label class="ui-field">Item to keep
-          <select class="ui-input" aria-label="Item to keep" bind:value={selected} disabled={controller.saving}><option value="">Choose an owned item</option>{#each filteredChoices as row}<option value={row.slug}>{row.name}</option>{/each}</select>
-        </label>
+        <div class="ui-field"><span>Item to keep</span>
+          <Select label="Item to keep" value={selected} options={itemOptions} onchange={(next) => (selected = next)} disabled={controller.saving} />
+        </div>
         <label class="ui-field">Extra copies
           <input class="ui-input" type="number" min="0" max="1000000" step="1" bind:value={quantity} disabled={controller.saving} />
         </label>

@@ -1,5 +1,6 @@
 import { encryptPayload } from '../../src/adapters/encrypted-snapshot';
 import { expect, test } from '@playwright/test';
+import { pickOption } from '../pick-option';
 
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} protection reserves recipe quantities and preserves unsaved edits`, async ({ page }, info) => {
@@ -9,13 +10,13 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto('/?preview-desktop&sample=protection');
     await page.getByText('Quantity details', { exact: true }).click();
     await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
-    await page.getByLabel('Keep parts for a set', { exact: true }).selectOption('akbolto_prime_set');
-    await page.getByLabel('Item to keep', { exact: true }).selectOption('akbolto_prime_barrel');
+    await pickOption(page.getByRole('combobox', { name: 'Keep parts for a set', exact: true }), 'akbolto_prime_set');
+    await pickOption(page.getByRole('combobox', { name: 'Item to keep', exact: true }), 'akbolto_prime_barrel');
     await page.getByLabel('Extra copies', { exact: true }).fill('1');
     await page.getByRole('button', { name: 'Set quantity', exact: true }).click();
     for (const [width, height] of [[1440, 900], [1200, 480], [320, 480]]) {
       await page.setViewportSize({ width, height });
-      await expect(page.getByLabel('Keep parts for a set', { exact: true })).toHaveValue('akbolto_prime_set');
+      await expect(page.getByRole('combobox', { name: 'Keep parts for a set', exact: true })).toHaveAttribute('data-value', 'akbolto_prime_set');
       await expect(page.getByLabel('Extra copies', { exact: true })).toHaveValue('1');
       await page.getByRole('button', { name: 'Save keep rules', exact: true }).scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
@@ -34,10 +35,10 @@ test('a failed save retains the protection draft', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=protection-save-error');
   await page.getByText('Quantity details', { exact: true }).click();
   await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
-  await page.getByLabel('Keep parts for a set', { exact: true }).selectOption('akbolto_prime_set');
+  await pickOption(page.getByRole('combobox', { name: 'Keep parts for a set', exact: true }), 'akbolto_prime_set');
   await page.getByRole('button', { name: 'Save keep rules', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Sample protection save failed');
-  await expect(page.getByLabel('Keep parts for a set', { exact: true })).toHaveValue('akbolto_prime_set');
+  await expect(page.getByRole('combobox', { name: 'Keep parts for a set', exact: true })).toHaveAttribute('data-value', 'akbolto_prime_set');
 });
 
 test('unavailable current orders never imply zero listed copies', async ({ page }) => {
@@ -133,7 +134,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto('/?preview-desktop&sample=logged-out');
     await page.getByText('Quantity details', { exact: true }).click();
     await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
-    await page.getByLabel('Item to keep', { exact: true }).selectOption('primed_flow');
+    await pickOption(page.getByRole('combobox', { name: 'Item to keep', exact: true }), 'primed_flow');
     await page.getByLabel('Extra copies', { exact: true }).fill('5');
     await page.getByRole('button', { name: 'Set quantity', exact: true }).click();
     await page.getByRole('button', { name: 'Save keep rules', exact: true }).click();
@@ -285,7 +286,14 @@ for (const theme of ['light', 'dark'] as const) {
     const dialog = page.getByRole('dialog', { name: 'What I’m keeping', exact: true });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('searchbox').fill('primed');
-    await expect(dialog.getByLabel('Item to keep', { exact: true }).locator('option')).toContainText(['Choose an owned item', 'Primed Flow']);
+    const item = dialog.getByRole('combobox', { name: 'Item to keep', exact: true });
+    await item.click();
+    await expect(dialog.getByRole('listbox', { name: 'Item to keep' }).getByRole('option')).toContainText(['Choose an owned item', 'Primed Flow']);
+    // The first Escape closes only the open list and leaves the editor up.
+    await page.keyboard.press('Escape');
+    await expect(dialog.getByRole('listbox')).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+    await expect(item).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
     await expect(edit).toBeFocused();

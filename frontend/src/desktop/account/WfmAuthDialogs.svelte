@@ -3,6 +3,14 @@
   const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock, desktopRememberAvailable } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
   import WfmTokenGuide from './WfmTokenGuide.svelte';
+  import Select from '../../ui/Select.svelte';
+
+  const PLATFORM_OPTIONS = [
+    { value: 'pc', label: 'PC (Steam & Epic)' },
+    { value: 'ps4', label: 'PlayStation' },
+    { value: 'xbox', label: 'Xbox' },
+    { value: 'switch', label: 'Switch' },
+  ];
   
 import { DesktopCmdError } from '../../contracts/errors';
 
@@ -202,15 +210,10 @@ import { DesktopCmdError } from '../../contracts/errors';
         from your browser instead.
       </p>
     {/if}
-    <label>
-      Platform
-      <select bind:value={wfmLoginPlatform}>
-        <option value="pc">PC (Steam &amp; Epic)</option>
-        <option value="ps4">PlayStation</option>
-        <option value="xbox">Xbox</option>
-        <option value="switch">Switch</option>
-      </select>
-    </label>
+    <div class="field">
+      <span>Platform</span>
+      <Select label="Platform" value={wfmLoginPlatform} options={PLATFORM_OPTIONS} onchange={(next) => (wfmLoginPlatform = next)} />
+    </div>
     <label>
       Encryption passphrase
       <input
