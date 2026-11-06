@@ -21,7 +21,7 @@ describe('NotificationSettings in game', () => {
       if (cmd === 'get_notification_preferences') return structuredClone(stored);
       if (cmd === 'set_notification_preferences') { stored = JSON.parse(JSON.stringify(args!.preferences)) as NotificationPreferences; saved.push(stored); return structuredClone(stored); }
       throw new Error(`unexpected ${cmd}`);
-    }));
+    }), undefined);
     render(NotificationSettings, { props: {} });
     const boxes = await screen.findAllByRole('checkbox', { name: / in game$/ });
     expect(boxes).toHaveLength(IN_GAME_CATEGORIES.length);
@@ -39,7 +39,7 @@ describe('NotificationSettings in game', () => {
     installTauri(vi.fn(async (cmd: string) => {
       if (cmd === 'get_notification_preferences') return paused;
       throw new Error(`unexpected ${cmd}`);
-    }));
+    }), undefined);
     render(NotificationSettings, { props: {} });
     const box = await screen.findByRole('checkbox', { name: 'Price watches in game' });
     expect((box as HTMLInputElement).disabled).toBe(true);

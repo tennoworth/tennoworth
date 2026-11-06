@@ -92,6 +92,8 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   .notice { margin: 0 var(--inset) var(--s4); }
   .rail + .notice { margin-top: var(--s4); }
   .scroll { border-top: 1px var(--rule) var(--border); }
+  /* Anchors the hidden text to its cell; otherwise it escapes the table's scroll box and widens the page. */
+  .categories td:last-child { position: relative; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .in-game-note { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--border); }
   /* Category names are reading text that wraps, not truncated data. */
