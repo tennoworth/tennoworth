@@ -3,8 +3,8 @@
 // length. `bun scripts/i18n.ts` runs these over the files.
 import { argumentNames, tagsIn, MessageError } from './message';
 import { formatPo, parsePo, type PoEntry, type PoFile } from './po';
+import type { Source } from './source';
 
-interface Source { text: string; note: string; max?: number }
 type Sources = Record<string, Source>;
 
 function notes(source: Source): string[] {

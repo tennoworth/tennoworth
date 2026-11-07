@@ -122,11 +122,14 @@ export function tagsIn(source: string): string[] {
   return (source.match(/<\/?[a-z]+>/g) ?? []).sort();
 }
 
-/** Split formatted text on <em> so a template can render the emphasis. */
-export function richParts(text: string): { text: string; em: boolean }[] {
-  return text.split(/(<em>.*?<\/em>)/).filter(Boolean).map(part => {
-    const em = /^<em>(.*)<\/em>$/.exec(part);
-    return em ? { text: em[1], em: true } : { text: part, em: false };
+export type RichTag = 'em' | 'b' | 'code';
+
+/** Split formatted text on <em>, <b> and <code> so a template renders them as
+ *  elements; the text itself is never parsed as HTML. */
+export function richParts(text: string): { text: string; tag: RichTag | null }[] {
+  return text.split(/(<(?:em|b|code)>.*?<\/(?:em|b|code)>)/).filter(Boolean).map(part => {
+    const tagged = /^<(em|b|code)>(.*)<\/\1>$/.exec(part);
+    return tagged ? { text: tagged[2], tag: tagged[1] as RichTag } : { text: part, tag: null };
   });
 }
 

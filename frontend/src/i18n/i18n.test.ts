@@ -33,7 +33,10 @@ describe('messages', () => {
 
   it('rewrites only literal text and splits emphasis', () => {
     expect(mapText(COUNT, text => text.toUpperCase())).toBe('{count, plural, =0 {NOTHING} one {# ITEM} other {# ITEMS}} LEFT');
-    expect(richParts('ranks <em>your</em> stuff')).toEqual([{ text: 'ranks ', em: false }, { text: 'your', em: true }, { text: ' stuff', em: false }]);
+    expect(richParts('ranks <em>your</em> stuff')).toEqual([{ text: 'ranks ', tag: null }, { text: 'your', tag: 'em' }, { text: ' stuff', tag: null }]);
+    expect(richParts('<b>3</b> new · <code>a<b</code>')).toEqual([{ text: '3', tag: 'b' }, { text: ' new · ', tag: null }, { text: 'a<b', tag: 'code' }]);
+    // A tag the app does not render stays text, so it cannot become markup.
+    expect(richParts('<script>x</script>')).toEqual([{ text: '<script>x</script>', tag: null }]);
     const pseudo = pseudoLocalize('Hi {name}, <em>you</em>');
     expect(pseudo).toMatch(/^\[Ĥí \{name\}, <em>ýóú<\/em>·+\]$/);
     expect(formatMessage(pseudoLocalize(COUNT), { count: 2 }, 'en')).toContain('2 íţéɱš');

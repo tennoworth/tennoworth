@@ -581,7 +581,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
          and feedback live in the header. -->
     <section data-shell class="upsell-lead desktop-hero" aria-labelledby="desktop-hero-title">
       <h2 data-shell id="desktop-hero-title">{t('firstRun.heading')}</h2>
-      <p data-shell class="sub">{#each richParts(t('firstRun.pitch')) as part, i (i)}{#if part.em}<em data-shell>{part.text}</em>{:else}{part.text}{/if}{/each}</p>
+      <p data-shell class="sub">{#each richParts(t('firstRun.pitch')) as part, i (i)}{#if part.tag === 'em'}<em data-shell>{part.text}</em>{:else}{part.text}{/if}{/each}</p>
       <p data-shell class="req">{t('firstRun.requirement')}</p>
       <div data-shell class="desktop-scan-row">
         <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? t('firstRun.scanning') : t('firstRun.scan')}</button>

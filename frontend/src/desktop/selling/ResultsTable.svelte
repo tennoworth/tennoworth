@@ -7,7 +7,7 @@
   import { untrack, type Snippet } from 'svelte';
   import Sparkline from '../../ui/Sparkline.svelte';
   import { hasSparkline } from '../../ui/sparkline';
-  import { plat, wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
+  import { plat, wfmItemUrl, ownedBreakdown, leveledNoteTitle, keptNoteTitle } from '../../ui/format';
   import { shimmer } from '../../ui/shimmer';
 
   import type { ProtectionState } from '../../contracts/protection';
@@ -546,7 +546,7 @@
       <span class="quantity-note" aria-label="sell {sellText ?? 'unavailable'}, {keepText}" title="Sell {sellText ?? 'unavailable'} · {keepText}">/ sell {sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText}</span>
     {:else if r.sellable < r.owned}
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
-      <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0}{' · '}{/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
+      <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={leveledNoteTitle()}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0}{' · '}{/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
     {/if}
     {#if listedFor?.(r)}<span class="quantity-note listed"> · listed {listedFor(r)}</span>{/if}
   {:else if col.key === 'delta'}

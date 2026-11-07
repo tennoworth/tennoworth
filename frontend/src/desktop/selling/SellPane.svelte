@@ -15,6 +15,9 @@
   import type { ListingReceipt, ListingReceipts } from './receipts.svelte';
   import { untrack } from 'svelte';
   import { focusLater, roving } from '../../ui/keyboard-actions';
+  import Rich from '../../ui/Rich.svelte';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import type { MessageKey } from '../../i18n/en';
   interface Props {
     minPrice: number; minOwned: number; typeFilter: string; hideAtLvl: number;
     activeTags: Set<string>; tableView: { rows: SellRow[]; active: boolean };
@@ -80,7 +83,7 @@
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow, receipts, onmakevisible, onopenorders,
-    pendingBanner, keep, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
+    pendingBanner, keep, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel, oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
   tradeAllowance = null, bulkSlugs = null,
   }: Props = $props();
 
@@ -98,7 +101,7 @@
   let potentialDelta = $derived(prevSummary ? Math.round(totalPotential - prevSummary.potential) : null);
   function fmtDelta(d: number | null, unit = '') {
     if (d == null || d === 0) return null;
-    const n = Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const n = Math.abs(d).toLocaleString(formatLocale(), { maximumFractionDigits: 0 });
     return `${d > 0 ? '▲' : '▼'}${n}${unit}`;
   }
   // "Changes only" - session-only view of the rows whose count moved since the
@@ -115,28 +118,38 @@
   // table has no row selection, so a number there read as a fixed batch size
   // (always "50" on a large inventory); the title carries the staged count.
   let stagedCount = $derived(Math.min(listableRows.length, 50));
-  let listTitle = $derived(
-    tableView.active
-      ? `Stage the ${stagedCount} rows in your current view (up to the first 50) - the in-table name filter and badge chips are applied; relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
-      : `Stage the top ${stagedCount} rows of the current view (up to the first 50) - relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
-  );
+  let listTitle = $derived(t(tableView.active ? 'sell.listTitleView' : 'sell.listTitleTop', { count: stagedCount }));
 
   // Auto-derived options for the type dropdown label map. The Type filter
   // mixes warframestat catalog categories (Mods, Arcanes, Relics…) with raw
   // inventory.json keys used as fallback (MiscItems, RawUpgrades…). The
   // internal names leak as-is without this map.
-  const TYPE_LABELS: Record<string, string> = {
-    MiscItems: 'Parts & misc',
-    Recipes: 'Blueprints',
-    RawUpgrades: 'Mods (unranked stacks)',
-    Suits: 'Warframes',
-    LongGuns: 'Primary weapons',
-    Pistols: 'Secondary weapons',
-    Melee: 'Melee weapons',
-    SpaceGuns: 'Archwing guns',
-    SpaceMelee: 'Archwing melee',
-    SentinelWeapons: 'Sentinel weapons',
+  const TYPE_LABELS: Record<string, MessageKey> = {
+    MiscItems: 'sell.type.MiscItems',
+    Recipes: 'sell.type.Recipes',
+    RawUpgrades: 'sell.type.RawUpgrades',
+    Suits: 'sell.type.Suits',
+    LongGuns: 'sell.type.LongGuns',
+    Pistols: 'sell.type.Pistols',
+    Melee: 'sell.type.Melee',
+    SpaceGuns: 'sell.type.SpaceGuns',
+    SpaceMelee: 'sell.type.SpaceMelee',
+    SentinelWeapons: 'sell.type.SentinelWeapons',
   };
+  const typeLabel = (type: string) => (TYPE_LABELS[type] ? t(TYPE_LABELS[type]) : type);
+  // Preset names and hints come from the catalog by preset name; domain/ keeps
+  // its English labels for itself.
+  const PRESET_TEXT: Record<string, [MessageKey, MessageKey]> = {
+    default: ['sell.preset.default', 'sell.preset.default.hint'],
+    spares: ['sell.preset.spares', 'sell.preset.spares.hint'],
+    ducats: ['sell.preset.ducats', 'sell.preset.ducats.hint'],
+    trending: ['sell.preset.trending', 'sell.preset.trending.hint'],
+    sets: ['sell.preset.sets', 'sell.preset.sets.hint'],
+    holdsell: ['sell.preset.holdsell', 'sell.preset.holdsell.hint'],
+    vault: ['sell.preset.vault', 'sell.preset.vault.hint'],
+  };
+  const presetLabel = (name: string) => (PRESET_TEXT[name] ? t(PRESET_TEXT[name][0]) : PRESETS[name].label);
+  const presetHint = (name: string) => (PRESET_TEXT[name] ? t(PRESET_TEXT[name][1]) : PRESETS[name].hint);
 
   function toggleTag(tag: string) {
     const next = new Set(activeTags);
@@ -210,14 +223,13 @@
     const plan = bulkSlugs ? tradeSplit.used : 0;
     return [...Array(plan).fill('plan'), ...Array(tradesLeft - plan).fill('free'), ...Array(max - tradesLeft).fill('spent')] as string[];
   });
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   function resetIn(now = Date.now()): string {
     const d = new Date(now), left = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now;
     const h = Math.floor(left / 3_600_000), m = Math.floor(left / 60_000) % 60;
-    return h ? `${h} h ${m} min` : `${m} min`;
+    return h ? t('sell.resetHoursMinutes', { h, m }) : t('sell.resetMinutes', { m });
   }
   const listedReceipt = (p: SellRow) => receipts?.forRow(p.slug, p.subtype);
-  const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const clock = (at: number) => new Date(at).toLocaleTimeString(formatLocale(), { hour: '2-digit', minute: '2-digit' });
 
   // Plain-language reason line for a pick, built only from fields the row
   // already carries (timing / delta_90d_pct / clearing_price / volume_48h) -
@@ -231,12 +243,12 @@
   // differ from the low ask the row shows.
   function pickReason(p: SellRow) {
     const price = Math.round(p.clearing_price ?? p.low_sell);
-    const clamp = price !== Math.round(p.low_sell) ? ` · clears around ${price}p` : '';
+    const clamp = price !== Math.round(p.low_sell) ? t('sell.reasonClears', { price }) : '';
     const d = p.delta_90d_pct;
-    if (p.timing === 'peak') return (d != null && d > 0 ? `Near its 90-day high, up ${Math.round(d)}%` : 'Near its 90-day high') + ' - a good moment to list' + clamp;
-    if (d != null && d >= 1) return `Up ${Math.round(d)}% vs its 90-day baseline` + clamp;
-    if (d != null && d <= -1) return `Down ${Math.abs(Math.round(d))}% vs its 90-day baseline` + clamp;
-    return 'At its 90-day baseline' + clamp;
+    if (p.timing === 'peak') return (d != null && d > 0 ? t('sell.reasonPeakUp', { pct: Math.round(d) }) : t('sell.reasonPeak')) + clamp;
+    if (d != null && d >= 1) return t('sell.reasonUp', { pct: Math.round(d) }) + clamp;
+    if (d != null && d <= -1) return t('sell.reasonDown', { pct: Math.abs(Math.round(d)) }) + clamp;
+    return t('sell.reasonFlat') + clamp;
   }
 
 
@@ -245,11 +257,11 @@
   // one. Each × resets that one filter to its wide-open value.
   let activeFilterChips = $derived.by(() => {
     const out = [];
-    if (minPrice > 0) out.push({ key: 'price', label: `min avg ≥ ${minPrice}p`, clear: () => (minPrice = 0) });
-    if (minOwned > 1) out.push({ key: 'owned', label: `min owned ≥ ${minOwned}`, clear: () => (minOwned = 1) });
-    if (reserveCopies > 0) out.push({ key: 'reserve', label: `keep ${reserveCopies} ${reserveCopies === 1 ? 'copy' : 'copies'}`, clear: () => setReserveCopies(0) });
-    if (typeFilter !== 'all') out.push({ key: 'type', label: `type: ${TYPE_LABELS[typeFilter] ?? typeFilter}`, clear: () => (typeFilter = 'all') });
-    if (hideAtLvl < 11) out.push({ key: 'kept', label: `hide ranked ≥ ${hideAtLvl}`, clear: () => (hideAtLvl = 11) });
+    if (minPrice > 0) out.push({ key: 'price', label: t('sell.chipMinPrice', { price: minPrice }), clear: () => (minPrice = 0) });
+    if (minOwned > 1) out.push({ key: 'owned', label: t('sell.chipMinOwned', { count: minOwned }), clear: () => (minOwned = 1) });
+    if (reserveCopies > 0) out.push({ key: 'reserve', label: t('sell.chipKeep', { count: reserveCopies }), clear: () => setReserveCopies(0) });
+    if (typeFilter !== 'all') out.push({ key: 'type', label: t('sell.chipType', { type: typeLabel(typeFilter) }), clear: () => (typeFilter = 'all') });
+    if (hideAtLvl < 11) out.push({ key: 'kept', label: t('sell.chipRanked', { rank: hideAtLvl }), clear: () => (hideAtLvl = 11) });
     return out;
   });
 
@@ -267,51 +279,51 @@
 </script>
 
 <section class="view-header">
-  <h2>{estimatedGuidance ? 'Estimated opportunities' : 'Sell'}</h2>
-  <p class="lede">{estimatedGuidance ? 'Items worth listing, estimated before your current listings are checked.' : 'Items worth listing right now, ranked by priority.'}</p>
+  <h2>{t(estimatedGuidance ? 'sell.titleEstimated' : 'sell.title')}</h2>
+  <p class="lede">{t(estimatedGuidance ? 'sell.ledeEstimated' : 'sell.lede')}</p>
   <!-- Totals with since-last-scan deltas; Listed / Needs fixing appear once
        the orders panel has reported; the last cell is the since-scan state
        with the session-only "Changes only" toggle. -->
   <div class="vh-end">
-  <div class="ui-totals" role="group" aria-label="Sell summary">
+  <div class="ui-totals" role="group" aria-label={t('sell.summary')}>
     <div class="cell">
-      <span class="k">Owned</span>
-      <span class="v">{resolved.owned.size.toLocaleString()}</span>
+      <span class="k">{t('sell.owned')}</span>
+      <span class="v">{resolved.owned.size.toLocaleString(formatLocale())}</span>
       {#if fmtDelta(ownedDelta)}<span class="d" class:up={(ownedDelta ?? 0) > 0} class:down={(ownedDelta ?? 0) < 0}>{fmtDelta(ownedDelta)}</span>{/if}
     </div>
     <div class="cell">
-      <span class="k">{estimatedGuidance ? 'Opportunities' : 'Sellable'}</span>
-      <span class="v" title="Items you can sell now among the rows these filters show{allSellable != null ? `, of ${allSellable.toLocaleString()} across the whole inventory (the sidebar count)` : ''}.">{calculationReady ? sellableCount.toLocaleString() : 'Unavailable'}{#if calculationReady && allSellable != null && allSellable !== sellableCount}<span class="unit">{` of ${allSellable.toLocaleString()}`}</span>{/if}</span>
+      <span class="k">{t(estimatedGuidance ? 'sell.opportunities' : 'sell.sellable')}</span>
+      <span class="v" title={allSellable != null ? t('sell.sellableTitleOfAll', { all: allSellable }) : t('sell.sellableTitle')}>{calculationReady ? sellableCount.toLocaleString(formatLocale()) : t('sell.unavailable')}{#if calculationReady && allSellable != null && allSellable !== sellableCount}<span class="unit">{t('sell.ofAll', { all: allSellable })}</span>{/if}</span>
       {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
     </div>
     <div class="cell">
-      <span class="k">{unavailableCount ? 'Known estimated value' : estimatedGuidance ? 'Estimated value' : 'Stack value'}</span>
-      <span class="v">{calculationReady ? totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'Unavailable'}{#if calculationReady}<span class="unit">p</span>{/if}</span>
+      <span class="k">{t(unavailableCount ? 'sell.knownEstimatedValue' : estimatedGuidance ? 'sell.estimatedValue' : 'sell.stackValue')}</span>
+      <span class="v">{calculationReady ? totalPotential.toLocaleString(formatLocale(), { maximumFractionDigits: 0 }) : t('sell.unavailable')}{#if calculationReady}<span class="unit">p</span>{/if}</span>
       {#if calculationReady && fmtDelta(potentialDelta)}<span class="d" class:up={(potentialDelta ?? 0) > 0} class:down={(potentialDelta ?? 0) < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
     </div>
     {#if ordersSummary}
       <div class="cell">
-        <span class="k">Listed</span>
-        <span class="v">{ordersSummary.live.toLocaleString()}</span>
+        <span class="k">{t('sell.listed')}</span>
+        <span class="v">{ordersSummary.live.toLocaleString(formatLocale())}</span>
       </div>
       {#if ordersSummary.issues > 0}
         <div class="cell attn">
-          <span class="k">Needs fixing</span>
-          <span class="v">{ordersSummary.issues.toLocaleString()}</span>
+          <span class="k">{t('sell.needsFixing')}</span>
+          <span class="v">{ordersSummary.issues.toLocaleString(formatLocale())}</span>
         </div>
       {/if}
     {/if}
     {#if sinceScan}
       <div class="cell since">
-        <span>Since scan: <b>{sinceScan.added}</b> new · <b>{sinceScan.changed}</b> moved · <b>{sinceScan.removed}</b> gone</span>
+        <span><Rich text={t('sell.sinceScan', { added: sinceScan.added, changed: sinceScan.changed, removed: sinceScan.removed })} /></span>
         <button
           type="button"
           class="changes-toggle"
           class:on={changesOnly}
           aria-pressed={changesOnly}
           onclick={() => (changesOnly = !changesOnly)}
-          title="Show only rows whose count changed since the last scan (the Δ column's ▲/▼ rows)."
-        >{changesOnly ? '☑' : '☐'} Changes only</button>
+          title={t('sell.changesOnlyTitle')}
+        >{changesOnly ? '☑' : '☐'} {t('sell.changesOnly')}</button>
       </div>
     {/if}
   </div>
@@ -321,35 +333,27 @@
 {#if !sellOnboardingDismissed}
   <div class="card sell-onboarding">
     <div class="so-body">
-      <strong>How Sell works</strong>
-      <p class="muted">
-        Your inventory is ranked by priority - what to list right
-        now from price, turnover, and bounded DE usage. Review the prices, then <strong>List on WFM</strong> posts them
-        hidden so no buyer sees them until you flip them visible in
-        <strong>My orders</strong>.
-      </p>
+      <strong>{t('sell.howTitle')}</strong>
+      <p class="muted"><Rich text={t('sell.howBody')} /></p>
     </div>
-    <button class="dismiss" onclick={dismissSellOnboarding} aria-label="Dismiss">×</button>
+    <button class="dismiss" onclick={dismissSellOnboarding} aria-label={t('sell.dismiss')}>×</button>
   </div>
 {/if}
 
 {#if sellOnboardingDismissed && !keepCopiesNudgeDismissed && reserveCopies === 0}
   <div class="card warn-banner keep-nudge">
     <div class="kn-body">
-      <strong>Keep copies on by default.</strong>
-      <span class="muted">
-        Hold back one copy of every item so an underpriced snipe can't strip
-        your last copy - set <code>Keep copies</code> to 1 in Filters.
-      </span>
+      <strong>{t('sell.keepNudgeTitle')}</strong>
+      <span class="muted"><Rich text={t('sell.keepNudgeBody')} /></span>
     </div>
-    <button class="dismiss" onclick={dismissKeepCopiesNudge} aria-label="Dismiss">×</button>
+    <button class="dismiss" onclick={dismissKeepCopiesNudge} aria-label={t('sell.dismiss')}>×</button>
   </div>
 {/if}
 
 {#if calculationError && !calculationErrorShown && !calculationPending}
   <div class="ui-notice" data-tone="bad" role="alert">
-    Sale calculations unavailable: {calculationError}
-    {#if onretryCalculation}<button class="btn" onclick={onretryCalculation}>Retry calculations</button>{/if}
+    {t('sell.calculationError', { error: calculationError })}
+    {#if onretryCalculation}<button class="btn" onclick={onretryCalculation}>{t('sell.retryCalculations')}</button>{/if}
   </div>
 {/if}
 
@@ -357,7 +361,7 @@
   <div class="card warn-banner">⚠ {marketLoadError}</div>
 {:else if marketFreshness === 'stale'}
   <p class="ui-notice" data-tone="warn">
-    ⚠ Prices may be outdated - this market snapshot was updated {marketStaleness ?? 'at an unknown time'}. Rankings below use stale data.
+    {marketStaleness ? t('sell.stalePrices', { age: marketStaleness }) : t('sell.stalePricesUnknown')}
   </p>
 {/if}
 
@@ -366,8 +370,8 @@
 {#if calculationReady && results.length > 0 && allPicks.length === 0}
   <div class="card empty">
     <div>
-      <strong>No picks clear the bar right now.</strong>
-      <p class="muted">Nothing owned trades often enough and ranks high enough to headline - check the table below for the rest.</p>
+      <strong>{t('sell.noPicksTitle')}</strong>
+      <p class="muted">{t('sell.noPicksBody')}</p>
     </div>
   </div>
 {/if}
@@ -375,43 +379,43 @@
 
 {#snippet picksHead()}
   <div class="picks-title">
-    <h3>Top picks</h3>
+    <h3>{t('sell.topPicks')}</h3>
     <span class="muted picks-count">
-      {picks.length}{#if picks.length !== allPicks.length} of {allPicks.length}{/if} {allPicks.length === 1 ? 'pick' : 'picks'}
+      {picks.length !== allPicks.length ? t('sell.picksCountOf', { shown: picks.length, all: allPicks.length }) : t('sell.picksCount', { shown: allPicks.length })}
       {#if snoozedPicks.size > 0}
-        · {snoozedPicks.size} snoozed <button type="button" class="link" onclick={() => (snoozedPicks = new Set())}>restore</button>
+        · {t('sell.snoozed', { count: snoozedPicks.size })} <button type="button" class="link" onclick={() => (snoozedPicks = new Set())}>{t('sell.restore')}</button>
       {/if}
     </span>
   </div>
   <span
     class="muted picks-exp"
-    title="Same Priority as the table below - price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} priority points to clear the bar."
-  >Best sells right now, ranked by priority - patience listings excluded.</span>
+    title={t('sell.picksExplainTitle', { minScore: MIN_PICK_SCORE })}
+  >{t('sell.picksExplain')}</span>
   {#if tradesLeft != null}
-    <span class="muted picks-trades" role="status" title={tradesLeft > 0 && !bulkSlugs ? 'Unlock warframe.market to count each pick’s trades exactly.' : undefined}>
+    <span class="muted picks-trades" role="status" title={tradesLeft > 0 && !bulkSlugs ? t('sell.unlockToCount') : undefined}>
       {#if gauge}<span class="trade-gauge" aria-hidden="true">{#each gauge as cell}<i class={cell}></i>{/each}</span>{/if}
-      <span>{#if tradesLeft === 0}No trades left today{:else if !bulkSlugs}{tradeAllowance?.confidence === 'estimated' ? 'About ' : ''}{plural(tradesLeft, 'trade')} left today{:else}Uses {tradeSplit.used} of {tradeAllowance?.confidence === 'estimated' ? 'about ' : ''}{plural(tradesLeft, 'trade')} today{/if}{#if tradeSplit.later.length}{' · '}{tradeSplit.later.length} after the reset{/if}</span>
+      <span>{#if tradesLeft === 0}{t('sell.noTradesLeft')}{:else if !bulkSlugs}{t(tradeAllowance?.confidence === 'estimated' ? 'sell.aboutTradesLeft' : 'sell.tradesLeft', { count: tradesLeft })}{:else}{t(tradeAllowance?.confidence === 'estimated' ? 'sell.usesAboutTrades' : 'sell.usesTrades', { count: tradesLeft, used: tradeSplit.used })}{/if}{#if tradeSplit.later.length}{' · '}{t('sell.afterResetCount', { count: tradeSplit.later.length })}{/if}</span>
     </span>
   {/if}
 {/snippet}
 
 {#snippet picksCutRow()}
   {@const unlisted = tradeSplit.later.filter((p) => !listedReceipt(p))}
-  <span class="cut-label">After the reset · {resetIn()}</span>
-  <span class="muted">{tradesLeft === 0 ? 'No trades left today. ' : ''}{tradeSplit.later.length === 1 ? 'This needs' : 'These need'} {plural(tradeSplit.laterTrades, 'trade')}{tradesLeft ? `, more than the ${plural(tradesLeft - tradeSplit.used, 'trade')} still free today` : ''}. Listing is free; they can sell after 00:00 UTC.</span>
+  <span class="cut-label">{t('sell.afterReset', { time: resetIn() })}</span>
+  <span class="muted">{tradesLeft === 0 ? t('sell.noTradesLeftSentence') : ''}{t(tradeSplit.later.length === 1 ? 'sell.laterNeedOne' : 'sell.laterNeedMany', { count: tradeSplit.laterTrades })}{tradesLeft ? t('sell.moreThanFree', { count: tradesLeft - tradeSplit.used }) : ''}{t('sell.listingIsFree')}</span>
   {#if unlisted.length}
-    <button type="button" class="pick-list cut-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(unlisted); }}>List {unlisted.length === 1 ? 'it' : `these ${unlisted.length}`} now</button>
+    <button type="button" class="pick-list cut-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(unlisted); }}>{unlisted.length === 1 ? t('sell.listItNow') : t('sell.listTheseNow', { count: unlisted.length })}</button>
   {/if}
 {/snippet}
 
 {#snippet pickReasonCell(p: SellRow)}
   {@const listed = listedReceipt(p)}
   {#if isSnoozed(p)}
-    <div class="rs receipt">Hidden for this session.</div>
+    <div class="rs receipt">{t('sell.hiddenForSession')}</div>
   {:else if listed}
     <div class="rs receipt">
-      {listed.action === 'updated' ? 'Updated to' : 'Listed'} {listed.quantity} at <b>{listed.platinum}p</b> · {clock(listed.at)}
-      {#if onopenorders}· <button type="button" class="link" data-opens-view data-pick={p.key ?? p.slug} onclick={onopenorders}>My orders →</button>{/if}
+      <Rich text={t(listed.action === 'updated' ? 'sell.updatedReceipt' : 'sell.listedReceipt', { quantity: listed.quantity, price: listed.platinum, time: clock(listed.at) })} />
+      {#if onopenorders}· <button type="button" class="link" data-opens-view data-pick={p.key ?? p.slug} onclick={onopenorders}>{t('sell.myOrdersLink')}</button>{/if}
     </div>
   {:else}
   {@const [lo, hi] = pickTradeRange(p)}
@@ -419,13 +423,13 @@
     <span class="t">
       {pickReason(p)}
       {#if lo > 0 && lo === hi}
-        <span class="pick-trade-count" title={bulkSlugs?.has(p.slug) ? 'Trades in bulk: up to 6 copies per trade.' : 'One copy per trade.'}>{plural(lo, 'trade')}{#if lo > 1}{' · '}{Math.round((p.clearing_price ?? p.low_sell) * p.sellable / lo)}p per trade{/if}</span>
+        <span class="pick-trade-count" title={t(bulkSlugs?.has(p.slug) ? 'sell.bulkTrade' : 'sell.oneCopyPerTrade')}>{t('sell.tradeCount', { count: lo })}{#if lo > 1}{' · '}{t('sell.perTrade', { price: Math.round((p.clearing_price ?? p.low_sell) * p.sellable / lo) })}{/if}</span>
       {:else if lo > 0}
-        <span class="pick-trade-count" title="Bulk items move up to 6 copies per trade, others one. Which this is needs an unlocked warframe.market session.">{lo}–{hi} trades</span>
+        <span class="pick-trade-count" title={t('sell.tradeRangeTitle')}>{t('sell.tradeRange', { lo, hi })}</span>
       {/if}
     </span>
     {#if p.volume_48h < LIQUID_VOL}
-      <span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
+      <span class="tag thin" title={t('sell.thinTitle', { floor: LIQUID_VOL })}>{t('sell.thin')}</span>
     {/if}
   </div>
   {/if}
@@ -434,77 +438,77 @@
 {#snippet pickActionsCell(p: SellRow)}
   {@const listed = listedReceipt(p)}
   {#if isSnoozed(p)}
-    <span class="pick-actions"><button type="button" class="pick-list" data-pick={p.key ?? p.slug} onclick={() => undoSnooze(p.key ?? p.slug)} aria-label="Undo hiding {p.name}">Undo</button></span>
+    <span class="pick-actions"><button type="button" class="pick-list" data-pick={p.key ?? p.slug} onclick={() => undoSnooze(p.key ?? p.slug)} aria-label={t('sell.undoHiding', { item: p.name })}>{t('sell.undo')}</button></span>
   {:else if listed}
     <span class="pick-actions">
-      <span class="tag" class:hold={listed.visible === false} title={listed.visible === false ? 'New listings start hidden: buyers cannot see this one yet.' : listed.visible ? 'Buyers can see this listing.' : 'This updated an existing order, which keeps its visibility.'}>listed · {listed.visible === false ? 'hidden' : listed.visible ? 'visible' : 'updated'}</span>
-      {#if listed.visible === false && listed.orderId && onmakevisible}<button type="button" class="pick-list" data-pick={p.key ?? p.slug} onclick={() => onmakevisible(listed)} aria-label="Make {p.name} visible to buyers">Make visible</button>{/if}
+      <span class="tag" class:hold={listed.visible === false} title={t(listed.visible === false ? 'sell.listedHiddenTitle' : listed.visible ? 'sell.listedVisibleTitle' : 'sell.listedUpdatedTitle')}>{t('sell.listedTag', { state: t(listed.visible === false ? 'sell.listedHidden' : listed.visible ? 'sell.listedVisible' : 'sell.listedUpdated') })}</span>
+      {#if listed.visible === false && listed.orderId && onmakevisible}<button type="button" class="pick-list" data-pick={p.key ?? p.slug} onclick={() => onmakevisible(listed)} aria-label={t('sell.makeVisibleLabel', { item: p.name })}>{t('sell.makeVisible')}</button>{/if}
     </span>
   {:else}
   <span class="pick-actions">
-    <button class="pick-list" data-pick={p.key ?? p.slug} disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
+    <button class="pick-list" data-pick={p.key ?? p.slug} disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label={t('sell.listItem', { item: p.name })}>{t('sell.list')}</button>
     <button
       type="button"
       class="pick-snooze"
       onclick={() => snoozePick(p.key ?? p.slug)}
-      aria-label="Hide {p.name} for this session"
-      title="Hide for this session"
+      aria-label={t('sell.hideItem', { item: p.name })}
+      title={t('sell.hideForSession')}
     >×</button>
   </span>
   {/if}
 {/snippet}
 
 {#snippet picksEmpty()}
-  <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
+  <p class="muted picks-all-snoozed">{t('sell.allSnoozed')}</p>
 {/snippet}
 
 <!-- Bar 1 · scope: presets and their hint; the table adds the name filter
      and this Filters popover at the bar's end. -->
 {#snippet scopeRow()}
-  <div class="ui-segmented presets-row" role="group" aria-label="Scope preset" use:roving>
-    {#each Object.entries(PRESETS) as [name, preset]}
+  <div class="ui-segmented presets-row" role="group" aria-label={t('sell.scopePreset')} use:roving>
+    {#each Object.keys(PRESETS) as name}
       <button
         type="button"
         aria-pressed={activePreset === name}
         onclick={() => applyPreset(name)}
-        title={preset.hint}
-      >{preset.label}</button>
+        title={presetHint(name)}
+      >{presetLabel(name)}</button>
     {/each}
   </div>
   <span class="muted preset-hint">
-    {activePreset ? PRESETS[activePreset].hint : 'custom - saved preset cleared'}
+    {activePreset ? presetHint(activePreset) : t('sell.customPreset')}
   </span>
 {/snippet}
 
 {#snippet filtersControl()}
   <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
     <summary>
-      <span class="dis-label">Filters</span>
+      <span class="dis-label">{t('sell.filters')}</span>
       {#if activeFilterChips.length > 0}<span class="dis-count">{activeFilterChips.length}</span>{/if}
       <span class="muted small">▾</span>
     </summary>
     <div class="filters-panel">
-      <button type="button" class="link" onclick={(event) => { const disclosure = event.currentTarget.closest('details'); if (disclosure) { disclosure.querySelector('summary')?.focus(); disclosure.open = false; } }}>Close filters</button>
+      <button type="button" class="link" onclick={(event) => { const disclosure = event.currentTarget.closest('details'); if (disclosure) { disclosure.querySelector('summary')?.focus(); disclosure.open = false; } }}>{t('sell.closeFilters')}</button>
       <div class="filters">
         <label>
-          Min avg price
+          {t('sell.minAvgPrice')}
           <input type="number" bind:value={minPrice} min="0" step="1" style="width:60px" />
           <span class="muted">p</span>
         </label>
-        <label title="Hides items you own fewer copies of than this. Set to 2 to keep one of each for yourself.">
-          Min owned
+        <label title={t('sell.minOwnedTitle')}>
+          {t('sell.minOwned')}
           <input type="number" bind:value={minOwned} min="1" step="1" style="width:50px" />
         </label>
-        <label title="Copies of each item to hold back from selling. Set to 1 to never list your last copy. Unlike Min owned (which only hides rows from this table), this changes what's actually listable.">
-          Keep copies
+        <label title={t('sell.keepCopiesTitle')}>
+          {t('sell.keepCopies')}
           <input type="number" data-testid="reserve-copies" value={reserveCopies} oninput={setReserveCopies} min="0" step="1" style="width:50px" />
         </label>
         <span class="field">
-          Type
-          <Select label="Type" value={typeFilter} options={[{ value: 'all', label: 'All' }, ...availableTypes.map((t) => ({ value: t, label: TYPE_LABELS[t] ?? t }))]} onchange={(next) => (typeFilter = next)} />
+          {t('sell.type')}
+          <Select label={t('sell.type')} value={typeFilter} options={[{ value: 'all', label: t('sell.allTypes') }, ...availableTypes.map((type) => ({ value: type, label: typeLabel(type) }))]} onchange={(next) => (typeFilter = next)} />
         </span>
-        <label title="Hides a row when you have a copy of that mod in `Upgrades` at this rank or higher. 5 ≈ regular maxed (most mods cap at lvl 5). 10 ≈ only Primed/Galvanized maxed. 0 ≈ also hide unranked instances (e.g. rivens). 11 disables the filter.">
-          Hide upgraded copies at rank ≥
+        <label title={t('sell.hideRankedTitle')}>
+          {t('sell.hideRanked')}
           <input type="number" bind:value={hideAtLvl} min="0" max="11" step="1" style="width:55px" />
         </label>
       </div>
@@ -516,7 +520,7 @@
      chips beside them are the only outlined things on the line. -->
 {#snippet categoriesRow()}
   {#if availableTags.length > 0}
-    <div class="toolbar-group tagchips" role="group" aria-label="Item types" use:roving={':scope > button.chip'}>
+    <div class="toolbar-group tagchips" role="group" aria-label={t('sell.itemTypes')} use:roving={':scope > button.chip'}>
       {#each availableTags as [tag, count]}
         <button
           type="button"
@@ -525,7 +529,7 @@
           class:zero={count === 0}
           aria-pressed={activeTags.has(tag)}
           onclick={() => toggleTag(tag)}
-          title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
+          title={count === 0 ? t('sell.tagNoRows') : t('sell.tagRows', { count })}
         >
           {tag === 'arcane_enhancement' ? 'arcane' : tag}
           <span class="chip-count">{count}</span>
@@ -533,12 +537,12 @@
       {/each}
       {#if activeTags.size > 0}
         <button type="button" class="chip-clear" onclick={() => { activeTags = new Set(); focusLater(() => document.querySelector<HTMLElement>('.tagchips > button.chip')); }}>
-          clear ({activeTags.size})
+          {t('sell.clearTags', { count: activeTags.size })}
         </button>
       {/if}
     </div>
     {#if activeTags.size >= 2}
-      <span class="tag-or-note">tags OR together</span>
+      <span class="tag-or-note">{t('sell.tagsOr')}</span>
     {/if}
   {/if}
 {/snippet}
@@ -546,9 +550,9 @@
 <!-- Row B · NARROW extras: the Filters popover's state as removable chips. -->
 {#snippet narrowChips()}
   {#if activeFilterChips.length > 0}
-    <div class="toolbar-group active-filters" role="group" aria-label="Active filters" use:roving>
+    <div class="toolbar-group active-filters" role="group" aria-label={t('sell.activeFilters')} use:roving>
       {#each activeFilterChips as f, index (f.key)}
-        <button type="button" class="chip fchip" aria-label="Remove filter: {f.label}" title="Remove this filter" onclick={() => {
+        <button type="button" class="chip fchip" aria-label={t('sell.removeFilter', { filter: f.label })} title={t('sell.removeFilterTitle')} onclick={() => {
           f.clear();
           // The chip is gone; the next one, or the Filters summary, takes focus.
           focusLater(() => {
@@ -566,7 +570,7 @@
 
 {#snippet listCta()}
   {#if !canList}
-    <button class="list-cta" data-testid="desktop-list-check" onclick={oncheckListings}>{listingActionLabel}</button>
+    <button class="list-cta" data-testid="desktop-list-check" onclick={oncheckListings}>{listingActionLabel ?? t('sell.checkListings')}</button>
   {:else}
     <!-- Stays focusable when there is nothing to list, so it can say why. -->
     <button
@@ -576,8 +580,8 @@
       aria-disabled={!calculationReady || listableRows.length === 0 ? 'true' : undefined}
       aria-describedby="list-cta-scope"
       title={listTitle}
-    >List on WFM</button>
-    <span id="list-cta-scope" class="muted list-scope">{!calculationReady ? 'Sale values are still calculating.' : listableRows.length === 0 ? 'Nothing in this view can be listed.' : `${Math.min(stagedCount, 50)} ${Math.min(stagedCount, 50) === 1 ? 'row' : 'rows'} to review`}</span>
+    >{t('sell.listOnWfm')}</button>
+    <span id="list-cta-scope" class="muted list-scope">{!calculationReady ? t('sell.stillCalculating') : listableRows.length === 0 ? t('sell.nothingToList') : t('sell.rowsToReview', { count: Math.min(stagedCount, 50) })}</span>
   {/if}
 {/snippet}
 
@@ -590,79 +594,75 @@
   <div class="card empty flush">
     {#if emptyReason.kind === 'no-market'}
       <div>
-        <strong>Nothing in this inventory has live market data.</strong>
-        <p class="muted">
-          Either nothing here is tradeable, or your market snapshot is
-          empty. Check that <code>market.json</code> looks healthy
-          ({marketStaleness ?? 'never updated'}).
-        </p>
+        <strong>{t('sell.emptyNoMarketTitle')}</strong>
+        <p class="muted"><Rich text={t('sell.emptyNoMarketBody', { age: marketStaleness ?? t('sell.neverUpdated') })} /></p>
       </div>
     {:else if emptyReason.kind === 'price'}
       <div>
-        <strong>{emptyReason.excluded} sellable items are under {minPrice}p average.</strong>
-        <p class="muted">Lower the price threshold to see them.</p>
+        <strong>{t('sell.emptyPriceTitle', { count: emptyReason.excluded ?? 0, price: minPrice })}</strong>
+        <p class="muted">{t('sell.emptyPriceBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'price' })}>Drop min price to 1p</button>
+      <button onclick={() => relaxFilters({ kind: 'price' })}>{t('sell.emptyPriceAction')}</button>
     {:else if emptyReason.kind === 'owned'}
       <div>
-        <strong>{emptyReason.excluded} items you own are below the “owned” threshold ({minOwned}).</strong>
-        <p class="muted">Most are 1-of-a-kind - set min-owned to 1 to include them.</p>
+        <strong>{t('sell.emptyOwnedTitle', { count: emptyReason.excluded ?? 0, min: minOwned })}</strong>
+        <p class="muted">{t('sell.emptyOwnedBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'owned' })}>Set min owned to 1</button>
+      <button onclick={() => relaxFilters({ kind: 'owned' })}>{t('sell.emptyOwnedAction')}</button>
     {:else if emptyReason.kind === 'type' && activePreset !== 'spares'}
       <div>
-        <strong>Nothing in your inventory matches type “{typeFilter}”.</strong>
-        <p class="muted">Switch back to All to see everything.</p>
+        <strong>{t('sell.emptyTypeTitle', { type: typeLabel(typeFilter) })}</strong>
+        <p class="muted">{t('sell.emptyTypeBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'type' })}>Show all types</button>
+      <button onclick={() => relaxFilters({ kind: 'type' })}>{t('sell.emptyTypeAction')}</button>
     {:else if emptyReason.kind === 'kept'}
       <div>
-        <strong>All {emptyReason.excluded} candidates have a copy you've ranked to {hideAtLvl}+ in <code>Upgrades</code>.</strong>
-        <p class="muted">Raise the threshold (or set 11 to disable) to see them.</p>
+        <strong><Rich text={t('sell.emptyKeptTitle', { count: emptyReason.excluded ?? 0, rank: hideAtLvl })} /></strong>
+        <p class="muted">{t('sell.emptyKeptBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'kept' })}>Disable the rank filter</button>
+      <button onclick={() => relaxFilters({ kind: 'kept' })}>{t('sell.emptyKeptAction')}</button>
     {:else if emptyReason.kind === 'vault'}
       <div>
-        <strong>You own no vaulted or vaulting-soon prime parts.</strong>
-        <p class="muted">The Vaulted preset only shows parts past (or near) their vault cliff.</p>
+        <strong>{t('sell.emptyVaultTitle')}</strong>
+        <p class="muted">{t('sell.emptyVaultBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'vault' })}>Back to Default</button>
+      <button onclick={() => relaxFilters({ kind: 'vault' })}>{t('sell.backToDefault')}</button>
     {:else if emptyReason.kind === 'vol' || emptyReason.kind === 'median'}
       <div>
-        <strong>Nothing you own clears the Trending liquidity floor.</strong>
-        <p class="muted">Trending hides thin-volume rows and penny items so the Δ-sort surfaces real movers.</p>
+        <strong>{t('sell.emptyTrendingTitle')}</strong>
+        <p class="muted">{t('sell.emptyTrendingBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: emptyReason.kind })}>Back to Default</button>
+      <button onclick={() => relaxFilters({ kind: emptyReason.kind })}>{t('sell.backToDefault')}</button>
     {:else if emptyReason.kind === 'spares' || (emptyReason.kind === 'type' && activePreset === 'spares')}
       <div>
-        <strong>No spare mods or arcanes to sell.</strong>
-        <p class="muted">Spares are duplicate copies: every unranked copy when you own a ranked one, otherwise all but one. Nothing you own has a duplicate worth ≥ 3p right now.</p>
+        <strong>{t('sell.emptySparesTitle')}</strong>
+        <p class="muted">{t('sell.emptySparesBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'spares' })}>Back to Default</button>
+      <button onclick={() => relaxFilters({ kind: 'spares' })}>{t('sell.backToDefault')}</button>
     {:else if emptyReason.kind === 'advice'}
       <div>
-        <strong>Nothing you own has calendar-timed advice.</strong>
-        <p class="muted">Hold / Sell covers primes with release and vault dates - parts, blueprints, and sets. Relics, mods, and non-prime gear have no calendar to time against.</p>
+        <strong>{t('sell.emptyAdviceTitle')}</strong>
+        <p class="muted">{t('sell.emptyAdviceBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'advice' })}>Back to Default</button>
+      <button onclick={() => relaxFilters({ kind: 'advice' })}>{t('sell.backToDefault')}</button>
     {:else if emptyReason.kind === 'ducats'}
       <div>
-        <strong>You own no prime parts with a ducat value.</strong>
-        <p class="muted">Ducats are Baro Ki'Teer's currency - only prime parts and blueprints carry them.</p>
+        <strong>{t('sell.emptyDucatsTitle')}</strong>
+        <p class="muted">{t('sell.emptyDucatsBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'ducats' })}>Back to Default</button>
+      <button onclick={() => relaxFilters({ kind: 'ducats' })}>{t('sell.backToDefault')}</button>
     {:else if emptyReason.kind === 'tag' && activePreset === 'sets'}
       <div>
-        <strong>You own nothing that trades as part of a prime set.</strong>
-        <p class="muted">The Sets preset only shows prime parts and assembled sets.</p>
+        <strong>{t('sell.emptySetsTitle')}</strong>
+        <p class="muted">{t('sell.emptySetsBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
+      <button onclick={() => relaxFilters({ kind: 'tag' })}>{t('sell.backToDefault')}</button>
     {:else if emptyReason.kind === 'tag'}
       <div>
-        <strong>Nothing matches the active badge filter{activeTags.size > 1 ? 's' : ''} ({[...activeTags].join(', ')}).</strong>
-        <p class="muted">Clear the badge chips (or switch preset) to see the rest.</p>
+        <strong>{t('sell.emptyTagTitle', { count: activeTags.size, tags: [...activeTags].join(', ') })}</strong>
+        <p class="muted">{t('sell.emptyTagBody')}</p>
       </div>
-      <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
+      <button onclick={() => relaxFilters({ kind: 'tag' })}>{t('sell.backToDefault')}</button>
     {/if}
   </div>
   {/if}
@@ -690,7 +690,7 @@
 
 
   .cell.since { color: var(--muted); }
-  .cell.since b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); }
+  .cell.since :global(b) { color: var(--fg); font-weight: 600; font-family: var(--font-mono); }
   .changes-toggle {
     font: inherit;
     font-size: var(--text-caption);
@@ -723,7 +723,7 @@
   .card.empty strong { font-weight: 600; }
   .card.empty p { margin: 4px 0 0 0; }
   .card.empty button { flex-shrink: 0; }
-  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 1em; }
+  .card :global(code) { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 1em; }
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
      App.svelte - nothing else in the app used these selectors. */
@@ -825,6 +825,7 @@
   }
   .sell-onboarding .so-body { min-width: 0; }
   .sell-onboarding strong { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
+  .sell-onboarding p :global(b) { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
   .sell-onboarding p { margin: 4px 0 0; font-size: var(--text-control); line-height: 1.5; }
   .sell-onboarding .dismiss {
     background: transparent;
@@ -851,7 +852,7 @@
   .keep-nudge .kn-body { min-width: 0; }
   .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
   .keep-nudge .muted { font-size: var(--text-control); line-height: 1.5; }
-  .keep-nudge code { font-family: var(--font-mono); font-size: 1em; }
+  .keep-nudge :global(code) { font-family: var(--font-mono); font-size: 1em; }
   .keep-nudge .dismiss {
     background: transparent;
     border: none;

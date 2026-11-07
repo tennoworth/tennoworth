@@ -49,6 +49,12 @@ class I18n {
 export const i18n = new I18n();
 export const t = i18n.t;
 
+/** The locale for dates and numbers: the system's own while the app is in
+ *  English, so an English app on a German system keeps German dates. */
+export function formatLocale(): string | undefined {
+  return i18n.language === 'en' ? undefined : i18n.tag;
+}
+
 /** Read the saved language; one that is unknown or not offered means English. */
 export function savedLanguage(value: string | null | undefined): AppLanguage {
   return isOfferedLanguage(value) ? value : 'en';

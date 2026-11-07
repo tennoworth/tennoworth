@@ -374,3 +374,1000 @@ msgstr "Sblocca"
 msgctxt "strip.signIn"
 msgid "Sign in"
 msgstr "Accedi"
+
+#. An age under a minute. Reads after a word like "updated", "Market", "recorded".
+#. Max 12 characters.
+msgctxt "format.justNow"
+msgid "just now"
+msgstr ""
+
+#. An age in minutes, e.g. "5 min ago". Reads after a word like "updated" or "Market".
+#. Max 14 characters.
+msgctxt "format.minutesAgo"
+msgid "{n} min ago"
+msgstr ""
+
+#. An age in hours, e.g. "13 h ago". Keep it short: it sits in the status bar.
+#. Max 12 characters.
+msgctxt "format.hoursAgo"
+msgid "{n} h ago"
+msgstr ""
+
+#. An age in days, e.g. "3 d ago".
+#. Max 12 characters.
+msgctxt "format.daysAgo"
+msgid "{n} d ago"
+msgstr ""
+
+#. A time left or a duration in days and hours, e.g. "1d 2h" until Baro arrives. Use the shortest unit marks your language uses.
+#. Max 10 characters.
+msgctxt "format.daysHours"
+msgid "{d}d {h}h"
+msgstr ""
+
+#. A duration in hours and minutes, e.g. "4h 12m".
+#. Max 10 characters.
+msgctxt "format.hoursMinutes"
+msgid "{h}h {m}m"
+msgstr ""
+
+#. A duration in whole days, e.g. "3d".
+#. Max 6 characters.
+msgctxt "format.days"
+msgid "{d}d"
+msgstr ""
+
+#. A duration in whole hours, e.g. "12h".
+#. Max 6 characters.
+msgctxt "format.hours"
+msgid "{h}h"
+msgstr ""
+
+#. A duration in minutes, e.g. "12m".
+#. Max 6 characters.
+msgctxt "format.minutes"
+msgid "{m}m"
+msgstr ""
+
+#. A foundry build time of zero.
+#. Max 12 characters.
+msgctxt "format.instant"
+msgid "instant"
+msgstr ""
+
+#. Heading over notifications from today.
+msgctxt "format.today"
+msgid "Today"
+msgstr ""
+
+#. Heading over notifications from yesterday.
+msgctxt "format.yesterday"
+msgid "Yesterday"
+msgstr ""
+
+#. Heading over notifications whose date could not be read.
+msgctxt "format.unknownDate"
+msgid "Unknown date"
+msgstr ""
+
+#. Shown in place of a time that could not be read.
+msgctxt "format.unknownTime"
+msgid "Unknown time"
+msgstr ""
+
+#. Tooltip on copies held back because they are leveled (ranked up).
+msgctxt "format.leveledNote"
+msgid "Leveled gear can't be traded in-game - only unranked copies can be sold."
+msgstr ""
+
+#. "Keep copies" is a setting: how many copies of each item the player keeps instead of selling.
+msgctxt "format.keptNote"
+msgid "{count, plural, one {# copy held back by the Keep copies reserve - not counted as sellable.} other {# copies held back by the Keep copies reserve - not counted as sellable.}}"
+msgstr ""
+
+#. Sell view heading.
+msgctxt "sell.title"
+msgid "Sell"
+msgstr ""
+
+#. Sell view heading while the player's listings have not been checked yet.
+msgctxt "sell.titleEstimated"
+msgid "Estimated opportunities"
+msgstr ""
+
+#. Sell view, line under the heading.
+msgctxt "sell.lede"
+msgid "Items worth listing right now, ranked by priority."
+msgstr ""
+
+#. Sell view, line under the heading before listings are checked.
+msgctxt "sell.ledeEstimated"
+msgid "Items worth listing, estimated before your current listings are checked."
+msgstr ""
+
+#. Screen reader name of the totals row.
+msgctxt "sell.summary"
+msgid "Sell summary"
+msgstr ""
+
+#. Totals row label: items owned. Shown in capitals.
+#. Max 14 characters.
+msgctxt "sell.owned"
+msgid "Owned"
+msgstr ""
+
+#. Totals row label: items that can be sold. Shown in capitals.
+#. Max 14 characters.
+msgctxt "sell.sellable"
+msgid "Sellable"
+msgstr ""
+
+#. Totals row label before listings are checked. Shown in capitals.
+#. Max 16 characters.
+msgctxt "sell.opportunities"
+msgid "Opportunities"
+msgstr ""
+
+#. Tooltip on the Sellable total.
+msgctxt "sell.sellableTitle"
+msgid "Items you can sell now among the rows these filters show."
+msgstr ""
+
+#. Tooltip on the Sellable total when filters hide some items.
+msgctxt "sell.sellableTitleOfAll"
+msgid "Items you can sell now among the rows these filters show, of {all, number} across the whole inventory (the sidebar count)."
+msgstr ""
+
+#. After the sellable count: " of 1,234" items in the whole inventory. Keep the leading space if your language uses one.
+msgctxt "sell.ofAll"
+msgid " of {all, number}"
+msgstr ""
+
+#. In place of a total that could not be calculated.
+#. Max 14 characters.
+msgctxt "sell.unavailable"
+msgid "Unavailable"
+msgstr ""
+
+#. Totals row label: the platinum value of everything sellable. Shown in capitals.
+#. Max 18 characters.
+msgctxt "sell.stackValue"
+msgid "Stack value"
+msgstr ""
+
+#. Totals row label before listings are checked. Shown in capitals.
+#. Max 18 characters.
+msgctxt "sell.estimatedValue"
+msgid "Estimated value"
+msgstr ""
+
+#. Totals row label when some items have no estimate. Shown in capitals.
+#. Max 24 characters.
+msgctxt "sell.knownEstimatedValue"
+msgid "Known estimated value"
+msgstr ""
+
+#. Totals row label: listings live on warframe.market. Shown in capitals.
+#. Max 14 characters.
+msgctxt "sell.listed"
+msgid "Listed"
+msgstr ""
+
+#. Totals row label: listings with a problem. Shown in capitals.
+#. Max 16 characters.
+msgctxt "sell.needsFixing"
+msgid "Needs fixing"
+msgstr ""
+
+#. Totals row: how the inventory changed since the previous scan. Keep the <b> tags around the numbers.
+msgctxt "sell.sinceScan"
+msgid "Since scan: <b>{added}</b> new · <b>{changed}</b> moved · <b>{removed}</b> gone"
+msgstr ""
+
+#. Toggle: show only rows whose count changed since the last scan.
+#. Max 16 characters.
+msgctxt "sell.changesOnly"
+msgid "Changes only"
+msgstr ""
+
+#. Tooltip on the Changes only toggle.
+msgctxt "sell.changesOnlyTitle"
+msgid "Show only rows whose count changed since the last scan (the Δ column's ▲/▼ rows)."
+msgstr ""
+
+#. Heading of the one-time explanation card.
+msgctxt "sell.howTitle"
+msgid "How Sell works"
+msgstr ""
+
+#. One-time explanation card. "List on WFM" and "My orders" are button and view names; keep them as they appear in your translation of those. DE is Digital Extremes, the game's developer.
+msgctxt "sell.howBody"
+msgid "Your inventory is ranked by priority - what to list right now from price, turnover, and bounded DE usage. Review the prices, then <b>List on WFM</b> posts them hidden so no buyer sees them until you flip them visible in <b>My orders</b>."
+msgstr ""
+
+#. Screen reader name of the × that closes a card.
+msgctxt "sell.dismiss"
+msgid "Dismiss"
+msgstr ""
+
+#. Suggestion card heading.
+msgctxt "sell.keepNudgeTitle"
+msgid "Keep copies on by default."
+msgstr ""
+
+#. Suggestion card. "Keep copies" and "Filters" are control names.
+msgctxt "sell.keepNudgeBody"
+msgid "Hold back one copy of every item so an underpriced snipe can't strip your last copy - set <code>Keep copies</code> to 1 in Filters."
+msgstr ""
+
+#. Error banner; error is a technical message.
+msgctxt "sell.calculationError"
+msgid "Sale calculations unavailable: {error}"
+msgstr ""
+
+#. Button.
+msgctxt "sell.retryCalculations"
+msgid "Retry calculations"
+msgstr ""
+
+#. Warning banner; age is like "3 d ago".
+msgctxt "sell.stalePrices"
+msgid "⚠ Prices may be outdated - this market snapshot was updated {age}. Rankings below use stale data."
+msgstr ""
+
+#. Warning banner when the snapshot age is unknown.
+msgctxt "sell.stalePricesUnknown"
+msgid "⚠ Prices may be outdated - this market snapshot was updated at an unknown time. Rankings below use stale data."
+msgstr ""
+
+#. Card heading when nothing qualifies as a top pick.
+msgctxt "sell.noPicksTitle"
+msgid "No picks clear the bar right now."
+msgstr ""
+
+#. Card text under "No picks clear the bar right now."
+msgctxt "sell.noPicksBody"
+msgid "Nothing owned trades often enough and ranks high enough to headline - check the table below for the rest."
+msgstr ""
+
+#. Heading of the best items to sell now.
+msgctxt "sell.topPicks"
+msgid "Top picks"
+msgstr ""
+
+#. Count beside "Top picks".
+msgctxt "sell.picksCount"
+msgid "{shown, plural, one {# pick} other {# picks}}"
+msgstr ""
+
+#. Count beside "Top picks" when some are hidden, e.g. "3 of 5 picks".
+msgctxt "sell.picksCountOf"
+msgid "{shown} of {all, plural, one {# pick} other {# picks}}"
+msgstr ""
+
+#. After the picks count: how many picks were hidden for this session.
+msgctxt "sell.snoozed"
+msgid "{count} snoozed"
+msgstr ""
+
+#. Link: bring back hidden picks.
+msgctxt "sell.restore"
+msgid "restore"
+msgstr ""
+
+#. Line under "Top picks".
+msgctxt "sell.picksExplain"
+msgid "Best sells right now, ranked by priority - patience listings excluded."
+msgstr ""
+
+#. Tooltip on the picks explanation. plat = platinum.
+msgctxt "sell.picksExplainTitle"
+msgid "Same Priority as the table below - price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {minScore} priority points to clear the bar."
+msgstr ""
+
+#. Tooltip on the trades-left line.
+msgctxt "sell.unlockToCount"
+msgid "Unlock warframe.market to count each pick’s trades exactly."
+msgstr ""
+
+#. Trades-left line. A player has a daily limit of trades.
+msgctxt "sell.noTradesLeft"
+msgid "No trades left today"
+msgstr ""
+
+#. Trades-left line.
+msgctxt "sell.tradesLeft"
+msgid "{count, plural, one {# trade left today} other {# trades left today}}"
+msgstr ""
+
+#. Trades-left line when the count is estimated.
+msgctxt "sell.aboutTradesLeft"
+msgid "{count, plural, one {About # trade left today} other {About # trades left today}}"
+msgstr ""
+
+#. How many of today's trades the picks need, e.g. "Uses 4 of 12 trades today".
+msgctxt "sell.usesTrades"
+msgid "{count, plural, one {Uses {used} of # trade today} other {Uses {used} of # trades today}}"
+msgstr ""
+
+#. As above, with an estimated count.
+msgctxt "sell.usesAboutTrades"
+msgid "{count, plural, one {Uses {used} of about # trade today} other {Uses {used} of about # trades today}}"
+msgstr ""
+
+#. After the trades line: picks that must wait for tomorrow's trades.
+msgctxt "sell.afterResetCount"
+msgid "{count} after the reset"
+msgstr ""
+
+#. Divider in the picks list; time is like "3 h 20 min" until 00:00 UTC.
+msgctxt "sell.afterReset"
+msgid "After the reset · {time}"
+msgstr ""
+
+#. Time until the daily trade reset.
+msgctxt "sell.resetHoursMinutes"
+msgid "{h} h {m} min"
+msgstr ""
+
+#. Time until the daily trade reset, under an hour.
+msgctxt "sell.resetMinutes"
+msgid "{m} min"
+msgstr ""
+
+#. Start of the divider explanation. Keep the trailing space.
+msgctxt "sell.noTradesLeftSentence"
+msgid "No trades left today. "
+msgstr ""
+
+#. Divider explanation, one pick after the reset.
+msgctxt "sell.laterNeedOne"
+msgid "{count, plural, one {This needs # trade} other {This needs # trades}}"
+msgstr ""
+
+#. Divider explanation, several picks after the reset.
+msgctxt "sell.laterNeedMany"
+msgid "{count, plural, one {These need # trade} other {These need # trades}}"
+msgstr ""
+
+#. Continues "These need 5 trades", e.g. ", more than the 2 trades still free today". Keep the leading comma.
+msgctxt "sell.moreThanFree"
+msgid "{count, plural, one {, more than the # trade still free today} other {, more than the # trades still free today}}"
+msgstr ""
+
+#. Ends the divider explanation. Keep the leading full stop.
+msgctxt "sell.listingIsFree"
+msgid ". Listing is free; they can sell after 00:00 UTC."
+msgstr ""
+
+#. Button for one pick after the reset.
+msgctxt "sell.listItNow"
+msgid "List it now"
+msgstr ""
+
+#. Button for several picks after the reset.
+msgctxt "sell.listTheseNow"
+msgid "List these {count} now"
+msgstr ""
+
+#. In place of a hidden pick's reason.
+msgctxt "sell.hiddenForSession"
+msgid "Hidden for this session."
+msgstr ""
+
+#. A pick listed this session. p = platinum. Keep <b> around the price.
+msgctxt "sell.listedReceipt"
+msgid "Listed {quantity} at <b>{price}p</b> · {time}"
+msgstr ""
+
+#. A pick whose existing listing was updated this session.
+msgctxt "sell.updatedReceipt"
+msgid "Updated to {quantity} at <b>{price}p</b> · {time}"
+msgstr ""
+
+#. Link to the My orders view.
+msgctxt "sell.myOrdersLink"
+msgid "My orders →"
+msgstr ""
+
+#. Tooltip on a pick's trade count.
+msgctxt "sell.bulkTrade"
+msgid "Trades in bulk: up to 6 copies per trade."
+msgstr ""
+
+#. Tooltip on a pick's trade count.
+msgctxt "sell.oneCopyPerTrade"
+msgid "One copy per trade."
+msgstr ""
+
+#. A pick's trade count.
+msgctxt "sell.tradeCount"
+msgid "{count, plural, one {# trade} other {# trades}}"
+msgstr ""
+
+#. After a trade count: platinum per trade.
+msgctxt "sell.perTrade"
+msgid "{price}p per trade"
+msgstr ""
+
+#. A pick's trade count when unknown exactly, e.g. "2–6 trades".
+msgctxt "sell.tradeRange"
+msgid "{lo}–{hi} trades"
+msgstr ""
+
+#. Tooltip on a trade range.
+msgctxt "sell.tradeRangeTitle"
+msgid "Bulk items move up to 6 copies per trade, others one. Which this is needs an unlocked warframe.market session."
+msgstr ""
+
+#. Tag: few trades, so a buyer may take a while.
+#. Max 8 characters.
+msgctxt "sell.thin"
+msgid "thin"
+msgstr ""
+
+#. Tooltip on the "thin" tag.
+msgctxt "sell.thinTitle"
+msgid "Below the {floor}-trade/48h liquidity floor - expect to wait for a buyer."
+msgstr ""
+
+#. Why a pick is suggested.
+msgctxt "sell.reasonPeakUp"
+msgid "Near its 90-day high, up {pct}% - a good moment to list"
+msgstr ""
+
+#. Why a pick is suggested.
+msgctxt "sell.reasonPeak"
+msgid "Near its 90-day high - a good moment to list"
+msgstr ""
+
+#. Why a pick is suggested.
+msgctxt "sell.reasonUp"
+msgid "Up {pct}% vs its 90-day baseline"
+msgstr ""
+
+#. Why a pick is suggested.
+msgctxt "sell.reasonDown"
+msgid "Down {pct}% vs its 90-day baseline"
+msgstr ""
+
+#. Why a pick is suggested.
+msgctxt "sell.reasonFlat"
+msgid "At its 90-day baseline"
+msgstr ""
+
+#. Added to a pick's reason when the expected sale price differs from the lowest ask. Keep the leading " · ".
+msgctxt "sell.reasonClears"
+msgid " · clears around {price}p"
+msgstr ""
+
+#. Button: bring back a hidden pick.
+#. Max 10 characters.
+msgctxt "sell.undo"
+msgid "Undo"
+msgstr ""
+
+#. Screen reader name of the Undo button.
+msgctxt "sell.undoHiding"
+msgid "Undo hiding {item}"
+msgstr ""
+
+#. Tag on a pick listed this session; state is hidden, visible or updated.
+#. Max 18 characters.
+msgctxt "sell.listedTag"
+msgid "listed · {state}"
+msgstr ""
+
+#. Listing state: buyers cannot see it.
+#. Max 8 characters.
+msgctxt "sell.listedHidden"
+msgid "hidden"
+msgstr ""
+
+#. Listing state: buyers can see it.
+#. Max 8 characters.
+msgctxt "sell.listedVisible"
+msgid "visible"
+msgstr ""
+
+#. Listing state: an existing order was updated.
+#. Max 8 characters.
+msgctxt "sell.listedUpdated"
+msgid "updated"
+msgstr ""
+
+#. Tooltip.
+msgctxt "sell.listedHiddenTitle"
+msgid "New listings start hidden: buyers cannot see this one yet."
+msgstr ""
+
+#. Tooltip.
+msgctxt "sell.listedVisibleTitle"
+msgid "Buyers can see this listing."
+msgstr ""
+
+#. Tooltip.
+msgctxt "sell.listedUpdatedTitle"
+msgid "This updated an existing order, which keeps its visibility."
+msgstr ""
+
+#. Button: show a hidden listing to buyers.
+#. Max 14 characters.
+msgctxt "sell.makeVisible"
+msgid "Make visible"
+msgstr ""
+
+#. Screen reader name of Make visible.
+msgctxt "sell.makeVisibleLabel"
+msgid "Make {item} visible to buyers"
+msgstr ""
+
+#. Button: list one pick on warframe.market.
+#. Max 8 characters.
+msgctxt "sell.list"
+msgid "List"
+msgstr ""
+
+#. Screen reader name of the List button. WFM = warframe.market.
+msgctxt "sell.listItem"
+msgid "List {item} on WFM"
+msgstr ""
+
+#. Screen reader name of the × beside a pick.
+msgctxt "sell.hideItem"
+msgid "Hide {item} for this session"
+msgstr ""
+
+#. Tooltip on the × beside a pick.
+msgctxt "sell.hideForSession"
+msgid "Hide for this session"
+msgstr ""
+
+#. In place of the picks when all are hidden.
+msgctxt "sell.allSnoozed"
+msgid "All picks snoozed for this session."
+msgstr ""
+
+#. Screen reader name of the preset buttons.
+msgctxt "sell.scopePreset"
+msgid "Scope preset"
+msgstr ""
+
+#. Beside the presets when filters were changed by hand.
+msgctxt "sell.customPreset"
+msgid "custom - saved preset cleared"
+msgstr ""
+
+#. Disclosure button. Shown in capitals.
+#. Max 12 characters.
+msgctxt "sell.filters"
+msgid "Filters"
+msgstr ""
+
+#. Link in the filters panel.
+msgctxt "sell.closeFilters"
+msgid "Close filters"
+msgstr ""
+
+#. Filter: minimum average price.
+msgctxt "sell.minAvgPrice"
+msgid "Min avg price"
+msgstr ""
+
+#. Filter: minimum copies owned.
+msgctxt "sell.minOwned"
+msgid "Min owned"
+msgstr ""
+
+#. Tooltip.
+msgctxt "sell.minOwnedTitle"
+msgid "Hides items you own fewer copies of than this. Set to 2 to keep one of each for yourself."
+msgstr ""
+
+#. Filter: copies of each item held back from selling.
+msgctxt "sell.keepCopies"
+msgid "Keep copies"
+msgstr ""
+
+#. Tooltip.
+msgctxt "sell.keepCopiesTitle"
+msgid "Copies of each item to hold back from selling. Set to 1 to never list your last copy. Unlike Min owned (which only hides rows from this table), this changes what's actually listable."
+msgstr ""
+
+#. Filter: item type.
+msgctxt "sell.type"
+msgid "Type"
+msgstr ""
+
+#. Type filter option: every type.
+msgctxt "sell.allTypes"
+msgid "All"
+msgstr ""
+
+#. Filter: hide mods ranked at or above this.
+msgctxt "sell.hideRanked"
+msgid "Hide upgraded copies at rank ≥"
+msgstr ""
+
+#. Tooltip. Upgrades is the game's inventory section.
+msgctxt "sell.hideRankedTitle"
+msgid "Hides a row when you have a copy of that mod in `Upgrades` at this rank or higher. 5 ≈ regular maxed (most mods cap at lvl 5). 10 ≈ only Primed/Galvanized maxed. 0 ≈ also hide unranked instances (e.g. rivens). 11 disables the filter."
+msgstr ""
+
+#. Screen reader name of the tag chips.
+msgctxt "sell.itemTypes"
+msgid "Item types"
+msgstr ""
+
+#. Tooltip on a tag with no rows.
+msgctxt "sell.tagNoRows"
+msgid "No matching rows pass the other filters"
+msgstr ""
+
+#. Tooltip on a tag chip.
+msgctxt "sell.tagRows"
+msgid "{count, plural, one {# row carries this tag} other {# rows carry this tag}}"
+msgstr ""
+
+#. Button: clear the selected tags.
+msgctxt "sell.clearTags"
+msgid "clear ({count})"
+msgstr ""
+
+#. Note: rows with any selected tag are shown.
+msgctxt "sell.tagsOr"
+msgid "tags OR together"
+msgstr ""
+
+#. Screen reader name of the filter chips.
+msgctxt "sell.activeFilters"
+msgid "Active filters"
+msgstr ""
+
+#. Screen reader name of a filter chip.
+msgctxt "sell.removeFilter"
+msgid "Remove filter: {filter}"
+msgstr ""
+
+#. Tooltip on a filter chip.
+msgctxt "sell.removeFilterTitle"
+msgid "Remove this filter"
+msgstr ""
+
+#. Filter chip.
+msgctxt "sell.chipMinPrice"
+msgid "min avg ≥ {price}p"
+msgstr ""
+
+#. Filter chip.
+msgctxt "sell.chipMinOwned"
+msgid "min owned ≥ {count}"
+msgstr ""
+
+#. Filter chip.
+msgctxt "sell.chipKeep"
+msgid "{count, plural, one {keep # copy} other {keep # copies}}"
+msgstr ""
+
+#. Filter chip.
+msgctxt "sell.chipType"
+msgid "type: {type}"
+msgstr ""
+
+#. Filter chip.
+msgctxt "sell.chipRanked"
+msgid "hide ranked ≥ {rank}"
+msgstr ""
+
+#. Main button: list the rows in view on warframe.market (WFM).
+#. Max 18 characters.
+msgctxt "sell.listOnWfm"
+msgid "List on WFM"
+msgstr ""
+
+#. Tooltip on List on WFM.
+msgctxt "sell.listTitleView"
+msgid "Stage the {count} rows in your current view (up to the first 50) - the in-table name filter and badge chips are applied; relics and rows with no spare copy are excluded. Review each row in the modal before sending."
+msgstr ""
+
+#. Tooltip on List on WFM.
+msgctxt "sell.listTitleTop"
+msgid "Stage the top {count} rows of the current view (up to the first 50) - relics and rows with no spare copy are excluded. Review each row in the modal before sending."
+msgstr ""
+
+#. Beside List on WFM.
+msgctxt "sell.stillCalculating"
+msgid "Sale values are still calculating."
+msgstr ""
+
+#. Beside List on WFM.
+msgctxt "sell.nothingToList"
+msgid "Nothing in this view can be listed."
+msgstr ""
+
+#. Beside List on WFM.
+msgctxt "sell.rowsToReview"
+msgid "{count, plural, one {# row to review} other {# rows to review}}"
+msgstr ""
+
+#. Button: check the player's listings on warframe.market.
+msgctxt "sell.checkListings"
+msgid "Check WFM listings"
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyNoMarketTitle"
+msgid "Nothing in this inventory has live market data."
+msgstr ""
+
+#. Empty state. Keep <code>market.json</code> as is; age is like "3 d ago".
+msgctxt "sell.emptyNoMarketBody"
+msgid "Either nothing here is tradeable, or your market snapshot is empty. Check that <code>market.json</code> looks healthy ({age})."
+msgstr ""
+
+#. In place of the snapshot age when it was never updated.
+msgctxt "sell.neverUpdated"
+msgid "never updated"
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyPriceTitle"
+msgid "{count} sellable items are under {price}p average."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyPriceBody"
+msgid "Lower the price threshold to see them."
+msgstr ""
+
+#. Empty state button.
+msgctxt "sell.emptyPriceAction"
+msgid "Drop min price to 1p"
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyOwnedTitle"
+msgid "{count} items you own are below the “owned” threshold ({min})."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyOwnedBody"
+msgid "Most are 1-of-a-kind - set min-owned to 1 to include them."
+msgstr ""
+
+#. Empty state button.
+msgctxt "sell.emptyOwnedAction"
+msgid "Set min owned to 1"
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyTypeTitle"
+msgid "Nothing in your inventory matches type “{type}”."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyTypeBody"
+msgid "Switch back to All to see everything."
+msgstr ""
+
+#. Empty state button.
+msgctxt "sell.emptyTypeAction"
+msgid "Show all types"
+msgstr ""
+
+#. Empty state heading. Upgrades is the game's inventory section.
+msgctxt "sell.emptyKeptTitle"
+msgid "All {count} candidates have a copy you've ranked to {rank}+ in <code>Upgrades</code>."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyKeptBody"
+msgid "Raise the threshold (or set 11 to disable) to see them."
+msgstr ""
+
+#. Empty state button.
+msgctxt "sell.emptyKeptAction"
+msgid "Disable the rank filter"
+msgstr ""
+
+#. Empty state button: return to the Default preset.
+msgctxt "sell.backToDefault"
+msgid "Back to Default"
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyVaultTitle"
+msgid "You own no vaulted or vaulting-soon prime parts."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyVaultBody"
+msgid "The Vaulted preset only shows parts past (or near) their vault cliff."
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyTrendingTitle"
+msgid "Nothing you own clears the Trending liquidity floor."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyTrendingBody"
+msgid "Trending hides thin-volume rows and penny items so the Δ-sort surfaces real movers."
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptySparesTitle"
+msgid "No spare mods or arcanes to sell."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptySparesBody"
+msgid "Spares are duplicate copies: every unranked copy when you own a ranked one, otherwise all but one. Nothing you own has a duplicate worth ≥ 3p right now."
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyAdviceTitle"
+msgid "Nothing you own has calendar-timed advice."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyAdviceBody"
+msgid "Hold / Sell covers primes with release and vault dates - parts, blueprints, and sets. Relics, mods, and non-prime gear have no calendar to time against."
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptyDucatsTitle"
+msgid "You own no prime parts with a ducat value."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyDucatsBody"
+msgid "Ducats are Baro Ki'Teer's currency - only prime parts and blueprints carry them."
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sell.emptySetsTitle"
+msgid "You own nothing that trades as part of a prime set."
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptySetsBody"
+msgid "The Sets preset only shows prime parts and assembled sets."
+msgstr ""
+
+#. Empty state heading; tags is a list of tag names.
+msgctxt "sell.emptyTagTitle"
+msgid "{count, plural, one {Nothing matches the active badge filter ({tags}).} other {Nothing matches the active badge filters ({tags}).}}"
+msgstr ""
+
+#. Empty state.
+msgctxt "sell.emptyTagBody"
+msgid "Clear the badge chips (or switch preset) to see the rest."
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.MiscItems"
+msgid "Parts & misc"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.Recipes"
+msgid "Blueprints"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.RawUpgrades"
+msgid "Mods (unranked stacks)"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.Suits"
+msgid "Warframes"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.LongGuns"
+msgid "Primary weapons"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.Pistols"
+msgid "Secondary weapons"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.Melee"
+msgid "Melee weapons"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.SpaceGuns"
+msgid "Archwing guns"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.SpaceMelee"
+msgid "Archwing melee"
+msgstr ""
+
+#. Item type.
+msgctxt "sell.type.SentinelWeapons"
+msgid "Sentinel weapons"
+msgstr ""
+
+#. Preset button.
+#. Max 12 characters.
+msgctxt "sell.preset.default"
+msgid "Default"
+msgstr ""
+
+#. Preset explanation.
+msgctxt "sell.preset.default.hint"
+msgid "averaging 5p or more, best first · items you keep are dimmed"
+msgstr ""
+
+#. Preset button: duplicate mods and arcanes.
+#. Max 12 characters.
+msgctxt "sell.preset.spares"
+msgid "Spares"
+msgstr ""
+
+#. Preset explanation.
+msgctxt "sell.preset.spares.hint"
+msgid "duplicate mods & arcanes worth ≥ 3p - sell these instead of dissolving them (keeps one unless you own a ranked copy)"
+msgstr ""
+
+#. Preset button.
+#. Max 12 characters.
+msgctxt "sell.preset.ducats"
+msgid "Ducats"
+msgstr ""
+
+#. Preset explanation.
+msgctxt "sell.preset.ducats.hint"
+msgid "prime parts worth feeding to Baro (ducats = his currency)"
+msgstr ""
+
+#. Preset button.
+#. Max 12 characters.
+msgctxt "sell.preset.trending"
+msgid "Trending"
+msgstr ""
+
+#. Preset explanation.
+msgctxt "sell.preset.trending.hint"
+msgid "movers vs 90d median · vol ≥ 10 · baseline ≥ 5p"
+msgstr ""
+
+#. Preset button.
+#. Max 12 characters.
+msgctxt "sell.preset.sets"
+msgid "Sets"
+msgstr ""
+
+#. Preset explanation.
+msgctxt "sell.preset.sets.hint"
+msgid "only set-tagged rows"
+msgstr ""
+
+#. Preset button.
+#. Max 12 characters.
+msgctxt "sell.preset.holdsell"
+msgid "Hold / Sell"
+msgstr ""
+
+#. Preset explanation. Resurgence is a game event (Prime Resurgence).
+msgctxt "sell.preset.holdsell.hint"
+msgid "calendar-timed advice for your primes - release decay, Resurgence floods, post-vault ramps; hover a chip for the numbers"
+msgstr ""
+
+#. Preset button.
+#. Max 12 characters.
+msgctxt "sell.preset.vault"
+msgid "Vaulted"
+msgstr ""
+
+#. Preset explanation.
+msgctxt "sell.preset.vault.hint"
+msgid "vaulted + vaulting-soon prime parts (prices usually climb once relics stop dropping)"
+msgstr ""

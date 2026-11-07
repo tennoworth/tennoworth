@@ -3,7 +3,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { useDesktopServices } from '../shell/desktop-context';
   import { createListingReview, type ListingReviewInput } from './listing-review.svelte';
-  import { plat, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
+  import { plat, ownedBreakdown, leveledNoteTitle, keptNoteTitle } from '../../ui/format';
   import { orderUnitPrice } from '../../domain/order-prices';
   import { MAX_PLATINUM } from '../../domain/limits';
   import DialogHeader from '../../ui/DialogHeader.svelte';
@@ -193,7 +193,7 @@
                   <td class="muted">
                     {#if row.sellable < row.owned}
                       {@const bd = ownedBreakdown(row.owned, row.sellable, row.leveled)}
-                      {row.owned} owned{#if bd.leveledPart > 0}{' · '}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.keptPart > 0}{' · '}<span class="kept-note" title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if}
+                      {row.owned} owned{#if bd.leveledPart > 0}{' · '}<span class="leveled-note" title={leveledNoteTitle()}>{bd.leveledPart} leveled</span>{/if}{#if bd.keptPart > 0}{' · '}<span class="kept-note" title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if}
                     {:else}
                       {row.owned} owned
                     {/if}
