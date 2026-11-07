@@ -71,7 +71,7 @@ describe('SellPane', () => {
     const availableTags: [string, number][] = [['mod', 30], ['rare', 25], ['weapon', 12], ['melee', 9], ['nyx', 4], ['jat_kittag', 2], ['axi', 1]];
     renderPane({ availableTags });
     const line = screen.getByRole('group', { name: 'Item types' });
-    const onLine = () => [...line.querySelectorAll('button.chip')].map((chip) => chip.firstChild?.textContent?.trim());
+    const onLine = () => [...line.querySelectorAll('button.chip .chip-label')].map((label) => label.firstChild?.textContent?.trim());
     expect(onLine()).toEqual(['mod', 'melee']);
     const more = screen.getByRole('button', { name: '+ 5 more' });
     await fireEvent.click(more);
@@ -84,13 +84,17 @@ describe('SellPane', () => {
     await fireEvent.input(narrow, { target: { value: 'jat k' } });
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Rarity' })).toBeNull());
     expect(screen.getByRole('button', { name: 'Jat Kittag 2' })).toBeTruthy();
-    // A tag picked from the list joins the main line, so the choice stays in view.
-    await fireEvent.click(screen.getByRole('button', { name: 'Jat Kittag 2' }));
-    await waitFor(() => expect(onLine()).toEqual(['mod', 'melee', 'Jat Kittag']));
+    // A tag picked from the list stays put while the list is open, so nothing
+    // moves under the pointer, and joins the main line once it closes.
+    const jat = screen.getByRole('button', { name: 'Jat Kittag 2' });
+    await fireEvent.click(jat);
+    await waitFor(() => expect(jat.getAttribute('aria-pressed')).toBe('true'));
+    expect(onLine()).toEqual(['mod', 'melee']);
     await fireEvent.input(narrow, { target: { value: 'oberon' } });
     await waitFor(() => expect(screen.getByText('No tag matches “oberon”.')).toBeTruthy());
     await fireEvent.keyDown(narrow, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('searchbox', { name: 'Narrow tags' })).toBeNull());
+    expect(onLine()).toEqual(['mod', 'melee', 'Jat Kittag']);
   });
 
   it('splits the picks where today\'s trades run out, and not when the allowance is unknown', async () => {
