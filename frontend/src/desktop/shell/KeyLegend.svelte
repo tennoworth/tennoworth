@@ -4,14 +4,15 @@
   // reads the user's own bindings, so a recorded or disabled shortcut never
   // shows here as something it is not.
   import { focusSearch, keyboard, requestKeyboard } from '../../ui/keyboard.svelte';
+  import { t } from '../../i18n/i18n.svelte';
 
   let { search = false }: { search?: boolean } = $props();
   const goKey = $derived(`${keyboard.modifier}+${keyboard.navigation ?? keyboard.commandKey}`);
 </script>
 
-<footer class="key-legend" aria-label="Keyboard shortcuts">
-  {#if search}<button type="button" onclick={() => focusSearch()} aria-label={keyboard.enabled ? `Search, key ${keyboard.search}` : 'Search'}>{#if keyboard.enabled}<kbd>{keyboard.search}</kbd>{/if}Search</button>{/if}
-  <button type="button" onclick={() => requestKeyboard('navigate')} aria-label="Go to a view, keys {goKey}"><kbd>{goKey}</kbd>Go to</button>
-  <span><kbd>F6</kbd>Next region</span>
-  <button type="button" onclick={() => requestKeyboard('help')} aria-label={keyboard.enabled ? `Keyboard shortcuts, key ${keyboard.help}` : 'Keyboard shortcuts'}>{#if keyboard.enabled}<kbd>{keyboard.help}</kbd>{/if}Shortcuts</button>
+<footer class="key-legend" aria-label={t('keys.legend')}>
+  {#if search}<button type="button" onclick={() => focusSearch()} aria-label={keyboard.enabled ? t('keys.searchKey', { key: keyboard.search }) : t('keys.search')}>{#if keyboard.enabled}<kbd>{keyboard.search}</kbd>{/if}{t('keys.search')}</button>{/if}
+  <button type="button" onclick={() => requestKeyboard('navigate')} aria-label={t('keys.goToKeys', { keys: goKey })}><kbd>{goKey}</kbd>{t('keys.goTo')}</button>
+  <span><kbd>F6</kbd>{t('keys.nextRegion')}</span>
+  <button type="button" onclick={() => requestKeyboard('help')} aria-label={keyboard.enabled ? t('keys.shortcutsKey', { key: keyboard.help }) : t('keys.legend')}>{#if keyboard.enabled}<kbd>{keyboard.help}</kbd>{/if}{t('keys.shortcuts')}</button>
 </footer>

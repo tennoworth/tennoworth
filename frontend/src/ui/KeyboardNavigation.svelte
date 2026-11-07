@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import type { SettingsStore } from '../contracts/state-store';
   import DialogHeader from './DialogHeader.svelte';
+  import { t } from '../i18n/i18n.svelte';
   import { focusView } from './keyboard-actions';
   import { characterKey, keyboard, keyboardRequest, type KeyboardDestination, matchesCharacter, readKeyboardPreferences, saveKeyboardPreferences, shortcutBlocked, visible, watchKeyboardLayout } from './keyboard.svelte';
 
@@ -54,7 +55,7 @@
   async function save() {
     error = ''; saveFailed = false;
     try { await saveKeyboardPreferences(store); }
-    catch { saveFailed = true; error = 'This choice works for this window, but could not be saved. Try again.'; }
+    catch { saveFailed = true; error = t('keys.saveFailed'); }
   }
   async function reset() { recording = null; readKeyboardPreferences(); await save(); }
   function dialogKey(event: KeyboardEvent) {
@@ -63,9 +64,9 @@
       if (event.key === 'Tab') { recording = null; return; }
       event.preventDefault(); event.stopPropagation();
       const key = characterKey(event);
-      if (!key) { error = 'Type one character, using Shift or AltGr if needed.'; return; }
-      if (recording === 'navigation' && event.getModifierState('AltGraph')) { error = 'Choose a character without AltGr. The command modifier is added automatically.'; return; }
-      if (recording !== 'navigation' && key === keyboard[recording === 'search' ? 'help' : 'search']) { error = 'Search and help need different characters.'; return; }
+      if (!key) { error = t('keys.oneChar'); return; }
+      if (recording === 'navigation' && event.getModifierState('AltGraph')) { error = t('keys.noAltGr'); return; }
+      if (recording !== 'navigation' && key === keyboard[recording === 'search' ? 'help' : 'search']) { error = t('keys.different'); return; }
       keyboard[recording] = key; recording = null; void save(); return;
     }
     if (mode === 'navigate' && event.target === filterInput) {
@@ -154,36 +155,36 @@
   <button type="button" class="btn ghost xs" onclick={() => open('help')}>Keyboard shortcuts{#if keyboard.enabled} <kbd>{keyboard.help}</kbd>{/if}</button>
 </div>
 <dialog bind:this={dialog} class="cryptobox keyboard-dialog" aria-labelledby="keyboard-title" onclose={restoreFocus} oncancel={(event) => { event.preventDefault(); close(); }} onkeydown={dialogKey}>
-  <DialogHeader titleId="keyboard-title" title={mode === 'help' ? 'Keyboard shortcuts' : 'Go to a view'} onclose={close} />
+  <DialogHeader titleId="keyboard-title" title={t(mode === 'help' ? 'keys.title' : 'keys.goToView')} onclose={close} />
   <div class="keyboard-body ui-stack">
     {#if mode === 'navigate'}
-      <label class="ui-field"><span>Find a view</span><input class="ui-input" bind:this={filterInput} bind:value={query} oninput={() => selected = 0} role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="keyboard-destinations" aria-activedescendant={matches.length ? `keyboard-destination-${selected}` : undefined} /></label>
-      <div id="keyboard-destinations" role="listbox" aria-label="Views" class="destinations">
+      <label class="ui-field"><span>{t('keys.findView')}</span><input class="ui-input" bind:this={filterInput} bind:value={query} oninput={() => selected = 0} role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="keyboard-destinations" aria-activedescendant={matches.length ? `keyboard-destination-${selected}` : undefined} /></label>
+      <div id="keyboard-destinations" role="listbox" aria-label={t('keys.views')} class="destinations">
         {#each matches as destination, index}
           <button type="button" id="keyboard-destination-{index}" role="option" tabindex="-1" aria-selected={selected === index} class="destination" onclick={() => go(index)}>{destination.label}</button>
-        {:else}<p role="status">No matching views.</p>{/each}
+        {:else}<p role="status">{t('keys.noMatches')}</p>{/each}
       </div>
-      <p class="muted">↑ / ↓ choose · Enter opens · Escape closes</p>
+      <p class="muted">{t('keys.listHelp')}</p>
     {:else}
-      {#if desktop}<button class="btn" onclick={showDestinations}>Go to a view <kbd>{keyboard.modifier}+{keyboard.navigation ?? keyboard.commandKey}</kbd></button>{/if}
-      <p>Shortcuts work in this window when you are not typing or using a dialog. Search and help follow the character you type on your current keyboard, including Shift or AltGr.</p>
-      <div class="shortcut-row"><span>Focus this view’s search</span><kbd>{keyboard.search}</kbd><button class="btn" onclick={() => { recording = 'search'; error = ''; saveFailed = false; }}>{recording === 'search' ? 'Type a character…' : 'Change search key'}</button></div>
-      <div class="shortcut-row"><span>Open keyboard help</span><kbd>{keyboard.help}</kbd><button class="btn" onclick={() => { recording = 'help'; error = ''; saveFailed = false; }}>{recording === 'help' ? 'Type a character…' : 'Change help key'}</button></div>
+      {#if desktop}<button class="btn" onclick={showDestinations}>{t('keys.goToView')} <kbd>{keyboard.modifier}+{keyboard.navigation ?? keyboard.commandKey}</kbd></button>{/if}
+      <p>{t('keys.intro')}</p>
+      <div class="shortcut-row"><span>{t('keys.focusSearch')}</span><kbd>{keyboard.search}</kbd><button class="btn" onclick={() => { recording = 'search'; error = ''; saveFailed = false; }}>{t(recording === 'search' ? 'keys.typeChar' : 'keys.changeSearch')}</button></div>
+      <div class="shortcut-row"><span>{t('keys.openHelp')}</span><kbd>{keyboard.help}</kbd><button class="btn" onclick={() => { recording = 'help'; error = ''; saveFailed = false; }}>{t(recording === 'help' ? 'keys.typeChar' : 'keys.changeHelp')}</button></div>
       {#if desktop}
-        <div class="shortcut-row"><span>Find a view</span><kbd>{keyboard.modifier}+{keyboard.navigation ?? keyboard.commandKey}</kbd><button class="btn" onclick={() => { recording = 'navigation'; error = ''; saveFailed = false; }}>{recording === 'navigation' ? 'Type a character…' : 'Change view key'}</button></div>
-        <div class="shortcut-row"><span>Next / previous region</span><span><kbd>F6</kbd> / <kbd>Shift+F6</kbd></span></div>
-        <div class="shortcut-row"><span>Resize the sidebar, from its edge after the views</span><span><kbd>←</kbd> / <kbd>→</kbd></span></div>
-        <div class="shortcut-row"><span>Collapse or expand the sidebar, from its edge</span><kbd>Enter</kbd></div>
+        <div class="shortcut-row"><span>{t('keys.findView')}</span><kbd>{keyboard.modifier}+{keyboard.navigation ?? keyboard.commandKey}</kbd><button class="btn" onclick={() => { recording = 'navigation'; error = ''; saveFailed = false; }}>{t(recording === 'navigation' ? 'keys.typeChar' : 'keys.changeView')}</button></div>
+        <div class="shortcut-row"><span>{t('keys.regions')}</span><span><kbd>F6</kbd> / <kbd>Shift+F6</kbd></span></div>
+        <div class="shortcut-row"><span>{t('keys.resizeSidebar')}</span><span><kbd>←</kbd> / <kbd>→</kbd></span></div>
+        <div class="shortcut-row"><span>{t('keys.collapseSidebar')}</span><kbd>Enter</kbd></div>
       {/if}
-      <div class="shortcut-row"><span>Next / previous control</span><span><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></span></div>
-      <div class="shortcut-row"><span>Close a dialog or menu</span><kbd>Escape</kbd></div>
-      <p class="muted">{keyboard.layoutAvailable ? 'Key labels adapt locally when your keyboard layout changes.' : 'Automatic key labels are unavailable in this browser. You can record search and help characters above.'} Keyboard layout information is never saved or sent. Only your shortcut choices are saved on this device.</p>
-      <label class="enable-shortcuts"><input type="checkbox" bind:checked={keyboard.enabled} onchange={() => save()} /> Enable single-character shortcuts</label>
-      <button class="btn" onclick={reset}>Reset shortcut choices</button>
-      {#if recording}<p role="status">Type the character to use{recording === 'navigation' ? `; ${keyboard.modifier} is added automatically` : ''}. Escape cancels; Tab moves on.</p>{/if}
+      <div class="shortcut-row"><span>{t('keys.controls')}</span><span><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></span></div>
+      <div class="shortcut-row"><span>{t('keys.closeDialog')}</span><kbd>Escape</kbd></div>
+      <p class="muted">{t(keyboard.layoutAvailable ? 'keys.layoutAdapts' : 'keys.layoutUnavailable')} {t('keys.privacy')}</p>
+      <label class="enable-shortcuts"><input type="checkbox" bind:checked={keyboard.enabled} onchange={() => save()} /> {t('keys.enable')}</label>
+      <button class="btn" onclick={reset}>{t('keys.reset')}</button>
+      {#if recording}<p role="status">{recording === 'navigation' ? t('keys.recordingNav', { modifier: keyboard.modifier }) : t('keys.recording')}</p>{/if}
       <!-- The live region stays mounted so a conflict typed while recording is
            announced; a region inserted with its text is often missed. -->
-      <div role="alert">{#if error}<div class="ui-notice" data-tone="warn">{error} {#if saveFailed}<button class="btn" onclick={save}>Retry saving</button>{/if}</div>{/if}</div>
+      <div role="alert">{#if error}<div class="ui-notice" data-tone="warn">{error} {#if saveFailed}<button class="btn" onclick={save}>{t('keys.retrySave')}</button>{/if}</div>{/if}</div>
     {/if}
   </div>
 </dialog>

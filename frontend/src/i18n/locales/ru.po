@@ -4405,3 +4405,267 @@ msgstr ""
 msgctxt "shell.loadScan"
 msgid "Load new scan"
 msgstr ""
+
+#. Screen reader name of ×.
+msgctxt "ui.close"
+msgid "Close"
+msgstr ""
+
+#. Screen reader name of ×.
+msgctxt "ui.dismiss"
+msgid "Dismiss"
+msgstr ""
+
+#. Button.
+#. Max 10 characters.
+msgctxt "ui.copy"
+msgid "Copy"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "ui.copyCommand"
+msgid "Copy command: {command}"
+msgstr ""
+
+#. Button after copying.
+#. Max 10 characters.
+msgctxt "ui.copied"
+msgid "Copied ✓"
+msgstr ""
+
+#. Theme choice.
+#. Max 8 characters.
+msgctxt "ui.theme.light"
+msgid "Light"
+msgstr ""
+
+#. Theme choice.
+#. Max 8 characters.
+msgctxt "ui.theme.dark"
+msgid "Dark"
+msgstr ""
+
+#. Theme choice: follow the system.
+#. Max 8 characters.
+msgctxt "ui.theme.system"
+msgid "System"
+msgstr ""
+
+#. Theme switcher label.
+msgctxt "ui.colourMode"
+msgid "Colour mode"
+msgstr ""
+
+#. Note when table columns are hidden.
+msgctxt "ui.hiddenToFit"
+msgid "{count, plural, one {Hidden to fit this window: {columns}. Widen the window to show it.} other {Hidden to fit this window: {columns}. Widen the window to show them.}}"
+msgstr ""
+
+#. Screen reader name of a table.
+msgctxt "ui.tableRegion"
+msgid "{table}; scroll for all columns"
+msgstr ""
+
+#. Keyboard skip link. table is a table name, lower case in English.
+msgctxt "ui.skipTable"
+msgid "Skip {table}"
+msgstr ""
+
+#. Screen reader landmark.
+msgctxt "ui.endOfTable"
+msgid "End of {table}"
+msgstr ""
+
+#. Screen reader name of the shortcut bar.
+msgctxt "keys.legend"
+msgid "Keyboard shortcuts"
+msgstr ""
+
+#. Shortcut bar button.
+#. Max 10 characters.
+msgctxt "keys.search"
+msgid "Search"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "keys.searchKey"
+msgid "Search, key {key}"
+msgstr ""
+
+#. Shortcut bar button.
+#. Max 10 characters.
+msgctxt "keys.goTo"
+msgid "Go to"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "keys.goToKeys"
+msgid "Go to a view, keys {keys}"
+msgstr ""
+
+#. Shortcut bar text.
+#. Max 14 characters.
+msgctxt "keys.nextRegion"
+msgid "Next region"
+msgstr ""
+
+#. Shortcut bar button.
+#. Max 12 characters.
+msgctxt "keys.shortcuts"
+msgid "Shortcuts"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "keys.shortcutsKey"
+msgid "Keyboard shortcuts, key {key}"
+msgstr ""
+
+#. Dialog title.
+msgctxt "keys.title"
+msgid "Keyboard shortcuts"
+msgstr ""
+
+#. Dialog title and button.
+msgctxt "keys.goToView"
+msgid "Go to a view"
+msgstr ""
+
+#. Field label and shortcut name.
+msgctxt "keys.findView"
+msgid "Find a view"
+msgstr ""
+
+#. Screen reader name of the list.
+msgctxt "keys.views"
+msgid "Views"
+msgstr ""
+
+#. Empty list.
+msgctxt "keys.noMatches"
+msgid "No matching views."
+msgstr ""
+
+#. Hint. Keep the key names as your keyboard prints them.
+msgctxt "keys.listHelp"
+msgid "↑ / ↓ choose · Enter opens · Escape closes"
+msgstr ""
+
+#. Dialog introduction.
+msgctxt "keys.intro"
+msgid "Shortcuts work in this window when you are not typing or using a dialog. Search and help follow the character you type on your current keyboard, including Shift or AltGr."
+msgstr ""
+
+#. Shortcut name.
+msgctxt "keys.focusSearch"
+msgid "Focus this view’s search"
+msgstr ""
+
+#. Button while recording a key.
+msgctxt "keys.typeChar"
+msgid "Type a character…"
+msgstr ""
+
+#. Button.
+msgctxt "keys.changeSearch"
+msgid "Change search key"
+msgstr ""
+
+#. Shortcut name.
+msgctxt "keys.openHelp"
+msgid "Open keyboard help"
+msgstr ""
+
+#. Button.
+msgctxt "keys.changeHelp"
+msgid "Change help key"
+msgstr ""
+
+#. Button.
+msgctxt "keys.changeView"
+msgid "Change view key"
+msgstr ""
+
+#. Shortcut name.
+msgctxt "keys.regions"
+msgid "Next / previous region"
+msgstr ""
+
+#. Shortcut name.
+msgctxt "keys.resizeSidebar"
+msgid "Resize the sidebar, from its edge after the views"
+msgstr ""
+
+#. Shortcut name.
+msgctxt "keys.collapseSidebar"
+msgid "Collapse or expand the sidebar, from its edge"
+msgstr ""
+
+#. Shortcut name.
+msgctxt "keys.controls"
+msgid "Next / previous control"
+msgstr ""
+
+#. Shortcut name.
+msgctxt "keys.closeDialog"
+msgid "Close a dialog or menu"
+msgstr ""
+
+#. Note.
+msgctxt "keys.layoutAdapts"
+msgid "Key labels adapt locally when your keyboard layout changes."
+msgstr ""
+
+#. Note.
+msgctxt "keys.layoutUnavailable"
+msgid "Automatic key labels are unavailable in this browser. You can record search and help characters above."
+msgstr ""
+
+#. Note.
+msgctxt "keys.privacy"
+msgid "Keyboard layout information is never saved or sent. Only your shortcut choices are saved on this device."
+msgstr ""
+
+#. Checkbox.
+msgctxt "keys.enable"
+msgid "Enable single-character shortcuts"
+msgstr ""
+
+#. Button.
+msgctxt "keys.reset"
+msgid "Reset shortcut choices"
+msgstr ""
+
+#. Status while recording.
+msgctxt "keys.recording"
+msgid "Type the character to use. Escape cancels; Tab moves on."
+msgstr ""
+
+#. Status while recording; modifier is Ctrl or Command.
+msgctxt "keys.recordingNav"
+msgid "Type the character to use; {modifier} is added automatically. Escape cancels; Tab moves on."
+msgstr ""
+
+#. Button.
+msgctxt "keys.retrySave"
+msgid "Retry saving"
+msgstr ""
+
+#. Error.
+msgctxt "keys.saveFailed"
+msgid "This choice works for this window, but could not be saved. Try again."
+msgstr ""
+
+#. Error.
+msgctxt "keys.oneChar"
+msgid "Type one character, using Shift or AltGr if needed."
+msgstr ""
+
+#. Error.
+msgctxt "keys.noAltGr"
+msgid "Choose a character without AltGr. The command modifier is added automatically."
+msgstr ""
+
+#. Error.
+msgctxt "keys.different"
+msgid "Search and help need different characters."
+msgstr ""

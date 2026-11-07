@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t as tr } from '../i18n/i18n.svelte';
   export interface ToastMessage {
     id: number;
     kind: 'error' | 'success';
@@ -19,7 +20,7 @@
     {#each toasts as t (t.id)}
       <div class="toast {t.kind}">
         <span class="toast-text">{t.text}</span>
-        <button class="toast-dismiss" onclick={() => ondismiss?.(t.id)} aria-label="Dismiss">×</button>
+        <button class="toast-dismiss" onclick={() => ondismiss?.(t.id)} aria-label={tr('ui.dismiss')}>×</button>
       </div>
     {/each}
   </div>

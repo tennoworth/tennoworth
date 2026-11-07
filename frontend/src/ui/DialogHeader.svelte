@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n/i18n.svelte';
   // Shared header layout for modal dialogs - close-button styling and title
   // treatment. The parent dialog owns aria-labelledby; titleId keeps the two
   // in sync.
@@ -12,7 +13,7 @@
 
 <header>
   <h2 id={titleId}>{title}</h2>
-  <button class="x" onclick={onclose} aria-label="Close">×</button>
+  <button class="x" onclick={onclose} aria-label={t('ui.close')}>×</button>
 </header>
 
 <style>

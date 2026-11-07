@@ -7,6 +7,7 @@
 // scroll box carries the step as `data-fit` and names what is hidden in
 // `data-fit-note`, which shared CSS draws under the table. Sideways scrolling is left only for content that cannot fit
 // even then, such as enlarged text.
+import { t } from '../i18n/i18n.svelte';
 
 export const MAX_DROP_RANK = 3;
 
@@ -22,7 +23,7 @@ export function hidesAt(rank: number, step: number): boolean {
 }
 
 export function fitNote(hidden: string[]): string | undefined {
-  return hidden.length ? `Hidden to fit this window: ${hidden.join(', ')}. Widen the window to show ${hidden.length === 1 ? 'it' : 'them'}.` : undefined;
+  return hidden.length ? t('ui.hiddenToFit', { count: hidden.length, columns: hidden.join(', ') }) : undefined;
 }
 
 function columnLabel(cell: HTMLElement): string {
