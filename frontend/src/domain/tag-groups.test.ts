@@ -35,4 +35,15 @@ describe('tag groups', () => {
     expect(tagMatches('nyx', 'oberon')).toBe(false);
     expect(tagMatches('nyx', '  ')).toBe(true);
   });
+
+  it('finds a name by the start of its words, in any order', () => {
+    expect(tagMatches('jat_kittag', 'kit jat')).toBe(true);
+    expect(tagMatches('jat_kittag', 'j k')).toBe(true);
+    expect(tagMatches('two_handed_nikana', 'nik two')).toBe(true);
+    expect(tagMatches('ax_52', '52 ax')).toBe(true);
+    // Each typed word needs a word of its own, and must start it.
+    expect(tagMatches('jat_kittag', 'jat jat')).toBe(false);
+    expect(tagMatches('jat_kittag', 'at tag')).toBe(false);
+    expect(tagMatches('jat_kittag', 'kitag')).toBe(false);
+  });
 });

@@ -20,9 +20,23 @@ export function tagLabel(tag: string): string {
   return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
-/** Whether `query` (as typed: spaces, hyphens, any case) finds the tag. */
+const words = (text: string) => text.toLowerCase().split(/[\s_-]+/).filter(Boolean);
+
+/** Whether `query` (as typed: spaces, hyphens, any case) finds the tag: its
+ *  letters run on inside the name ("jatk"), or each typed word starts a
+ *  different word of the name, in any order ("kit jat", "j k"). */
 export function tagMatches(tag: string, query: string): boolean {
   const flat = (text: string) => text.toLowerCase().replace(/[\s_-]+/g, '');
   const q = flat(query);
-  return !q || flat(tag).includes(q) || flat(tagLabel(tag)).includes(q);
+  if (!q || flat(tag).includes(q) || flat(tagLabel(tag)).includes(q)) return true;
+  const typed = words(query);
+  return [words(tag), words(tagLabel(tag))].some((name) => {
+    const free = [...name];
+    return typed.every((word) => {
+      const at = free.findIndex((part) => part.startsWith(word));
+      if (at < 0) return false;
+      free.splice(at, 1);
+      return true;
+    });
+  });
 }
