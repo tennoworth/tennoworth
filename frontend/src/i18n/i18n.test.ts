@@ -80,6 +80,16 @@ describe('catalogs', () => {
     expect(checkCatalogs(tagged, { fr: file.replace('msgctxt "b"', 'msgctxt "b2"') }, ['fr']).errors.join()).toMatch(/out of step/);
   });
 
+  it('takes tags per plural branch and lengths in visible characters', () => {
+    const plural = { p: { text: '{count, plural, one {<b>#</b> row} other {<b>#</b> rows}}', note: 'Rows.' }, t: { text: 'Average', note: 'Header.', max: 5 } };
+    const file = (translations: Record<string, string>) => formatPo({ language: 'pl', entries: syncCatalog(plural, 'pl', null).entries.map(entry => ({ ...entry, translation: translations[entry.key] ?? '' })) });
+    const four = '{count, plural, one {<b>#</b> wiersz} few {<b>#</b> wiersze} many {<b>#</b> wierszy} other {<b>#</b> wiersza}}';
+    expect(checkCatalogs(plural, { pl: file({ p: four, t: 'Śr.' }) }, ['pl']).errors).toEqual([]);
+    expect(checkCatalogs(plural, { pl: file({ p: '{count, plural, other {<b># wiersze}}', t: 'Śr.' }) }, ['pl']).errors.join()).toMatch(/tags differ/);
+    expect(checkCatalogs(plural, { pl: file({ p: '{count, plural, other {<em>#</em> wiersze}}', t: 'Śr.' }) }, ['pl']).errors.join()).toMatch(/tags differ/);
+    expect(checkCatalogs(plural, { th: file({ p: four, t: 'เฉลี่ย' }).replace('Language: pl', 'Language: th') }, ['th']).warnings).toEqual([]);
+  });
+
   it('the shipped catalogs are in step with en.ts and valid', () => {
     const files = Object.fromEntries(TRANSLATED.map(language => [language, readFileSync(`src/i18n/locales/${language}.po`, 'utf8')]));
     expect(checkCatalogs(EN, files, TRANSLATED).errors).toEqual([]);

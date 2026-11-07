@@ -41,7 +41,18 @@ export interface CheckResult {
   coverage: Record<string, Coverage>;
 }
 
-const visibleLength = (text: string) => [...text.replace(/\{[^{}]*\}/g, '').replace(/<\/?[a-z]+>/g, '')].length;
+// Counted in graphemes: Thai vowel and tone marks stack on a letter and take no room.
+const graphemes = new Intl.Segmenter('und', { granularity: 'grapheme' });
+const visibleLength = (text: string) => [...graphemes.segment(text.replace(/\{[^{}]*\}/g, '').replace(/<\/?[a-z]+>/g, ''))].length;
+
+// The same kinds of tags as the English, each closed. Not the same count: a
+// plural can have more or fewer branches than English, each with its own tags.
+function tagsMatch(translation: string, english: string): boolean {
+  const kinds = (text: string) => [...new Set(tagsIn(text).map((tag) => tag.replace(/[</>]/g, '')))].sort().join();
+  const balanced = [...new Set(tagsIn(translation).map((tag) => tag.replace(/[</>]/g, '')))]
+    .every((name) => tagsIn(translation).filter((tag) => tag === `<${name}>`).length === tagsIn(translation).filter((tag) => tag === `</${name}>`).length);
+  return balanced && kinds(translation) === kinds(english);
+}
 
 export function checkCatalogs(sources: Sources, files: Record<string, string>, languages: readonly string[]): CheckResult {
   const result: CheckResult = { errors: [], warnings: [], coverage: {} };
@@ -74,7 +85,7 @@ export function checkCatalogs(sources: Sources, files: Record<string, string>, l
       } catch (error) {
         result.errors.push(`${where}: ${error instanceof MessageError ? error.message : String(error)}`);
       }
-      if (tagsIn(entry.translation).join() !== tagsIn(source.text).join()) result.errors.push(`${where}: tags differ from English (${tagsIn(source.text).join(' ') || 'none'})`);
+      if (!tagsMatch(entry.translation, source.text)) result.errors.push(`${where}: tags differ from English (${tagsIn(source.text).join(' ') || 'none'})`);
       if (source.max && visibleLength(entry.translation) > source.max) {
         result.warnings.push(`${where}: ${visibleLength(entry.translation)} characters, the space holds about ${source.max}`);
       }
