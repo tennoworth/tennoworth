@@ -146,7 +146,9 @@ pub(crate) fn detect(log: &Path) -> Option<String> {
 /// The warframe.market code of the language the game at `log` runs in, when
 /// this build can read rewards in it. The first-run picker preselects it.
 pub(crate) fn game_language(log: &Path) -> Option<&'static str> {
-    detect(log).and_then(|code| by_game_code(&code)).map(|language| language.code)
+    detect(log)
+        .and_then(|code| by_game_code(&code))
+        .map(|language| language.code)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

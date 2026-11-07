@@ -259,6 +259,24 @@ const PROBE_JS: &str = r#"(function(){
     // install against a fixture manifest must REJECT (unreachable bundle URL /
     // garbage signature) without hurting the app - invk records the rejection
     // as an 'ERR:' string, and every later step still runs.
+    // A fresh profile asks for the app language first, and update notes wait
+    // behind it, so answer it as a player would. A later run has the choice
+    // saved and never sees it.
+    .then(function(){
+      var waited = 0;
+      function answer(){
+        var picker = document.querySelector('dialog.language-picker');
+        if (picker && picker.open) {
+          R.languagePicker = 'shown';
+          picker.querySelector('button.cta').click();
+          return delay(1500);
+        }
+        if (waited >= 5000) { R.languagePicker = 'absent'; return; }
+        waited += 250;
+        return delay(250).then(answer);
+      }
+      return answer();
+    })
     .then(function(){
       R.updateBannerVisible = !!document.querySelector('[data-testid="update-banner"]');
       if (R.updateCheck && R.updateCheck.available) {
