@@ -38,7 +38,7 @@
     onwfmlogout?: () => Promise<void>;
     /** Opens the page at this section (the inbox's "Notification settings",
      *  the price sharing prompt's "What is sent"). */
-    section?: 'notifications' | 'price-sharing' | 'account' | null;
+    section?: 'notifications' | 'price-sharing' | 'account' | 'scan' | 'overlay' | 'app' | null;
     /** Whether Settings is on screen; it stays mounted while hidden. */
     active?: boolean;
     onsectionshown?: () => void;

@@ -78,7 +78,7 @@
 </script>
 
 {#if fresh}
-  <div class="card ui-panel warn-banner general-banner watch-offer" role="status" data-testid="watch-offer">
+  <div class="card ui-panel warn-banner general-banner watch-offer" role="status" data-testid="watch-offer" data-region="notices">
     <div class="gb-body">
       <strong>Price watch hit {age}.</strong>
       {fresh.player} {fresh.side === 'sell' ? 'sells' : 'buys'} {fresh.name} at {fresh.price}p

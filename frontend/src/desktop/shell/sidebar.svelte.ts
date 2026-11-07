@@ -32,7 +32,9 @@ export class SidebarLayout {
 
   /** Keyboard resizing on the separator; returns whether the key was used. */
   key(key: string): boolean {
-    if (key === 'Enter' || key === ' ') { this.toggle(); return true; }
+    // Enter only, as a window splitter does: Space on the way past was a
+    // surprise collapse.
+    if (key === 'Enter') { this.toggle(); return true; }
     if (key === 'ArrowLeft') {
       if (this.collapsed) return true;
       if (this.width <= SIDEBAR_MIN) this.collapsed = true; else this.width = clamp(this.width - STEP);

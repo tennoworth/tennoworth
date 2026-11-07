@@ -80,7 +80,16 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   // the desktop app, driven by the wfm_session commands.
   let updateNotesRef: UpdateNotes;
   // Set only by the inbox's settings link; every other way in opens the top.
-  let settingsSection = $state<'notifications' | 'price-sharing' | 'account' | null>(null);
+  let settingsSection = $state<'notifications' | 'price-sharing' | 'account' | 'scan' | 'overlay' | 'app' | null>(null);
+  // Settings people look for by name ("dark mode", "popups") rather than by view.
+  const openSettings = (section: NonNullable<typeof settingsSection>) => { settingsSection = section; filters.setView('settings'); };
+  const settingsDestinations = [
+    { label: 'Settings › Appearance and updates', keywords: 'dark light theme colour color mode updates privacy app icon item pictures visual compact', run: () => openSettings('app') },
+    { label: 'Settings › Notifications', keywords: 'popups alerts sounds in game price watches inbox', run: () => openSettings('notifications') },
+    { label: 'Settings › Automatic scan', keywords: 'auto scan cadence rescan', run: () => openSettings('scan') },
+    { label: 'Settings › Account', keywords: 'warframe.market sign in log out status presence online invisible', run: () => openSettings('account') },
+    { label: 'Settings › Relic overlay', keywords: 'reward screen ocr', run: () => openSettings('overlay') },
+  ];
 
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
@@ -118,7 +127,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   let tip = $state<{ text: string; top: number; left: number } | null>(null);
   function showTip(event: Event) {
     if (!sidebar.collapsed || matchMedia('(max-width: 900px)').matches) { tip = null; return; }
-    const target = (event.target as Element | null)?.closest<HTMLElement>('.nav-item, .project-link, .feedback-trigger, .keyboard-tools button, .rail-toggle');
+    const target = (event.target as Element | null)?.closest<HTMLElement>('.nav-item, .project-link, .feedback-trigger, .rail-toggle');
     if (!target) { tip = null; return; }
     const label = target.querySelector('.label')?.textContent?.trim() ?? target.getAttribute('aria-label') ?? target.textContent?.trim() ?? '';
     const badge = target.querySelector('.badge')?.textContent?.trim();
@@ -457,9 +466,6 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   <StatusStrip keyboardTools={firstRunKeyboard} bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
   <aside data-shell class="sidebar" onpointerover={showTip} onpointerleave={hideTip} onfocusin={showTip} onfocusout={hideTip}>
-    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-    <div data-shell class="sidebar-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Sidebar width" aria-valuemin={56} aria-valuemax={SIDEBAR_MAX} aria-valuenow={sidebar.collapsed ? 56 : sidebar.width} aria-valuetext={sidebar.collapsed ? 'Icons only' : `${sidebar.width} pixels`} title="Drag to resize · double-click to collapse"
-      onpointerdown={startResize} ondblclick={() => sidebar.toggle()} onkeydown={(e) => { if (sidebar.key(e.key)) e.preventDefault(); }}></div>
     <nav data-shell aria-label="App views">
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Trade</div>
@@ -555,7 +561,11 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
         </button>
       </div>
     </nav>
-
+    <!-- After the views in tab order: it is absolutely placed on the edge, and
+         Enter collapsing the sidebar was easy to hit on the way to the views. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div data-shell class="sidebar-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Sidebar width" aria-valuemin={56} aria-valuemax={SIDEBAR_MAX} aria-valuenow={sidebar.collapsed ? 56 : sidebar.width} aria-valuetext={sidebar.collapsed ? 'Icons only' : `${sidebar.width} pixels`} title="Drag to resize · ← → resize · Enter or double-click collapses"
+      onpointerdown={startResize} ondblclick={() => sidebar.toggle()} onkeydown={(e) => { if (sidebar.key(e.key)) e.preventDefault(); }}></div>
   </aside>
 
   {/if}
@@ -742,7 +752,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     <button data-shell type="button" class="rail-toggle" aria-label={sidebar.collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebar.collapsed} onclick={() => { sidebar.toggle(); tip = null; }}>
       <NavIcon name={sidebar.collapsed ? 'expand' : 'collapse'} /><span data-shell class="label">Collapse</span>
     </button>
-    <KeyboardNavigation desktop compact {store} />
+    <KeyboardNavigation desktop compact {store} extra={settingsDestinations} />
     <nav data-shell class="project-links" aria-label="Project links">
       {@render projectLinkAnchors()}
     </nav>
@@ -877,4 +887,4 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
 
 <UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} onautomatic={(state) => prompts.notes(state)} />
 
-{#snippet firstRunKeyboard()}<KeyboardNavigation {store} />{/snippet}
+{#snippet firstRunKeyboard()}<KeyboardNavigation desktop {store} />{/snippet}

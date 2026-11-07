@@ -275,6 +275,10 @@
     cursor: pointer;
   }
   .nav-item:hover[data-shell] { color: var(--fg); background: var(--hover-tint); }
+  /* Drawn inside: the view list scrolls, and an outer ring was clipped to two
+     lines that read as separators. */
+  .nav-item:focus-visible[data-shell] { outline-offset: -2px; }
+  .nav-item.active:focus-visible[data-shell] { outline-color: var(--on-ink); }
   .nav-item.active[data-shell] {
     color: var(--fg);
     border-left-color: var(--accent);
@@ -350,8 +354,8 @@
   .shell[data-sidebar="rail"] .sfoot .project-link[data-shell],
   .shell[data-sidebar="rail"] .sfoot .feedback-trigger[data-shell],
   .shell[data-sidebar="rail"] .rail-toggle[data-shell] { justify-content: center; width: auto; padding: var(--s1); }
-  .shell[data-sidebar="rail"] .sfoot .keyboard-tools button { font-size: 0; justify-content: center; }
-  .shell[data-sidebar="rail"] .sfoot .keyboard-tools button kbd { font-size: var(--text-caption); }
+  /* The key legend under the view opens keyboard help on a wide window. */
+  @media (min-width: 901px) { .shell .sfoot .keyboard-tools { display: none; } }
   .shell[data-sidebar="rail"] .sfoot .ver[data-shell] { display: none; }
 
   .recovery-details[data-shell] {

@@ -6,6 +6,7 @@ import type { FilterController } from '../selling/filters.svelte';
 import { baroPhase } from '../../domain/baro-board';
 import { humanWindow, shortStamp } from '../../ui/format';
 import PresenceMenu from '../presence/PresenceMenu.svelte';
+import { busy, closeOnFocusOut, focusLater } from '../../ui/keyboard-actions';
 import type { ActivityLog } from './activity.svelte';
 import type { PresenceController } from '../presence/presence.svelte';
   let { inShell, inventory, listing, filters, unresolvedCount, unresolvedSummary, inventoryFreshness, inventoryStaleness, inventoryTimestamp, marketFreshness, marketStaleness, baroState, unreadNotifications, wfmLabel, projectLinkAnchors, onexport, onimport, onclear, onupdates, onfeedback, onauth, presence, onpresencesettings, activity, keyboardTools }: {
@@ -111,9 +112,20 @@ import type { PresenceController } from '../presence/presence.svelte';
   });
   let refreshOpen = $state(false);
   let refreshTrigger = $state<HTMLButtonElement>();
+  // Each action closes the menu and so removes the button that had focus;
+  // focus goes back to Refresh first, so the next Tab continues from there.
+  function closeRefresh() { refreshTrigger?.focus(); refreshOpen = false; confirmingClear = false; }
   async function refreshFromGame() {
-    refreshOpen = false;
+    closeRefresh();
     await inventory.pullInventory();
+  }
+  // Clear sits one Tab after Restore and erases the saved scan, so it asks.
+  let confirmingClear = $state(false);
+  let keepScan = $state<HTMLButtonElement>();
+  function clearScan() {
+    closeRefresh();
+    onclear();
+    focusLater(() => document.querySelector<HTMLElement>('[data-testid="desktop-scan"]') ?? refreshTrigger);
   }
   $effect(() => {
     if (!refreshOpen) return;
@@ -173,25 +185,33 @@ import type { PresenceController } from '../presence/presence.svelte';
             aria-expanded={refreshOpen}
             aria-controls="refresh-pop"
             aria-busy={inventory.pullingInventory}
-            disabled={inventory.pullingInventory}
+            use:busy={inventory.pullingInventory}
             title={inventory.pullingInventory
               ? 'Reading the running game’s memory - this can take a few seconds.'
               : 'Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too.'}
           >{inventory.pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
-            <div data-shell id="refresh-pop" class="refresh-pop">
+            <div data-shell id="refresh-pop" class="refresh-pop" use:closeOnFocusOut={{ trigger: () => refreshTrigger, close: () => { refreshOpen = false; confirmingClear = false; } }}>
               {#if inventory.inventoryName}<p data-shell class="rp-name">{inventory.inventoryName}</p>{/if}
               <p data-shell class="rp-lede">Scan the running game - no file needed.</p>
-              <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={inventory.pullingInventory}>
+              <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} use:busy={inventory.pullingInventory}>
                 {inventory.pullingInventory ? 'Scanning game…' : 'Scan game'}
               </button>
               <div data-shell class="rp-sep" aria-hidden="true"></div>
               {#if inventory.inventoryName}
-                <button data-shell class="rp-item" onclick={() => { refreshOpen = false; onexport(); }} title="Download an encrypted snapshot for another device or backup.">Export…</button>
+                <button data-shell class="rp-item" onclick={() => { closeRefresh(); onexport(); }} title="Download an encrypted snapshot for another device or backup.">Export…</button>
               {/if}
-              <button data-shell class="rp-item" onclick={() => { refreshOpen = false; onimport(); }} title="Restore an encrypted snapshot exported from another device.">Restore…</button>
+              <button data-shell class="rp-item" onclick={() => { closeRefresh(); onimport(); }} title="Restore an encrypted snapshot exported from another device.">Restore…</button>
               {#if inventory.inventoryName}
-                <button data-shell class="rp-item danger" onclick={() => { refreshOpen = false; onclear(); }} title="Forget the saved inventory entirely.">Clear</button>
+                {#if confirmingClear}
+                  <div data-shell class="rp-confirm" role="group" aria-labelledby="rp-clear-q">
+                    <p data-shell id="rp-clear-q" class="rp-note">Forget the saved scan? Scan again to get it back.</p>
+                    <button data-shell class="rp-item danger" onclick={clearScan}>Clear saved scan</button>
+                    <button data-shell class="rp-item" bind:this={keepScan} onclick={() => { confirmingClear = false; focusLater(() => document.querySelector<HTMLElement>('#refresh-pop .rp-item.danger')); }}>Keep it</button>
+                  </div>
+                {:else}
+                  <button data-shell class="rp-item danger" onclick={() => { confirmingClear = true; focusLater(() => keepScan); }} title="Forget the saved inventory entirely.">Clear…</button>
+                {/if}
               {/if}
               {#if unresolvedCount > 0}
                 <p data-shell class="rp-note" title="Breakdown: {unresolvedSummary}.">{unresolvedCount} items couldn't be price-matched (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.</p>
@@ -234,9 +254,9 @@ import type { PresenceController } from '../presence/presence.svelte';
       <div data-shell class="cell end more">
         <button data-shell type="button" class="cellbtn more-trigger" bind:this={moreTrigger} aria-expanded={moreOpen} aria-controls="more-pop" onclick={() => (moreOpen = !moreOpen)}>More ▾</button>
         {#if moreOpen}
-          <div data-shell id="more-pop" class="more-pop">
-            <button data-shell type="button" onclick={() => { moreOpen = false; onupdates(); }}>Check for updates</button>
-            <button data-shell type="button" onclick={() => { moreOpen = false; onfeedback(); }}>Send feedback</button>
+          <div data-shell id="more-pop" class="more-pop" use:closeOnFocusOut={{ trigger: () => moreTrigger, close: () => (moreOpen = false) }}>
+            <button data-shell type="button" onclick={() => { moreTrigger?.focus(); moreOpen = false; onupdates(); }}>Check for updates</button>
+            <button data-shell type="button" onclick={() => { moreTrigger?.focus(); moreOpen = false; onfeedback(); }}>Send feedback</button>
             <hr data-shell />
             <a data-shell href="#faq" onclick={() => (moreOpen = false)}>FAQ</a>
             {@render projectLinkAnchors()}

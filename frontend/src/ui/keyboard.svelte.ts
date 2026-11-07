@@ -32,17 +32,53 @@ export function characterKey(event: KeyboardEvent): string | null {
   return event.key;
 }
 
-export function typingTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && !!target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"]');
+// Checkboxes, radios and buttons take no characters, so a shortcut pressed
+// on one is meant for the app. Most of Settings is checkboxes; treating them
+// as text fields made F6 and Ctrl+K do nothing there.
+const TEXT_ENTRY = 'input:not([type="checkbox"], [type="radio"], [type="button"], [type="submit"], [type="reset"], [type="range"], [type="color"], [type="file"]), textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
+
+/** Whether a key pressed here is text. A drawn select's type-ahead takes
+ *  characters too, but not chords or F6 (`chord`). */
+export function typingTarget(target: EventTarget | null, chord = false): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.closest(TEXT_ENTRY)) return true;
+  return !chord && !!target.closest('[role="combobox"]');
 }
 
 export function visible(element: Element): boolean {
   return element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden' && !element.closest('[inert]');
 }
 
-export function shortcutBlocked(event: KeyboardEvent): boolean {
-  return event.defaultPrevented || event.isComposing || event.repeat || typingTarget(event.target) ||
-    [...document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"], [aria-expanded="true"][aria-controls]')].some(visible);
+/** A modal always holds the keys. An open menu or popover holds them only
+ *  while focus is in it or on its trigger: one left open behind the user
+ *  silently turned every shortcut off. */
+export function shortcutBlocked(event: KeyboardEvent, chord = false): boolean {
+  if (event.defaultPrevented || event.isComposing || event.repeat || typingTarget(event.target, chord)) return true;
+  if ([...document.querySelectorAll('dialog[open]:modal, [aria-modal="true"]')].some(visible)) return true;
+  const focus = document.activeElement;
+  const holds = (element: Element) => visible(element) && !!focus && element.contains(focus);
+  if ([...document.querySelectorAll('[role="dialog"]:not(dialog), dialog[open]:not(:modal)')].some(holds)) return true;
+  return [...document.querySelectorAll<HTMLElement>('[aria-expanded="true"][aria-controls]')].some((trigger) => {
+    const popover = document.getElementById(trigger.getAttribute('aria-controls') ?? '');
+    return !!popover && visible(popover) && (holds(popover) || trigger === focus);
+  });
+}
+
+/** A place the view picker can go that is not a sidebar view, such as a Settings section. */
+export interface KeyboardDestination { label: string; keywords?: string; run: () => void }
+
+/** Asks the keyboard tools to open help or the view picker, from a click on
+ *  the key legend. `count` changes on every request. */
+export const keyboardRequest = $state({ mode: 'help' as 'help' | 'navigate', count: 0 });
+export function requestKeyboard(mode: 'help' | 'navigate'): void {
+  keyboardRequest.mode = mode; keyboardRequest.count++;
+}
+
+/** Focuses the view's primary search, as the search key does. */
+export function focusSearch(): boolean {
+  const first = [...document.querySelectorAll<HTMLInputElement>('[data-shortcut-search]')].find(el => visible(el) && !el.disabled);
+  first?.focus();
+  return !!first;
 }
 
 export function searchShortcut(node: HTMLInputElement, onjump?: () => void) {
