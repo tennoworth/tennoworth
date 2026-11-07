@@ -806,6 +806,7 @@
   .set-liq.cold[data-shell]   { color: var(--bad); }
   .reco-detail[data-shell] { font-size: var(--text-control); margin: 0; line-height: 1.5; }
   .reco-detail strong[data-shell] { color: var(--fg); font-weight: 600; }
+  .reco-detail b { color: var(--fg); font-weight: 600; }
   .good-text[data-shell] { color: var(--good); }
   .bad-text[data-shell] { color: var(--bad); }
 

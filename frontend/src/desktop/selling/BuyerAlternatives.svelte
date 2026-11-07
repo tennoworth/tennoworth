@@ -6,6 +6,7 @@
   import type { LiveTop } from '../../contracts/desktop';
   import { wfmItemUrl } from '../../ui/format';
   import { busy } from '../../ui/keyboard-actions';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
 
   let { slug, name, quantity, ask, onclose }: {
     slug: string; name: string; quantity: number; ask: number; onclose(): void;
@@ -53,29 +54,28 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions (Escape closes the comparison from any control inside it.) -->
-<section class="ui-panel ui-stack buyer-alternatives" aria-label="Buyer alternatives"
+<section class="ui-panel ui-stack buyer-alternatives" aria-label={t('buyers.panel')}
   onkeydown={(event) => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); onclose(); } }}>
   <div class="ui-toolbar">
-    <h3 tabindex="-1">Buyers for {name} ×{quantity}</h3>
-    <button class="btn" onclick={refresh} use:busy={loading}>{loading ? 'Checking buyers…' : 'Refresh buyers'}</button>
-    <button class="btn ghost" onclick={onclose}>Close buyer comparison</button>
+    <h3 tabindex="-1">{t('buyers.title', { item: name, quantity })}</h3>
+    <button class="btn" onclick={refresh} use:busy={loading}>{t(loading ? 'buyers.checking' : 'buyers.refresh')}</button>
+    <button class="btn ghost" onclick={onclose}>{t('buyers.close')}</button>
   </div>
-  <p>Compare visible bids with the selected reference of {ask}p per unit. Rank 0 where applicable.</p>
-  <p class="muted">Top-five sample, not the full order book. Whole lots only; this comparison fills higher unit bids first and may leave units uncovered. Offers do not guarantee a sale or response.</p>
+  <p>{t('buyers.intro', { ask })}</p>
+  <p class="muted">{t('buyers.sample')}</p>
   {#if error}
     <p class="ui-notice" data-tone="bad" role="alert">{error}</p>
   {:else if !loading && comparison.error}
-    <p class="ui-notice" data-tone="warn" role="status">{comparison.error}</p>
+    <p class="ui-notice" data-tone="warn" role="status">{t(`buyers.error.${comparison.error}`)}</p>
   {:else if !loading && comparison.error === null}
-    <p class="ui-notice" role="status">{comparison.covered} of {quantity} units covered · {comparison.value}p visible bid value · {comparison.uncovered} {comparison.uncovered === 1 ? 'unit' : 'units'} without observed coverage.</p>
-    <p>For those same {comparison.covered} covered units: {comparison.askValue}p at your listing reference;
-      {Math.abs(comparison.gap)}p {comparison.gap >= 0 ? 'less at these bids' : 'more at these bids'}.</p>
-    <p class="muted">Checked {new Date(comparison.observed ?? '').toLocaleTimeString()}. Your own orders are excluded.</p>
+    <p class="ui-notice" role="status">{t('buyers.coverage', { covered: comparison.covered, quantity, value: comparison.value, uncovered: comparison.uncovered })}</p>
+    <p>{t(comparison.gap >= 0 ? 'buyers.gapLess' : 'buyers.gapMore', { covered: comparison.covered, ask: comparison.askValue, gap: Math.abs(comparison.gap) })}</p>
+    <p class="muted">{t('buyers.checked', { time: new Date(comparison.observed ?? '').toLocaleTimeString(formatLocale()) })}</p>
     {#if comparison.rows.length}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard focus lets users scroll every buyer column.) -->
-      <div class="wrap tw" role="region" aria-label="Compatible buyer quantities" tabindex="0">
+      <div class="wrap tw" role="region" aria-label={t('buyers.tableLabel')} tabindex="0">
         <table class="tw">
-          <thead><tr><th class="l">Buyer</th><th>Units / lot</th><th>Units covered</th><th>Bid value</th><th class="l">Status / platform</th></tr></thead>
+          <thead><tr><th class="l">{t('buyers.col.buyer')}</th><th>{t('buyers.col.lot')}</th><th>{t('buyers.col.covered')}</th><th>{t('buyers.col.value')}</th><th class="l">{t('buyers.col.status')}</th></tr></thead>
           <tbody>{#each comparison.rows as row (row.order.id)}
             <tr><td class="l"><a href={`https://warframe.market/profile/${encodeURIComponent(row.order.user_slug)}`} target="_blank" rel="noopener noreferrer">{row.order.name}</a></td>
               <td>{row.order.per_trade}</td><td>{row.quantity}</td><td>{row.value}p</td><td class="l">{row.order.status} · {row.order.platform}</td></tr>
@@ -84,7 +84,7 @@
       </div>
     {/if}
   {/if}
-  <a class="btn ghost" href={wfmItemUrl(slug)} target="_blank" rel="noopener noreferrer">Open item on WFM</a>
+  <a class="btn ghost" href={wfmItemUrl(slug)} target="_blank" rel="noopener noreferrer">{t('buyers.openOnWfm')}</a>
 </section>
 
 <style>

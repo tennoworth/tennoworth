@@ -1,18 +1,21 @@
 import type { BuyerOrder, LiveTop } from '../contracts/desktop';
 import { MAX_PER_TRADE } from './limits';
 
+/** Why buyers cannot be compared; the view words each one. */
+export type BuyerCompareError = 'invalid' | 'unavailable' | 'locked' | 'stale';
+
 export function compareBuyers(quote: LiveTop | null, quantity: number, ask: number, now: number) {
   const book = quote?.buyer_book;
   const observed = Date.parse(book?.observed_at ?? '');
   if (!Number.isSafeInteger(quantity) || quantity <= 0 || !Number.isFinite(ask) || ask <= 0) {
-    return { error: 'Choose a positive whole quantity and a valid listing reference.' } as const;
+    return { error: 'invalid' as BuyerCompareError } as const;
   }
   if (!quote || quote.error || !book || !Array.isArray(book.orders) || !Number.isFinite(observed)) {
-    return { error: 'Buyer coverage is unavailable. Check buyers to try again.' } as const;
+    return { error: 'unavailable' as BuyerCompareError } as const;
   }
-  if (!book.own_orders_excluded) return { error: 'Unlock your WFM account, then check again to exclude your own orders.' } as const;
+  if (!book.own_orders_excluded) return { error: 'locked' as BuyerCompareError } as const;
   if (!Number.isFinite(now) || now < observed || now - observed >= 60_000) {
-    return { error: 'This buyer check is stale. Refresh before comparing quantities.' } as const;
+    return { error: 'stale' as BuyerCompareError } as const;
   }
   const seen = new Set<string>();
   const eligible = book.orders.filter(order => {

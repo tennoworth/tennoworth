@@ -1,5 +1,6 @@
 import type { OwnedRecord } from '../../contracts/data';
 import type { DesktopServices } from '../../contracts/services';
+import { t } from '../../i18n/i18n.svelte';
 import type { ProtectionPlan, ProtectionState, ProtectionInventory } from '../../contracts/protection';
 import { humanError } from '../../contracts/errors';
 import { type AccessStatus, ALLOWANCE_CHANGED_EVENT, TRADE_DETECTED_EVENT, WFM_ACCESS_EVENT } from '../../contracts/generated/desktop';
@@ -99,12 +100,12 @@ export class ProtectionController {
     try {
       const state = await this.port.desktopProtectionState(input);
       if (request !== this.request || this.disposed) return;
-      if (!state?.plan || !state.items || !Array.isArray(state.issues)) throw new Error('Protected quantities are unavailable. Retry before listing.');
+      if (!state?.plan || !state.items || !Array.isArray(state.issues)) throw new Error(t('listing.protectedUnavailable'));
       const quantity = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff_ffff;
       if ((state.snapshot_id != null && (!Number.isSafeInteger(state.snapshot_id) || state.snapshot_id <= 0)) || Object.values(state.items).some(row =>
         !row || !quantity(row.owned) || !quantity(row.protected) || (row.listed != null && !quantity(row.listed))
         || (row.estimated != null && (!quantity(row.estimated) || row.estimated > row.owned))
-        || (row.available != null && (!quantity(row.available) || row.available > row.owned)))) throw new Error('Protected quantities are invalid. Retry before listing.');
+        || (row.available != null && (!quantity(row.available) || row.available > row.owned)))) throw new Error(t('listing.protectedInvalid'));
       // Unchanged polling results must not reset native calculations or disable
       // the listing trigger while the review restores keyboard focus.
       if (JSON.stringify(this.state) !== JSON.stringify(state)) this.state = state;

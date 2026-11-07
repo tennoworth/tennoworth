@@ -389,10 +389,10 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   let wfmAuthFailure = $state<unknown>(null);
   async function checkListingRequirements() {
     if (inventory.pullingInventory || protection.loading) return;
-    if (listingActionLabel === 'Scan game') {
+    if (workspace.listingAction === 'scan') {
       await inventory.pullInventory();
       await protection.refresh();
-    } else if (listingActionLabel === 'Recheck protection') await protection.refresh();
+    } else if (workspace.listingAction === 'recheck') await protection.refresh();
     else await connectForListings();
   }
   async function connectForListings() {

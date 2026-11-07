@@ -35,6 +35,7 @@ describe('messages', () => {
     expect(mapText(COUNT, text => text.toUpperCase())).toBe('{count, plural, =0 {NOTHING} one {# ITEM} other {# ITEMS}} LEFT');
     expect(richParts('ranks <em>your</em> stuff')).toEqual([{ text: 'ranks ', tag: null }, { text: 'your', tag: 'em' }, { text: ' stuff', tag: null }]);
     expect(richParts('<b>3</b> new · <code>a<b</code>')).toEqual([{ text: '3', tag: 'b' }, { text: ' new · ', tag: null }, { text: 'a<b', tag: 'code' }]);
+    expect(richParts('<good>+5p</good> or <bad>−2p</bad>')).toEqual([{ text: '+5p', tag: 'good' }, { text: ' or ', tag: null }, { text: '−2p', tag: 'bad' }]);
     // A tag the app does not render stays text, so it cannot become markup.
     expect(richParts('<script>x</script>')).toEqual([{ text: '<script>x</script>', tag: null }]);
     const pseudo = pseudoLocalize('Hi {name}, <em>you</em>');

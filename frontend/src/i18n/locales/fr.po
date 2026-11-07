@@ -3187,3 +3187,727 @@ msgstr ""
 msgctxt "session.dataUnavailable"
 msgid "Trade Session data is unavailable. Try scanning again."
 msgstr ""
+
+#. View heading.
+msgctxt "sets.title"
+msgid "Set picks"
+msgstr ""
+
+#. Line under the heading. plat = platinum.
+msgctxt "sets.lede"
+msgid "{count} prime sets checked against your inventory, ranked by net plat."
+msgstr ""
+
+#. Warning after the line; age is like "3 d ago".
+msgctxt "sets.dataAge"
+msgid "· ⚠ set/vault data {age}"
+msgstr ""
+
+#. Screen reader name of the totals.
+msgctxt "sets.summary"
+msgid "Set picks summary"
+msgstr ""
+
+#. Total label.
+#. Max 14 characters.
+msgctxt "sets.opportunities"
+msgid "Opportunities"
+msgstr ""
+
+#. Total label: net platinum gain.
+#. Max 8 characters.
+msgctxt "sets.net"
+msgid "Net"
+msgstr ""
+
+#. In place of the table.
+msgctxt "sets.waiting"
+msgid "Set recommendations will appear once quantities are available."
+msgstr ""
+
+#. Status.
+msgctxt "sets.calculating"
+msgid "Calculating set opportunities…"
+msgstr ""
+
+#. Error; error is a technical message.
+msgctxt "sets.unavailable"
+msgid "Set recommendations unavailable: {error}"
+msgstr ""
+
+#. Button.
+msgctxt "sets.retry"
+msgid "Retry calculations"
+msgstr ""
+
+#. Panel heading.
+msgctxt "sets.panel"
+msgid "Set opportunities"
+msgstr ""
+
+#. Beside the panel heading.
+msgctxt "sets.count"
+msgid "{count, plural, one {# pick} other {# picks}} · ranked by net plat"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "sets.col.set"
+msgid "Set"
+msgstr ""
+
+#. Column header: what to do.
+#. Max 8 characters.
+msgctxt "sets.col.do"
+msgid "Do"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "sets.col.net"
+msgid "Net"
+msgstr ""
+
+#. Column header: sets traded in 48 hours.
+#. Max 12 characters.
+msgctxt "sets.col.volume"
+msgid "Set vol 48h"
+msgstr ""
+
+#. Column header.
+#. Max 16 characters.
+msgctxt "sets.col.detail"
+msgid "What it takes"
+msgstr ""
+
+#. Under a set name: parts owned of parts needed.
+msgctxt "sets.ownParts"
+msgid "own {owned}/{required}"
+msgstr ""
+
+#. Under a set name.
+msgctxt "sets.sparesFull"
+msgid "{count, plural, one {# spare + full set} other {# spares + full set}}"
+msgstr ""
+
+#. Under a set name.
+msgctxt "sets.duplicates"
+msgid "{count, plural, one {# duplicate} other {# duplicates}}"
+msgstr ""
+
+#. What to do.
+#. Max 14 characters.
+msgctxt "sets.completeSet"
+msgid "Complete set"
+msgstr ""
+
+#. What to do.
+#. Max 14 characters.
+msgctxt "sets.listSpares"
+msgid "List spares"
+msgstr ""
+
+#. Tooltip.
+msgctxt "sets.rarelyTitle"
+msgid "The assembled set has traded under 1×/48h - a flip may sit unsold for a while."
+msgstr ""
+
+#. Volume cell.
+#. Max 18 characters.
+msgctxt "sets.rarely"
+msgid "set rarely trades"
+msgstr ""
+
+#. Screen reader text after "set rarely trades". Keep the leading colon.
+msgctxt "sets.rarelySr"
+msgid ": under once in 48 hours"
+msgstr ""
+
+#. Tooltip.
+msgctxt "sets.thinTitle"
+msgid "Thin set volume - expect to wait for a buyer before you recoup the plat."
+msgstr ""
+
+#. Volume cell: few sets traded.
+#. Max 12 characters.
+msgctxt "sets.thin"
+msgid "thin · {count}"
+msgstr ""
+
+#. Screen reader text after the number. Keep the leading space.
+msgctxt "sets.thinSr"
+msgid " sets in 48 hours; expect to wait for a buyer"
+msgstr ""
+
+#. Tooltip.
+msgctxt "sets.healthy"
+msgid "Healthy set volume."
+msgstr ""
+
+#. Explanation. Keep <bad> and <good> around the prices; they colour them.
+msgctxt "sets.buy"
+msgid "Buy {parts} at current asks for <bad>{cost}p</bad>, then list the set at the current lowest ask, <good>{ask}p</good>."
+msgstr ""
+
+#. Explanation. Keep <good> around the gain.
+msgctxt "sets.uplift"
+msgid "{count, plural, one {That is <good>+{uplift}p potential uplift</good> versus listing your # owned part for {parts}p.} other {That is <good>+{uplift}p potential uplift</good> versus listing your # owned parts for {parts}p.}}"
+msgstr ""
+
+#. Explanation. Keep <good>.
+msgctxt "sets.instantGain"
+msgid "Selling instantly to the {bid}p top bid would be <good>+{amount}p</good> versus those parts."
+msgstr ""
+
+#. Explanation. Keep <bad>.
+msgctxt "sets.instantLoss"
+msgid "Selling instantly to the {bid}p top bid would be <bad>−{amount}p</bad> versus those parts."
+msgstr ""
+
+#. Explanation. Keep <b>.
+msgctxt "sets.fullPlusExtras"
+msgid "{count, plural, one {You hold a full set plus # spare blueprint. List the extra at <b>{plat}p</b>.} other {You hold a full set plus # spare blueprints. List the extras at <b>{plat}p</b>.}}"
+msgstr ""
+
+#. Explanation. Keep <b>.
+msgctxt "sets.duplicateParts"
+msgid "{count, plural, one {Duplicates of partial-set parts. List the # spare copy: <b>{plat}p</b>.} other {Duplicates of partial-set parts. List the # spare copies: <b>{plat}p</b>.}}"
+msgstr ""
+
+#. Disclosure that compares building with buying.
+msgctxt "sets.buildOrBuy"
+msgid "build it or buy it"
+msgstr ""
+
+#. Empty state heading.
+msgctxt "sets.noneTitle"
+msgid "No set recommendations."
+msgstr ""
+
+#. Empty state.
+msgctxt "sets.noneBody"
+msgid "You don't currently own enough prime parts to surface near-complete sets or spare-blueprint plays."
+msgstr ""
+
+#. Why listing is blocked.
+msgctxt "listing.block.noScan"
+msgid "Scan the game to verify this inventory before listing. Imported backups provide estimates only."
+msgstr ""
+
+#. Why listing is blocked.
+msgctxt "listing.block.scanning"
+msgid "A scan is in progress. Your review edits are kept."
+msgstr ""
+
+#. Why listing is blocked. Protection = the copies the player keeps.
+msgctxt "listing.block.noProtection"
+msgid "Inventory protection is unavailable. Recheck quantities before listing."
+msgstr ""
+
+#. Why listing is blocked.
+msgctxt "listing.block.staleScan"
+msgid "The displayed inventory does not match the latest game scan. Scan again before listing."
+msgstr ""
+
+#. Why listing is blocked.
+msgctxt "listing.block.someUnknown"
+msgid "Protection quantities are unavailable for some items. Recheck before listing."
+msgstr ""
+
+#. Why listing is blocked. WFM = warframe.market.
+msgctxt "listing.block.connect"
+msgid "Connect WFM to check current listings before posting."
+msgstr ""
+
+#. Why listing is blocked.
+msgctxt "listing.block.unchecked"
+msgid "Current WFM listings could not be checked. Recheck before posting."
+msgstr ""
+
+#. Button that clears the block.
+#. Max 22 characters.
+msgctxt "listing.action.scan"
+msgid "Scan game"
+msgstr ""
+
+#. Button that clears the block.
+#. Max 22 characters.
+msgctxt "listing.action.recheck"
+msgid "Recheck protection"
+msgstr ""
+
+#. Review dialog warning.
+msgctxt "listing.inventoryChanged"
+msgid "Inventory changed. Close review and prepare a new batch; your current edits remain here until you close."
+msgstr ""
+
+#. Review dialog warning. The allowance is the daily trade limit.
+msgctxt "listing.dayChanged"
+msgid "The inventory or allowance day changed. Close review and prepare a new batch."
+msgstr ""
+
+#. Error.
+msgctxt "listing.orderIncomplete"
+msgid "Existing order details are incomplete for {item}."
+msgstr ""
+
+#. Review dialog warning.
+msgctxt "listing.ordersChanged"
+msgid "Existing orders changed. Review the updated before/after details, then confirm again. Your edits were kept."
+msgstr ""
+
+#. Review dialog warning.
+msgctxt "listing.componentsOver"
+msgid "These edited quantities reuse components or exceed their available copies. Reduce a set or part quantity."
+msgstr ""
+
+#. Review dialog warning.
+msgctxt "listing.reviewFirst"
+msgid "Review quantities, units per trade, prices, and the remaining allowance before submitting."
+msgstr ""
+
+#. Error.
+msgctxt "listing.calculationBlocked"
+msgid "Protection rules are unavailable. Refresh allocation before using quantity estimates."
+msgstr ""
+
+#. Error.
+msgctxt "listing.protectedUnavailable"
+msgid "Protected quantities are unavailable. Retry before listing."
+msgstr ""
+
+#. Error.
+msgctxt "listing.protectedInvalid"
+msgid "Protected quantities are invalid. Retry before listing."
+msgstr ""
+
+#. Banner heading.
+msgctxt "listing.resuming"
+msgid "Resuming interrupted batch…"
+msgstr ""
+
+#. Banner text.
+msgctxt "listing.resumingNote"
+msgid "Checking current orders before continuing."
+msgstr ""
+
+#. Banner heading.
+msgctxt "listing.resumed"
+msgid "Resumed."
+msgstr ""
+
+#. Banner count.
+msgctxt "listing.created"
+msgid "{count} created"
+msgstr ""
+
+#. Banner count.
+msgctxt "listing.failed"
+msgid "{count} failed"
+msgstr ""
+
+#. Banner text.
+msgctxt "listing.stillHidden"
+msgid "New listings are still hidden - toggle from the orders panel."
+msgstr ""
+
+#. Button.
+msgctxt "listing.dismiss"
+msgid "Dismiss"
+msgstr ""
+
+#. Banner heading.
+msgctxt "listing.resumeFailed"
+msgid "Resume failed."
+msgstr ""
+
+#. Button.
+msgctxt "listing.retry"
+msgid "Retry"
+msgstr ""
+
+#. Button.
+msgctxt "listing.discardPending"
+msgid "Discard pending"
+msgstr ""
+
+#. Banner heading.
+msgctxt "listing.interruptedFrom"
+msgid "Interrupted batch from {time}"
+msgstr ""
+
+#. Batch detail part.
+msgctxt "listing.pending"
+msgid "{count} pending"
+msgstr ""
+
+#. Batch detail part.
+msgctxt "listing.uncertain"
+msgid "{count} with an unknown outcome"
+msgstr ""
+
+#. Batch detail part.
+msgctxt "listing.alreadyDone"
+msgid "{count} already done"
+msgstr ""
+
+#. Banner text.
+msgctxt "listing.mayBeLive"
+msgid "A listing whose outcome the market never confirmed may already be live. Check My Orders before listing it again."
+msgstr ""
+
+#. Button.
+msgctxt "listing.resume"
+msgid "Resume"
+msgstr ""
+
+#. Button.
+msgctxt "listing.reviewOrders"
+msgid "Review in My Orders"
+msgstr ""
+
+#. Button.
+msgctxt "listing.discard"
+msgid "Discard"
+msgstr ""
+
+#. Banner heading.
+msgctxt "listing.completedSaved"
+msgid "Completed batch still saved."
+msgstr ""
+
+#. Banner text.
+msgctxt "listing.notCleared"
+msgid "The saved batch could not be cleared. Check My Orders, then discard this record."
+msgstr ""
+
+#. Button.
+msgctxt "listing.retrySaving"
+msgid "Retry saving"
+msgstr ""
+
+#. Button.
+msgctxt "listing.discardRecord"
+msgid "Discard record"
+msgstr ""
+
+#. Screen reader name of the panel.
+msgctxt "buyers.panel"
+msgid "Buyer alternatives"
+msgstr ""
+
+#. Panel heading.
+msgctxt "buyers.title"
+msgid "Buyers for {item} ×{quantity}"
+msgstr ""
+
+#. Button while busy.
+msgctxt "buyers.checking"
+msgid "Checking buyers…"
+msgstr ""
+
+#. Button.
+msgctxt "buyers.refresh"
+msgid "Refresh buyers"
+msgstr ""
+
+#. Button.
+msgctxt "buyers.close"
+msgid "Close buyer comparison"
+msgstr ""
+
+#. Panel introduction.
+msgctxt "buyers.intro"
+msgid "Compare visible bids with the selected reference of {ask}p per unit. Rank 0 where applicable."
+msgstr ""
+
+#. Panel note.
+msgctxt "buyers.sample"
+msgid "Top-five sample, not the full order book. Whole lots only; this comparison fills higher unit bids first and may leave units uncovered. Offers do not guarantee a sale or response."
+msgstr ""
+
+#. Error.
+msgctxt "buyers.error.invalid"
+msgid "Choose a positive whole quantity and a valid listing reference."
+msgstr ""
+
+#. Error.
+msgctxt "buyers.error.unavailable"
+msgid "Buyer coverage is unavailable. Check buyers to try again."
+msgstr ""
+
+#. Error.
+msgctxt "buyers.error.locked"
+msgid "Unlock your WFM account, then check again to exclude your own orders."
+msgstr ""
+
+#. Error.
+msgctxt "buyers.error.stale"
+msgid "This buyer check is stale. Refresh before comparing quantities."
+msgstr ""
+
+#. Result summary.
+msgctxt "buyers.coverage"
+msgid "{covered} of {quantity} units covered · {value}p visible bid value · {uncovered, plural, one {# unit} other {# units}} without observed coverage."
+msgstr ""
+
+#. Result comparison.
+msgctxt "buyers.gapLess"
+msgid "For those same {covered} covered units: {ask}p at your listing reference; {gap}p less at these bids."
+msgstr ""
+
+#. Result comparison.
+msgctxt "buyers.gapMore"
+msgid "For those same {covered} covered units: {ask}p at your listing reference; {gap}p more at these bids."
+msgstr ""
+
+#. Result note.
+msgctxt "buyers.checked"
+msgid "Checked {time}. Your own orders are excluded."
+msgstr ""
+
+#. Screen reader name of the table.
+msgctxt "buyers.tableLabel"
+msgid "Compatible buyer quantities"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "buyers.col.buyer"
+msgid "Buyer"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "buyers.col.lot"
+msgid "Units / lot"
+msgstr ""
+
+#. Column header.
+#. Max 14 characters.
+msgctxt "buyers.col.covered"
+msgid "Units covered"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "buyers.col.value"
+msgid "Bid value"
+msgstr ""
+
+#. Column header.
+#. Max 18 characters.
+msgctxt "buyers.col.status"
+msgid "Status / platform"
+msgstr ""
+
+#. Link to warframe.market.
+msgctxt "buyers.openOnWfm"
+msgid "Open item on WFM"
+msgstr ""
+
+#. Error.
+msgctxt "build.unavailable"
+msgid "Build comparison unavailable. Try reopening this set."
+msgstr ""
+
+#. Row: one way to get the set.
+msgctxt "build.path.buy-set"
+msgid "Buy the set"
+msgstr ""
+
+#. Row: buy what you lack and build it in the foundry.
+msgctxt "build.path.buy-parts-build"
+msgid "Buy missing parts, build"
+msgstr ""
+
+#. Row: buy what you lack and rush the foundry with platinum.
+msgctxt "build.path.buy-parts-rush"
+msgid "Buy missing parts, rush"
+msgstr ""
+
+#. Row.
+msgctxt "build.path.sell-spares"
+msgid "Sell your spares instead"
+msgstr ""
+
+#. What you end with.
+msgctxt "build.end.buy-set"
+msgid "assembled, ready now"
+msgstr ""
+
+#. What you end with.
+msgctxt "build.end.buy-parts-build"
+msgid "assembled, after the foundry"
+msgstr ""
+
+#. What you end with.
+msgctxt "build.end.buy-parts-rush"
+msgid "assembled, ready now"
+msgstr ""
+
+#. What you end with. frame = the Warframe the set builds.
+msgctxt "build.end.sell-spares"
+msgid "plat, and no frame"
+msgstr ""
+
+#. Credits in thousands. cr = credits, the game currency.
+#. Max 8 characters.
+msgctxt "build.credits"
+msgid "{count}k cr"
+msgstr ""
+
+#. Status.
+msgctxt "build.calculating"
+msgid "Calculating build comparison…"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "build.youHold"
+msgid "You hold {parts}."
+msgstr ""
+
+#. Line under the heading.
+msgctxt "build.missing"
+msgid "Missing {missing} of {total}."
+msgstr ""
+
+#. Line under the heading.
+msgctxt "build.holdAll"
+msgid "You hold every part."
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "build.col.path"
+msgid "Path"
+msgstr ""
+
+#. Column header: platinum.
+#. Max 8 characters.
+msgctxt "build.col.plat"
+msgid "Plat"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "build.col.credits"
+msgid "Credits"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "build.col.wait"
+msgid "Wait"
+msgstr ""
+
+#. Column header.
+#. Max 16 characters.
+msgctxt "build.col.end"
+msgid "You end with"
+msgstr ""
+
+#. Column header: compared with buying the set.
+#. Max 8 characters.
+msgctxt "build.col.vsSet"
+msgid "vs set"
+msgstr ""
+
+#. Tooltip.
+msgctxt "build.noPrice"
+msgid "A part has no market price."
+msgstr ""
+
+#. Warning.
+msgctxt "build.noRecommendation"
+msgid "No recommendation: {parts} has no market price, so any comparison would be a guess."
+msgstr ""
+
+#. Note.
+msgctxt "build.noRecipe"
+msgid "No recipe data for this set in the current snapshot, so credits and foundry time are unknown rather than zero."
+msgstr ""
+
+#. Note.
+msgctxt "build.alsoNeeds"
+msgid "Building also needs {resources} - resources the scan can't see, so they aren't costed above."
+msgstr ""
+
+#. Demand cell: sells quickly. Very tight space.
+#. Max 6 characters.
+msgctxt "demand.fast"
+msgid "fast"
+msgstr ""
+
+#. Demand cell: priced below its usual level. Very tight space.
+#. Max 6 characters.
+msgctxt "demand.cheap"
+msgid "cheap"
+msgstr ""
+
+#. Demand cell: trades rarely. Very tight space.
+#. Max 6 characters.
+msgctxt "demand.slow"
+msgid "slow"
+msgstr ""
+
+#. Demand cell: too few trades to tell. Very tight space.
+#. Max 6 characters.
+msgctxt "demand.thin"
+msgid "thin"
+msgstr ""
+
+#. Tooltip part.
+msgctxt "demand.phrase.sells-today"
+msgid "played and trading - list at market and it moves"
+msgstr ""
+
+#. Tooltip part.
+msgctxt "demand.phrase.underpriced"
+msgid "played and trading, but priced below its own baseline"
+msgstr ""
+
+#. Tooltip part.
+msgctxt "demand.phrase.slow"
+msgid "played, but trades rarely"
+msgstr ""
+
+#. Tooltip part.
+msgctxt "demand.phrase.thin"
+msgid "too few trades to read"
+msgstr ""
+
+#. Tooltip part.
+msgctxt "demand.phrase.unknown"
+msgid "no liquidity read"
+msgstr ""
+
+#. Tooltip.
+msgctxt "demand.noUsage"
+msgid "No usage telemetry for this item or its set - {liquidity}."
+msgstr ""
+
+#. Tooltip part: how much players use it, from Digital Extremes data.
+msgctxt "demand.share"
+msgid "{share}% of {category} usage in {year}"
+msgstr ""
+
+#. Tooltip part.
+msgctxt "demand.measuredOnParent"
+msgid "measured on {item}, not this part"
+msgstr ""
+
+#. Tooltip part.
+msgctxt "demand.measuredOn"
+msgid "measured on {item}"
+msgstr ""
+
+#. Tooltip part: the Mastery Ranks of the players who use it.
+msgctxt "demand.mostlyMr"
+msgid "mostly MR {from}–{to}"
+msgstr ""
+
+#. Screen reader name of ↑.
+msgctxt "demand.inherited"
+msgid "inherited from the set"
+msgstr ""

@@ -6,6 +6,8 @@
   // price and spread. The tooltip carries the honesty the cell has no room
   // for: which parent the figure came from, and which year DE measured.
   import { masteryBand, type DemandRead } from '../../domain/demand';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import type { MessageKey } from '../../i18n/en';
 
   let { demand }: { demand: DemandRead } = $props();
 
@@ -14,33 +16,25 @@
   // column that cannot grow - they were clipped mid-word. The long form moves
   // into the tooltip, which is where this cell already keeps what it has no
   // room to say.
-  const LABEL: Record<DemandRead['liquidity'], string> = {
-    'sells-today': 'fast',
-    underpriced: 'cheap',
-    slow: 'slow',
-    thin: 'thin',
-    unknown: '-',
-  };
-
-  const LIQUIDITY_PHRASE: Record<DemandRead['liquidity'], string> = {
-    'sells-today': 'played and trading - list at market and it moves',
-    underpriced: 'played and trading, but priced below its own baseline',
-    slow: 'played, but trades rarely',
-    thin: 'too few trades to read',
-    unknown: 'no liquidity read',
+  const LABEL: Record<DemandRead['liquidity'], MessageKey | null> = {
+    'sells-today': 'demand.fast',
+    underpriced: 'demand.cheap',
+    slow: 'demand.slow',
+    thin: 'demand.thin',
+    unknown: null,
   };
 
   let band = $derived(demand.usage ? masteryBand(demand.usage.by_mr) : null);
 
   let title = $derived.by(() => {
-    const liq = LIQUIDITY_PHRASE[demand.liquidity];
-    if (!demand.usage) return `No usage telemetry for this item or its set - ${liq}.`;
+    const liq = t(`demand.phrase.${demand.liquidity}`);
+    if (!demand.usage) return t('demand.noUsage', { liquidity: liq });
     const u = demand.usage;
     const parts = [
-      `${u.share.toFixed(2)}% of ${u.category} usage in ${u.year}`,
-      demand.inherited ? `measured on ${u.name}, not this part` : `measured on ${u.name}`,
+      t('demand.share', { share: u.share.toLocaleString(formatLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }), category: u.category, year: u.year }),
+      t(demand.inherited ? 'demand.measuredOnParent' : 'demand.measuredOn', { item: u.name }),
     ];
-    if (band) parts.push(`mostly MR ${band.from}–${band.to}`);
+    if (band) parts.push(t('demand.mostlyMr', { from: band.from, to: band.to }));
     parts.push(liq);
     return parts.join(' · ');
   });
@@ -49,11 +43,11 @@
 <span class="demand" {title}>
   {#if demand.usage}
     <span class="share">{demand.usage.share.toFixed(1)}%</span>
-    {#if demand.inherited}<span class="inh" aria-label="inherited from the set">↑</span>{/if}
+    {#if demand.inherited}<span class="inh" aria-label={t('demand.inherited')}>↑</span>{/if}
   {:else}
     <span class="muted">-</span>
   {/if}
-  <span class="liq liq-{demand.liquidity}">{LABEL[demand.liquidity]}</span>
+  <span class="liq liq-{demand.liquidity}">{LABEL[demand.liquidity] ? t(LABEL[demand.liquidity]!) : '-'}</span>
 </span>
 
 <style>

@@ -12,6 +12,9 @@ import { TABLE } from './en/table';
 import { REVIEW } from './en/review';
 import { KEEP } from './en/keep';
 import { SESSION } from './en/session';
+import { SETS } from './en/sets';
+import { LISTING } from './en/listing';
+import { BUYERS } from './en/buyers';
 
 export const EN = {
   ...FIRST_RUN,
@@ -22,6 +25,9 @@ export const EN = {
   ...REVIEW,
   ...KEEP,
   ...SESSION,
+  ...SETS,
+  ...LISTING,
+  ...BUYERS,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

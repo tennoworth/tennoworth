@@ -1,6 +1,7 @@
 import { untrack } from 'svelte';
 import { sellableQty } from '../../domain/sell-priority';
-import { listingBlockReason as listingEligibilityBlockReason, listingActionLabel as listingEligibilityActionLabel } from './eligibility';
+import { listingBlockReason as listingEligibilityBlockReason, listingActionLabel as listingEligibilityActionLabel, listingAction as listingEligibilityAction } from './eligibility';
+import { t } from '../../i18n/i18n.svelte';
 import { advisorInput, relicInput, scoreInput, setInput, type CalcInputs } from './calc-inputs';
 import type { InventoryController } from '../inventory/controller.svelte';
 import type { ProtectionController } from './protection.svelte';
@@ -45,6 +46,7 @@ export function createSellWorkspace({ inventory, filters, protection, listing, t
   let listingQuantitiesKnown = $derived(!listingBlockReason);
   let estimatedGuidance = $derived(!listingQuantitiesKnown);
   let listingActionLabel = $derived(listingEligibilityActionLabel(eligibilityInputs));
+  let listingAction = $derived(listingEligibilityAction(eligibilityInputs));
   let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
     listingQuantitiesKnown && supportedOwned.has(key) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0) : 0,
   ])));
@@ -191,7 +193,7 @@ export function createSellWorkspace({ inventory, filters, protection, listing, t
 
 
 
-  let calculationError = $derived((guidanceUnavailable ? 'Protection rules are unavailable. Refresh allocation before using quantity estimates.' : null) ?? currentFacts.error ?? (filterState.adviceOnly ? advisorResult.error : null));
+  let calculationError = $derived((guidanceUnavailable ? t('listing.calculationBlocked') : null) ?? currentFacts.error ?? (filterState.adviceOnly ? advisorResult.error : null));
   let calculationPending = $derived(inventory.resolved.owned.size > 0 && !!inventory.market &&
     ((!protection.state && protection.loading) || currentFacts.phase === 'idle' || currentFacts.phase === 'loading' || (filterState.adviceOnly && advisorResult.phase === 'loading')));
   let calculationsReady = $derived(!calculationPending && !calculationError && currentFacts.phase === 'done');
@@ -324,6 +326,7 @@ export function createSellWorkspace({ inventory, filters, protection, listing, t
     get listingQuantitiesKnown() { return listingQuantitiesKnown; },
     get estimatedGuidance() { return estimatedGuidance; },
     get listingActionLabel() { return listingActionLabel; },
+    get listingAction() { return listingAction; },
     get availability() { return availability; },
     get guidanceAvailability() { return guidanceAvailability; },
     get guidanceOwned() { return guidanceOwned; },
