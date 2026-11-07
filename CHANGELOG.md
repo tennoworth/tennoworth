@@ -54,6 +54,34 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.9.100 - 2026-11-07
+
+# 🌍 TennoWorth Desktop 0.9.100
+
+TennoWorth Desktop 0.9.100 is ready.
+
+This release speaks your language: the whole app is translated into every language Warframe offers except Thai, plus European Portuguese, and the relic reward overlay reads rewards in the game's language. The translations are first drafts and improve as players report wording. It also brings a resizable sidebar that folds into an icon rail, and lets you crack a relic the advice says to keep.
+
+## Changelog (5)
+
+### Languages
+
+- **TennoWorth in your language** On first launch the app asks which language to use, with your game's language already picked, and switches as you move through the list. Change it any time in Settings › Appearance. Every language is a first draft: if something reads wrong, report it from the Translation review form on GitHub. <!-- app-note {"id":"app-languages","kind":"improved"} -->
+- **Rewards read in the game's language** The relic reward overlay now reads reward names in the language Warframe runs in, so it works when the game isn't in English. Settings › Relic overlay can set a different language. <!-- app-note {"id":"reward-languages","kind":"improved"} -->
+
+### Relics
+
+- **Crack a relic anyway** Under a Sell intact or Refine verdict, a button lets you crack that relic anyway. The expected value and totals follow your choice, and the original advice stays visible. <!-- app-note {"id":"crack-anyway","kind":"improved"} -->
+
+### Layout
+
+- **Resizable sidebar and icon rail** Drag the sidebar's edge to resize it, or narrower to fold it into icons with their counts underneath. The size is remembered. The window is now at least 1200px wide, so no view scrolls sideways. <!-- app-note {"id":"sidebar-rail","kind":"improved"} -->
+- **Status menu arrows no longer change your status** Moving through the status menu with the arrow keys used to change what buyers saw on warframe.market. Arrows now only move between choices; Enter picks one. <!-- app-note {"id":"status-menu-arrows","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.117 - 2026-11-06
 
 # 🎮 TennoWorth Desktop 0.8.117
