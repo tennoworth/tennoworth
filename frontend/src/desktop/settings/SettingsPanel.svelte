@@ -20,6 +20,7 @@
   import type { OverlaySettings, OverlayStatus } from '../../contracts/data';
   import { LATEST_RELEASE_URL, type UpdateController } from '../updates/update-controller.svelte';
   import { humanError } from '../../contracts/errors';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
 
   interface Props {
     /** The boot-time controller from src/lib/theme.ts. */
@@ -130,45 +131,49 @@
 
   /** What the background loop is doing right now, in the user's terms. */
   function autoScanStatusText(status: AutoScanStatus | null): string {
-    if (!status) return 'Reading status…';
-    if (!status.enabled) return 'Manual scans only.';
-    if (status.held) return 'Automatic scan paused while a listing review or Trade Session is open.';
-    if (status.lastError) return `Last automatic scan failed: ${status.lastError}`;
-    if (!status.gameRunning) return 'Waiting for Warframe. Nothing is scanned while the game is closed.';
-    const last = status.lastScanAt ? `Last automatic scan ${new Date(status.lastScanAt * 1000).toLocaleTimeString()}.` : '';
-    const next = status.nextCheckAt ? `Next scan around ${new Date(status.nextCheckAt * 1000).toLocaleTimeString()}.` : '';
-    return [last, next].filter(Boolean).join(' ') || 'Watching for Warframe.';
+    if (!status) return t('settings.scan.reading');
+    if (!status.enabled) return t('settings.scan.manual');
+    if (status.held) return t('settings.scan.held');
+    if (status.lastError) return t('settings.scan.failed', { error: status.lastError });
+    if (!status.gameRunning) return t('settings.scan.waiting');
+    const last = status.lastScanAt ? t('settings.scan.last', { time: new Date(status.lastScanAt * 1000).toLocaleTimeString(formatLocale()) }) : '';
+    const next = status.nextCheckAt ? t('settings.scan.next', { time: new Date(status.nextCheckAt * 1000).toLocaleTimeString(formatLocale()) }) : '';
+    return [last, next].filter(Boolean).join(' ') || t('settings.scan.watching');
   }
 
   function autoScanSummary(): string {
     const settings = autoScan?.settings;
-    if (!settings) return 'Loading…';
-    return settings.enabled ? `On · every ${settings.cadenceMinutes} min` : 'Off';
+    if (!settings) return t('settings.loading');
+    return settings.enabled ? t('settings.onEvery', { minutes: settings.cadenceMinutes }) : t('settings.off');
   }
 
   function overlaySummary(): string {
-    if (!overlay) return 'Loading…';
-    if (!overlay.enabled) return 'Off';
-    if (!overlayStatus) return 'On';
-    return `${overlayStatus.state.replaceAll('-', ' ')} · ${overlayStatus.ocrReady ? 'OCR ready' : 'OCR unavailable'}`;
+    if (!overlay) return t('settings.loading');
+    if (!overlay.enabled) return t('settings.off');
+    if (!overlayStatus) return t('settings.on');
+    return overlayStateText(overlayStatus);
+  }
+
+  function overlayStateText(status: OverlayStatus): string {
+    return `${t(`settings.overlay.${status.state}`)} · ${t(status.ocrReady ? 'settings.ocrReady' : 'settings.ocrUnavailable')}`;
   }
 
   function lastRunText(): string {
     const run = overlayStatus?.lastRun;
-    return run ? `Last run: ${run.outcome} · ${run.recognizedSlots}/${run.expectedSlots || '?'} slots · ${run.timings.totalMs} ms` : 'No reward screen read yet.';
+    return run ? t('settings.lastRun', { outcome: run.outcome, found: run.recognizedSlots, expected: run.expectedSlots || '?', ms: run.timings.totalMs }) : t('settings.noRunYet');
   }
 
   function sessionText(): string {
-    if (!wfmStatus) return 'Checking session…';
-    if (wfmStatus.unlocked) return 'Signed in · session unlocked';
-    if (wfmStatus.logged_in) return 'Signed in · session locked';
-    return 'Not signed in';
+    if (!wfmStatus) return t('settings.checkingSession');
+    if (wfmStatus.unlocked) return t('settings.unlocked');
+    if (wfmStatus.logged_in) return t('settings.locked');
+    return t('settings.signedOut');
   }
 
   // `revert` puts the control back to the stored value. A failed save leaves the
   // settings unchanged, so nothing re-renders and the control would keep showing
   // a value that was never stored - and the next click would send its opposite.
-  const cadenceOptions = AUTO_SCAN_CADENCE_CHOICES.map((minutes) => ({ value: minutes, label: `every ${minutes} minutes` }));
+  let cadenceOptions = $derived(AUTO_SCAN_CADENCE_CHOICES.map((minutes) => ({ value: minutes, label: t('settings.everyMinutes', { minutes }) })));
 
   async function saveAutoScan(next: AutoScanSettings, revert: (stored: AutoScanSettings) => void) {
     if (!autoScan) return;
@@ -251,167 +256,167 @@
 </script>
 
 <section class="view-header">
-  <h2>Settings</h2>
-  <p class="lede">Preferences for this device.</p>
+  <h2>{t('settings.title')}</h2>
+  <p class="lede">{t('settings.lede')}</p>
 </section>
 
 <div class="settings ui-reading">
   <!-- Most visits ask "is it running?", so the answers lead and link to the
        controls that change them. -->
-  <div class="ui-summary-strip glance" aria-label="Current state">
-    {#if autoScan}<a href="#settings-scan"><span class="k">Automatic scan</span><strong>{autoScanSummary()}</strong><span>{autoScanStatusText(autoScan.status)}</span></a>{/if}
-    {#if transport}<a href="#settings-overlay"><span class="k">Relic overlay</span><strong>{overlaySummary()}</strong><span>{overlay?.enabled ? lastRunText() : 'Reward screens are not read.'}</span></a>{/if}
+  <div class="ui-summary-strip glance" aria-label={t('settings.currentState')}>
+    {#if autoScan}<a href="#settings-scan"><span class="k">{t('settings.autoScan')}</span><strong>{autoScanSummary()}</strong><span>{autoScanStatusText(autoScan.status)}</span></a>{/if}
+    {#if transport}<a href="#settings-overlay"><span class="k">{t('settings.relicOverlay')}</span><strong>{overlaySummary()}</strong><span>{overlay?.enabled ? lastRunText() : t('settings.notReading')}</span></a>{/if}
     {#if presence?.status?.signedIn}
       <!-- What buyers see is the everyday question; the session is its second line. -->
-      <a href="#settings-account"><span class="k">warframe.market</span><strong class="with-mark"><PresenceMark kind={presenceMark(presence.status)} />{presenceWord(presence.status)}</strong><span>{presenceLine(presence.status)} · session unlocked</span></a>
+      <a href="#settings-account"><span class="k">warframe.market</span><strong class="with-mark"><PresenceMark kind={presenceMark(presence.status)} />{presenceWord(presence.status)}</strong><span>{t('settings.sessionUnlocked', { line: presenceLine(presence.status) })}</span></a>
     {:else}
-      <a href="#settings-account"><span class="k">warframe.market</span><strong class:ok={wfmStatus?.unlocked}>{sessionText()}</strong><span>Encrypted login on this device</span></a>
+      <a href="#settings-account"><span class="k">warframe.market</span><strong class:ok={wfmStatus?.unlocked}>{sessionText()}</strong><span>{t('settings.encryptedLogin')}</span></a>
     {/if}
   </div>
   <!-- Only sections the cards above do not already link to: each extra link
        was another Tab stop to the same place. -->
-  <nav class="jump" aria-label="Settings sections">
-    <span class="k">Everyday</span>
-    {#if !transport}<a href="#settings-overlay">Relic overlay</a>{/if}
-    <a href="#settings-notifications">Notifications</a>
-    <span class="k">Set once</span>
-    <a href="#settings-app">Appearance, updates and privacy</a>
+  <nav class="jump" aria-label={t('settings.sections')}>
+    <span class="k">{t('settings.everyday')}</span>
+    {#if !transport}<a href="#settings-overlay">{t('settings.relicOverlay')}</a>{/if}
+    <a href="#settings-notifications">{t('settings.notifications')}</a>
+    <span class="k">{t('settings.setOnce')}</span>
+    <a href="#settings-app">{t('settings.appLink')}</a>
   </nav>
 
-  <p class="tier">Everyday</p>
+  <p class="tier">{t('settings.everyday')}</p>
   {#if autoScan}
     <section class="wrap tw" id="settings-scan" tabindex="-1" aria-labelledby="set-auto-scan">
-      <div class="rail"><h3 id="set-auto-scan">Automatic scan</h3></div>
+      <div class="rail"><h3 id="set-auto-scan">{t('settings.autoScan')}</h3></div>
       {#if autoScan.settings}
         <div class="ui-setting-row">
-          <div class="ui-setting-copy"><strong>Status</strong><p>{autoScanStatusText(autoScan.status)}</p></div>
+          <div class="ui-setting-copy"><strong>{t('settings.status')}</strong><p>{autoScanStatusText(autoScan.status)}</p></div>
         </div>
         <div class="ui-setting-row">
-          <div class="ui-setting-copy"><label for="auto-scan-enabled">Scan automatically while Warframe is running</label><p>Off: TennoWorth scans only when you ask. On: it looks for the game and rescans on the chosen cadence. Each rescan reads the game's memory and requests your account inventory from Digital Extremes. Nothing is scanned while the game is closed or logged out, and a rescan never interrupts a listing review.</p></div>
+          <div class="ui-setting-copy"><label for="auto-scan-enabled">{t('settings.scanAuto')}</label><p>{t('settings.scanAutoHelp')}</p></div>
           <div class="ui-setting-control">
-            <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} use:pending={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, enabled: input.checked }, (stored) => (input.checked = stored.enabled)); }}><span>Enabled</span></label>
+            <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} use:pending={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, enabled: input.checked }, (stored) => (input.checked = stored.enabled)); }}><span>{t('settings.enabled')}</span></label>
             {#if autoScan.settings.enabled}
-              <Select id="auto-scan-cadence" label="Scan every" value={autoScan.settings.cadenceMinutes} options={cadenceOptions} disabled={savingAutoScan} onchange={(minutes) => void saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: minutes }, () => {})} />
+              <Select id="auto-scan-cadence" label={t('settings.scanEvery')} value={autoScan.settings.cadenceMinutes} options={cadenceOptions} disabled={savingAutoScan} onchange={(minutes) => void saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: minutes }, () => {})} />
             {/if}
           </div>
         </div>
         <div class="ui-setting-row">
-          <div class="ui-setting-copy"><label for="auto-scan-adopt">Update the open app automatically</label><p>When a scan finishes in the background - on the cadence, or Rescan from the tray - replace the inventory on screen. While a listing review or Trade Session is being prepared the scan waits for “Load new scan” instead.</p></div>
-          <label class="ui-setting-check"><input id="auto-scan-adopt" type="checkbox" checked={autoScan.settings.adoptAutomatically} use:pending={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, adoptAutomatically: input.checked }, (stored) => (input.checked = stored.adoptAutomatically)); }}><span>Automatic</span></label>
+          <div class="ui-setting-copy"><label for="auto-scan-adopt">{t('settings.adopt')}</label><p>{t('settings.adoptHelp')}</p></div>
+          <label class="ui-setting-check"><input id="auto-scan-adopt" type="checkbox" checked={autoScan.settings.adoptAutomatically} use:pending={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, adoptAutomatically: input.checked }, (stored) => (input.checked = stored.adoptAutomatically)); }}><span>{t('settings.automatic')}</span></label>
         </div>
-      {:else}<p class="exp inset">Loading automatic-scan settings…</p>{/if}
+      {:else}<p class="exp inset">{t('settings.loadingScan')}</p>{/if}
       {#if autoScan.settingsError}<p class="error inset" role="alert">{autoScan.settingsError}</p>{/if}
     </section>
   {/if}
   <section class="wrap tw" id="settings-overlay" tabindex="-1" aria-labelledby="set-relic-overlay">
     <div class="rail">
-      <h3 id="set-relic-overlay">Relic reward overlay</h3>
-      {#if overlay}<button class="btn xs" onclick={previewOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>Preview overlay</button><button class="btn xs" onclick={testOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>Scan reward screen now</button>{/if}
+      <h3 id="set-relic-overlay">{t('settings.overlayTitle')}</h3>
+      {#if overlay}<button class="btn xs" onclick={previewOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>{t('settings.previewOverlay')}</button><button class="btn xs" onclick={testOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>{t('settings.scanRewards')}</button>{/if}
     </div>
     {#if overlay}
       <div class="ui-setting-row">
-        <div class="ui-setting-copy"><label for="overlay-enabled">Enable local screen recognition</label><p>Captures only after a reward event or your retry shortcut. Frames stay in memory and are never uploaded.</p>{#if overlay.enabled && overlayStatus?.lastRun}<p>{lastRunText()}</p>{/if}</div>
+        <div class="ui-setting-copy"><label for="overlay-enabled">{t('settings.recognition')}</label><p>{t('settings.recognitionHelp')}</p>{#if overlay.enabled && overlayStatus?.lastRun}<p>{lastRunText()}</p>{/if}</div>
         <div class="ui-setting-control">
-          <label class="ui-setting-check"><input id="overlay-enabled" type="checkbox" checked={overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, enabled: event.currentTarget.checked })}><span>Enabled</span></label>
-          {#if overlayStatus}<span class="status" class:good={['watching', 'showing'].includes(overlayStatus.state)}>{overlayStatus.state.replaceAll('-', ' ')} · {overlayStatus.ocrReady ? 'OCR ready' : 'OCR unavailable'}</span>{/if}
+          <label class="ui-setting-check"><input id="overlay-enabled" type="checkbox" checked={overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, enabled: event.currentTarget.checked })}><span>{t('settings.enabled')}</span></label>
+          {#if overlayStatus}<span class="status" class:good={['watching', 'showing'].includes(overlayStatus.state)}>{overlayStateText(overlayStatus)}</span>{/if}
         </div>
       </div>
       <div class="split">
         <div class="ui-section-group">
-          <h4>Detection</h4>
+          <h4>{t('settings.detection')}</h4>
           <div class="ui-setting-row">
-            <div class="ui-setting-copy"><label for="overlay-auto">Automatic reward detection</label><p>Watches EE.log for “Got rewards”.</p></div>
-            <label class="ui-setting-check"><input id="overlay-auto" type="checkbox" checked={overlay.autoDetect} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, autoDetect: event.currentTarget.checked })}><span>Enabled</span></label>
+            <div class="ui-setting-copy"><label for="overlay-auto">{t('settings.autoDetect')}</label><p>{t('settings.autoDetectHelp')}</p></div>
+            <label class="ui-setting-check"><input id="overlay-auto" type="checkbox" checked={overlay.autoDetect} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, autoDetect: event.currentTarget.checked })}><span>{t('settings.enabled')}</span></label>
           </div>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-shortcut">Retry shortcut</label><p>Still available when the game delays that line.</p></div><div class="ui-setting-control"><input id="overlay-shortcut" class="ui-input shortcut" value={overlay.shortcut} disabled={!overlay.enabled} use:pending={savingOverlay} onblur={(event) => saveOverlay({ ...overlay!, shortcut: event.currentTarget.value })}></div></div>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-shortcut">{t('settings.retryShortcut')}</label><p>{t('settings.retryShortcutHelp')}</p></div><div class="ui-setting-control"><input id="overlay-shortcut" class="ui-input shortcut" value={overlay.shortcut} disabled={!overlay.enabled} use:pending={savingOverlay} onblur={(event) => saveOverlay({ ...overlay!, shortcut: event.currentTarget.value })}></div></div>
         </div>
         <div class="ui-section-group">
-          <h4>Reward cards</h4>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-scale">Card scale</label></div><div class="ui-setting-control"><input id="overlay-scale" type="range" min="0.75" max="1.5" step="0.05" value={overlay.scale} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, scale: Number(event.currentTarget.value) })}><output class="mono" for="overlay-scale">{Math.round(overlay.scale * 100)}%</output></div></div>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-prices">Live online asks</label><p>Replace cached prices with live online asks.</p></div><label class="ui-setting-check"><input id="overlay-prices" type="checkbox" checked={overlay.livePrices} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, livePrices: event.currentTarget.checked })}><span>Enabled</span></label></div>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-owned">Owned count</label><p>Show count from the latest inventory scan.</p></div><label class="ui-setting-check"><input id="overlay-owned" type="checkbox" checked={overlay.showOwned} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, showOwned: event.currentTarget.checked })}><span>Shown</span></label></div>
+          <h4>{t('settings.rewardCards')}</h4>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-scale">{t('settings.cardScale')}</label></div><div class="ui-setting-control"><input id="overlay-scale" type="range" min="0.75" max="1.5" step="0.05" value={overlay.scale} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, scale: Number(event.currentTarget.value) })}><output class="mono" for="overlay-scale">{Math.round(overlay.scale * 100)}%</output></div></div>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-prices">{t('settings.liveAsks')}</label><p>{t('settings.liveAsksHelp')}</p></div><label class="ui-setting-check"><input id="overlay-prices" type="checkbox" checked={overlay.livePrices} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, livePrices: event.currentTarget.checked })}><span>{t('settings.enabled')}</span></label></div>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-owned">{t('settings.ownedCount')}</label><p>{t('settings.ownedCountHelp')}</p></div><label class="ui-setting-check"><input id="overlay-owned" type="checkbox" checked={overlay.showOwned} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, showOwned: event.currentTarget.checked })}><span>{t('settings.shown')}</span></label></div>
         </div>
       </div>
       <details class="troubleshooting" bind:open={troubleshootingOpen}>
-        <summary>Troubleshooting: diagnostics and display requirements</summary>
-        <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-diagnostics">Save local recognition diagnostics</label><p>Keep captures on this device to investigate recognition problems.</p></div><label class="ui-setting-check"><input id="overlay-diagnostics" type="checkbox" checked={overlay.diagnostics} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, diagnostics: event.currentTarget.checked })}><span>Enabled</span></label></div>
-        {#if overlay.diagnostics}<div class="diagnostics"><p class="warning">Diagnostic captures may contain player or game information. They stay on this device and are never uploaded automatically.</p><div class="ui-toolbar"><button class="btn" onclick={() => diagnosticsAction('open')}>Open diagnostics</button><button class="btn" onclick={() => diagnosticsAction('clear')}>Clear diagnostics</button></div></div>{/if}
+        <summary>{t('settings.troubleshooting')}</summary>
+        <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-diagnostics">{t('settings.diagnostics')}</label><p>{t('settings.diagnosticsHelp')}</p></div><label class="ui-setting-check"><input id="overlay-diagnostics" type="checkbox" checked={overlay.diagnostics} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, diagnostics: event.currentTarget.checked })}><span>{t('settings.enabled')}</span></label></div>
+        {#if overlay.diagnostics}<div class="diagnostics"><p class="warning">{t('settings.diagnosticsWarning')}</p><div class="ui-toolbar"><button class="btn" onclick={() => diagnosticsAction('open')}>{t('settings.openDiagnostics')}</button><button class="btn" onclick={() => diagnosticsAction('clear')}>{t('settings.clearDiagnostics')}</button></div></div>{/if}
         <div class="requirements">
-          {#if overlayStatus}<p class="status">{overlayStatus.backend} capture · {overlayStatus.presentationBackend} display</p>{/if}
-          <p class="exp">Use Borderless Fullscreen or Windowed mode. Windows and X11 use direct window capture; Wayland captures through XWayland and presents through layer-shell when the compositor supports it. No interaction, injection, or automatic reward selection is performed.</p>
+          {#if overlayStatus}<p class="status">{t('settings.backends', { capture: overlayStatus.backend, display: overlayStatus.presentationBackend })}</p>{/if}
+          <p class="exp">{t('settings.requirements')}</p>
         </div>
       </details>
-    {:else}<p class="exp inset">Loading overlay settings…</p>{/if}
+    {:else}<p class="exp inset">{t('settings.loadingOverlay')}</p>{/if}
     {#if overlayError}<p class="error inset" role="alert">{overlayError}</p>{/if}
   </section>
   <NotificationSettings />
 
-  <p class="tier">Set once</p>
+  <p class="tier">{t('settings.setOnce')}</p>
   <section class="wrap tw" id="settings-account" tabindex="-1" aria-labelledby="set-wfm-account">
-    <div class="rail"><h3 id="set-wfm-account">warframe.market account</h3></div>
+    <div class="rail"><h3 id="set-wfm-account">{t('settings.account')}</h3></div>
     <div class="ui-setting-row">
-      <div class="ui-setting-copy"><strong>Account session</strong><p>{#if wfmStatus?.logged_in || wfmStatus?.unlocked}Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed.{:else}Manage the encrypted login saved on this device.{/if}</p></div>
+      <div class="ui-setting-copy"><strong>{t('settings.session')}</strong><p>{t(wfmStatus?.logged_in || wfmStatus?.unlocked ? 'settings.logoutHelp' : 'settings.manageLogin')}</p></div>
       <div class="ui-setting-control">
         <span class="status" class:ok={wfmStatus?.unlocked}>{sessionText()}</span>
         {#if wfmStatus?.logged_in || wfmStatus?.unlocked}
-          <button class="btn" class:bad={confirmingLogout} onclick={logOutWfm} use:pending={loggingOut}>{loggingOut ? 'Logging out…' : confirmingLogout ? 'Confirm log out' : 'Log out'}</button>
-          {#if confirmingLogout}<button class="btn ghost" onclick={() => { confirmingLogout = false; logoutError = ''; }} use:pending={loggingOut}>Cancel</button>{/if}
+          <button class="btn" class:bad={confirmingLogout} onclick={logOutWfm} use:pending={loggingOut}>{t(loggingOut ? 'settings.loggingOut' : confirmingLogout ? 'settings.confirmLogout' : 'settings.logout')}</button>
+          {#if confirmingLogout}<button class="btn ghost" onclick={() => { confirmingLogout = false; logoutError = ''; }} use:pending={loggingOut}>{t('settings.cancel')}</button>{/if}
         {/if}
       </div>
     </div>
-    {#if logoutError}<p class="error inset" role="alert">Couldn’t log out: {logoutError}</p>{/if}
+    {#if logoutError}<p class="error inset" role="alert">{t('settings.logoutFailed', { error: logoutError })}</p>{/if}
     {#if presence}<PresenceSettings {presence} />{/if}
   </section>
   <!-- Each of these is one row, set once. As three panels they used to lead the page. -->
   <section class="wrap tw" id="settings-app" tabindex="-1" aria-labelledby="set-app">
-    <div class="rail"><h3 id="set-app">This app</h3></div>
+    <div class="rail"><h3 id="set-app">{t('settings.thisApp')}</h3></div>
     <div class="ui-section-group first">
-      <h4>Appearance</h4>
+      <h4>{t('settings.appearance')}</h4>
       <div class="ui-setting-row">
-        <div class="ui-setting-copy"><strong>Colour mode</strong><p>System follows your operating system's light/dark setting and changes with it; Light and Dark pin the app regardless.</p></div>
-        <div class="ui-setting-control"><ThemeSwitcher {theme} label="Colour mode" /></div>
+        <div class="ui-setting-copy"><strong>{t('settings.colourMode')}</strong><p>{t('settings.colourModeHelp')}</p></div>
+        <div class="ui-setting-control"><ThemeSwitcher {theme} label={t('settings.colourMode')} /></div>
       </div>
       {#if appIcon}<AppIconSetting {appIcon} />{/if}
       {#if display}
         <div class="ui-setting-row">
-          <div class="ui-setting-copy"><strong>Item lists</strong><p>Visual shows each item's picture in roomier rows. Compact keeps dense text rows and fits more on screen.</p><p class="credit">Item pictures: Warframe Wiki · © Digital Extremes. TennoWorth is not affiliated with either.</p></div>
+          <div class="ui-setting-copy"><strong>{t('settings.itemLists')}</strong><p>{t('settings.itemListsHelp')}</p><p class="credit">{t('settings.credit')}</p></div>
           <div class="ui-setting-control">
-            <div class="ui-segmented" role="group" aria-label="Item lists" use:roving>
-              <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>Visual</button>
-              <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
+            <div class="ui-segmented" role="group" aria-label={t('settings.itemLists')} use:roving>
+              <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>{t('settings.visual')}</button>
+              <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>{t('settings.compact')}</button>
             </div>
           </div>
         </div>
       {/if}
     </div>
     <div class="ui-section-group">
-      <h4>Updates</h4>
+      <h4>{t('settings.updates')}</h4>
       <div class="ui-setting-row">
-        <div class="ui-setting-copy"><strong>Application updates</strong><p>On Windows and Linux AppImage, TennoWorth also checks every 30 minutes while it is running. Updates are downloaded and installed only after you confirm.</p></div>
+        <div class="ui-setting-copy"><strong>{t('settings.appUpdates')}</strong><p>{t('settings.appUpdatesHelp')}</p></div>
         <div class="ui-setting-control">
-          {#if onwhatsnew}<button class="btn" onclick={onwhatsnew}>What’s new</button>{/if}
+          {#if onwhatsnew}<button class="btn" onclick={onwhatsnew}>{t('settings.whatsNew')}</button>{/if}
           {#if updates}
             {@const info = updates.info}
             {#if updates.installed}
-              <button class="btn primary" onclick={() => updates.restart()}>Restart now</button>
+              <button class="btn primary" onclick={() => updates.restart()}>{t('settings.restart')}</button>
             {:else if info?.available}
-              <button class="btn primary" onclick={() => updates.install()} use:pending={updates.installing || updates.checking}>{updates.installing ? 'Installing…' : 'Install update'}</button>
+              <button class="btn primary" onclick={() => updates.install()} use:pending={updates.installing || updates.checking}>{t(updates.installing ? 'settings.installing' : 'settings.install')}</button>
             {:else}
-              <button class="btn" onclick={() => updates.check()} use:pending={updates.checking}>{updates.checking ? 'Checking…' : 'Check for updates'}</button>
+              <button class="btn" onclick={() => updates.check()} use:pending={updates.checking}>{t(updates.checking ? 'settings.checking' : 'settings.checkUpdates')}</button>
             {/if}
             <span class="status" role="status">
-              {#if updates.installed}Version {info?.version} is installed and takes over the next time TennoWorth starts.
-              {:else if updates.installing}Installing version {info?.version}… Keep TennoWorth open until it finishes.
-              {:else if info?.available}Version {info.version} is available (you have v{info.current_version}). Nothing downloads until you install.
-              {:else if info?.checked && info.support === 'supported'}You’re up to date · v{info.current_version}
-              {:else if info?.checked && info.support === 'appimage_required'}This install can’t update itself. Download and run the TennoWorth AppImage to receive updates.
-              {:else if info?.checked && info.support === 'disabled_test_build'}Updates are disabled in this test build.{/if}
+              {#if updates.installed}{t('settings.update.installed', { version: info?.version ?? '' })}
+              {:else if updates.installing}{t('settings.update.installing', { version: info?.version ?? '' })}
+              {:else if info?.available}{t('settings.update.available', { version: info.version ?? '', current: info.current_version })}
+              {:else if info?.checked && info.support === 'supported'}{t('settings.update.current', { current: info.current_version })}
+              {:else if info?.checked && info.support === 'appimage_required'}{t('settings.update.appimage')}
+              {:else if info?.checked && info.support === 'disabled_test_build'}{t('settings.update.disabled')}{/if}
             </span>
           {/if}
         </div>
       </div>
       {#if updates?.needsManualInstall}
-        <p class="warning manual" data-testid="settings-update-manual-install">This update can’t be installed from inside the app. Download it once from the <a href={LATEST_RELEASE_URL} target="_blank" rel="noopener noreferrer">latest release</a> and run it - your settings and data are kept, and updates install normally again after that.</p>
+        <p class="warning manual" data-testid="settings-update-manual-install">{t('settings.manualBefore')}<a href={LATEST_RELEASE_URL} target="_blank" rel="noopener noreferrer">{t('settings.latestRelease')}</a>{t('settings.manualAfter')}</p>
       {/if}
       {#if updates?.error}<p class="error inset" role="alert">{updates.error}</p>{/if}
     </div>

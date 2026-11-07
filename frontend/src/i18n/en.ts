@@ -21,6 +21,8 @@ import { ORDERS } from './en/orders';
 import { BACKUP } from './en/backup';
 import { LEDGER } from './en/ledger';
 import { WATCHES } from './en/watches';
+import { SETTINGS } from './en/settings';
+import { PRIVACY } from './en/privacy';
 
 export const EN = {
   ...FIRST_RUN,
@@ -40,6 +42,8 @@ export const EN = {
   ...BACKUP,
   ...LEDGER,
   ...WATCHES,
+  ...SETTINGS,
+  ...PRIVACY,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

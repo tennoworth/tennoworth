@@ -6195,3 +6195,832 @@ msgstr ""
 msgctxt "offer.dismiss"
 msgid "Dismiss price watch hit"
 msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.reading"
+msgid "Reading status…"
+msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.manual"
+msgid "Manual scans only."
+msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.held"
+msgid "Automatic scan paused while a listing review or Trade Session is open."
+msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.failed"
+msgid "Last automatic scan failed: {error}"
+msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.waiting"
+msgid "Waiting for Warframe. Nothing is scanned while the game is closed."
+msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.last"
+msgid "Last automatic scan {time}."
+msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.next"
+msgid "Next scan around {time}."
+msgstr ""
+
+#. Automatic scan status.
+msgctxt "settings.scan.watching"
+msgid "Watching for Warframe."
+msgstr ""
+
+#. Status.
+msgctxt "settings.loading"
+msgid "Loading…"
+msgstr ""
+
+#. Summary.
+#. Max 22 characters.
+msgctxt "settings.onEvery"
+msgid "On · every {minutes} min"
+msgstr ""
+
+#. Summary.
+#. Max 22 characters.
+msgctxt "settings.off"
+msgid "Off"
+msgstr ""
+
+#. Summary.
+#. Max 22 characters.
+msgctxt "settings.on"
+msgid "On"
+msgstr ""
+
+#. Overlay state.
+msgctxt "settings.overlay.disabled"
+msgid "disabled"
+msgstr ""
+
+#. Overlay state.
+msgctxt "settings.overlay.waiting-for-game"
+msgid "waiting for game"
+msgstr ""
+
+#. Overlay state.
+msgctxt "settings.overlay.needs-permission"
+msgid "needs permission"
+msgstr ""
+
+#. Overlay state.
+msgctxt "settings.overlay.watching"
+msgid "watching"
+msgstr ""
+
+#. Overlay state: reading the reward screen.
+msgctxt "settings.overlay.recognizing"
+msgid "recognizing"
+msgstr ""
+
+#. Overlay state.
+msgctxt "settings.overlay.showing"
+msgid "showing"
+msgstr ""
+
+#. Overlay state.
+msgctxt "settings.overlay.error"
+msgid "error"
+msgstr ""
+
+#. Overlay status. OCR = text recognition.
+msgctxt "settings.ocrReady"
+msgid "OCR ready"
+msgstr ""
+
+#. Overlay status.
+msgctxt "settings.ocrUnavailable"
+msgid "OCR unavailable"
+msgstr ""
+
+#. Overlay status; outcome is technical, slots are reward positions.
+msgctxt "settings.lastRun"
+msgid "Last run: {outcome} · {found}/{expected} slots · {ms} ms"
+msgstr ""
+
+#. Overlay status.
+msgctxt "settings.noRunYet"
+msgid "No reward screen read yet."
+msgstr ""
+
+#. Account status.
+msgctxt "settings.checkingSession"
+msgid "Checking session…"
+msgstr ""
+
+#. Account status.
+msgctxt "settings.unlocked"
+msgid "Signed in · session unlocked"
+msgstr ""
+
+#. Account status.
+msgctxt "settings.locked"
+msgid "Signed in · session locked"
+msgstr ""
+
+#. Account status.
+msgctxt "settings.signedOut"
+msgid "Not signed in"
+msgstr ""
+
+#. Cadence option.
+msgctxt "settings.everyMinutes"
+msgid "every {minutes} minutes"
+msgstr ""
+
+#. View heading.
+msgctxt "settings.title"
+msgid "Settings"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "settings.lede"
+msgid "Preferences for this device."
+msgstr ""
+
+#. Screen reader name of the summary.
+msgctxt "settings.currentState"
+msgid "Current state"
+msgstr ""
+
+#. Summary label and section heading.
+msgctxt "settings.autoScan"
+msgid "Automatic scan"
+msgstr ""
+
+#. Summary label and link.
+msgctxt "settings.relicOverlay"
+msgid "Relic overlay"
+msgstr ""
+
+#. Summary.
+msgctxt "settings.notReading"
+msgid "Reward screens are not read."
+msgstr ""
+
+#. Summary; line says what buyers see.
+msgctxt "settings.sessionUnlocked"
+msgid "{line} · session unlocked"
+msgstr ""
+
+#. Summary.
+msgctxt "settings.encryptedLogin"
+msgid "Encrypted login on this device"
+msgstr ""
+
+#. Screen reader name of the jump links.
+msgctxt "settings.sections"
+msgid "Settings sections"
+msgstr ""
+
+#. Group label.
+msgctxt "settings.everyday"
+msgid "Everyday"
+msgstr ""
+
+#. Link.
+msgctxt "settings.notifications"
+msgid "Notifications"
+msgstr ""
+
+#. Group label.
+msgctxt "settings.setOnce"
+msgid "Set once"
+msgstr ""
+
+#. Link.
+msgctxt "settings.appLink"
+msgid "Appearance, updates and privacy"
+msgstr ""
+
+#. Row label.
+msgctxt "settings.status"
+msgid "Status"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.scanAuto"
+msgid "Scan automatically while Warframe is running"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.scanAutoHelp"
+msgid "Off: TennoWorth scans only when you ask. On: it looks for the game and rescans on the chosen cadence. Each rescan reads the game's memory and requests your account inventory from Digital Extremes. Nothing is scanned while the game is closed or logged out, and a rescan never interrupts a listing review."
+msgstr ""
+
+#. Checkbox.
+#. Max 12 characters.
+msgctxt "settings.enabled"
+msgid "Enabled"
+msgstr ""
+
+#. Field label.
+msgctxt "settings.scanEvery"
+msgid "Scan every"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.adopt"
+msgid "Update the open app automatically"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.adoptHelp"
+msgid "When a scan finishes in the background - on the cadence, or Rescan from the tray - replace the inventory on screen. While a listing review or Trade Session is being prepared the scan waits for “Load new scan” instead."
+msgstr ""
+
+#. Checkbox.
+#. Max 12 characters.
+msgctxt "settings.automatic"
+msgid "Automatic"
+msgstr ""
+
+#. Status.
+msgctxt "settings.loadingScan"
+msgid "Loading automatic-scan settings…"
+msgstr ""
+
+#. Section heading.
+msgctxt "settings.overlayTitle"
+msgid "Relic reward overlay"
+msgstr ""
+
+#. Button.
+msgctxt "settings.previewOverlay"
+msgid "Preview overlay"
+msgstr ""
+
+#. Button.
+msgctxt "settings.scanRewards"
+msgid "Scan reward screen now"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.recognition"
+msgid "Enable local screen recognition"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.recognitionHelp"
+msgid "Captures only after a reward event or your retry shortcut. Frames stay in memory and are never uploaded."
+msgstr ""
+
+#. Group heading.
+msgctxt "settings.detection"
+msgid "Detection"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.autoDetect"
+msgid "Automatic reward detection"
+msgstr ""
+
+#. Setting help. Keep EE.log and “Got rewards” as they are: they are the game log.
+msgctxt "settings.autoDetectHelp"
+msgid "Watches EE.log for “Got rewards”."
+msgstr ""
+
+#. Setting.
+msgctxt "settings.retryShortcut"
+msgid "Retry shortcut"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.retryShortcutHelp"
+msgid "Still available when the game delays that line."
+msgstr ""
+
+#. Group heading.
+msgctxt "settings.rewardCards"
+msgid "Reward cards"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.cardScale"
+msgid "Card scale"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.liveAsks"
+msgid "Live online asks"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.liveAsksHelp"
+msgid "Replace cached prices with live online asks."
+msgstr ""
+
+#. Setting.
+msgctxt "settings.ownedCount"
+msgid "Owned count"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.ownedCountHelp"
+msgid "Show count from the latest inventory scan."
+msgstr ""
+
+#. Checkbox.
+#. Max 12 characters.
+msgctxt "settings.shown"
+msgid "Shown"
+msgstr ""
+
+#. Disclosure.
+msgctxt "settings.troubleshooting"
+msgid "Troubleshooting: diagnostics and display requirements"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.diagnostics"
+msgid "Save local recognition diagnostics"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.diagnosticsHelp"
+msgid "Keep captures on this device to investigate recognition problems."
+msgstr ""
+
+#. Warning.
+msgctxt "settings.diagnosticsWarning"
+msgid "Diagnostic captures may contain player or game information. They stay on this device and are never uploaded automatically."
+msgstr ""
+
+#. Button.
+msgctxt "settings.openDiagnostics"
+msgid "Open diagnostics"
+msgstr ""
+
+#. Button.
+msgctxt "settings.clearDiagnostics"
+msgid "Clear diagnostics"
+msgstr ""
+
+#. Technical status; the values are technical names.
+msgctxt "settings.backends"
+msgid "{capture} capture · {display} display"
+msgstr ""
+
+#. Requirements. Keep the technical names.
+msgctxt "settings.requirements"
+msgid "Use Borderless Fullscreen or Windowed mode. Windows and X11 use direct window capture; Wayland captures through XWayland and presents through layer-shell when the compositor supports it. No interaction, injection, or automatic reward selection is performed."
+msgstr ""
+
+#. Status.
+msgctxt "settings.loadingOverlay"
+msgid "Loading overlay settings…"
+msgstr ""
+
+#. Section heading.
+msgctxt "settings.account"
+msgid "warframe.market account"
+msgstr ""
+
+#. Row label.
+msgctxt "settings.session"
+msgid "Account session"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.logoutHelp"
+msgid "Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed."
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.manageLogin"
+msgid "Manage the encrypted login saved on this device."
+msgstr ""
+
+#. Button while busy.
+msgctxt "settings.loggingOut"
+msgid "Logging out…"
+msgstr ""
+
+#. Button.
+msgctxt "settings.confirmLogout"
+msgid "Confirm log out"
+msgstr ""
+
+#. Button.
+msgctxt "settings.logout"
+msgid "Log out"
+msgstr ""
+
+#. Button.
+msgctxt "settings.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Error.
+msgctxt "settings.logoutFailed"
+msgid "Couldn’t log out: {error}"
+msgstr ""
+
+#. Section heading.
+msgctxt "settings.thisApp"
+msgid "This app"
+msgstr ""
+
+#. Group heading.
+msgctxt "settings.appearance"
+msgid "Appearance"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.colourMode"
+msgid "Colour mode"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.colourModeHelp"
+msgid "System follows your operating system's light/dark setting and changes with it; Light and Dark pin the app regardless."
+msgstr ""
+
+#. Setting.
+msgctxt "settings.itemLists"
+msgid "Item lists"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.itemListsHelp"
+msgid "Visual shows each item's picture in roomier rows. Compact keeps dense text rows and fits more on screen."
+msgstr ""
+
+#. Credit line.
+msgctxt "settings.credit"
+msgid "Item pictures: Warframe Wiki · © Digital Extremes. TennoWorth is not affiliated with either."
+msgstr ""
+
+#. Choice.
+#. Max 10 characters.
+msgctxt "settings.visual"
+msgid "Visual"
+msgstr ""
+
+#. Choice.
+#. Max 10 characters.
+msgctxt "settings.compact"
+msgid "Compact"
+msgstr ""
+
+#. Group heading.
+msgctxt "settings.updates"
+msgid "Updates"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.appUpdates"
+msgid "Application updates"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.appUpdatesHelp"
+msgid "On Windows and Linux AppImage, TennoWorth also checks every 30 minutes while it is running. Updates are downloaded and installed only after you confirm."
+msgstr ""
+
+#. Button.
+msgctxt "settings.whatsNew"
+msgid "What’s new"
+msgstr ""
+
+#. Button.
+msgctxt "settings.restart"
+msgid "Restart now"
+msgstr ""
+
+#. Button while busy.
+msgctxt "settings.installing"
+msgid "Installing…"
+msgstr ""
+
+#. Button.
+msgctxt "settings.install"
+msgid "Install update"
+msgstr ""
+
+#. Button while busy.
+msgctxt "settings.checking"
+msgid "Checking…"
+msgstr ""
+
+#. Button.
+msgctxt "settings.checkUpdates"
+msgid "Check for updates"
+msgstr ""
+
+#. Update status.
+msgctxt "settings.update.installed"
+msgid "Version {version} is installed and takes over the next time TennoWorth starts."
+msgstr ""
+
+#. Update status.
+msgctxt "settings.update.installing"
+msgid "Installing version {version}… Keep TennoWorth open until it finishes."
+msgstr ""
+
+#. Update status.
+msgctxt "settings.update.available"
+msgid "Version {version} is available (you have v{current}). Nothing downloads until you install."
+msgstr ""
+
+#. Update status.
+msgctxt "settings.update.current"
+msgid "You’re up to date · v{current}"
+msgstr ""
+
+#. Update status.
+msgctxt "settings.update.appimage"
+msgid "This install can’t update itself. Download and run the TennoWorth AppImage to receive updates."
+msgstr ""
+
+#. Update status.
+msgctxt "settings.update.disabled"
+msgid "Updates are disabled in this test build."
+msgstr ""
+
+#. Text before a link to the latest release. Keep the trailing space.
+msgctxt "settings.manualBefore"
+msgid "This update can’t be installed from inside the app. Download it once from the "
+msgstr ""
+
+#. Link text.
+msgctxt "settings.latestRelease"
+msgid "latest release"
+msgstr ""
+
+#. Text after the link. Keep the leading space.
+msgctxt "settings.manualAfter"
+msgid " and run it - your settings and data are kept, and updates install normally again after that."
+msgstr ""
+
+#. App icon choice.
+msgctxt "icon.blue"
+msgid "Classic blue"
+msgstr ""
+
+#. App icon hint.
+msgctxt "icon.blue.hint"
+msgid "Default. Visible on any taskbar."
+msgstr ""
+
+#. App icon choice.
+msgctxt "icon.match"
+msgid "Match colour mode"
+msgstr ""
+
+#. App icon hint. Ink and rag are the two icon colours.
+msgctxt "icon.match.hint"
+msgid "Ink in Light, rag in Dark."
+msgstr ""
+
+#. App icon choice: the dark icon.
+msgctxt "icon.ink"
+msgid "Ink"
+msgstr ""
+
+#. App icon hint.
+msgctxt "icon.ink.hint"
+msgid "Hard to see on dark taskbars."
+msgstr ""
+
+#. App icon choice: the light, paper-coloured icon.
+msgctxt "icon.rag"
+msgid "Rag"
+msgstr ""
+
+#. App icon hint.
+msgctxt "icon.rag.hint"
+msgid "Hard to see on light taskbars."
+msgstr ""
+
+#. Setting.
+msgctxt "icon.title"
+msgid "App icon"
+msgstr ""
+
+#. Setting help.
+msgctxt "icon.help"
+msgid "The icon on this window, the taskbar and the tray. Your desktop shortcut and the installer keep the classic icon."
+msgstr ""
+
+#. Setting note.
+msgctxt "icon.wayland"
+msgid "On this Wayland session the window and taskbar show the installed icon; only the tray follows this setting."
+msgstr ""
+
+#. Error.
+msgctxt "icon.failed"
+msgid "Couldn’t change the app icon: {error}"
+msgstr ""
+
+#. Checkbox.
+#. Max 12 characters.
+msgctxt "privacy.enabled"
+msgid "Enabled"
+msgstr ""
+
+#. Status.
+msgctxt "privacy.loading"
+msgid "Loading preference…"
+msgstr ""
+
+#. Note.
+msgctxt "privacy.unavailable"
+msgid "Sharing is disabled in this build or launch."
+msgstr ""
+
+#. Error.
+msgctxt "privacy.saveFailed"
+msgid "Could not save this preference. Retry before restarting the app."
+msgstr ""
+
+#. Disclosure.
+msgctxt "privacy.whatIsSent"
+msgid "What is sent and what is not"
+msgstr ""
+
+#. Error.
+msgctxt "prices.loadFailed"
+msgid "Could not load the price sharing preference. No change has been made."
+msgstr ""
+
+#. Error.
+msgctxt "prices.eraseFailed"
+msgid "Could not delete this week’s reports. Nothing was removed; try again later."
+msgstr ""
+
+#. Group heading.
+msgctxt "prices.title"
+msgid "Price sharing"
+msgstr ""
+
+#. Setting and button.
+msgctxt "prices.share"
+msgid "Share sale prices"
+msgstr ""
+
+#. Setting help.
+msgctxt "prices.shareHelp"
+msgid "Off unless you choose to enable it. When a trade for platinum completes from now on, the item and the price are sent so TennoWorth can publish what items really sell for. An item’s price is published only once five installs report it in the same week."
+msgstr ""
+
+#. Status. Keep <b> around the number.
+msgctxt "prices.sharedThisWeek"
+msgid "{count, plural, one {<b>#</b> sale shared this week.} other {<b>#</b> sales shared this week.}}"
+msgstr ""
+
+#. Setting.
+msgctxt "prices.remove"
+msgid "Remove what you shared"
+msgstr ""
+
+#. Setting help.
+msgctxt "prices.removeHelp"
+msgid "Deletes this install’s reports from this week and last week. Older weeks are already merged into totals that no longer link to any install."
+msgstr ""
+
+#. Button while busy.
+msgctxt "prices.deleting"
+msgid "Deleting…"
+msgstr ""
+
+#. Button.
+msgctxt "prices.delete"
+msgid "Delete recent reports"
+msgstr ""
+
+#. Terms.
+msgctxt "prices.terms1"
+msgid "Only trades where platinum was exchanged for one kind of item: the item’s market name, quantity, price, whether it was a sale or a purchase, and the UTC day. Trades from before you enabled this are never sent. A trade that could not be sent is retried, with growing pauses, for up to seven days."
+msgstr ""
+
+#. Terms.
+msgctxt "prices.terms2"
+msgid "Never sent: who you traded with, the time of day, your inventory, riven trades, your game or warframe.market account, the app version or your platform. Reports carry an id that changes every week, so weeks cannot be linked to each other or to you."
+msgstr ""
+
+#. Terms, before a link. Keep the trailing space.
+msgctxt "prices.terms3"
+msgid "Mod and arcane ranks are not in the game’s trade log, so those prices are published as “rank unknown”. Delivery exposes your IP address to the hosting infrastructure. See "
+msgstr ""
+
+#. Link text.
+msgctxt "prices.termsLink"
+msgid "how price reports work"
+msgstr ""
+
+#. Terms, after the link. Keep the leading space.
+msgctxt "prices.terms4"
+msgid " for retention and publishing details."
+msgstr ""
+
+#. Status.
+msgctxt "prices.erased"
+msgid "Recent reports deleted from the service."
+msgstr ""
+
+#. Error.
+msgctxt "prices.turnOnFailed"
+msgid "Price sharing could not be turned on. Nothing was changed."
+msgstr ""
+
+#. Error.
+msgctxt "prices.turnOnFailedRetry"
+msgid "Price sharing could not be turned on. Nothing was changed; try again or use Settings."
+msgstr ""
+
+#. Prompt title.
+msgctxt "prices.promptOn"
+msgid "Price sharing is on"
+msgstr ""
+
+#. Prompt title.
+msgctxt "prices.promptAsk"
+msgid "Help show what items really sell for"
+msgstr ""
+
+#. Button.
+msgctxt "prices.close"
+msgid "Close"
+msgstr ""
+
+#. Button.
+msgctxt "prices.notNow"
+msgid "Not now"
+msgstr ""
+
+#. Prompt.
+msgctxt "prices.thanks"
+msgid "Thank you. Trades you complete from now on are shared. You can turn this off or delete recent reports in Settings at any time."
+msgstr ""
+
+#. Prompt.
+msgctxt "prices.pitch"
+msgid "Optional. When you trade for platinum, TennoWorth can share the item, quantity, price and day, and publishes an item’s price once five installs report it. It never sends who you traded with, your inventory or your accounts. Ignoring this changes nothing."
+msgstr ""
+
+#. Button while busy.
+msgctxt "prices.turningOn"
+msgid "Turning on…"
+msgstr ""
+
+#. Button.
+msgctxt "prices.settings"
+msgid "Settings"
+msgstr ""
+
+#. Button.
+msgctxt "prices.whatIsSent"
+msgid "What is sent"
+msgstr ""
+
+#. Error.
+msgctxt "usage.loadFailed"
+msgid "Could not load usage preference. No change has been made."
+msgstr ""
+
+#. Group heading.
+msgctxt "usage.title"
+msgid "Usage sharing"
+msgstr ""
+
+#. Setting.
+msgctxt "usage.share"
+msgid "Share a daily usage count"
+msgstr ""
+
+#. Setting help.
+msgctxt "usage.shareHelp"
+msgid "Off unless you choose to enable it. Contributes one installation per UTC day while the app is running, including in the tray, to our public community chart."
+msgstr ""
+
+#. Terms.
+msgctxt "usage.terms1"
+msgid "One check-in per UTC day, sent at startup or day rollover. If it does not get through, the same token is offered again once a minute, at most 10 times that day, and never for a past day. Only a token that changes daily is sent. No account details, inventory, screenshots, hardware identifiers, or activity events. Turning this off stops future check-ins; previous aggregate counts remain."
+msgstr ""
+
+#. Terms, before a link. Keep the trailing space.
+msgctxt "usage.terms2"
+msgid "Delivery exposes your IP address to the hosting infrastructure. See the "
+msgstr ""
+
+#. Link text.
+msgctxt "usage.termsLink"
+msgid "security policy"
+msgstr ""
+
+#. Terms, after the link. Keep the leading space.
+msgctxt "usage.terms3"
+msgid " for retention details."
+msgstr ""

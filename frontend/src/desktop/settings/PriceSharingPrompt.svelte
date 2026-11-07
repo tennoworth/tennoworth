@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
   import type { DesktopCapabilities } from '../../contracts/desktop';
   import type { PriceReportPreferences } from '../../contracts/price-reports';
   import PromptBanner from '../prompts/PromptBanner.svelte';
@@ -32,27 +33,27 @@
         enabledHere = true;
         session.finish(PRICE_SHARING_PROMPT.id);
       } else {
-        error = 'Price sharing could not be turned on. Nothing was changed.';
+        error = t('prices.turnOnFailed');
       }
     } catch {
-      error = 'Price sharing could not be turned on. Nothing was changed; try again or use Settings.';
+      error = t('prices.turnOnFailedRetry');
     } finally { saving = false; }
   }
 </script>
 
 {#if active && preference?.available && (!preference.enabled || enabledHere)}
-  <PromptBanner {session} id={PRICE_SHARING_PROMPT.id} title={enabledHere ? 'Price sharing is on' : 'Help show what items really sell for'} dismissLabel={enabledHere ? 'Close' : 'Not now'}>
+  <PromptBanner {session} id={PRICE_SHARING_PROMPT.id} title={t(enabledHere ? 'prices.promptOn' : 'prices.promptAsk')} dismissLabel={t(enabledHere ? 'prices.close' : 'prices.notNow')}>
     {#if enabledHere}
-      <p role="status">Thank you. Trades you complete from now on are shared. You can turn this off or delete recent reports in Settings at any time.</p>
+      <p role="status">{t('prices.thanks')}</p>
     {:else}
-      <p>Optional. When you trade for platinum, TennoWorth can share the item, quantity, price and day, and publishes an item’s price once five installs report it. It never sends who you traded with, your inventory or your accounts. Ignoring this changes nothing.</p>
+      <p>{t('prices.pitch')}</p>
     {/if}
     {#if error}<p class="bad" role="alert">{error}</p>{/if}
     {#snippet actions()}
       {#if !enabledHere}
-        <button type="button" class="btn primary" onclick={enable} disabled={saving}>{saving ? 'Turning on…' : 'Share sale prices'}</button>
+        <button type="button" class="btn primary" onclick={enable} disabled={saving}>{t(saving ? 'prices.turningOn' : 'prices.share')}</button>
       {/if}
-      <button type="button" class="btn" onclick={onsettings}>{enabledHere ? 'Settings' : 'What is sent'}</button>
+      <button type="button" class="btn" onclick={onsettings}>{t(enabledHere ? 'prices.settings' : 'prices.whatIsSent')}</button>
     {/snippet}
   </PromptBanner>
 {/if}

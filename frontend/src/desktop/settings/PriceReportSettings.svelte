@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
+  import Rich from '../../ui/Rich.svelte';
   import { onMount } from 'svelte';
   import type { DesktopCapabilities } from '../../contracts/desktop';
   import type { PriceReportPreferences } from '../../contracts/price-reports';
@@ -8,14 +10,14 @@
   let erasing = $state(false);
   let erased = $state(false);
   let error = $state('');
-  onMount(() => { void transport.getPriceReportPreferences().then(value => { preference=value; }).catch(() => { error='Could not load the price sharing preference. No change has been made.'; }); });
+  onMount(() => { void transport.getPriceReportPreferences().then(value => { preference=value; }).catch(() => { error=t('prices.loadFailed'); }); });
   async function change(enabled: boolean) {
     saving=true; error=''; erased=false;
     try { preference=await transport.setPriceReportPreferences(enabled); }
     catch {
       try { preference=await transport.getPriceReportPreferences(); }
       catch { preference=null; }
-      error='Could not save this preference. Retry before restarting the app.';
+      error=t('privacy.saveFailed');
     }
     finally { saving=false; }
   }
@@ -26,41 +28,43 @@
       erased=true;
       preference=await transport.getPriceReportPreferences();
     }
-    catch { error='Could not delete this week’s reports. Nothing was removed; try again later.'; }
+    catch { error=t('prices.eraseFailed'); }
     finally { erasing=false; }
   }
 </script>
 <!-- Beside usage sharing in Settings' "This app" panel: a set-once consent
      whose full terms sit in a disclosure. -->
 <div class="ui-section-group" id="settings-price-sharing" tabindex="-1" aria-labelledby="price-settings-title">
-  <h4 id="price-settings-title">Price sharing</h4>
+  <h4 id="price-settings-title">{t('prices.title')}</h4>
   <div class="ui-setting-row">
     <div class="ui-setting-copy">
-      <label for="price-sharing">Share sale prices</label>
-      <p>Off unless you choose to enable it. When a trade for platinum completes from now on, the item and the price are sent so TennoWorth can publish what items really sell for. An item’s price is published only once five installs report it in the same week.</p>
-      {#if preference?.enabled}<p role="status"><span class="mono">{preference.sent_this_week}</span> {preference.sent_this_week === 1 ? 'sale' : 'sales'} shared this week.</p>{/if}
+      <label for="price-sharing">{t('prices.share')}</label>
+      <p>{t('prices.shareHelp')}</p>
+      {#if preference?.enabled}<p role="status"><Rich text={t('prices.sharedThisWeek', { count: preference.sent_this_week })} /></p>{/if}
     </div>
-    <label class="ui-setting-check"><input id="price-sharing" type="checkbox" checked={preference?.enabled ?? false} disabled={!preference?.available || saving} onchange={async event => { const input=event.currentTarget; await change(input.checked); input.checked=preference?.enabled ?? false; }}><span>Enabled</span></label>
+    <label class="ui-setting-check"><input id="price-sharing" type="checkbox" checked={preference?.enabled ?? false} disabled={!preference?.available || saving} onchange={async event => { const input=event.currentTarget; await change(input.checked); input.checked=preference?.enabled ?? false; }}><span>{t('privacy.enabled')}</span></label>
   </div>
   <div class="ui-setting-row">
     <div class="ui-setting-copy">
-      <strong>Remove what you shared</strong>
-      <p>Deletes this install’s reports from this week and last week. Older weeks are already merged into totals that no longer link to any install.</p>
+      <strong>{t('prices.remove')}</strong>
+      <p>{t('prices.removeHelp')}</p>
     </div>
-    <div class="ui-setting-control"><button type="button" class="btn ghost" disabled={!preference?.available || erasing} onclick={erase}>{erasing ? 'Deleting…' : 'Delete recent reports'}</button></div>
+    <div class="ui-setting-control"><button type="button" class="btn ghost" disabled={!preference?.available || erasing} onclick={erase}>{t(erasing ? 'prices.deleting' : 'prices.delete')}</button></div>
   </div>
   <details class="terms">
-    <summary>What is sent and what is not</summary>
-    <p>Only trades where platinum was exchanged for one kind of item: the item’s market name, quantity, price, whether it was a sale or a purchase, and the UTC day. Trades from before you enabled this are never sent. A trade that could not be sent is retried, with growing pauses, for up to seven days.</p>
-    <p>Never sent: who you traded with, the time of day, your inventory, riven trades, your game or warframe.market account, the app version or your platform. Reports carry an id that changes every week, so weeks cannot be linked to each other or to you.</p>
-    <p>Mod and arcane ranks are not in the game’s trade log, so those prices are published as “rank unknown”. Delivery exposes your IP address to the hosting infrastructure. See <a href="https://github.com/tennoworth/tennoworth/blob/main/docs/price-reports.md" target="_blank" rel="noopener noreferrer">how price reports work</a> for retention and publishing details.</p>
+    <summary>{t('privacy.whatIsSent')}</summary>
+    <p>{t('prices.terms1')}</p>
+    <p>{t('prices.terms2')}</p>
+    <p>{t('prices.terms3')}<a href="https://github.com/tennoworth/tennoworth/blob/main/docs/price-reports.md" target="_blank" rel="noopener noreferrer">{t('prices.termsLink')}</a>{t('prices.terms4')}</p>
   </details>
-  {#if !preference && !error}<p class="note" role="status">Loading preference…</p>{/if}
-  {#if preference && !preference.available}<p class="note">Sharing is disabled in this build or launch.</p>{/if}
-  {#if erased}<p class="note" role="status">Recent reports deleted from the service.</p>{/if}
+  {#if !preference && !error}<p class="note" role="status">{t('privacy.loading')}</p>{/if}
+  {#if preference && !preference.available}<p class="note">{t('privacy.unavailable')}</p>{/if}
+  {#if erased}<p class="note" role="status">{t('prices.erased')}</p>{/if}
   {#if error}<p class="note bad" role="alert">{error}</p>{/if}
 </div>
 <style>
+  /* The shared count reads as a figure, as it did before translation. */
+  [role="status"] :global(b) { font-family: var(--font-mono); font-weight: inherit; }
   #settings-price-sharing:focus { outline: none; }
   .terms { padding: var(--s2) var(--inset) 0; }
   .terms > summary { min-height: var(--ctl); cursor: pointer; color: var(--muted); font-size: var(--text-control); }

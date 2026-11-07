@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
   // Settings → This app → Appearance → App icon. One radio card per choice,
   // each previewing its compact mark on the light and the dark ground, since
   // the point of the choice is how it reads on the user's taskbar.
@@ -6,41 +7,36 @@
 
   let { appIcon }: { appIcon: AppIconController } = $props();
 
-  const OPTIONS: { id: AppIconChoice; name: string; hint: string }[] = [
-    { id: 'blue', name: 'Classic blue', hint: 'Default. Visible on any taskbar.' },
-    { id: 'match', name: 'Match colour mode', hint: 'Ink in Light, rag in Dark.' },
-    { id: 'ink', name: 'Ink', hint: 'Hard to see on dark taskbars.' },
-    { id: 'rag', name: 'Rag', hint: 'Hard to see on light taskbars.' },
-  ];
+  const OPTIONS: AppIconChoice[] = ['blue', 'match', 'ink', 'rag'];
 </script>
 
 <div class="ui-setting-row app-icon">
   <div class="ui-setting-copy">
-    <strong id="app-icon-label">App icon</strong>
-    <p id="app-icon-help">The icon on this window, the taskbar and the tray. Your desktop shortcut and the installer keep the classic icon.</p>
+    <strong id="app-icon-label">{t('icon.title')}</strong>
+    <p id="app-icon-help">{t('icon.help')}</p>
     {#if !appIcon.windowIcon}
-      <p>On this Wayland session the window and taskbar show the installed icon; only the tray follows this setting.</p>
+      <p>{t('icon.wayland')}</p>
     {/if}
   </div>
   <div class="options" role="radiogroup" aria-labelledby="app-icon-label" aria-describedby="app-icon-help">
-    {#each OPTIONS as option (option.id)}
-      <label class="option" class:selected={appIcon.choice === option.id}>
+    {#each OPTIONS as option (option)}
+      <label class="option" class:selected={appIcon.choice === option}>
         <input
           type="radio"
           name="app-icon"
-          value={option.id}
-          checked={appIcon.choice === option.id}
-          onchange={() => void appIcon.select(option.id)}
+          value={option}
+          checked={appIcon.choice === option}
+          onchange={() => void appIcon.select(option)}
         />
-        <img src={`/app-icon/${option.id}.svg`} alt="" />
+        <img src={`/app-icon/${option}.svg`} alt="" />
         <span class="text">
-          <span class="name">{option.name}</span>
-          <span class="hint">{option.hint}</span>
+          <span class="name">{t(`icon.${option}`)}</span>
+          <span class="hint">{t(`icon.${option}.hint`)}</span>
         </span>
       </label>
     {/each}
   </div>
-  {#if appIcon.error}<p class="error" role="alert">Couldn’t change the app icon: {appIcon.error}</p>{/if}
+  {#if appIcon.error}<p class="error" role="alert">{t('icon.failed', { error: appIcon.error })}</p>{/if}
 </div>
 
 <style>
