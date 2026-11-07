@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
   import { onMount, type Snippet } from 'svelte';
   import type { PromptSession } from './prompt-session.svelte';
   // An optional invitation that is safe to ignore. The owner mounts it only
   // while it applies; the session decides whether this launch asks it.
-  let { session, id, title, dismissLabel = 'Not now', children, actions }: {
+  let { session, id, title, dismissLabel, children, actions }: {
     session: PromptSession;
     id: string;
     title: string;
@@ -23,7 +24,7 @@
     </div>
     <div class="gb-actions">
       {@render actions?.()}
-      <button type="button" class="btn ghost" onclick={() => session.decline()}>{dismissLabel}</button>
+      <button type="button" class="btn ghost" onclick={() => session.decline()}>{dismissLabel ?? t('prices.notNow')}</button>
     </div>
   </section>
 {/if}

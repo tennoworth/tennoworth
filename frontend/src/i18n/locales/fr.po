@@ -9691,3 +9691,550 @@ msgstr ""
 msgctxt "support.kofi"
 msgid "Support on Ko-fi"
 msgstr ""
+
+#. Tab.
+#. Max 20 characters.
+msgctxt "market.metaDrift"
+msgid "Meta drift"
+msgstr ""
+
+#. Tab.
+#. Max 20 characters.
+msgctxt "market.dispositions"
+msgid "Riven dispositions"
+msgstr ""
+
+#. Baro clock caption.
+#. Max 12 characters.
+msgctxt "market.leavesIn"
+msgid "leaves in"
+msgstr ""
+
+#. Baro clock caption.
+#. Max 12 characters.
+msgctxt "market.arrivesIn"
+msgid "arrives in"
+msgstr ""
+
+#. Baro clock caption.
+#. Max 12 characters.
+msgctxt "market.nextVisit"
+msgid "next visit"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.vaultedHelp"
+msgid "Vaulted - no longer dropping, supply is capped"
+msgstr ""
+
+#. Tag.
+#. Max 8 characters.
+msgctxt "market.vaulted"
+msgid "vaulted"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.soonHelp"
+msgid "Vaulting soon - supply about to be capped"
+msgstr ""
+
+#. Tag: vaulting soon.
+#. Max 8 characters.
+msgctxt "market.soon"
+msgid "soon"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.yearUp"
+msgid "Latest daily median {pct}% above where it was a year ago ({from}p → {to}p; year low {low}p, high {high}p)"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.yearDown"
+msgid "Latest daily median {pct}% below where it was a year ago ({from}p → {to}p; year low {low}p, high {high}p)"
+msgstr ""
+
+#. Unit after a change: over one year.
+#. Max 3 characters.
+msgctxt "market.oneYear"
+msgid "1y"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.medianUp"
+msgid "Latest median {pct}% above the 90-day median"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.medianDown"
+msgid "Latest median {pct}% below the 90-day median"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.flat"
+msgid "Within ±1% of the 90-day median"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.yearSpark"
+msgid "Weekly medians over the last year: low {low}p, high {high}p, {days} traded days"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.thinHelp"
+msgid "Fewer than 20 traded days in the last year"
+msgstr ""
+
+#. Note in the trend cell.
+#. Max 14 characters.
+msgctxt "market.thin"
+msgid "thin history"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.spark"
+msgid "7-day medians: {values}"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.sparkMedian"
+msgid "7-day medians: {values} · 90-day median {median}"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "market.col.item"
+msgid "Item"
+msgstr ""
+
+#. Column header: average price.
+#. Max 6 characters.
+msgctxt "market.col.avg"
+msgid "Avg"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.avgHelp"
+msgid "Average of recent WFM sales"
+msgstr ""
+
+#. Column header: change against the 90-day median.
+#. Max 6 characters.
+msgctxt "market.col.delta"
+msgid "Δ 90d"
+msgstr ""
+
+#. Column header: change over a year.
+#. Max 6 characters.
+msgctxt "market.col.delta1y"
+msgid "Δ 1y"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.deltaHelp"
+msgid "Latest daily median vs the 90-day median"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "market.col.trend"
+msgid "Trend"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.trendYear"
+msgid "Weekly medians, last year"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.trendWeek"
+msgid "Daily medians, last 7 days"
+msgstr ""
+
+#. Column header: trades in 48 hours.
+#. Max 8 characters.
+msgctxt "market.col.vol"
+msgid "Vol 48h"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.volHelp"
+msgid "Trades completed in the last 48 hours"
+msgstr ""
+
+#. Column header.
+#. Max 7 characters.
+msgctxt "market.col.ducats"
+msgid "Ducats"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.ducatsHelp"
+msgid "Ducat value at Baro Ki’Teer"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.lookup"
+msgid "Item lookup"
+msgstr ""
+
+#. Search placeholder. Use item words players search for in your language.
+msgctxt "market.searchHint"
+msgid "Search any item - try “primed”, “mag”, “ash prime set”…"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.search"
+msgid "Search items"
+msgstr ""
+
+#. Note beside the search.
+msgctxt "market.searchAbout"
+msgid "any tradeable item · price, 48h volume, 7-day trend"
+msgstr ""
+
+#. Keyboard hint; key is a shortcut.
+msgctxt "market.toFocus"
+msgid "<kbd>{key}</kbd> to focus"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.yearHelp"
+msgid "Show each item’s last year of daily prices (relics.run archive) instead of the last 7 days"
+msgstr ""
+
+#. Button while busy.
+msgctxt "market.loadingYear"
+msgid "Loading 1 year…"
+msgstr ""
+
+#. Toggle button.
+#. Max 8 characters.
+msgctxt "market.year"
+msgid "1 year"
+msgstr ""
+
+#. Note.
+msgctxt "market.historyUnavailable"
+msgid "· history unavailable right now"
+msgstr ""
+
+#. Note: the last day of history.
+msgctxt "market.through"
+msgid "· through {date}"
+msgstr ""
+
+#. Warning; age reads like "3 h ago".
+msgctxt "market.stale"
+msgid "⚠ This snapshot was updated {age} - prices below may lag the live book."
+msgstr ""
+
+#. In place of an age.
+msgctxt "market.unknownTime"
+msgid "at an unknown time"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.searchTable"
+msgid "Search results table"
+msgstr ""
+
+#. Column header with the count.
+msgctxt "market.matches"
+msgid "{count, plural, one {Item · # match} other {Item · # matches}}"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.avgSell"
+msgid "Average of recent WFM sales - list below it to sell faster"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "market.col.lowAsk"
+msgid "Low ask"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.lowAskHelp"
+msgid "Lowest current online sell listing"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "market.col.topBuy"
+msgid "Top buy"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.topBuyHelp"
+msgid "Highest current online buy offer"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "market.col.demand"
+msgid "Demand"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.demandHelp"
+msgid "Live buyers ÷ live sellers - > 1 means buyers outnumber sellers"
+msgstr ""
+
+#. Column header.
+#. Max 6 characters.
+msgctxt "market.col.own"
+msgid "Own"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.ownHelp"
+msgid "How many you own - filled by the desktop scan"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "market.col.priority"
+msgid "Priority"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.priorityHelp"
+msgid "Priority from price, likely sell-through, and bounded DE usage - filled by the desktop scan"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "market.col.stack"
+msgid "Stack value"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.stackHelp"
+msgid "Sellable copies × the 48 h average trade price - filled by the desktop scan"
+msgstr ""
+
+#. Text before a link. Keep the trailing space.
+msgctxt "market.handoffBefore"
+msgid "Own · Priority · Stack value fill in when the "
+msgstr ""
+
+#. Link text.
+msgctxt "market.desktopApp"
+msgid "desktop app"
+msgstr ""
+
+#. Text after the link. Keep the leading space.
+msgctxt "market.handoffAfter"
+msgid " scans your inventory - free, Windows + Linux, no login."
+msgstr ""
+
+#. Link.
+msgctxt "market.seeCompleted"
+msgid "↓ see the completed row"
+msgstr ""
+
+#. Note.
+msgctxt "market.fillOnScan"
+msgid "Own · Priority · Stack value fill in once you scan your inventory (Refresh ▾ → Scan game)."
+msgstr ""
+
+#. Empty state.
+msgctxt "market.noMatch"
+msgid "No priceable items match “{query}”."
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.moversHelp"
+msgid "Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can’t move the list."
+msgstr ""
+
+#. Section heading.
+msgctxt "market.rising"
+msgid "▲ Rising"
+msgstr ""
+
+#. Section heading.
+msgctxt "market.falling"
+msgid "▼ Falling"
+msgstr ""
+
+#. Section note.
+msgctxt "market.moversAbout"
+msgid "vs 90-day median · vol ≥ 20"
+msgstr ""
+
+#. Empty state.
+msgctxt "market.noRisers"
+msgid "No risers."
+msgstr ""
+
+#. Empty state.
+msgctxt "market.noFallers"
+msgid "No fallers."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.risingTable"
+msgid "Rising prices table"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.fallingTable"
+msgid "Falling prices table"
+msgstr ""
+
+#. Section heading.
+msgctxt "market.vaultedTitle"
+msgid "Vaulted & valuable"
+msgstr ""
+
+#. Section note.
+msgctxt "market.vaultedAbout"
+msgid "no longer drop, so supply is capped"
+msgstr ""
+
+#. Empty state.
+msgctxt "market.noVault"
+msgid "No vault data in this snapshot."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.vaultedTable"
+msgid "Vaulted items table"
+msgstr ""
+
+#. Note.
+msgctxt "market.vaultedNote"
+msgid "High-value vaulted items tend to hold or climb."
+msgstr ""
+
+#. Baro.
+msgctxt "market.baroAt"
+msgid "At {location} now."
+msgstr ""
+
+#. Baro.
+msgctxt "market.baroArrives"
+msgid "Arrives at {location}."
+msgstr ""
+
+#. Baro.
+msgctxt "market.baroNext"
+msgid "Next visit at {location}."
+msgstr ""
+
+#. Baro.
+msgctxt "market.baroAdvice"
+msgid "Schedule only - bring your own ducats. His mods dip ~50% on arrival day; the money is in holding for the recovery."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.baroTable"
+msgid "Baro stock table"
+msgstr ""
+
+#. Column header.
+msgctxt "market.lastStock"
+msgid "Last visit’s stock"
+msgstr ""
+
+#. Column header.
+msgctxt "market.stock"
+msgid "Stock"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.ducatPrice"
+msgid "Ducat price at Baro"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "market.avgNow"
+msgid "Avg now"
+msgstr ""
+
+#. Button.
+msgctxt "market.showTop"
+msgid "Show top {count}"
+msgstr ""
+
+#. Button.
+msgctxt "market.allItems"
+msgid "All {count} items"
+msgstr ""
+
+#. Link.
+msgctxt "market.ducatMath"
+msgid "Ducat math for what you own →"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.context"
+msgid "Market context"
+msgstr ""
+
+#. Section heading.
+msgctxt "market.dispoTitle"
+msgid "Riven disposition changes"
+msgstr ""
+
+#. Section note.
+msgctxt "market.dispoAbout"
+msgid "last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon’s rivens - WFM reprices within a day"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "market.dispoTable"
+msgid "Riven dispositions table"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "market.col.weapon"
+msgid "Weapon"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "market.col.disposition"
+msgid "Disposition"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.dispositionHelp"
+msgid "Disposition before → after"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "market.col.seen"
+msgid "Seen"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.col.seenHelp"
+msgid "When our scrape first saw the new value"
+msgstr ""
+
+#. Tooltip.
+msgctxt "market.dispoMove"
+msgid "Disposition {from} → {to}"
+msgstr ""
+
+#. Count.
+msgctxt "market.all"
+msgid "All {count}"
+msgstr ""
+
+#. Count.
+msgctxt "market.topOf"
+msgid "Top {shown} of {total}"
+msgstr ""
+
+#. Button.
+msgctxt "market.showAll"
+msgid "Show all {count}"
+msgstr ""
