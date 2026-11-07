@@ -1,5 +1,5 @@
 {
-  "version": "0.8.117",
+  "version": "0.9.100",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1893,6 +1893,67 @@
           "kind": "improved",
           "title": "Dropdowns match the app",
           "body": "Every dropdown is now drawn in the app's own style in both themes, instead of the white system box Linux showed. They work with the keyboard as before.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.9.100",
+      "date": "2026-11-07",
+      "changes": [
+        {
+          "id": "app-languages",
+          "kind": "improved",
+          "title": "TennoWorth in your language",
+          "body": "On first launch the app asks which language to use, with your game's language already picked, and switches as you move through the list. Change it any time in Settings › Appearance. Every language is a first draft: if something reads wrong, report it from the Translation review form on GitHub.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "reward-languages",
+          "kind": "improved",
+          "title": "Rewards read in the game's language",
+          "body": "The relic reward overlay now reads reward names in the language Warframe runs in, so it works when the game isn't in English. Settings › Relic overlay can set a different language.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "crack-anyway",
+          "kind": "improved",
+          "title": "Crack a relic anyway",
+          "body": "Under a Sell intact or Refine verdict, a button lets you crack that relic anyway. The expected value and totals follow your choice, and the original advice stays visible.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sidebar-rail",
+          "kind": "improved",
+          "title": "Resizable sidebar and icon rail",
+          "body": "Drag the sidebar's edge to resize it, or narrower to fold it into icons with their counts underneath. The size is remembered. The window is now at least 1200px wide, so no view scrolls sideways.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "status-menu-arrows",
+          "kind": "fixed",
+          "title": "Status menu arrows no longer change your status",
+          "body": "Moving through the status menu with the arrow keys used to change what buyers saw on warframe.market. Arrows now only move between choices; Enter picks one.",
           "platforms": [
             "windows",
             "linux"
