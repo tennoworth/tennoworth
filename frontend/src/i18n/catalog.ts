@@ -48,10 +48,19 @@ const visibleLength = (text: string) => [...graphemes.segment(text.replace(/\{[^
 // The same kinds of tags as the English, each closed. Not the same count: a
 // plural can have more or fewer branches than English, each with its own tags.
 function tagsMatch(translation: string, english: string): boolean {
-  const kinds = (text: string) => [...new Set(tagsIn(text).map((tag) => tag.replace(/[</>]/g, '')))].sort().join();
-  const balanced = [...new Set(tagsIn(translation).map((tag) => tag.replace(/[</>]/g, '')))]
-    .every((name) => tagsIn(translation).filter((tag) => tag === `<${name}>`).length === tagsIn(translation).filter((tag) => tag === `</${name}>`).length);
-  return balanced && kinds(translation) === kinds(english);
+  const RICH = new Set(['em', 'b', 'code', 'kbd', 'good', 'bad']);
+  const name = (tag: string) => tag.replace(/[</>]/g, '');
+  const split = (text: string) => {
+    const tags = tagsIn(text);
+    return { rich: tags.filter((tag) => RICH.has(name(tag))), literal: tags.filter((tag) => !RICH.has(name(tag))).join() };
+  };
+  const ours = split(translation);
+  const theirs = split(english);
+  const kinds = (tags: string[]) => [...new Set(tags.map(name))].sort().join();
+  const balanced = [...new Set(ours.rich.map(name))]
+    .every((tag) => ours.rich.filter((t) => t === `<${tag}>`).length === ours.rich.filter((t) => t === `</${tag}>`).length);
+  // Text such as /proc/<pid>/mem is not a tag: it stays exactly as in English.
+  return balanced && kinds(ours.rich) === kinds(theirs.rich) && ours.literal === theirs.literal;
 }
 
 export function checkCatalogs(sources: Sources, files: Record<string, string>, languages: readonly string[]): CheckResult {

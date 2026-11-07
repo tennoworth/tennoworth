@@ -90,6 +90,13 @@ describe('catalogs', () => {
     expect(checkCatalogs(plural, { th: file({ p: four, t: 'เฉลี่ย' }).replace('Language: pl', 'Language: th') }, ['th']).warnings).toEqual([]);
   });
 
+  it('keeps text like <pid> exactly as English has it', () => {
+    const path = { a: { text: 'Read <code>/proc/<pid>/mem</code>.', note: 'Path.' } };
+    const file = (translation: string) => formatPo({ language: 'fr', entries: syncCatalog(path, 'fr', null).entries.map(entry => ({ ...entry, translation })) });
+    expect(checkCatalogs(path, { fr: file('Lire <code>/proc/<pid>/mem</code>.') }, ['fr']).errors).toEqual([]);
+    expect(checkCatalogs(path, { fr: file('Lire <code>/proc/<pid>/mem</code> <pid>.') }, ['fr']).errors.join()).toMatch(/tags differ/);
+  });
+
   it('the shipped catalogs are in step with en.ts and valid', () => {
     const files = Object.fromEntries(TRANSLATED.map(language => [language, readFileSync(`src/i18n/locales/${language}.po`, 'utf8')]));
     expect(checkCatalogs(EN, files, TRANSLATED).errors).toEqual([]);
