@@ -207,8 +207,14 @@ export interface Appraisal {
    *  then not a typical price and the UI must lead with the median. */
   skewed: boolean;
   /** Notes the UI must show alongside any number - the limits of the model. */
-  caveats: string[];
+  caveats: AppraisalCaveat[];
 }
+
+/** The limits of the model, worded by the view: `band` (a weapon band, not
+ *  this roll; popularity is a score, not a trade count), `desirability`,
+ *  `spliced` (the band mixes spliced and classic rivens since Update 44.1),
+ *  `rare` (few trades), `skewed` (average far above the median). */
+export type AppraisalCaveat = 'no-data' | 'band' | 'desirability' | 'spliced' | 'rare' | 'skewed';
 
 /**
  * Appraise an offer against a weapon's distribution.
@@ -231,26 +237,16 @@ export function appraise(
       verdict: null,
       reroll: null,
       skewed: false,
-      caveats: ['DE published no price for this weapon and reroll state this week.'],
+      caveats: ['no-data'],
     };
   }
 
   const skew = skewOf(dist);
   const skewed = skew != null && skew >= SKEWED;
 
-  const caveats = [
-    `DE's weekly band for the weapon's market, not this riven's stats. Popularity ${dist.pop}/100 is a relative score, not a count of trades.`,
-    'Stat desirability is not modelled; a god roll and a junk roll sit in the same band.',
-    "Since Update 44.1 DE's band mixes spliced and classic rivens.",
-  ];
-  if (dist.pop <= LOW_POPULARITY) {
-    caveats.push('Rarely traded this week: the band may rest on a handful of sales.');
-  }
-  if (skewed) {
-    caveats.push(
-      `A few large sales pull the average (${dist.avg.toFixed(0)}p) well above the median (${dist.median.toFixed(0)}p) - read the median.`,
-    );
-  }
+  const caveats: AppraisalCaveat[] = ['band', 'desirability', 'spliced'];
+  if (dist.pop <= LOW_POPULARITY) caveats.push('rare');
+  if (skewed) caveats.push('skewed');
 
   if (price == null || !(price > 0)) {
     return { dist, placement: null, verdict: null, reroll: null, skewed, caveats };

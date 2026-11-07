@@ -9,7 +9,8 @@
 
   import type { RivenAuction, RivenStatFilter } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
-  import { humanWindow } from '../../ui/format';
+  import { humanWindow, plat } from '../../ui/format';
+  import { t } from '../../i18n/i18n.svelte';
   import {
     bandForRiven,
     compsFilterFor,
@@ -114,9 +115,9 @@
     const wanted = rerolled ? entry?.rolled : entry?.unrolled;
     const usedOther = !!entry && !wanted;
     return {
-      price: band.median.toFixed(0) + 'p',
-      range: band.min > 0 || band.max > 0 ? band.min.toFixed(0) + '–' + band.max.toFixed(0) + 'p' : '',
-      note: (usedOther ? 'closest band · ' : '') + (rerolled ? 'rolled' : 'unrolled') + ' · popularity ' + band.pop + '/100',
+      price: plat(band.median) + 'p',
+      range: band.min > 0 || band.max > 0 ? plat(band.min) + '–' + plat(band.max) + 'p' : '',
+      note: [usedOther ? t('riven.closestBand') : '', t(rerolled ? 'riven.rolled' : 'riven.unrolled'), t('riven.popularity', { pop: band.pop })].filter(Boolean).join(' · '),
       bar: band.min > 0 && band.max >= band.min ? { from: bandPos(band.min), to: bandPos(band.max), at: bandPos(band.median) } : null,
     };
   }
@@ -180,21 +181,21 @@
    *  the line describes the sample and stops there. */
   function sampleLine(comps: RivenAuction[]): string {
     const read = describeComps(comps, Date.now());
-    const parts = [`${read.size} cheapest buyout${read.size === 1 ? '' : 's'} in this sample`];
+    const parts = [t('riven.sample.size', { count: read.size })];
     const spliced = comps.filter((a) => a.attributes.some((s) => isSplicedStat(s.url_name))).length;
-    if (spliced > 0) parts.push(`${spliced} with a spliced trait`);
+    if (spliced > 0) parts.push(t('riven.sample.spliced', { count: spliced }));
     parts.push(read.dated === 0
-      ? 'no listing dates in this response'
-      : `${read.dated} dated · oldest ${read.oldestAskDays} d, newest ${read.newestAskDays} d`);
+      ? t('riven.sample.undated')
+      : t('riven.sample.dated', { count: read.dated, oldest: read.oldestAskDays ?? 0, newest: read.newestAskDays ?? 0 }));
     const { online, ingame, offline, unknown } = read.status;
     const sellers = [
-      online ? `${online} online` : '',
-      ingame ? `${ingame} in game` : '',
-      offline ? `${offline} offline` : '',
-      unknown ? `${unknown} status unknown` : '',
+      online ? t('riven.sample.online', { count: online }) : '',
+      ingame ? t('riven.sample.ingame', { count: ingame }) : '',
+      offline ? t('riven.sample.offline', { count: offline }) : '',
+      unknown ? t('riven.sample.unknown', { count: unknown }) : '',
     ].filter(Boolean);
-    if (sellers.length) parts.push(`sellers ${sellers.join(', ')}`);
-    parts.push('listing age is not time-to-sale');
+    if (sellers.length) parts.push(t('riven.sample.sellers', { list: sellers.join(', ') }));
+    parts.push(t('riven.sample.age'));
     return parts.join(' · ');
   }
 
@@ -204,35 +205,34 @@
 
   function spliceText(o: SpliceOption): string {
     const name = attrs?.find((a) => a.slug === o.recipe.result)?.name ?? o.recipe.name;
-    const from = `${o.consumed[0].label} and ${o.consumed[1].label}`;
-    return `${name} from ${from}${o.randomIsNegative ? ' (the new random trait is negative)' : ''}`;
+    return t(o.randomIsNegative ? 'riven.spliceNegative' : 'riven.splice', { name, first: o.consumed[0].label, second: o.consumed[1].label });
   }
 
   function filterText(row: Row): string {
     if (!row.filter) return '';
     const names = row.filter.filter.positive.map((s) => '+' + attrName(s)).join(', ');
-    return row.filter.complete ? names : `${names} (unrecognised stats left out)`;
+    return row.filter.complete ? names : t('riven.unrecognised', { names });
   }
 </script>
 
 <section class="view-header">
-  <h2>Rivens</h2>
-  <p class="lede">DE’s weekly band, the disposition trend, splice options, and live comparables — no single “worth N” number.</p>
+  <h2>{t('riven.title')}</h2>
+  <p class="lede">{t('riven.lede')}</p>
   <div class="vh-end">
-    <div class="ui-totals" role="group" aria-label="Rivens summary">
-      <div class="cell"><span class="k">Owned</span><span class="v">{rivens.length}</span></div>
-      {#if rivenStatsAge}<div class="cell"><span class="k">Band data</span><span class="v">{rivenStatsAge}</span></div>{/if}
+    <div class="ui-totals" role="group" aria-label={t('riven.summary')}>
+      <div class="cell"><span class="k">{t('riven.owned')}</span><span class="v">{rivens.length}</span></div>
+      {#if rivenStatsAge}<div class="cell"><span class="k">{t('riven.bandData')}</span><span class="v">{rivenStatsAge}</span></div>{/if}
     </div>
   </div>
 </section>
 <section class="wrap tw rivens" data-testid="rivens-view">
   <div class="rail">
-    <h3>Owned rivens</h3>
-    <span class="exp">{rivens.length} owned</span>
+    <h3>{t('riven.ownedTitle')}</h3>
+    <span class="exp">{t('riven.ownedCount', { count: rivens.length })}</span>
   </div>
 
   {#if sorted.length === 0}
-    <div class="line"><span class="exp">No rivens in your scanned inventory. Crack some relics or buy veiled ones.</span></div>
+    <div class="line"><span class="exp">{t('riven.empty')}</span></div>
   {:else}
     <div class="scroll" use:fitTable bind:this={tableEl}>
       <table class="tw fixed">
@@ -247,8 +247,8 @@
         </colgroup>
         <thead>
           <tr>
-            <th class="l">Weapon</th><th class="l"><span class="sr-only">Actions</span></th><th class="l">Stats</th><th>Rolls</th><th data-drop="1">Rank</th>
-            <th class="l">Dispo</th><th title="DE’s weekly trade band: median, then min–max. The bars share one 1p–10,000p log scale.">DE weekly</th>
+            <th class="l">{t('riven.col.weapon')}</th><th class="l"><span class="sr-only">{t('riven.col.actions')}</span></th><th class="l">{t('riven.col.stats')}</th><th>{t('riven.col.rolls')}</th><th data-drop="1">{t('riven.col.rank')}</th>
+            <th class="l">{t('riven.col.dispo')}</th><th title={t('riven.col.deHelp')}>{t('riven.col.de')}</th>
           </tr>
         </thead>
         <tbody>
@@ -261,10 +261,10 @@
               <td class="l">
                 <div class="weapon">
                   {#if r.veiled}
-                    <span class="veiled" title="Veiled riven - the stats are revealed by installing and completing its challenge.">Veiled</span>
+                    <span class="veiled" title={t('riven.veiledHelp')}>{t('riven.veiled')}</span>
                   {:else}
-                    <strong>{r.weaponName ?? 'Unknown weapon'}</strong>
-                    {#if r.pol}<span class="pol" title="Polarity">{polaritySymbol(r.pol)}</span>{/if}
+                    <strong>{r.weaponName ?? t('riven.unknownWeapon')}</strong>
+                    {#if r.pol}<span class="pol" title={t('riven.polarity')}>{polaritySymbol(r.pol)}</span>{/if}
                   {/if}
                 </div>
               </td>
@@ -275,37 +275,37 @@
                   disabled={!r.slug}
                   use:busy={compsBusy !== null}
                   aria-expanded={r.slug ? openRow === row.key : undefined}
-                  title={r.slug ? 'Fetch the cheapest live buyouts for this riven (WFM caps at 10/min).' : 'Unknown weapon - no comps.'}
+                  title={t(r.slug ? 'riven.compsHelp' : 'riven.noComps')}
                 >
-                  {query != null && compsBusy === query.key ? 'Fetching…' : openRow === row.key ? 'Hide comps' : 'Comps'}
+                  {t(query != null && compsBusy === query.key ? 'riven.fetching' : openRow === row.key ? 'riven.hideComps' : 'riven.comps')}
                 </button>
                 {#if row.report}
                   <!-- DE's raw riven data, for reporting a trait or state the
                        app does not read yet. No account details: the path
                        and fingerprint only. -->
-                  <span class="copy-data" title="Copy DE's raw data for this riven, to paste into a bug report. It holds no account details.">
-                    <CopyButton text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
+                  <span class="copy-data" title={t('riven.copyHelp')}>
+                    <CopyButton text={row.report} label={t('riven.copyData')} name={t('riven.copyName', { weapon: r.weaponName ?? t('riven.thisRiven') })} />
                   </span>
                 {/if}
               </td>
               <td class="l">
-                <div class="stats" title={r.veiled ? 'Veiled - stats hidden until revealed.' : 'Stat names from the inventory fingerprint. Exact values require DE’s full Riven formula and are not guessed.'}>
+                <div class="stats" title={t(r.veiled ? 'riven.veiledStats' : 'riven.statsHelp')}>
                   {#if r.veiled}
-                    <span class="muted">challenge to reveal</span>
+                    <span class="muted">{t('riven.challenge')}</span>
                   {:else}
                     {#each row.stats as stat, si (si)}
-                      <span class="stat" class:unknown={stat.slug == null}>{stat.label}{#if stat.spliced}<span class="spliced">spliced</span>{/if}</span>
+                      <span class="stat" class:unknown={stat.slug == null}>{stat.label}{#if stat.spliced}<span class="spliced">{t('riven.spliced')}</span>{/if}</span>
                     {/each}
                   {/if}
                 </div>
                 {#if row.unread.length > 0}
                   <p class="unread" data-testid="unread-fingerprint">
-                    This riven carries data the app does not read yet ({row.unread.join(', ')}), so a trait may be missing above. Copy data and report it.
+                    {t('riven.unread', { keys: row.unread.join(', ') })}
                   </p>
                 {/if}
                 {#if row.splices.length > 0}
                   <p class="splices" data-testid="splice-options">
-                    <span class="splices-label">Can splice:</span>
+                    <span class="splices-label">{t('riven.canSplice')}</span>
                     {row.splices.map(spliceText).join('; ')}
                   </p>
                 {/if}
@@ -317,7 +317,7 @@
                   <span class="mono">{market.rivens.weapons[r.slug].disposition.toFixed(2)}</span>
                   {#if change && change.to !== change.from}
                     {@const up = change.to > change.from}
-                    <span class="dispo-move" class:up class:down={!up} title={`Disposition ${change.from.toFixed(2)} → ${change.to.toFixed(2)} (${change.seen_at.slice(0, 10)})`}>
+                    <span class="dispo-move" class:up class:down={!up} title={t('riven.dispoMove', { from: change.from.toFixed(2), to: change.to.toFixed(2), date: change.seen_at.slice(0, 10) })}>
                       {up ? '▲' : '▼'} {Math.abs((change.to - change.from) * 100).toFixed(0)}%
                     </span>
                   {/if}
@@ -344,7 +344,7 @@
                        the user, and we supply the arithmetic against DE's
                        distribution - placement and reroll cost. -->
                   <details class="offer-check">
-                    <summary>check an offer</summary>
+                    <summary>{t('riven.checkOffer')}</summary>
                     <RivenOffer riven={r} market={market} />
                   </details>
                 {:else}
@@ -357,23 +357,23 @@
               <tr class="comps-row">
                 <td colspan="7">
                   <div class="comps-bar">
-                    <span class="ui-segmented xs" role="group" aria-label="Compare with" use:roving>
-                      <button type="button" aria-pressed={scopeOf(row) === 'matched'} disabled={!row.filter || compsBusy !== null} onclick={() => setScope(row, 'matched')}>Same positive stats</button>
-                      <button type="button" aria-pressed={scopeOf(row) === 'weapon'} disabled={compsBusy !== null} onclick={() => setScope(row, 'weapon')}>All on weapon</button>
+                    <span class="ui-segmented xs" role="group" aria-label={t('riven.compareWith')} use:roving>
+                      <button type="button" aria-pressed={scopeOf(row) === 'matched'} disabled={!row.filter || compsBusy !== null} onclick={() => setScope(row, 'matched')}>{t('riven.samePositive')}</button>
+                      <button type="button" aria-pressed={scopeOf(row) === 'weapon'} disabled={compsBusy !== null} onclick={() => setScope(row, 'weapon')}>{t('riven.allOnWeapon')}</button>
                     </span>
                     {#if scopeOf(row) === 'matched' && row.filter}
                       <span class="muted small">{filterText(row)}</span>
                     {/if}
                   </div>
                   {#if compsError.get(query.key)}
-                    <div class="muted bad">Couldn't load comps: {compsError.get(query.key)}</div>
+                    <div class="muted bad">{t('riven.compsFailed', { error: compsError.get(query.key) ?? '' })}</div>
                   {:else if compsBusy === query.key}
-                    <div class="muted">Fetching the cheapest buyouts for {r.weaponName}…</div>
+                    <div class="muted">{t('riven.fetchingFor', { weapon: r.weaponName ?? t('riven.thisRiven') })}</div>
                   {:else if comps && comps.length === 0}
                     <div class="muted">
                       {scopeOf(row) === 'matched'
-                        ? 'No buyouts for this weapon share these positive stats right now. Try All on weapon.'
-                        : 'No buyout auctions for this weapon right now.'}
+                        ? t('riven.noMatched', { all: t('riven.allOnWeapon') })
+                        : t('riven.noBuyouts')}
                     </div>
                   {:else if comps}
                     <div class="comps">
@@ -383,8 +383,8 @@
                           class="btn ghost xs"
                           onclick={() => loadComps(row, true)}
                           disabled={compsBusy !== null}
-                          title="Ask warframe.market again for the cheapest buyouts."
-                        >Refresh sample</button>
+                          title={t('riven.refreshHelp')}
+                        >{t('riven.refresh')}</button>
                       </div>
                       {#each comps as a (a.id)}
                         {@const similarity = rivenSimilarity(r, a.attributes, attrs)}
@@ -392,25 +392,25 @@
                           <div class="comp-head">
                             <span class="mono price">{a.price}p</span>
                             <span class="muted small">
-                              {a.is_direct_sell ? 'buyout' : 'auction buyout'}
-                              {#if a.top_bid != null} · top bid {a.top_bid}p{/if}
+                              {t(a.is_direct_sell ? 'riven.buyout' : 'riven.auctionBuyout')}
+                              {#if a.top_bid != null} · {t('riven.topBid', { price: a.top_bid })}{/if}
                             </span>
-                            <span class="comp-owner" title="WFM status">{a.owner ?? 'unknown'}{#if a.owner_status}{` · ${a.owner_status}`}{/if}</span>
+                            <span class="comp-owner" title={t('riven.wfmStatus')}>{a.owner ?? t('riven.unknown')}{#if a.owner_status}{` · ${a.owner_status}`}{/if}</span>
                             {#if similarity != null}
-                              <span class="similarity" title="Matching signed stat names only; roll strength is not compared">{similarity}% stat match</span>
+                              <span class="similarity" title={t('riven.matchHelp')}>{t('riven.match', { pct: similarity })}</span>
                             {/if}
                           </div>
                           <div class="comp-detail muted small">
-                            {#if a.name}<span class="riven-name" title="The riven's rolled name">{a.name}</span>{/if}
-                            <span>MR {a.mastery_level}</span>
-                            <span>{a.re_rolls} reroll{a.re_rolls === 1 ? '' : 's'}</span>
-                            {#if listedDaysAgo(a.created) != null}<span>listed {listedDaysAgo(a.created)} d ago</span>{/if}
-                            {#if a.mod_rank > 0}<span>rank {a.mod_rank}</span>{/if}
+                            {#if a.name}<span class="riven-name" title={t('riven.nameHelp')}>{a.name}</span>{/if}
+                            <span>{t('riven.mr', { level: a.mastery_level })}</span>
+                            <span>{t('riven.rerolls', { count: a.re_rolls })}</span>
+                            {#if listedDaysAgo(a.created) != null}<span>{t('riven.listedAgo', { days: listedDaysAgo(a.created) ?? 0 })}</span>{/if}
+                            {#if a.mod_rank > 0}<span>{t('riven.modRank', { rank: a.mod_rank })}</span>{/if}
                             {#if a.polarity}<span>{a.polarity}</span>{/if}
                           </div>
                           <div class="comp-stats small">
                             {#each a.attributes as s, ai (ai)}
-                              <span class="stat">{formatAuctionStat(s.url_name, s.value, s.positive, attrs)}{#if isSplicedStat(s.url_name)}<span class="spliced">spliced</span>{/if}</span>
+                              <span class="stat">{formatAuctionStat(s.url_name, s.value, s.positive, attrs)}{#if isSplicedStat(s.url_name)}<span class="spliced">{t('riven.spliced')}</span>{/if}</span>
                             {/each}
                           </div>
                         </div>
@@ -424,7 +424,7 @@
         </tbody>
       </table>
     </div>
-    <Pager window={win} total={sorted.length} label="Riven pages" target={tableEl} onpage={(p) => (page = p)} />
+    <Pager window={win} total={sorted.length} label={t('riven.pages')} target={tableEl} onpage={(p) => (page = p)} />
   {/if}
 
 </section>

@@ -246,6 +246,6 @@ describe('RivensPanel', () => {
     render(RivensPanel, { props: { market, rivens } });
     const compsButton = (await screen.findAllByRole('button', { name: 'Comps' }))[0];
     await fireEvent.click(compsButton);
-    await screen.findByText(/Couldn't load comps/);
+    await screen.findByText(/Couldn.t load comps/);
   });
 });

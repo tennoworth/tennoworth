@@ -7744,3 +7744,520 @@ msgstr ""
 msgctxt "guide.note"
 msgid "TennoWorth checks the token with warframe.market before saving it, encrypted. It signs in as you, so don’t share it. Close the tab rather than logging out of warframe.market there - logging out may end this token too."
 msgstr ""
+
+#. Band note: the other reroll tier was used.
+msgctxt "riven.closestBand"
+msgid "closest band"
+msgstr ""
+
+#. Band note: the riven has been rerolled.
+msgctxt "riven.rolled"
+msgid "rolled"
+msgstr ""
+
+#. Band note: never rerolled.
+msgctxt "riven.unrolled"
+msgid "unrolled"
+msgstr ""
+
+#. Band note. A relative score, not a number of trades.
+msgctxt "riven.popularity"
+msgid "popularity {pop}/100"
+msgstr ""
+
+#. Comparison sample.
+msgctxt "riven.sample.size"
+msgid "{count, plural, one {# cheapest buyout in this sample} other {# cheapest buyouts in this sample}}"
+msgstr ""
+
+#. Comparison sample.
+msgctxt "riven.sample.spliced"
+msgid "{count} with a spliced trait"
+msgstr ""
+
+#. Comparison sample.
+msgctxt "riven.sample.undated"
+msgid "no listing dates in this response"
+msgstr ""
+
+#. Comparison sample; d = days.
+msgctxt "riven.sample.dated"
+msgid "{count} dated · oldest {oldest} d, newest {newest} d"
+msgstr ""
+
+#. Seller status count.
+msgctxt "riven.sample.online"
+msgid "{count} online"
+msgstr ""
+
+#. Seller status count.
+msgctxt "riven.sample.ingame"
+msgid "{count} in game"
+msgstr ""
+
+#. Seller status count.
+msgctxt "riven.sample.offline"
+msgid "{count} offline"
+msgstr ""
+
+#. Seller status count.
+msgctxt "riven.sample.unknown"
+msgid "{count} status unknown"
+msgstr ""
+
+#. Comparison sample; list is the seller status counts.
+msgctxt "riven.sample.sellers"
+msgid "sellers {list}"
+msgstr ""
+
+#. Comparison sample caveat.
+msgctxt "riven.sample.age"
+msgid "listing age is not time-to-sale"
+msgstr ""
+
+#. Splice option; names are riven traits.
+msgctxt "riven.splice"
+msgid "{name} from {first} and {second}"
+msgstr ""
+
+#. Splice option.
+msgctxt "riven.spliceNegative"
+msgid "{name} from {first} and {second} (the new random trait is negative)"
+msgstr ""
+
+#. Comparison filter.
+msgctxt "riven.unrecognised"
+msgid "{names} (unrecognised stats left out)"
+msgstr ""
+
+#. View heading.
+msgctxt "riven.title"
+msgid "Rivens"
+msgstr ""
+
+#. Line under the heading. DE = Digital Extremes.
+msgctxt "riven.lede"
+msgid "DE’s weekly band, the disposition trend, splice options, and live comparables - no single “worth N” number."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "riven.summary"
+msgid "Rivens summary"
+msgstr ""
+
+#. Summary label.
+#. Max 12 characters.
+msgctxt "riven.owned"
+msgid "Owned"
+msgstr ""
+
+#. Summary label: age of the price data.
+#. Max 12 characters.
+msgctxt "riven.bandData"
+msgid "Band data"
+msgstr ""
+
+#. Section heading.
+msgctxt "riven.ownedTitle"
+msgid "Owned rivens"
+msgstr ""
+
+#. Count.
+msgctxt "riven.ownedCount"
+msgid "{count} owned"
+msgstr ""
+
+#. Empty state.
+msgctxt "riven.empty"
+msgid "No rivens in your scanned inventory. Crack some relics or buy veiled ones."
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "riven.col.weapon"
+msgid "Weapon"
+msgstr ""
+
+#. Screen reader column header.
+msgctxt "riven.col.actions"
+msgid "Actions"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "riven.col.stats"
+msgid "Stats"
+msgstr ""
+
+#. Column header: reroll count.
+#. Max 6 characters.
+msgctxt "riven.col.rolls"
+msgid "Rolls"
+msgstr ""
+
+#. Column header.
+#. Max 6 characters.
+msgctxt "riven.col.rank"
+msgid "Rank"
+msgstr ""
+
+#. Column header: disposition.
+#. Max 8 characters.
+msgctxt "riven.col.dispo"
+msgid "Dispo"
+msgstr ""
+
+#. Column header.
+#. Max 14 characters.
+msgctxt "riven.col.de"
+msgid "DE weekly"
+msgstr ""
+
+#. Column tooltip.
+msgctxt "riven.col.deHelp"
+msgid "DE’s weekly trade band: median, then min–max. The bars share one 1p–10,000p log scale."
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.veiledHelp"
+msgid "Veiled riven - the stats are revealed by installing and completing its challenge."
+msgstr ""
+
+#. Riven state.
+#. Max 10 characters.
+msgctxt "riven.veiled"
+msgid "Veiled"
+msgstr ""
+
+#. In place of a weapon name.
+msgctxt "riven.unknownWeapon"
+msgid "Unknown weapon"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.polarity"
+msgid "Polarity"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.compsHelp"
+msgid "Fetch the cheapest live buyouts for this riven (WFM caps at 10/min)."
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.noComps"
+msgid "Unknown weapon - no comps."
+msgstr ""
+
+#. Button while busy.
+msgctxt "riven.fetching"
+msgid "Fetching…"
+msgstr ""
+
+#. Button.
+msgctxt "riven.hideComps"
+msgid "Hide comps"
+msgstr ""
+
+#. Button: comparable listings.
+#. Max 12 characters.
+msgctxt "riven.comps"
+msgid "Comps"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.copyHelp"
+msgid "Copy DE’s raw data for this riven, to paste into a bug report. It holds no account details."
+msgstr ""
+
+#. Button.
+msgctxt "riven.copyData"
+msgid "Copy data"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "riven.copyName"
+msgid "Copy raw riven data for {weapon}"
+msgstr ""
+
+#. In place of a weapon name.
+msgctxt "riven.thisRiven"
+msgid "this riven"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.veiledStats"
+msgid "Veiled - stats hidden until revealed."
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.statsHelp"
+msgid "Stat names from the inventory fingerprint. Exact values require DE’s full Riven formula and are not guessed."
+msgstr ""
+
+#. Placeholder for veiled stats.
+msgctxt "riven.challenge"
+msgid "challenge to reveal"
+msgstr ""
+
+#. Trait tag.
+#. Max 8 characters.
+msgctxt "riven.spliced"
+msgid "spliced"
+msgstr ""
+
+#. Note; keys are technical names.
+msgctxt "riven.unread"
+msgid "This riven carries data the app does not read yet ({keys}), so a trait may be missing above. Copy data and report it."
+msgstr ""
+
+#. Label.
+msgctxt "riven.canSplice"
+msgid "Can splice:"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.dispoMove"
+msgid "Disposition {from} → {to} ({date})"
+msgstr ""
+
+#. Disclosure.
+msgctxt "riven.checkOffer"
+msgid "check an offer"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "riven.compareWith"
+msgid "Compare with"
+msgstr ""
+
+#. Choice.
+msgctxt "riven.samePositive"
+msgid "Same positive stats"
+msgstr ""
+
+#. Choice; the empty state refers to it.
+msgctxt "riven.allOnWeapon"
+msgid "All on weapon"
+msgstr ""
+
+#. Error.
+msgctxt "riven.compsFailed"
+msgid "Couldn’t load comps: {error}"
+msgstr ""
+
+#. Status.
+msgctxt "riven.fetchingFor"
+msgid "Fetching the cheapest buyouts for {weapon}…"
+msgstr ""
+
+#. Empty state; all is the "All on weapon" choice.
+msgctxt "riven.noMatched"
+msgid "No buyouts for this weapon share these positive stats right now. Try {all}."
+msgstr ""
+
+#. Empty state.
+msgctxt "riven.noBuyouts"
+msgid "No buyout auctions for this weapon right now."
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.refreshHelp"
+msgid "Ask warframe.market again for the cheapest buyouts."
+msgstr ""
+
+#. Button.
+msgctxt "riven.refresh"
+msgid "Refresh sample"
+msgstr ""
+
+#. Listing type.
+msgctxt "riven.buyout"
+msgid "buyout"
+msgstr ""
+
+#. Listing type.
+msgctxt "riven.auctionBuyout"
+msgid "auction buyout"
+msgstr ""
+
+#. Listing detail.
+msgctxt "riven.topBid"
+msgid "top bid {price}p"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.wfmStatus"
+msgid "WFM status"
+msgstr ""
+
+#. In place of a seller name.
+msgctxt "riven.unknown"
+msgid "unknown"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.matchHelp"
+msgid "Matching signed stat names only; roll strength is not compared"
+msgstr ""
+
+#. Similarity.
+msgctxt "riven.match"
+msgid "{pct}% stat match"
+msgstr ""
+
+#. Tooltip.
+msgctxt "riven.nameHelp"
+msgid "The riven’s rolled name"
+msgstr ""
+
+#. Mastery rank requirement.
+msgctxt "riven.mr"
+msgid "MR {level}"
+msgstr ""
+
+#. Listing detail.
+msgctxt "riven.rerolls"
+msgid "{count, plural, one {# reroll} other {# rerolls}}"
+msgstr ""
+
+#. Listing detail; d = days.
+msgctxt "riven.listedAgo"
+msgid "listed {days} d ago"
+msgstr ""
+
+#. Listing detail.
+msgctxt "riven.modRank"
+msgid "rank {rank}"
+msgstr ""
+
+#. Screen reader name of the pager.
+msgctxt "riven.pages"
+msgid "Riven pages"
+msgstr ""
+
+#. Offer placement.
+msgctxt "offer.place.below-observed"
+msgid "Under the cheapest sale DE recorded"
+msgstr ""
+
+#. Offer placement.
+msgctxt "offer.place.bottom"
+msgid "Below the median"
+msgstr ""
+
+#. Offer placement.
+msgctxt "offer.place.middle"
+msgid "Between median and average"
+msgstr ""
+
+#. Offer placement.
+msgctxt "offer.place.upper"
+msgid "Above the average"
+msgstr ""
+
+#. Offer placement.
+msgctxt "offer.place.above-observed"
+msgid "Over the dearest sale DE recorded"
+msgstr ""
+
+#. Offer verdict, after the placement.
+msgctxt "offer.verdict.below"
+msgid "below this weapon’s market"
+msgstr ""
+
+#. Offer verdict.
+msgctxt "offer.verdict.fair"
+msgid "about right for this weapon"
+msgstr ""
+
+#. Offer verdict.
+msgctxt "offer.verdict.above"
+msgid "above this weapon’s market"
+msgstr ""
+
+#. Offer verdict.
+msgctxt "offer.verdict.outlier"
+msgid "above anything DE recorded this week"
+msgstr ""
+
+#. Field label.
+msgctxt "offer.offer"
+msgid "Offer"
+msgstr ""
+
+#. Field placeholder.
+#. Max 6 characters.
+msgctxt "offer.plat"
+msgid "plat"
+msgstr ""
+
+#. Checkbox.
+msgctxt "offer.locked"
+msgid "A trait is locked (rerolls cost double)"
+msgstr ""
+
+#. Axis label.
+msgctxt "offer.median"
+msgid "median {price}p"
+msgstr ""
+
+#. Reroll arithmetic. Keep <b>.
+msgctxt "offer.reroll"
+msgid "Rerolling costs <b>{kuva}</b> kuva. This weapon’s median trade is <b>{median}p</b>; your offer is above it."
+msgstr ""
+
+#. Reroll arithmetic.
+msgctxt "offer.rerollAtOrBelow"
+msgid "Rerolling costs <b>{kuva}</b> kuva. This weapon’s median trade is <b>{median}p</b>; your offer is at or below it."
+msgstr ""
+
+#. Reroll arithmetic.
+msgctxt "offer.rerollLocked"
+msgid "Rerolling costs <b>{kuva}</b> kuva with the lock. This weapon’s median trade is <b>{median}p</b>; your offer is above it."
+msgstr ""
+
+#. Reroll arithmetic.
+msgctxt "offer.rerollLockedAtOrBelow"
+msgid "Rerolling costs <b>{kuva}</b> kuva with the lock. This weapon’s median trade is <b>{median}p</b>; your offer is at or below it."
+msgstr ""
+
+#. Warning.
+msgctxt "offer.skewed"
+msgid "A few large sales pull this weapon’s average well above its median. Read the median."
+msgstr ""
+
+#. Note.
+msgctxt "offer.discount"
+msgid "Rerolled rivens on this weapon trade about <b>{pct}</b> below unrolled ones - buyers pay for reroll headroom."
+msgstr ""
+
+#. Caveat.
+msgctxt "offer.caveat.no-data"
+msgid "DE published no price for this weapon and reroll state this week."
+msgstr ""
+
+#. Caveat. Popularity is not a trade count.
+msgctxt "offer.caveat.band"
+msgid "DE’s weekly band for the weapon’s market, not this riven’s stats. Popularity {pop}/100 is a relative score, not a count of trades."
+msgstr ""
+
+#. Caveat.
+msgctxt "offer.caveat.desirability"
+msgid "Stat desirability is not modelled; a god roll and a junk roll sit in the same band."
+msgstr ""
+
+#. Caveat.
+msgctxt "offer.caveat.spliced"
+msgid "Since Update 44.1 DE’s band mixes spliced and classic rivens."
+msgstr ""
+
+#. Caveat.
+msgctxt "offer.caveat.rare"
+msgid "Rarely traded this week: the band may rest on a handful of sales."
+msgstr ""
+
+#. Caveat.
+msgctxt "offer.caveat.skewed"
+msgid "A few large sales pull the average ({avg}p) well above the median ({median}p) - read the median."
+msgstr ""
