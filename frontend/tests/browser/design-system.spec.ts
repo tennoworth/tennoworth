@@ -1022,7 +1022,7 @@ test('riven bands draw the median inside their min-max range on one shared scale
   await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
   const bands = page.locator('.band');
   // The range itself is DE's weekly data from the snapshot.
-  await expect(bands.first()).toContainText(/\d+–\d+p/);
+  await expect(bands.first()).toContainText(/\d[\d,]*–\d[\d,]*p/);
   for (const band of await bands.all()) {
     const span = (await band.locator('.range .span').boundingBox())!;
     const mid = (await band.locator('.range .mid').boundingBox())!;
