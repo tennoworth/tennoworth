@@ -67,6 +67,32 @@ describe('SellPane', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /clear/ })).toBeTruthy());
   });
 
+  it('keeps the main tags on one line and the rest in a grouped list that narrows as you type', async () => {
+    const availableTags: [string, number][] = [['mod', 30], ['rare', 25], ['weapon', 12], ['melee', 9], ['nyx', 4], ['jat_kittag', 2], ['axi', 1]];
+    renderPane({ availableTags });
+    const line = screen.getByRole('group', { name: 'Item types' });
+    const onLine = () => [...line.querySelectorAll('button.chip')].map((chip) => chip.firstChild?.textContent?.trim());
+    expect(onLine()).toEqual(['mod', 'melee']);
+    const more = screen.getByRole('button', { name: '+ 5 more' });
+    await fireEvent.click(more);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('group', { name: 'Rarity' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Relic era' })).toBeTruthy();
+    const names = screen.getByRole('group', { name: 'Mods for a Warframe, weapon or companion' });
+    expect(names.textContent).toContain('Jat Kittag');
+    const narrow = screen.getByRole('searchbox', { name: 'Narrow tags' });
+    await fireEvent.input(narrow, { target: { value: 'jat k' } });
+    await waitFor(() => expect(screen.queryByRole('group', { name: 'Rarity' })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Jat Kittag 2' })).toBeTruthy();
+    // A tag picked from the list joins the main line, so the choice stays in view.
+    await fireEvent.click(screen.getByRole('button', { name: 'Jat Kittag 2' }));
+    await waitFor(() => expect(onLine()).toEqual(['mod', 'melee', 'Jat Kittag']));
+    await fireEvent.input(narrow, { target: { value: 'oberon' } });
+    await waitFor(() => expect(screen.getByText('No tag matches “oberon”.')).toBeTruthy());
+    await fireEvent.keyDown(narrow, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('searchbox', { name: 'Narrow tags' })).toBeNull());
+  });
+
   it('splits the picks where today\'s trades run out, and not when the allowance is unknown', async () => {
     const allowance = { remaining: 3, mastery_rank: 12, observed_at: 1, utc_day: 1, snapshot_id: 1, confidence: 'scanned' as const, reason: null, monitoring: true };
     // Two non-bulk copies take 2 trades; nine bulk copies take 2 more, past the 3 left.

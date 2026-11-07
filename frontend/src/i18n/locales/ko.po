@@ -1142,6 +1142,81 @@ msgctxt "sell.tagsOr"
 msgid "tags OR together"
 msgstr "태그는 OR 조건"
 
+#. Button after the main tags: opens every other tag, grouped.
+#. Max 14 characters.
+#, fuzzy
+msgctxt "sell.tagsMore"
+msgid "+ {count} more"
+msgstr "+ {count}개 더"
+
+#. Button: closes the list of every tag.
+#. Max 14 characters.
+#, fuzzy
+msgctxt "sell.tagsFewer"
+msgid "− fewer"
+msgstr "− 접기"
+
+#. Placeholder of the box that narrows the full tag list, e.g. typing “nyx”.
+#. Max 24 characters.
+#, fuzzy
+msgctxt "sell.tagsNarrow"
+msgid "Narrow tags…"
+msgstr "태그 좁히기…"
+
+#. Screen reader name of the box that narrows the full tag list.
+#, fuzzy
+msgctxt "sell.tagsNarrowLabel"
+msgid "Narrow tags"
+msgstr "태그 좁히기"
+
+#. Shown when the narrowing text matches no tag.
+#, fuzzy
+msgctxt "sell.tagsNoMatch"
+msgid "No tag matches “{query}”."
+msgstr "“{query}”와 일치하는 태그가 없습니다."
+
+#. Tag group heading: what kind of item (mod, relic, set…).
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.type"
+msgid "Type"
+msgstr "종류"
+
+#. Tag group heading: weapon slot and weapon class (primary, swords…).
+#. Max 24 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.slot"
+msgid "Slot and class"
+msgstr "슬롯 및 분류"
+
+#. Tag group heading: common, uncommon, rare, legendary.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.rarity"
+msgid "Rarity"
+msgstr "희귀도"
+
+#. Tag group heading: Lith, Meso, Neo, Axi, Requiem relics.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.era"
+msgid "Relic era"
+msgstr "유물 시대"
+
+#. Tag group heading: kubrows, kavats, sentinels and their mods.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.companion"
+msgid "Companions"
+msgstr "동료"
+
+#. Tag group heading: tags naming the one Warframe, weapon or companion a mod belongs to.
+#. Max 48 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.name"
+msgid "Mods for a Warframe, weapon or companion"
+msgstr "워프레임·무기·동료 전용 모드"
+
 #. Screen reader name of the filter chips.
 #, fuzzy
 msgctxt "sell.activeFilters"

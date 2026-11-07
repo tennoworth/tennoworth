@@ -15,6 +15,8 @@
   import type { ListingReceipt, ListingReceipts } from './receipts.svelte';
   import { untrack } from 'svelte';
   import { focusLater, roving } from '../../ui/keyboard-actions';
+  import { TAG_GROUPS, tagGroup, topTags, type TagGroup } from '../../domain/tag-groups';
+  import { tagLabel, tagMatches } from './tag-labels';
   import Rich from '../../ui/Rich.svelte';
   import { formatLocale, t } from '../../i18n/i18n.svelte';
   import type { MessageKey } from '../../i18n/en';
@@ -156,6 +158,22 @@
     if (next.has(tag)) next.delete(tag); else next.add(tag);
     activeTags = next;
   }
+
+  // A big inventory carries ~150 tags, most naming one Warframe or weapon. One
+  // line keeps the broadest types and slots plus whatever is switched on; the
+  // rest wait, grouped, behind "+ more".
+  const GROUP_LABEL: Record<TagGroup, MessageKey> = {
+    type: 'sell.tagGroup.type', slot: 'sell.tagGroup.slot', rarity: 'sell.tagGroup.rarity',
+    era: 'sell.tagGroup.era', companion: 'sell.tagGroup.companion', name: 'sell.tagGroup.name',
+  };
+  let tagsOpen = $state(false);
+  let tagQuery = $state('');
+  let topTagSet = $derived(new Set(topTags(availableTags)));
+  let shownTags = $derived(availableTags.filter(([tag]) => topTagSet.has(tag) || activeTags.has(tag)));
+  let moreTags = $derived(availableTags.filter(([tag]) => !topTagSet.has(tag) && !activeTags.has(tag)));
+  let tagGroups = $derived(TAG_GROUPS
+    .map((group) => ({ group, tags: moreTags.filter(([tag]) => tagGroup(tag) === group && tagMatches(tag, tagQuery)) }))
+    .filter(({ tags }) => tags.length > 0));
 
   // Top picks strip. Built from `results`, which is already sorted best-first,
   // so selectPicks is a cheap filter+slice - no rescoring. Deliberately reads
@@ -518,23 +536,33 @@
 
 <!-- Bar 2 · categories as quiet text toggles, so the outlined active-filter
      chips beside them are the only outlined things on the line. -->
+{#snippet tagChip(tag: string, count: number)}
+  <button
+    type="button"
+    class="chip"
+    class:active={activeTags.has(tag)}
+    class:zero={count === 0}
+    aria-pressed={activeTags.has(tag)}
+    onclick={() => toggleTag(tag)}
+    title={count === 0 ? t('sell.tagNoRows') : t('sell.tagRows', { count })}
+  >
+    {tagLabel(tag)}
+    <span class="chip-count">{count}</span>
+  </button>
+{/snippet}
+
 {#snippet categoriesRow()}
   {#if availableTags.length > 0}
-    <div class="toolbar-group tagchips" role="group" aria-label={t('sell.itemTypes')} use:roving={':scope > button.chip'}>
-      {#each availableTags as [tag, count]}
-        <button
-          type="button"
-          class="chip"
-          class:active={activeTags.has(tag)}
-          class:zero={count === 0}
-          aria-pressed={activeTags.has(tag)}
-          onclick={() => toggleTag(tag)}
-          title={count === 0 ? t('sell.tagNoRows') : t('sell.tagRows', { count })}
-        >
-          {tag === 'arcane_enhancement' ? 'arcane' : tag}
-          <span class="chip-count">{count}</span>
-        </button>
+    <div class="toolbar-group tagchips" role="group" aria-label={t('sell.itemTypes')} use:roving={':scope > button.chip, :scope > button.tags-more'}>
+      {#each shownTags as [tag, count] (tag)}
+        {@render tagChip(tag, count)}
       {/each}
+      {#if moreTags.length > 0}
+        <button type="button" class="tags-more" aria-expanded={tagsOpen} aria-controls="all-tags"
+          onclick={() => { tagsOpen = !tagsOpen; if (tagsOpen) focusLater(() => document.querySelector<HTMLElement>('#tags-narrow')); }}>
+          {tagsOpen ? t('sell.tagsFewer') : t('sell.tagsMore', { count: moreTags.length })}
+        </button>
+      {/if}
       {#if activeTags.size > 0}
         <button type="button" class="chip-clear" onclick={() => { activeTags = new Set(); focusLater(() => document.querySelector<HTMLElement>('.tagchips > button.chip')); }}>
           {t('sell.clearTags', { count: activeTags.size })}
@@ -543,6 +571,22 @@
     </div>
     {#if activeTags.size >= 2}
       <span class="tag-or-note">{t('sell.tagsOr')}</span>
+    {/if}
+    {#if tagsOpen && moreTags.length > 0}
+      <div id="all-tags" class="all-tags">
+        <input id="tags-narrow" class="tags-narrow" type="search" placeholder={t('sell.tagsNarrow')} aria-label={t('sell.tagsNarrowLabel')} bind:value={tagQuery}
+          onkeydown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); tagsOpen = false; focusLater(() => document.querySelector<HTMLElement>('.tagchips > button.tags-more')); } }} />
+        {#each tagGroups as { group, tags } (group)}
+          <div class="tagset" role="group" aria-label={t(GROUP_LABEL[group])} use:roving={':scope > button.chip'}>
+            <span class="tagset-label">{t(GROUP_LABEL[group])} <span class="chip-count">{tags.length}</span></span>
+            {#each tags as [tag, count] (tag)}
+              {@render tagChip(tag, count)}
+            {/each}
+          </div>
+        {:else}
+          <p class="tags-none">{t('sell.tagsNoMatch', { query: tagQuery })}</p>
+        {/each}
+      </div>
     {/if}
   {/if}
 {/snippet}
@@ -874,6 +918,22 @@
   /* Type chips take their own line under the presets - real inventories carry
      10–20 tags, which cannot share a 40px line with six presets. */
   .tagchips { gap: 0 var(--s2); }
+  .tags-more {
+    font: inherit; font-size: var(--text-caption); color: var(--fg);
+    min-height: var(--ctl-xs); padding: 0 var(--s2);
+    background: transparent; border: 1px dashed var(--border); border-radius: var(--radius-ctl); cursor: pointer;
+  }
+  .tags-more:hover, .tags-more[aria-expanded="true"] { border-color: var(--fg); }
+  /* The full list takes its own line under the row and scrolls inside itself. */
+  .all-tags {
+    flex: 1 0 100%; display: grid; gap: var(--s2); white-space: normal;
+    max-height: 18rem; overflow-y: auto; padding: var(--s2) 0;
+    border-top: 1px var(--rule) var(--hairline);
+  }
+  .tags-narrow { width: 16rem; max-width: 100%; }
+  .tagset { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s2); }
+  .tagset-label { flex: 1 0 100%; font: 600 var(--text-caption) var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .tags-none { margin: 0; color: var(--muted); font-size: var(--text-caption); }
   .chip {
     font: inherit;
     display: inline-flex;

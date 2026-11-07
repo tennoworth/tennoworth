@@ -210,6 +210,14 @@ describe('computeAvailableTags', () => {
     expect(Object.fromEntries(counts)).toEqual({ prime: 2, mod: 1 });
   });
 
+  it('folds a breed into its species, for counts and for the filter', () => {
+    const mkt = market({ a: item({ tags: ['mod', 'huras_kubrow'] }), b: item({ tags: ['mod', 'kubrow', 'sunika_kubrow'] }), c: item({ tags: ['kubrow_claws'] }) });
+    const recs = owned(rec('a'), rec('b'), rec('c'));
+    expect(Object.fromEntries(computeAvailableTags(recs, mkt, baseFilters()))).toEqual({ mod: 2, kubrow: 2, kubrow_claws: 1 });
+    const out = computeResults(recs, mkt, { ...baseFilters(), activeTags: new Set(['kubrow']) }, 0);
+    expect(out.map((row) => row.slug).sort()).toEqual(['a', 'b']);
+  });
+
   it('still respects the non-tag clauses (e.g. minPrice)', () => {
     const filters = { ...baseFilters(), minPrice: 60 };
     const mkt = market({ a: item({ avg: 10, tags: ['prime'] }) });
