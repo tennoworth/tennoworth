@@ -25,6 +25,8 @@ frontend/
     contracts/               wire shapes, capabilities, errors, state interfaces
     adapters/                Tauri IPC, same-origin loading, persistence
     ui/                      visual primitives only
+    i18n/                    translation catalogs (locales/*.po), the English
+                             source (en.ts), t() and the game-term glossary
     dev/                     gates/, preview/ (sample transport, wasm planners),
                              styleguide/, testing/
   admin.html                 separate private dashboard entry (dist-admin)

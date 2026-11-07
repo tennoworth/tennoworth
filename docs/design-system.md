@@ -113,6 +113,16 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
   Add a semantic token centrally when an existing one cannot express the role.
   Layout-specific dimensions are allowed when justified by the content; they
   must not become a second spacing or typography system.
+- Translated text keeps these roles. Japanese, Korean, Chinese and Thai drop
+  letter-spacing and show `<em>` as weight rather than slant (app.css, keyed on
+  `:lang`), because tracking breaks those scripts and their italics are
+  synthetic. The document's `lang` is the chosen language, so English left on a
+  translated page takes that language's casing (Turkish turns "FALLING" into
+  "FALLİNG"): a language ships only once the text it shows is in the catalog,
+  and English data inside an uppercase label carries `lang="en"`. Check a
+  layout change with the
+  desktop preview's `&lang=pseudo` (about 40% longer, accented) and in German,
+  Japanese and Thai.
 
 ## Shared patterns
 
