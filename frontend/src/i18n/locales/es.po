@@ -8597,3 +8597,310 @@ msgstr ""
 msgctxt "overlay.check"
 msgid "check name · {pct}%"
 msgstr ""
+
+#. Daily task. Use the game’s name for Daily Tribute.
+msgctxt "routine.task.login-tribute"
+msgid "Claim the Daily Tribute"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.login-tribute.detail"
+msgid "Collect the login reward when you enter the game."
+msgstr ""
+
+#. Daily task.
+msgctxt "routine.task.foundry-build"
+msgid "Keep the Foundry busy"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.foundry-build.detail"
+msgid "Start a Forma or another build you have planned."
+msgstr ""
+
+#. Daily task.
+msgctxt "routine.task.syndicate-standing"
+msgid "Use Syndicate Standing"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.syndicate-standing.detail"
+msgid "Work toward the daily cap and choose an augment or arcane with demand."
+msgstr ""
+
+#. Daily task.
+msgctxt "routine.task.steel-path-incursions"
+msgid "Check Steel Path Incursions"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.steel-path-incursions.detail"
+msgid "Complete the missions that fit today’s play session."
+msgstr ""
+
+#. Daily task.
+msgctxt "routine.task.sortie"
+msgid "Complete the Sortie"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.sortie.detail"
+msgid "Claim the current daily reward if the mission set fits your plan."
+msgstr ""
+
+#. Weekly task.
+msgctxt "routine.task.maroo-treasure"
+msgid "Maroo’s Ayatan Treasure Hunt"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.maroo-treasure.detail"
+msgid "Claim the weekly sculpture and fill it when you need Endo."
+msgstr ""
+
+#. Weekly task.
+msgctxt "routine.task.archon-hunt"
+msgid "Archon Hunt"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.archon-hunt.detail"
+msgid "Complete the weekly hunt for its reward and Archon Shard."
+msgstr ""
+
+#. Weekly task.
+msgctxt "routine.task.nightwave-acts"
+msgid "Review Nightwave acts"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.nightwave-acts.detail"
+msgid "Choose the acts that fit your goals before the week ends."
+msgstr ""
+
+#. Detail under a monthly goal.
+msgctxt "routine.goalDetail"
+msgid "Your personal focus for this calendar month."
+msgstr ""
+
+#. Error.
+msgctxt "routine.saveFailed"
+msgid "Progress is only saved in this open view. Retry before closing the app."
+msgstr ""
+
+#. Clock label.
+msgctxt "routine.baroLeaves"
+msgid "Baro leaves"
+msgstr ""
+
+#. Clock label.
+msgctxt "routine.baroArrives"
+msgid "Baro arrives"
+msgstr ""
+
+#. Progress.
+msgctxt "routine.progress"
+msgid "{done} of {total} complete"
+msgstr ""
+
+#. Checklist period.
+#. Max 9 characters.
+msgctxt "routine.cadence.daily"
+msgid "Daily"
+msgstr ""
+
+#. Checklist period.
+#. Max 9 characters.
+msgctxt "routine.cadence.weekly"
+msgid "Weekly"
+msgstr ""
+
+#. Checklist period.
+#. Max 9 characters.
+msgctxt "routine.cadence.monthly"
+msgid "Monthly"
+msgstr ""
+
+#. View heading.
+msgctxt "routine.title"
+msgid "Profit routines"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "routine.lede"
+msgid "Mark tasks as you complete them. This checklist is manual and local to this installation; TennoWorth does not detect completion from the game."
+msgstr ""
+
+#. Section heading.
+msgctxt "routine.checklist"
+msgid "Routine checklist"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "routine.period"
+msgid "Checklist period"
+msgstr ""
+
+#. Period note.
+msgctxt "routine.about.daily"
+msgid "A personal day ending at 00:00 UTC; individual activities can refresh at other times."
+msgstr ""
+
+#. Period note.
+msgctxt "routine.about.weekly"
+msgid "Monday through Sunday. The planner starts a fresh list Monday at 00:00 UTC."
+msgstr ""
+
+#. Period note.
+msgctxt "routine.about.monthly"
+msgid "Personal planning by calendar month; this is not a Warframe reset schedule."
+msgstr ""
+
+#. Field label.
+msgctxt "routine.addGoalLabel"
+msgid "Add a monthly goal"
+msgstr ""
+
+#. Field placeholder.
+msgctxt "routine.goalExample"
+msgid "e.g. Prepare and list three ranked mods"
+msgstr ""
+
+#. Button.
+msgctxt "routine.addGoal"
+msgid "Add goal"
+msgstr ""
+
+#. Note.
+msgctxt "routine.goalLimit"
+msgid "Up to {max} goals. Remove one to add another."
+msgstr ""
+
+#. Note.
+msgctxt "routine.goalHelp"
+msgid "Each goal gets its own checkbox. Goals carry forward; their ticks reset each month."
+msgstr ""
+
+#. Screen reader name of the field.
+msgctxt "routine.goalText"
+msgid "Goal text"
+msgstr ""
+
+#. Button.
+msgctxt "routine.saveGoal"
+msgid "Save goal"
+msgstr ""
+
+#. Button.
+msgctxt "routine.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "routine.moveUp"
+msgid "Move {goal} up"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "routine.moveDown"
+msgid "Move {goal} down"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "routine.edit"
+msgid "Edit {goal}"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "routine.remove"
+msgid "Remove {goal}"
+msgstr ""
+
+#. Button.
+#. Max 8 characters.
+msgctxt "routine.up"
+msgid "Up"
+msgstr ""
+
+#. Button.
+#. Max 8 characters.
+msgctxt "routine.down"
+msgid "Down"
+msgstr ""
+
+#. Button.
+#. Max 8 characters.
+msgctxt "routine.editShort"
+msgid "Edit"
+msgstr ""
+
+#. Button.
+#. Max 10 characters.
+msgctxt "routine.removeShort"
+msgid "Remove"
+msgstr ""
+
+#. Empty state.
+msgctxt "routine.emptyGoals"
+msgid "Add a monthly goal to build this month’s checklist."
+msgstr ""
+
+#. Button while busy.
+msgctxt "routine.saving"
+msgid "Saving…"
+msgstr ""
+
+#. Button.
+msgctxt "routine.retrySave"
+msgid "Retry saving"
+msgstr ""
+
+#. Status.
+msgctxt "routine.savingProgress"
+msgid "Saving progress…"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "routine.timing"
+msgid "Routine timing"
+msgstr ""
+
+#. Clock label.
+msgctxt "routine.newDaily"
+msgid "New daily checklist"
+msgstr ""
+
+#. Clock label.
+msgctxt "routine.newWeekly"
+msgid "New weekly checklist"
+msgstr ""
+
+#. Clock note: Monday midnight UTC.
+msgctxt "routine.mondayReset"
+msgid "Mon 00:00 UTC"
+msgstr ""
+
+#. Clock label.
+msgctxt "routine.nextBaro"
+msgid "Next Baro visit"
+msgstr ""
+
+#. In place of a location.
+msgctxt "routine.scheduleUnknown"
+msgid "schedule unknown"
+msgstr ""
+
+#. Disclosure.
+msgctxt "routine.notes"
+msgid "Endo and selling notes"
+msgstr ""
+
+#. Note.
+msgctxt "routine.notes1"
+msgid "Baro follows the visit schedule above rather than the weekly checklist. Review his stock when he arrives, and plan purchases around your own inventory."
+msgstr ""
+
+#. Note. Use the game’s names for the activities.
+msgctxt "routine.notes2"
+msgid "For Endo, compare the time and difficulty of Arbitrations, Rathuum, excavation, Sorties, Archon Hunts, and Maroo’s weekly treasure hunt. Account-bound rewards can save Platinum even when they cannot be sold."
+msgstr ""

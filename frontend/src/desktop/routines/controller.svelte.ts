@@ -1,4 +1,5 @@
 import type { SettingsStore } from '../../contracts/state-store';
+import { t } from '../../i18n/i18n.svelte';
 
 export type RoutineCadence = 'daily' | 'weekly' | 'monthly';
 
@@ -13,20 +14,13 @@ export interface MonthlyGoal {
   text: string;
 }
 
-export const ROUTINE_TASKS: Record<'daily' | 'weekly', RoutineTask[]> = {
-  daily: [
-    { id: 'login-tribute', title: 'Claim the Daily Tribute', detail: 'Collect the login reward when you enter the game.' },
-    { id: 'foundry-build', title: 'Keep the Foundry busy', detail: 'Start a Forma or another build you have planned.' },
-    { id: 'syndicate-standing', title: 'Use Syndicate Standing', detail: 'Work toward the daily cap and choose an augment or arcane with demand.' },
-    { id: 'steel-path-incursions', title: 'Check Steel Path Incursions', detail: 'Complete the missions that fit today’s play session.' },
-    { id: 'sortie', title: 'Complete the Sortie', detail: 'Claim the current daily reward if the mission set fits your plan.' },
-  ],
-  weekly: [
-    { id: 'maroo-treasure', title: 'Maroo’s Ayatan Treasure Hunt', detail: 'Claim the weekly sculpture and fill it when you need Endo.' },
-    { id: 'archon-hunt', title: 'Archon Hunt', detail: 'Complete the weekly hunt for its reward and Archon Shard.' },
-    { id: 'nightwave-acts', title: 'Review Nightwave acts', detail: 'Choose the acts that fit your goals before the week ends.' },
-  ],
-};
+export const ROUTINE_TASKS = {
+  daily: ['login-tribute', 'foundry-build', 'syndicate-standing', 'steel-path-incursions', 'sortie'],
+  weekly: ['maroo-treasure', 'archon-hunt', 'nightwave-acts'],
+} as const;
+
+type RoutineTaskId = (typeof ROUTINE_TASKS)[keyof typeof ROUTINE_TASKS][number];
+const routineTask = (id: RoutineTaskId): RoutineTask => ({ id, title: t(`routine.task.${id}`), detail: t(`routine.task.${id}.detail`) });
 
 interface PeriodState {
   id: string;
@@ -43,7 +37,6 @@ interface PersistedRoutineState {
 export const MAX_GOAL_LENGTH = 120;
 export const MAX_GOALS = 8;
 
-const GOAL_DETAIL = 'Your personal focus for this calendar month.';
 const NUMBERED_GOAL_ID = /^goal-(\d+)$/;
 
 export function routinePeriodId(cadence: RoutineCadence, timestamp: number): string {
@@ -117,8 +110,8 @@ export function parseRoutineState(raw: string | null, now: number): { state: Per
     state.monthlyGoals = goals;
     state.nextGoalId = nextGoalId;
     const allowed: Record<RoutineCadence, Set<string>> = {
-      daily: new Set(ROUTINE_TASKS.daily.map(task => task.id)),
-      weekly: new Set(ROUTINE_TASKS.weekly.map(task => task.id)),
+      daily: new Set<string>(ROUTINE_TASKS.daily),
+      weekly: new Set<string>(ROUTINE_TASKS.weekly),
       monthly: new Set(goals.map(goal => goal.id)),
     };
     for (const cadence of ['daily', 'weekly', 'monthly'] as const) {
@@ -153,8 +146,8 @@ export class RoutineController {
   }
 
   get tasks(): RoutineTask[] {
-    if (this.cadence !== 'monthly') return ROUTINE_TASKS[this.cadence];
-    return this.state.monthlyGoals.map(goal => ({ id: goal.id, title: goal.text, detail: GOAL_DETAIL }));
+    if (this.cadence !== 'monthly') return ROUTINE_TASKS[this.cadence].map(routineTask);
+    return this.state.monthlyGoals.map(goal => ({ id: goal.id, title: goal.text, detail: t('routine.goalDetail') }));
   }
 
   get goalLimitReached(): boolean {
@@ -275,7 +268,7 @@ export class RoutineController {
           if (this.#store.getSetting('routine-checklist') !== value) throw new Error('write was not retained');
           this.saveError = '';
         } catch {
-          this.saveError = 'Progress is only saved in this open view. Retry before closing the app.';
+          this.saveError = t('routine.saveFailed');
         }
       }
     } finally {

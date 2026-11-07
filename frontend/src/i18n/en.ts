@@ -27,6 +27,7 @@ import { NOTIFICATIONS } from './en/notifications';
 import { ACCOUNT } from './en/account';
 import { RIVENS } from './en/rivens';
 import { RELICS } from './en/relics';
+import { ROUTINES } from './en/routines';
 
 export const EN = {
   ...FIRST_RUN,
@@ -52,6 +53,7 @@ export const EN = {
   ...ACCOUNT,
   ...RIVENS,
   ...RELICS,
+  ...ROUTINES,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;
