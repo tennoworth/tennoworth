@@ -10238,3 +10238,115 @@ msgstr ""
 msgctxt "market.showAll"
 msgid "Show all {count}"
 msgstr ""
+
+#. Subtitle: the two years compared.
+msgctxt "drift.label"
+msgid "DE equip share · {prior} → {current}"
+msgstr ""
+
+#. Subtitle; missing lists years DE did not publish.
+msgctxt "drift.labelMissing"
+msgid "DE equip share · {prior} → {current} ({missing} unavailable)"
+msgstr ""
+
+#. View heading.
+msgctxt "drift.title"
+msgid "Meta Drift"
+msgstr ""
+
+#. Section heading.
+msgctxt "drift.changes"
+msgid "Equip-share changes"
+msgstr ""
+
+#. Introduction.
+msgctxt "drift.intro"
+msgid "Annual DE equip-share snapshots, published in arrears. Deltas compare the same item within the same category; they are percentage points, not causes or forecasts."
+msgstr ""
+
+#. Note.
+msgctxt "drift.excluded"
+msgid "{count, plural, one {# category change was incomparable and excluded.} other {# category changes were incomparable and excluded.}}"
+msgstr ""
+
+#. Field label.
+msgctxt "drift.movement"
+msgid "Movement"
+msgstr ""
+
+#. Choice.
+#. Max 10 characters.
+msgctxt "drift.gains"
+msgid "Gains"
+msgstr ""
+
+#. Choice.
+#. Max 10 characters.
+msgctxt "drift.losses"
+msgid "Losses"
+msgstr ""
+
+#. Choice: items in one year’s data only.
+#. Max 18 characters.
+msgctxt "drift.only"
+msgid "Only in year data"
+msgstr ""
+
+#. Field label.
+msgctxt "drift.equipment"
+msgid "Equipment"
+msgstr ""
+
+#. Search placeholder.
+msgctxt "drift.search"
+msgid "Search equipment"
+msgstr ""
+
+#. Field label and column header.
+#. Max 12 characters.
+msgctxt "drift.category"
+msgid "Category"
+msgstr ""
+
+#. Choice.
+msgctxt "drift.allCategories"
+msgid "All categories"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "drift.col.name"
+msgid "Name"
+msgstr ""
+
+#. Column header: change in share.
+#. Max 8 characters.
+msgctxt "drift.col.delta"
+msgid "Δ share"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "drift.col.share"
+msgid "Share"
+msgstr ""
+
+#. Empty state.
+msgctxt "drift.noGains"
+msgid "No matching gains."
+msgstr ""
+
+#. Empty state.
+msgctxt "drift.noLosses"
+msgid "No matching losses."
+msgstr ""
+
+#. Table heading.
+msgctxt "drift.onlyIn"
+msgid "Only in {year} data"
+msgstr ""
+
+#. Empty state.
+msgctxt "drift.noItems"
+msgid "No matching items."
+msgstr ""

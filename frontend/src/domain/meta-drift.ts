@@ -30,7 +30,8 @@ export interface OnlyRow {
 export interface MetaDriftModel {
   priorYear: number;
   currentYear: number;
-  label: string;
+  /** Years between the two snapshots that DE did not publish. */
+  missingYears: number[];
   gains: DriftRow[];
   losses: DriftRow[];
   onlyPrior: OnlyRow[];
@@ -76,10 +77,10 @@ function availableYears(market: Market): Array<{ year: number; rows: Record<stri
   });
 }
 
-export function metaDriftLabel(priorYear: number, currentYear: number): string {
+function yearsBetween(priorYear: number, currentYear: number): number[] {
   const missing = [];
   for (let year = priorYear + 1; year < currentYear; year++) missing.push(year);
-  return `DE equip share · ${priorYear} → ${currentYear}${missing.length ? ` (${missing.join(', ')} unavailable)` : ''}`;
+  return missing;
 }
 
 export function buildMetaDrift(market: Market | null | undefined): MetaDriftModel | null {
@@ -136,7 +137,7 @@ export function buildMetaDrift(market: Market | null | undefined): MetaDriftMode
   return {
     priorYear: prior.year,
     currentYear: current.year,
-    label: metaDriftLabel(prior.year, current.year),
+    missingYears: yearsBetween(prior.year, current.year),
     gains, losses, onlyPrior, onlyCurrent, categoryChanges, categories,
   };
 }

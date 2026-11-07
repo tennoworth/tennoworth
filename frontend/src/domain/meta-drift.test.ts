@@ -19,7 +19,7 @@ describe('meta drift model', () => {
       2023: { gain_b: row('Gain B', 'Primary', 1), gain_a: row('Gain A', 'Primary', 1), loss: row('Loss', 'Primary', 3) },
       2025: { gain_b: row('Gain B', 'Primary', 2), gain_a: row('Gain A', 'Primary', 2), loss: row('Loss', 'Primary', 1) },
     }))!;
-    expect(model.label).toBe('DE equip share · 2023 → 2025 (2024 unavailable)');
+    expect(model.missingYears).toEqual([2024]);
     expect(model.gains.map((r) => r.slug)).toEqual(['gain_a', 'gain_b']);
     expect(model.gains[0].deltaPp).toBe(1);
     expect(model.losses.map((r) => r.slug)).toEqual(['loss']);
@@ -61,6 +61,6 @@ describe('meta drift model', () => {
       2025: { old: row('Old', 'Primary', 2) },
     }, [2021, 2024, 2025]))!;
     expect([model.priorYear, model.currentYear]).toEqual([2021, 2025]);
-    expect(model.label).toBe('DE equip share · 2021 → 2025 (2022, 2023, 2024 unavailable)');
+    expect(model.missingYears).toEqual([2022, 2023, 2024]);
   });
 });

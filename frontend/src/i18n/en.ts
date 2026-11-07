@@ -32,6 +32,7 @@ import { BARO } from './en/baro';
 import { PRESENCE } from './en/presence';
 import { UPDATES } from './en/updates';
 import { MARKET } from './en/market';
+import { DRIFT } from './en/drift';
 
 export const EN = {
   ...FIRST_RUN,
@@ -62,6 +63,7 @@ export const EN = {
   ...PRESENCE,
   ...UPDATES,
   ...MARKET,
+  ...DRIFT,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;
