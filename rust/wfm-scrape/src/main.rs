@@ -53,8 +53,26 @@ fn main() -> std::process::ExitCode {
             .unwrap_or(Path::new("."))
             .to_path_buf(),
         };
-        match acquire_output(&directory) {
-            Ok(file) => Some(file),
+        // The art timer can land while a sweep holds the directory: it waits
+        // for the sweep instead of failing, and leaves the day to the next run
+        // if the sweep is still busy.
+        let wait = if command == "art" {
+            ART_LOCK_WAIT
+        } else {
+            std::time::Duration::ZERO
+        };
+        match acquire_output(&directory, wait) {
+            Ok(Some(file)) => Some(file),
+            Ok(None) if command == "art" => {
+                eprintln!(
+                    "art: a scrape still holds the output directory; the next run tries again"
+                );
+                return std::process::ExitCode::SUCCESS;
+            }
+            Ok(None) => {
+                eprintln!("Another scraper is using this output directory.");
+                return std::process::ExitCode::FAILURE;
+            }
             Err(error) => {
                 eprintln!("{error}");
                 return std::process::ExitCode::FAILURE;
@@ -106,22 +124,55 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-fn acquire_output(directory: &Path) -> Result<std::fs::File, String> {
+/// How long `art` waits for a sweep to release the output directory. Well inside
+/// the art unit's hour-long start timeout, with room for its own ten minutes.
+const ART_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+const LOCK_POLL: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Takes the output directory, waiting up to `wait` for another holder.
+/// `None` means it was still held when the wait ran out.
+fn acquire_output(
+    directory: &Path,
+    wait: std::time::Duration,
+) -> Result<Option<std::fs::File>, String> {
     let file = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
         .open(directory.join(".wfm-output.lock"))
         .map_err(|e| format!("Opening scrape lock: {e}"))?;
-    file.try_lock()
-        .map_err(|_| "Another scraper is using this output directory.".to_string())?;
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        match file.try_lock() {
+            Ok(()) => break,
+            Err(std::fs::TryLockError::WouldBlock) => {
+                let left = deadline.saturating_duration_since(std::time::Instant::now());
+                if left.is_zero() {
+                    return Ok(None);
+                }
+                std::thread::sleep(left.min(LOCK_POLL));
+            }
+            Err(std::fs::TryLockError::Error(e)) => return Err(format!("Taking scrape lock: {e}")),
+        }
+    }
     wfm_client::policy::start(directory, wfm_client::policy::Component::Scraper)
         .map_err(|e| e.to_string())?;
-    Ok(file)
+    Ok(Some(file))
 }
 
-/// Wire the `art` subcommand. Runs at most once per `--interval` (default
-/// 24h) however often it is called, so the scrape timer can call it every sweep.
+/// The art timer fires once a day somewhere in a 60-minute window, so two runs
+/// can be under 24h apart; a 24h minimum skipped every other day. 20h still
+/// keeps a manual run from being repeated the same day.
+const ART_INTERVAL_HOURS: i64 = 20;
+
+fn ran_recently(last_run: Option<&str>, now: chrono::DateTime<Utc>, hours: i64) -> bool {
+    last_run
+        .and_then(clock::parse_stamp)
+        .is_some_and(|t| now - t < chrono::Duration::hours(hours))
+}
+
+/// Wire the `art` subcommand. Runs at most once per `--interval-hours`
+/// (default 20) however often it is called.
 fn run_art_cmd(args: &[String], dirs: Option<&Dirs>) -> Result<(), String> {
     use wfm_scrape::art;
     let dirs = dirs.ok_or("art needs --data-dir and --publish-dir, or a checkout")?;
@@ -131,7 +182,7 @@ fn run_art_cmd(args: &[String], dirs: Option<&Dirs>) -> Result<(), String> {
     let hours: i64 = extract_flag(args, "--interval-hours")
         .map(|s| s.parse().map_err(|_| format!("bad --interval-hours: {s}")))
         .transpose()?
-        .unwrap_or(24);
+        .unwrap_or(ART_INTERVAL_HOURS);
     let mut opts = art::Options::default();
     if let Some(b) = extract_flag(args, "--budget") {
         opts.budget = b.parse().map_err(|_| format!("bad --budget: {b}"))?;
@@ -148,11 +199,7 @@ fn run_art_cmd(args: &[String], dirs: Option<&Dirs>) -> Result<(), String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => art::State::default(),
         Err(e) => return Err(format!("read {}: {e}", state_path.display())),
     };
-    let recent = state
-        .last_run
-        .as_deref()
-        .and_then(clock::parse_stamp)
-        .is_some_and(|t| now - t < chrono::Duration::hours(hours));
+    let recent = ran_recently(state.last_run.as_deref(), now, hours);
     if recent && !args.iter().any(|a| a == "--force") {
         eprintln!("art: last run under {hours}h ago; nothing to do");
         return Ok(());
@@ -414,4 +461,64 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         hist.through.as_deref().unwrap_or("-")
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn a_daily_timer_that_fires_a_little_early_still_runs() {
+        let now = clock::parse_stamp("2026-11-07T04:26:55Z").unwrap();
+        // The production case: the previous run started 23h51m earlier.
+        assert!(!ran_recently(
+            Some("2026-11-06T04:35:56Z"),
+            now,
+            ART_INTERVAL_HOURS
+        ));
+        // A manual run earlier the same day still holds the next one back.
+        assert!(ran_recently(
+            Some("2026-11-06T20:32:43Z"),
+            now,
+            ART_INTERVAL_HOURS
+        ));
+        assert!(!ran_recently(None, now, ART_INTERVAL_HOURS));
+    }
+
+    struct Dir(PathBuf);
+    impl Drop for Dir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    fn dir(name: &str) -> Dir {
+        let p = std::env::temp_dir().join(format!("wfm-lock-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&p).unwrap();
+        Dir(p)
+    }
+
+    #[test]
+    fn a_busy_directory_fails_at_once_without_a_wait() {
+        let d = dir("busy");
+        let held = acquire_output(&d.0, Duration::ZERO).unwrap();
+        assert!(held.is_some());
+        assert!(acquire_output(&d.0, Duration::ZERO).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_waiting_caller_takes_the_directory_once_it_is_released() {
+        let d = dir("wait");
+        let held = acquire_output(&d.0, Duration::ZERO).unwrap().unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(held);
+        });
+        let started = std::time::Instant::now();
+        assert!(acquire_output(&d.0, Duration::from_secs(30))
+            .unwrap()
+            .is_some());
+        assert!(started.elapsed() < Duration::from_secs(5));
+        release.join().unwrap();
+    }
 }
