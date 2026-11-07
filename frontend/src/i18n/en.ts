@@ -1,0 +1,75 @@
+// The English source of every translatable message. Keys are grouped by
+// surface; a note tells translators where the text appears and any limit.
+// After changing this file run `bun scripts/i18n.ts --write` in frontend/ so
+// every catalog gains, drafts or drops the key.
+
+interface Source {
+  text: string;
+  note: string;
+  /** Characters available where space is tight; the check reports longer translations. */
+  max?: number;
+}
+
+const m = (text: string, note: string, max?: number): Source => ({ text, note, max });
+
+export const EN = {
+  'firstRun.heading': m('Get your personal sell list', 'Desktop first-run page, the main heading. Shown in capitals.', 40),
+  'firstRun.pitch': m('Scan once and TennoWorth ranks <em>your</em> inventory by what to sell right now.', 'First-run page, under the heading. Keep <em>…</em> around the word that is stressed.'),
+  'firstRun.requirement': m('Warframe must be open and past the login screen.', 'First-run page, a condition for scanning.'),
+  'firstRun.scan': m('Scan inventory', 'First-run page, the main button. Reads the game\'s inventory.', 26),
+  'firstRun.scanning': m('Scanning game…', 'The same button while a scan runs.', 26),
+  'firstRun.trust': m("Reads the running game's memory only - nothing leaves your machine.", 'First-run page, privacy line under the button.'),
+  'firstRun.lookup': m('Or look anything up', 'First-run page, label above the market search. Shown in capitals.', 32),
+
+  'strip.tagline': m('warframe.market prices, ranked by what actually sells', 'Status bar next to the brand on the first-run page. Cut short when space runs out.'),
+  'strip.noInventory': m('No inventory yet', 'Status bar, inventory cell before the first scan.', 22),
+  'strip.loadingScan': m('Loading saved scan…', 'Status bar, inventory cell while the saved scan loads.', 22),
+  'strip.imported': m('Imported', 'Status bar, inventory cell: the inventory came from an imported file.', 14),
+  'strip.savedScan': m('Saved scan', 'Status bar, inventory cell: showing the last saved scan.', 14),
+  'strip.inventory': m('Inventory', 'Status bar, inventory cell label.', 14),
+  'strip.timestampUnavailable': m('Timestamp unavailable', 'Status bar, when a scan has no time.'),
+  'strip.refreshFailed': m('Last refresh failed', 'Status bar, after a failed rescan.', 22),
+  'strip.refresh': m('Refresh ▾', 'Status bar button that opens the scan menu. Keep the ▾.', 14),
+  'strip.refreshing': m('Scanning…', 'The same button while a scan runs.', 14),
+  'strip.refreshTitle': m('Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too.', 'Tooltip on the Refresh button.'),
+  'strip.refreshingTitle': m('Reading the running game’s memory - this can take a few seconds.', 'Tooltip on the Refresh button while scanning.'),
+  'strip.menuLede': m('Scan the running game - no file needed.', 'Scan menu, first line.'),
+  'strip.scanGame': m('Scan game', 'Scan menu button.', 22),
+  'strip.export': m('Export…', 'Scan menu button: save an encrypted copy of the inventory.', 18),
+  'strip.exportTitle': m('Download an encrypted snapshot for another device or backup.', 'Tooltip on Export.'),
+  'strip.restore': m('Restore…', 'Scan menu button: load an exported copy.', 18),
+  'strip.restoreTitle': m('Restore an encrypted snapshot exported from another device.', 'Tooltip on Restore.'),
+  'strip.clearAsk': m('Forget the saved scan? Scan again to get it back.', 'Scan menu, confirmation question before clearing.'),
+  'strip.clearConfirm': m('Clear saved scan', 'Scan menu, confirms clearing.', 22),
+  'strip.clearKeep': m('Keep it', 'Scan menu, cancels clearing.', 22),
+  'strip.clear': m('Clear…', 'Scan menu button that asks before clearing.', 18),
+  'strip.clearTitle': m('Forget the saved inventory entirely.', 'Tooltip on Clear.'),
+  'strip.unmatched': m("{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} ({summary}) - usually untradeable blueprints, quest items and very new content.", 'Tooltip on the inventory cell. count is a number of items; summary lists them by kind, in English.'),
+  'strip.unmatchedNote': m("{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.", 'Scan menu note. count is a number of items.'),
+  'strip.unmatchedBreakdown': m('Breakdown: {summary}.', 'Tooltip on that note; summary lists items by kind, in English.'),
+  'strip.noTradeables': m('No tradeable items found; showing saved inventory', 'Status bar note after a scan that found nothing to sell.'),
+  'strip.inventoryFailedLabel': m('Inventory refresh failed', 'Screen reader label for the inventory status dot.'),
+  'strip.inventoryRecordedLabel': m('Inventory recorded {age}', 'Screen reader label for the inventory status dot. age is like "12 h ago" (English for now).'),
+  'strip.inventoryUnknownTime': m('Inventory recorded at an unknown time', 'Screen reader label for the inventory status dot.'),
+  'strip.market': m('Market', 'Status bar, market data cell label. Shown in capitals.', 10),
+  'strip.marketLabel': m('Market data {state}', 'Screen reader label for the market status dot; state is one of the four words below.'),
+  'strip.state.fresh': m('fresh', 'Market data age: recent. Shown in capitals after "Market 2 h ago ·".', 10),
+  'strip.state.aging': m('aging', 'Market data age: getting old.', 10),
+  'strip.state.stale': m('stale', 'Market data age: too old to trust.', 10),
+  'strip.state.unknown': m('unknown', 'Market data age: not known.', 10),
+  'strip.stale': m('Stale · {age}', 'Status bar tag when market data is too old; age is like "3 d ago" (English for now).', 18),
+  'strip.baroLeaves': m('Baro leaves in', 'Status bar, followed by a time such as "1d 3h".', 18),
+  'strip.baroArrives': m('Baro arrives in', 'Status bar, followed by a time such as "1d 3h".', 18),
+  'strip.notifications': m('Notifications', 'Status bar button. Shown in capitals.', 16),
+  'strip.settings': m('Settings', 'Status bar button. Shown in capitals.', 14),
+  'strip.more': m('More ▾', 'Status bar menu button. Keep the ▾.', 10),
+  'strip.checkUpdates': m('Check for updates', 'More menu.'),
+  'strip.sendFeedback': m('Send feedback', 'More menu.'),
+  'strip.faq': m('FAQ', 'More menu, link to the questions section.', 8),
+  'strip.locked': m('Locked', 'Status bar, warframe.market account cell: signed in but locked.', 12),
+  'strip.signedOut': m('Signed out', 'Status bar, warframe.market account cell.', 12),
+  'strip.unlock': m('Unlock', 'Status bar button.', 12),
+  'strip.signIn': m('Sign in', 'Status bar button: sign in to warframe.market.', 12),
+} satisfies Record<string, Source>;
+
+export type MessageKey = keyof typeof EN;

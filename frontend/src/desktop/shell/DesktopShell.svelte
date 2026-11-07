@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
+  import { richParts } from '../../i18n/message';
 import KeyboardNavigation from '../../ui/KeyboardNavigation.svelte';
 import KeyLegend from './KeyLegend.svelte';
 import NavIcon from './NavIcon.svelte';
@@ -578,18 +580,18 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     <!-- Scanning is the first thing to do here, so it leads; settings, updates
          and feedback live in the header. -->
     <section data-shell class="upsell-lead desktop-hero" aria-labelledby="desktop-hero-title">
-      <h2 data-shell id="desktop-hero-title">Get your personal sell list</h2>
-      <p data-shell class="sub">Scan once and TennoWorth ranks <em data-shell>your</em> inventory by what to sell right now.</p>
-      <p data-shell class="req">Warframe must be open and past the login screen.</p>
+      <h2 data-shell id="desktop-hero-title">{t('firstRun.heading')}</h2>
+      <p data-shell class="sub">{#each richParts(t('firstRun.pitch')) as part, i (i)}{#if part.em}<em data-shell>{part.text}</em>{:else}{part.text}{/if}{/each}</p>
+      <p data-shell class="req">{t('firstRun.requirement')}</p>
       <div data-shell class="desktop-scan-row">
-        <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
-        <span data-shell class="trust">Reads the running game's memory only - nothing leaves your machine.</span>
+        <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? t('firstRun.scanning') : t('firstRun.scan')}</button>
+        <span data-shell class="trust">{t('firstRun.trust')}</span>
       </div>
     </section>
   {/if}
   {@render marketAnnouncement()}
   {#if inventory.market}
-    <p data-shell class="lookup-label">Or look anything up</p>
+    <p data-shell class="lookup-label">{t('firstRun.lookup')}</p>
     <MarketBrowser market={inventory.market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
   {/if}
   <Faq />

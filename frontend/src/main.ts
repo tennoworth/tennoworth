@@ -60,7 +60,8 @@ const app = styleguideSurface && !overlaySurface && !noticeSurface
     // build prerenders content there, so drop it only once the shell chunk has
     // loaded: a chunk that fails to load must leave the readable page intact.
     return store.mode === 'tauri'
-      ? Promise.all([import('./desktop/shell/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => {
+      ? Promise.all([import('./desktop/shell/DesktopShell.svelte'), import('./adapters/services'), import('./i18n/startup')]).then(async ([{ default: DesktopShell }, { createDesktopServices }, { startLanguage }]) => {
+          await startLanguage(store);
           target.replaceChildren();
           return mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) });
         })

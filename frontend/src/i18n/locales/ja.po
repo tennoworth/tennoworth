@@ -1,0 +1,320 @@
+msgid ""
+msgstr ""
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Desktop first-run page, the main heading. Shown in capitals.
+#. Max 40 characters.
+msgctxt "firstRun.heading"
+msgid "Get your personal sell list"
+msgstr ""
+
+#. First-run page, under the heading. Keep <em>…</em> around the word that is stressed.
+msgctxt "firstRun.pitch"
+msgid "Scan once and TennoWorth ranks <em>your</em> inventory by what to sell right now."
+msgstr ""
+
+#. First-run page, a condition for scanning.
+msgctxt "firstRun.requirement"
+msgid "Warframe must be open and past the login screen."
+msgstr ""
+
+#. First-run page, the main button. Reads the game's inventory.
+#. Max 26 characters.
+msgctxt "firstRun.scan"
+msgid "Scan inventory"
+msgstr ""
+
+#. The same button while a scan runs.
+#. Max 26 characters.
+msgctxt "firstRun.scanning"
+msgid "Scanning game…"
+msgstr ""
+
+#. First-run page, privacy line under the button.
+msgctxt "firstRun.trust"
+msgid "Reads the running game's memory only - nothing leaves your machine."
+msgstr ""
+
+#. First-run page, label above the market search. Shown in capitals.
+#. Max 32 characters.
+msgctxt "firstRun.lookup"
+msgid "Or look anything up"
+msgstr ""
+
+#. Status bar next to the brand on the first-run page. Cut short when space runs out.
+msgctxt "strip.tagline"
+msgid "warframe.market prices, ranked by what actually sells"
+msgstr ""
+
+#. Status bar, inventory cell before the first scan.
+#. Max 22 characters.
+msgctxt "strip.noInventory"
+msgid "No inventory yet"
+msgstr ""
+
+#. Status bar, inventory cell while the saved scan loads.
+#. Max 22 characters.
+msgctxt "strip.loadingScan"
+msgid "Loading saved scan…"
+msgstr ""
+
+#. Status bar, inventory cell: the inventory came from an imported file.
+#. Max 14 characters.
+msgctxt "strip.imported"
+msgid "Imported"
+msgstr ""
+
+#. Status bar, inventory cell: showing the last saved scan.
+#. Max 14 characters.
+msgctxt "strip.savedScan"
+msgid "Saved scan"
+msgstr ""
+
+#. Status bar, inventory cell label.
+#. Max 14 characters.
+msgctxt "strip.inventory"
+msgid "Inventory"
+msgstr ""
+
+#. Status bar, when a scan has no time.
+msgctxt "strip.timestampUnavailable"
+msgid "Timestamp unavailable"
+msgstr ""
+
+#. Status bar, after a failed rescan.
+#. Max 22 characters.
+msgctxt "strip.refreshFailed"
+msgid "Last refresh failed"
+msgstr ""
+
+#. Status bar button that opens the scan menu. Keep the ▾.
+#. Max 14 characters.
+msgctxt "strip.refresh"
+msgid "Refresh ▾"
+msgstr ""
+
+#. The same button while a scan runs.
+#. Max 14 characters.
+msgctxt "strip.refreshing"
+msgid "Scanning…"
+msgstr ""
+
+#. Tooltip on the Refresh button.
+msgctxt "strip.refreshTitle"
+msgid "Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too."
+msgstr ""
+
+#. Tooltip on the Refresh button while scanning.
+msgctxt "strip.refreshingTitle"
+msgid "Reading the running game’s memory - this can take a few seconds."
+msgstr ""
+
+#. Scan menu, first line.
+msgctxt "strip.menuLede"
+msgid "Scan the running game - no file needed."
+msgstr ""
+
+#. Scan menu button.
+#. Max 22 characters.
+msgctxt "strip.scanGame"
+msgid "Scan game"
+msgstr ""
+
+#. Scan menu button: save an encrypted copy of the inventory.
+#. Max 18 characters.
+msgctxt "strip.export"
+msgid "Export…"
+msgstr ""
+
+#. Tooltip on Export.
+msgctxt "strip.exportTitle"
+msgid "Download an encrypted snapshot for another device or backup."
+msgstr ""
+
+#. Scan menu button: load an exported copy.
+#. Max 18 characters.
+msgctxt "strip.restore"
+msgid "Restore…"
+msgstr ""
+
+#. Tooltip on Restore.
+msgctxt "strip.restoreTitle"
+msgid "Restore an encrypted snapshot exported from another device."
+msgstr ""
+
+#. Scan menu, confirmation question before clearing.
+msgctxt "strip.clearAsk"
+msgid "Forget the saved scan? Scan again to get it back."
+msgstr ""
+
+#. Scan menu, confirms clearing.
+#. Max 22 characters.
+msgctxt "strip.clearConfirm"
+msgid "Clear saved scan"
+msgstr ""
+
+#. Scan menu, cancels clearing.
+#. Max 22 characters.
+msgctxt "strip.clearKeep"
+msgid "Keep it"
+msgstr ""
+
+#. Scan menu button that asks before clearing.
+#. Max 18 characters.
+msgctxt "strip.clear"
+msgid "Clear…"
+msgstr ""
+
+#. Tooltip on Clear.
+msgctxt "strip.clearTitle"
+msgid "Forget the saved inventory entirely."
+msgstr ""
+
+#. Tooltip on the inventory cell. count is a number of items; summary lists them by kind, in English.
+msgctxt "strip.unmatched"
+msgid "{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} ({summary}) - usually untradeable blueprints, quest items and very new content."
+msgstr ""
+
+#. Scan menu note. count is a number of items.
+msgctxt "strip.unmatchedNote"
+msgid "{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected."
+msgstr ""
+
+#. Tooltip on that note; summary lists items by kind, in English.
+msgctxt "strip.unmatchedBreakdown"
+msgid "Breakdown: {summary}."
+msgstr ""
+
+#. Status bar note after a scan that found nothing to sell.
+msgctxt "strip.noTradeables"
+msgid "No tradeable items found; showing saved inventory"
+msgstr ""
+
+#. Screen reader label for the inventory status dot.
+msgctxt "strip.inventoryFailedLabel"
+msgid "Inventory refresh failed"
+msgstr ""
+
+#. Screen reader label for the inventory status dot. age is like "12 h ago" (English for now).
+msgctxt "strip.inventoryRecordedLabel"
+msgid "Inventory recorded {age}"
+msgstr ""
+
+#. Screen reader label for the inventory status dot.
+msgctxt "strip.inventoryUnknownTime"
+msgid "Inventory recorded at an unknown time"
+msgstr ""
+
+#. Status bar, market data cell label. Shown in capitals.
+#. Max 10 characters.
+msgctxt "strip.market"
+msgid "Market"
+msgstr ""
+
+#. Screen reader label for the market status dot; state is one of the four words below.
+msgctxt "strip.marketLabel"
+msgid "Market data {state}"
+msgstr ""
+
+#. Market data age: recent. Shown in capitals after "Market 2 h ago ·".
+#. Max 10 characters.
+msgctxt "strip.state.fresh"
+msgid "fresh"
+msgstr ""
+
+#. Market data age: getting old.
+#. Max 10 characters.
+msgctxt "strip.state.aging"
+msgid "aging"
+msgstr ""
+
+#. Market data age: too old to trust.
+#. Max 10 characters.
+msgctxt "strip.state.stale"
+msgid "stale"
+msgstr ""
+
+#. Market data age: not known.
+#. Max 10 characters.
+msgctxt "strip.state.unknown"
+msgid "unknown"
+msgstr ""
+
+#. Status bar tag when market data is too old; age is like "3 d ago" (English for now).
+#. Max 18 characters.
+msgctxt "strip.stale"
+msgid "Stale · {age}"
+msgstr ""
+
+#. Status bar, followed by a time such as "1d 3h".
+#. Max 18 characters.
+msgctxt "strip.baroLeaves"
+msgid "Baro leaves in"
+msgstr ""
+
+#. Status bar, followed by a time such as "1d 3h".
+#. Max 18 characters.
+msgctxt "strip.baroArrives"
+msgid "Baro arrives in"
+msgstr ""
+
+#. Status bar button. Shown in capitals.
+#. Max 16 characters.
+msgctxt "strip.notifications"
+msgid "Notifications"
+msgstr ""
+
+#. Status bar button. Shown in capitals.
+#. Max 14 characters.
+msgctxt "strip.settings"
+msgid "Settings"
+msgstr ""
+
+#. Status bar menu button. Keep the ▾.
+#. Max 10 characters.
+msgctxt "strip.more"
+msgid "More ▾"
+msgstr ""
+
+#. More menu.
+msgctxt "strip.checkUpdates"
+msgid "Check for updates"
+msgstr ""
+
+#. More menu.
+msgctxt "strip.sendFeedback"
+msgid "Send feedback"
+msgstr ""
+
+#. More menu, link to the questions section.
+#. Max 8 characters.
+msgctxt "strip.faq"
+msgid "FAQ"
+msgstr ""
+
+#. Status bar, warframe.market account cell: signed in but locked.
+#. Max 12 characters.
+msgctxt "strip.locked"
+msgid "Locked"
+msgstr ""
+
+#. Status bar, warframe.market account cell.
+#. Max 12 characters.
+msgctxt "strip.signedOut"
+msgid "Signed out"
+msgstr ""
+
+#. Status bar button.
+#. Max 12 characters.
+msgctxt "strip.unlock"
+msgid "Unlock"
+msgstr ""
+
+#. Status bar button: sign in to warframe.market.
+#. Max 12 characters.
+msgctxt "strip.signIn"
+msgid "Sign in"
+msgstr ""
