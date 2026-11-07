@@ -54,6 +54,25 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.9.101 - 2026-11-07
+
+# 🏷️ TennoWorth Desktop 0.9.101
+
+TennoWorth Desktop 0.9.101 is ready.
+
+This release tidies the Sell view's tags for anyone with a large inventory. Some 170 tags used to wrap across several lines above the table; now the main ones fit on one line, the rest wait in a grouped list you can search, and the filters no longer jump while you switch between them.
+
+## Changelog (2)
+
+### Sell
+
+- **Tags on one line, the rest grouped** The Sell view keeps the main item types and slots on one line. "+ more" opens every other tag, grouped by type, slot, rarity, relic era, companions and the mods for one Warframe, weapon or companion, with a box that finds a tag by any part of its name or the start of its words. Companion breeds count as their species, so a Huras Kubrow's precepts are kubrow mods, and names read as the game writes them. <!-- app-note {"id":"tag-groups","kind":"improved"} -->
+- **Filters stay where you click** Switching tags or filters used to move the tag line, because the Top picks above it changed height. The line you are using now stays put, and a tag picked from the list stays in place until the list closes. <!-- app-note {"id":"sell-filters-still","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.9.100 - 2026-11-07
 
 # 🌍 TennoWorth Desktop 0.9.100
