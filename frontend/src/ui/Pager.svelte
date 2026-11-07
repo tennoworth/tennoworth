@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { PageWindow } from './paging';
+  import { t } from '../i18n/i18n.svelte';
 
   let { window: win, total, label, target, onpage }: {
     window: PageWindow;
@@ -25,11 +26,11 @@
 
 {#if win.pages > 1}
   <nav class="pager" aria-label={label}>
-    <span class="range">Showing {(win.start + 1).toLocaleString()}–{win.end.toLocaleString()} of {total.toLocaleString()}</span>
+    <span class="range">{t('ui.showing', { from: win.start + 1, to: win.end, total })}</span>
     <div class="controls">
-      <button type="button" class="btn" disabled={win.page === 0} onclick={() => go(win.page - 1)}>‹ Prev</button>
+      <button type="button" class="btn" disabled={win.page === 0} onclick={() => go(win.page - 1)}>{t('ui.prev')}</button>
       <span class="count" aria-live="polite">Page {win.page + 1} of {win.pages}</span>
-      <button type="button" class="btn" disabled={win.page >= win.pages - 1} onclick={() => go(win.page + 1)}>Next ›</button>
+      <button type="button" class="btn" disabled={win.page >= win.pages - 1} onclick={() => go(win.page + 1)}>{t('ui.next')}</button>
     </div>
   </nav>
 {/if}

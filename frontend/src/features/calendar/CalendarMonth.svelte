@@ -5,7 +5,9 @@
   import { eventEnd, type CalendarEvent, type EventKind } from '../../domain/calendar-events';
   import EventDetail from './EventDetail.svelte';
   import { focusLater } from '../../ui/keyboard-actions';
-  import { DAY, dayStart, utcDay, utcTime, weekStart } from './time';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import { DAY, dayStart, utcDay, utcPart, utcTime, weekStart } from './time';
+  import { wordsOf } from './wording';
 
   let { events, now, surface }: { events: CalendarEvent[]; now: number; surface: 'desktop' | 'hosted' } = $props();
   const LANES = 4;
@@ -48,7 +50,7 @@
     const chosen = next;
     focusLater(() => [...document.querySelectorAll<HTMLElement>('.month .cell[data-day]')].find((el) => Number(el.dataset.day) === chosen));
   }
-  const label = $derived(new Date(month).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+  const label = $derived(new Date(month).toLocaleDateString(formatLocale() ?? 'en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
   const weeks = $derived.by(() => {
     const m = new Date(month).getUTCMonth();
     const last = Date.UTC(new Date(month).getUTCFullYear(), m + 1, 0);
@@ -75,20 +77,22 @@
   });
   const onDay = $derived(events.filter(e => dayStart(e.from) <= day && dayStart(eventEnd(e)) >= day));
   const nextUp = $derived(onDay.length ? [] : events.filter(e => e.from >= day + DAY).slice(0, 3));
+  // 1 January 2024 was a Monday.
+  const weekdays = $derived(Array.from({ length: 7 }, (_, i) => utcPart(Date.UTC(2024, 0, 1 + i), 'weekday')));
   const count = (d: number) => events.filter(e => dayStart(e.from) <= d && dayStart(eventEnd(e)) >= d).length;
 </script>
 
 <div class="month-view">
-  <section class="month" aria-label="{label}. Arrow keys choose a day; Page Up and Page Down change month">
+  <section class="month" aria-label={t('cal.monthHelp', { month: label })}>
     <div class="mhead">
       <h3>{label}</h3>
       <div class="ui-toolbar">
-        <button type="button" class="btn xs" aria-label="Previous month" onclick={() => shift(-1)}>‹</button>
-        <button type="button" class="btn xs" onclick={goToday}>Today</button>
-        <button type="button" class="btn xs" aria-label="Next month" onclick={() => shift(1)}>›</button>
+        <button type="button" class="btn xs" aria-label={t('cal.prevMonth')} onclick={() => shift(-1)}>‹</button>
+        <button type="button" class="btn xs" onclick={goToday}>{t('cal.today')}</button>
+        <button type="button" class="btn xs" aria-label={t('cal.nextMonth')} onclick={() => shift(1)}>›</button>
       </div>
     </div>
-    <div class="dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+    <div class="dow" aria-hidden="true">{#each weekdays as name, i (i)}<span>{name}</span>{/each}</div>
     {#each weeks as week (week.start)}
       <div class="week">
         {#each week.days as d, i (d)}
@@ -96,36 +100,36 @@
           <button type="button" class="cell" class:out={new Date(d).getUTCMonth() !== week.month} style:grid-column={i + 1}
             data-day={d} tabindex={d === day || (!weeks.some((w) => w.days.includes(day)) && d === month) ? 0 : -1}
             onkeydown={(event) => dayKey(event, d)}
-            aria-pressed={d === day} aria-label="{utcDay(d, true)}, {n ? `${n} event${n === 1 ? '' : 's'}` : 'nothing scheduled'}" onclick={() => { day = d; }}></button>
+            aria-pressed={d === day} aria-label={n ? t('cal.dayEvents', { day: utcDay(d, true), count: n }) : t('cal.dayEmpty', { day: utcDay(d, true) })} onclick={() => { day = d; }}></button>
           <span class="num" class:out={new Date(d).getUTCMonth() !== week.month} class:today={d === today} style:grid-column={i + 1} aria-hidden="true"><b>{new Date(d).getUTCDate()}</b></span>
         {/each}
         {#each week.bars as bar (bar.event.id)}
           <button type="button" class={bar.event.to === null ? 'ev-moment' : 'ev-run'} class:estimate={bar.event.estimate} data-kind={bar.event.kind}
-            style:grid-column="{bar.first + 1} / {bar.lastCol + 2}" style:grid-row={bar.lane + 2} title={bar.event.title} aria-label={bar.event.title} tabindex="-1"
+            style:grid-column="{bar.first + 1} / {bar.lastCol + 2}" style:grid-row={bar.lane + 2} title={wordsOf(bar.event).title} aria-label={wordsOf(bar.event).title} tabindex="-1"
             onclick={() => { day = Math.max(dayStart(bar.event.from), week.start); }}>
-            {#if bar.event.to === null}<span class="tm">{utcTime(bar.event.from)}</span>{/if}<span class="ev-text">{bar.continued ? '◂ ' : ''}{bar.event.short}</span>
+            {#if bar.event.to === null}<span class="tm">{utcTime(bar.event.from)}</span>{/if}<span class="ev-text">{bar.continued ? '◂ ' : ''}{wordsOf(bar.event).short}</span>
           </button>
         {/each}
         {#each week.more as n, i (i)}
-          {#if n}<button type="button" class="more" tabindex="-1" style:grid-column={i + 1} style:grid-row={LANES + 2} onclick={() => { day = week.start + i * DAY; }}>+{n} more</button>{/if}
+          {#if n}<button type="button" class="more" tabindex="-1" style:grid-column={i + 1} style:grid-row={LANES + 2} onclick={() => { day = week.start + i * DAY; }}>{t('cal.more', { count: n })}</button>{/if}
         {/each}
       </div>
     {/each}
   </section>
 
-  <section class="ui-panel day" aria-live="polite" aria-label="Selected day">
-    <header><h3>{day === today ? 'Today' : 'Day'}</h3><span>Times in UTC</span></header>
+  <section class="ui-panel day" aria-live="polite" aria-label={t('cal.selectedDay')}>
+    <header><h3>{day === today ? t('cal.today') : t('cal.day')}</h3><span>{t('cal.utc')}</span></header>
     <p class="big"><b>{new Date(day).getUTCDate()}</b><span>{utcDay(day, true)}</span></p>
     {#each onDay as event (event.id)}
       <div class="entry" data-kind={event.kind} class:estimate={event.estimate}>
-        <strong>{event.title}{#if event.estimate}<span class="tag">est.</span>{/if}</strong>
+        <strong>{wordsOf(event).title}{#if event.estimate}<span class="tag">{t('cal.est')}</span>{/if}</strong>
         <EventDetail {event} {surface} />
       </div>
     {:else}
-      <p class="hint">Nothing scheduled.</p>
-      {#if nextUp.length}<p class="hint">Coming next:</p>{/if}
+      <p class="hint">{t('cal.nothing')}</p>
+      {#if nextUp.length}<p class="hint">{t('cal.comingNext')}</p>{/if}
       {#each nextUp as event (event.id)}
-        <button type="button" class="btn ghost xs next" onclick={() => { day = dayStart(event.from); month = Date.UTC(new Date(event.from).getUTCFullYear(), new Date(event.from).getUTCMonth(), 1); }}>{utcDay(event.from)} · {event.short}</button>
+        <button type="button" class="btn ghost xs next" onclick={() => { day = dayStart(event.from); month = Date.UTC(new Date(event.from).getUTCFullYear(), new Date(event.from).getUTCMonth(), 1); }}>{utcDay(event.from)} · {wordsOf(event).short}</button>
       {/each}
     {/each}
   </section>

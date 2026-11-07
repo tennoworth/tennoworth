@@ -111,7 +111,7 @@
 <section class="wrap tw board">
   <div class="rail"><h3>{t('baro.selling')}</h3></div>
   <div class="board-body">
-  {#if valueResult.phase === 'loading'}<p role="status">Pricing Baro's stock…</p>{/if}
+  {#if valueResult.phase === 'loading'}<p role="status">{t('baro.pricing')}</p>{/if}
   {#if valueResult.phase === 'error'}<p class="ui-notice" data-tone="bad" role="alert">{t('baro.pricingUnavailable')}</p>{/if}
   {#if unavailableItems}<p class="ui-notice" data-tone="warn">{t('baro.quantitiesUnknown', { count: unavailableItems })} {t(quantitiesUnavailable ? 'baro.recheck' : 'baro.knownOnly')}</p>{/if}
   {#if scrapLoading}<p role="status">{t('baro.calculating')}</p>{/if}

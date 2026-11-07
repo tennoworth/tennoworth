@@ -53,4 +53,7 @@ export const UI = {
   'keys.oneChar': m('Type one character, using Shift or AltGr if needed.', 'Error.'),
   'keys.noAltGr': m('Choose a character without AltGr. The command modifier is added automatically.', 'Error.'),
   'keys.different': m('Search and help need different characters.', 'Error.'),
+  'ui.prev': m('‹ Prev', 'Pager button: previous page.', 10),
+  'ui.next': m('Next ›', 'Pager button: next page.', 10),
+  'ui.showing': m('Showing {from}–{to} of {total}', 'Pager: which rows are on this page.'),
 } satisfies Record<string, Source>;

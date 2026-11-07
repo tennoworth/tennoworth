@@ -1,24 +1,25 @@
 <script lang="ts">
   import type { CalendarEvent } from '../../domain/calendar-events';
+  import { t } from '../../i18n/i18n.svelte';
   import { utcDay, utcTime, localTime } from './time';
+  import { wordsOf } from './wording';
 
   let { event, surface }: { event: CalendarEvent; surface: 'desktop' | 'hosted' } = $props();
-  const SOURCE = { worldstate: 'DE worldState', estimate: 'Estimate', notice: 'TennoWorth notice', official: 'DE announcement' } as const;
 </script>
 
 <div class="detail" data-kind={event.kind} class:estimate={event.estimate}>
   <p class="when">
-    {#if event.to === null}{utcDay(event.from)}, {utcTime(event.from)} UTC <span>({localTime(event.from)} your time)</span>
+    {#if event.to === null}{utcDay(event.from)}, {utcTime(event.from)} UTC <span>{t('cal.yourTime', { time: localTime(event.from) })}</span>
     {:else}{utcDay(event.from)} {utcTime(event.from)} → {utcDay(event.to)} {utcTime(event.to)} UTC{/if}
   </p>
-  <p>{event.detail}</p>
+  <p>{wordsOf(event).detail}</p>
   {#if surface === 'desktop' && event.affects}
-    <p class="affects">{event.affects.length ? `You hold ${event.affects.length} affected item${event.affects.length === 1 ? '' : 's'}.` : 'Nothing you hold is affected.'}</p>
+    <p class="affects">{event.affects.length ? t('cal.youHoldStop', { count: event.affects.length }) : t('cal.noneHeld')}</p>
   {/if}
   <p class="source">
-    <span class="who">{SOURCE[event.source]}</span>
-    {#if event.sourceUrl}<a href={event.sourceUrl} target="_blank" rel="noopener noreferrer">Source ↗</a>{/if}
-    {#if event.estimate}<span>No advice until DE confirms it.</span>{/if}
+    <span class="who">{t(`cal.source.${event.source}`)}</span>
+    {#if event.sourceUrl}<a href={event.sourceUrl} target="_blank" rel="noopener noreferrer">{t('cal.source')}</a>{/if}
+    {#if event.estimate}<span>{t('cal.noAdvice')}</span>{/if}
   </p>
 </div>
 

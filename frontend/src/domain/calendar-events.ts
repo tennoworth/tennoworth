@@ -18,11 +18,8 @@ export interface CalendarEvent {
   from: number;
   /** Epoch ms; `null` for a single moment such as a deadline. */
   to: number | null;
-  title: string;
-  /** Short label for the month grid and lanes. */
-  short: string;
-  /** What happens, in one or two sentences. */
-  detail: string;
+  /** What to say about it; the view words it (features/calendar/wording.ts). */
+  text: CalendarText;
   estimate: boolean;
   /** Who published the date. */
   source: 'worldstate' | 'estimate' | 'notice' | 'official';
@@ -30,6 +27,21 @@ export interface CalendarEvent {
   /** Owned slugs this event touches; absent when that cannot be known. */
   affects?: string[];
 }
+
+/**
+ * The facts behind an event's title and description. Events DE or our feed
+ * name themselves carry that text as published (`given`); the rest are worded
+ * by the view, in the reader's language.
+ */
+export type CalendarText =
+  | { kind: 'baro'; where: string | null }
+  | { kind: 'baro-estimate' }
+  | { kind: 'resurgence'; names: string[] }
+  | { kind: 'vault'; names: string[] }
+  | { kind: 'deal'; item: string; discount: number | null; price: number | null }
+  | { kind: 'event'; title: string; rewards: string[] }
+  | { kind: 'official'; title: string; note: string | null; type: string }
+  | { kind: 'given'; title: string; detail: string };
 
 const DAY = 86_400_000;
 const BARO_PERIOD = 14 * DAY;
@@ -68,19 +80,16 @@ function baro(market: Market, now: number): CalendarEvent[] {
   const from = at(visit?.activation);
   const to = at(visit?.expiry);
   if (!visit || !Number.isFinite(from) || !Number.isFinite(to) || to < now - PAST) return [];
-  const where = visit.location || 'a relay';
   const events: CalendarEvent[] = [{
     id: `baro-${from}`, kind: 'baro', from, to, estimate: false, source: 'worldstate',
-    title: `Baro Ki'Teer at ${where}`, short: `Baro · ${where}`,
-    detail: 'He sells for 48 hours. Items he brings usually fall in price while he is here.',
+    text: { kind: 'baro', where: visit.location || null },
   }];
   for (let n = 1; n <= BARO_PROJECTIONS; n++) {
     const start = from + n * BARO_PERIOD;
     if (start + (to - from) < now) continue;
     events.push({
       id: `baro-est-${start}`, kind: 'baro', from: start, to: start + (to - from), estimate: true, source: 'estimate',
-      title: "Baro Ki'Teer, expected", short: 'Baro (est.)',
-      detail: 'He visits every 14 days. The relay and his stock are unknown until DE publishes the visit.',
+      text: { kind: 'baro-estimate' },
     });
   }
   return events;
@@ -100,11 +109,9 @@ function resurgence(market: Market, now: number, owned: Map<string, OwnedRecord>
     const id = `resurgence-${from}`;
     if (seen.has(id)) continue;
     seen.add(id);
-    const names = joinNames(rotation.frames.map(slug => primeName(market, slug)));
     events.push({
       id, kind: 'resurgence', from, to, estimate: false, source: 'worldstate',
-      title: `Prime Resurgence: ${names}`, short: `Resurgence · ${names}`,
-      detail: `Varzia sells ${names} relics. Fresh supply tends to keep their parts cheap until the rotation ends; prices usually recover afterwards.`,
+      text: { kind: 'resurgence', names: rotation.frames.map(slug => primeName(market, slug)) },
       affects: heldParts(market, rotation.frames, owned),
     });
   }
@@ -120,11 +127,9 @@ function vaulting(market: Market, now: number, owned: Map<string, OwnedRecord> |
     byDate.set(when, [...(byDate.get(when) ?? []), slug]);
   }
   return [...byDate].map(([when, slugs]) => {
-    const names = joinNames(slugs.map(slug => primeName(market, slug)).sort());
     return {
       id: `vault-est-${when}`, kind: 'vault', from: when, to: null, estimate: true, source: 'estimate',
-      title: `${names} may be vaulted`, short: `Vaulting (est.) · ${names}`,
-      detail: 'Estimated from release dates; DE has not announced it.',
+      text: { kind: 'vault', names: slugs.map(slug => primeName(market, slug)).sort() },
       affects: heldParts(market, slugs, owned),
     } satisfies CalendarEvent;
   });
@@ -134,11 +139,10 @@ function deals(market: Market, now: number): CalendarEvent[] {
   return (market.de?.deals ?? []).flatMap(deal => {
     const to = at(deal.expiry);
     if (!Number.isFinite(to) || to < now) return [];
-    const price = deal.discount && deal.sale_price ? ` (${deal.discount}% off, ${deal.sale_price}p)` : '';
+    const priced = !!(deal.discount && deal.sale_price);
     return [{
       id: `deal-${to}-${deal.item}`, kind: 'deal' as const, from: to - DAY, to, estimate: false, source: 'worldstate' as const,
-      title: `Darvo: ${deal.item}${price}`, short: `Darvo · ${deal.item}`,
-      detail: 'A store item for real-money Platinum. It does not touch tradeable holdings.',
+      text: { kind: 'deal' as const, item: deal.item, discount: priced ? deal.discount! : null, price: priced ? deal.sale_price! : null },
     }];
   });
 }
@@ -153,22 +157,10 @@ function gameEvents(market: Market, now: number): CalendarEvent[] {
     const rewards = [...new Set(entry.groups.flatMap(group => group.rewards.map(reward => reward.name)))];
     return [{
       id: `event-${entry.id}`, kind: 'event' as const, from, to, estimate: false, source: 'worldstate' as const,
-      title: entry.title, short: entry.title,
-      detail: rewards.length ? `In-game event. Rewards include ${joinNames(rewards.slice(0, 3))}${rewards.length > 3 ? ' and more' : ''}.` : 'In-game event.',
+      text: { kind: 'event' as const, title: entry.title, rewards },
     }];
   });
 }
-
-const OFFICIAL_DETAIL: Record<string, string> = {
-  update: 'An update releases. Balance changes in its notes can move mod and weapon prices within hours.',
-  devstream: 'DE presents what is coming next. Reworks and changes announced here can move prices the same evening.',
-  'prime-access': 'A new Prime Access begins. New prime parts start high and usually fall as supply grows.',
-  drops: 'Watch partnered streams to earn the listed drops.',
-  nightwave: 'A Nightwave season or its offerings change.',
-  ducats: 'A Ducat value changes. Exchange or keep affected items before the date.',
-  event: 'An announced in-game event.',
-  other: 'An announcement from DE.',
-};
 
 function official(feed: AnnouncementFeed | null | undefined, now: number): CalendarEvent[] {
   return (feed?.events ?? []).flatMap(event => {
@@ -177,8 +169,7 @@ function official(feed: AnnouncementFeed | null | undefined, now: number): Calen
     if (!Number.isFinite(from) || (to !== null && !Number.isFinite(to)) || (to ?? from) < now - PAST) return [];
     return [{
       id: `official-${event.id}`, kind: 'official' as const, from, to, estimate: false, source: 'official' as const,
-      title: event.title, short: event.title,
-      detail: event.note?.trim() || OFFICIAL_DETAIL[event.kind] || OFFICIAL_DETAIL.other,
+      text: { kind: 'official' as const, title: event.title, note: event.note?.trim() || null, type: event.kind },
       sourceUrl: event.source_url,
     }];
   });
@@ -191,7 +182,7 @@ function notices(feed: AnnouncementFeed | null | undefined, now: number): Calend
     if (!Number.isFinite(from) || !Number.isFinite(to) || to < now - PAST) return [];
     return [{
       id: `notice-${message.id}`, kind: 'notice' as const, from, to, estimate: false, source: 'notice' as const,
-      title: message.title, short: message.title, detail: message.body, sourceUrl: message.source_url,
+      text: { kind: 'given' as const, title: message.title, detail: message.body }, sourceUrl: message.source_url,
     }];
   });
 }

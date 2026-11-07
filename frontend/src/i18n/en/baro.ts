@@ -56,4 +56,5 @@ export const BARO = {
   'baro.earmark': m('Earmark these for Baro using the <b>Ducats</b> preset.', 'Advice.'),
   'baro.yieldUnavailable': m('Ducat yield is unavailable while inventory valuation is pending or failed. Reopen Baro to retry.', 'Note.'),
   'baro.openPreset': m('Open Ducats preset →', 'Button.'),
+  'baro.pricing': m('Pricing Baro’s stock…', 'Status while prices load.'),
 } satisfies Record<string, Source>;

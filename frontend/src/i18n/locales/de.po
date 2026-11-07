@@ -4670,6 +4670,23 @@ msgctxt "keys.different"
 msgid "Search and help need different characters."
 msgstr ""
 
+#. Pager button: previous page.
+#. Max 10 characters.
+msgctxt "ui.prev"
+msgid "‹ Prev"
+msgstr ""
+
+#. Pager button: next page.
+#. Max 10 characters.
+msgctxt "ui.next"
+msgid "Next ›"
+msgstr ""
+
+#. Pager: which rows are on this page.
+msgctxt "ui.showing"
+msgid "Showing {from}–{to} of {total}"
+msgstr ""
+
 #. Activity status.
 #. Max 30 characters.
 msgctxt "orders.liveProgress"
@@ -9189,6 +9206,11 @@ msgctxt "baro.openPreset"
 msgid "Open Ducats preset →"
 msgstr ""
 
+#. Status while prices load.
+msgctxt "baro.pricing"
+msgid "Pricing Baro’s stock…"
+msgstr ""
+
 #. warframe.market status. Use the name warframe.market uses in your language.
 #. Max 16 characters.
 msgctxt "presence.online"
@@ -10704,4 +10726,593 @@ msgstr ""
 #. After the Ko-fi link: the sentence’s end.
 msgctxt "faq.support.after"
 msgid "."
+msgstr ""
+
+#. Event title.
+msgctxt "cal.baro.title"
+msgid "Baro Ki’Teer at {where}"
+msgstr ""
+
+#. Short label in the month grid.
+#. Max 24 characters.
+msgctxt "cal.baro.short"
+msgid "Baro · {where}"
+msgstr ""
+
+#. In place of an unknown location.
+msgctxt "cal.baro.relay"
+msgid "a relay"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.baro.detail"
+msgid "He sells for 48 hours. Items he brings usually fall in price while he is here."
+msgstr ""
+
+#. Event title.
+msgctxt "cal.baroEst.title"
+msgid "Baro Ki’Teer, expected"
+msgstr ""
+
+#. Short label; est. = estimated.
+#. Max 24 characters.
+msgctxt "cal.baroEst.short"
+msgid "Baro (est.)"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.baroEst.detail"
+msgid "He visits every 14 days. The relay and his stock are unknown until DE publishes the visit."
+msgstr ""
+
+#. Event title; names are Prime Warframes.
+msgctxt "cal.resurgence.title"
+msgid "Prime Resurgence: {names}"
+msgstr ""
+
+#. Short label.
+msgctxt "cal.resurgence.short"
+msgid "Resurgence · {names}"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.resurgence.detail"
+msgid "Varzia sells {names} relics. Fresh supply tends to keep their parts cheap until the rotation ends; prices usually recover afterwards."
+msgstr ""
+
+#. Event title.
+msgctxt "cal.vault.title"
+msgid "{names} may be vaulted"
+msgstr ""
+
+#. Short label.
+msgctxt "cal.vault.short"
+msgid "Vaulting (est.) · {names}"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.vault.detail"
+msgid "Estimated from release dates; DE has not announced it."
+msgstr ""
+
+#. Event title.
+msgctxt "cal.deal.title"
+msgid "Darvo: {item}"
+msgstr ""
+
+#. Event title.
+msgctxt "cal.deal.titlePriced"
+msgid "Darvo: {item} ({discount}% off, {price}p)"
+msgstr ""
+
+#. Short label.
+msgctxt "cal.deal.short"
+msgid "Darvo · {item}"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.deal.detail"
+msgid "A store item for real-money Platinum. It does not touch tradeable holdings."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.event.detail"
+msgid "In-game event."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.event.rewards"
+msgid "In-game event. Rewards include {rewards}."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.event.rewardsMore"
+msgid "In-game event. Rewards include {rewards} and more."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.update"
+msgid "An update releases. Balance changes in its notes can move mod and weapon prices within hours."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.devstream"
+msgid "DE presents what is coming next. Reworks and changes announced here can move prices the same evening."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.prime-access"
+msgid "A new Prime Access begins. New prime parts start high and usually fall as supply grows."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.drops"
+msgid "Watch partnered streams to earn the listed drops."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.nightwave"
+msgid "A Nightwave season or its offerings change."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.ducats"
+msgid "A Ducat value changes. Exchange or keep affected items before the date."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.event"
+msgid "An announced in-game event."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.official.other"
+msgid "An announcement from DE."
+msgstr ""
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.official"
+msgid "DE announcements"
+msgstr ""
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.event"
+msgid "In-game events"
+msgstr ""
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.baro"
+msgid "Baro Ki’Teer"
+msgstr ""
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.resurgence"
+msgid "Prime Resurgence"
+msgstr ""
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.vault"
+msgid "Vaulting"
+msgstr ""
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.notice"
+msgid "TennoWorth notices"
+msgstr ""
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.deal"
+msgid "Darvo deals"
+msgstr ""
+
+#. Countdown: days and hours.
+#. Max 8 characters.
+msgctxt "cal.days"
+msgid "{d}d {h}h"
+msgstr ""
+
+#. Countdown: hours and minutes.
+#. Max 8 characters.
+msgctxt "cal.hours"
+msgid "{h}h {m}m"
+msgstr ""
+
+#. Column heading.
+msgctxt "cal.thisWeek"
+msgid "This week"
+msgstr ""
+
+#. Column heading.
+msgctxt "cal.nextWeek"
+msgid "Next week"
+msgstr ""
+
+#. Column heading.
+msgctxt "cal.later"
+msgid "Later"
+msgstr ""
+
+#. Panel heading.
+msgctxt "cal.nextUp"
+msgid "Next up"
+msgstr ""
+
+#. When the next event ends.
+msgctxt "cal.ends"
+msgid "Ends {day}, {time} UTC"
+msgstr ""
+
+#. When the next event starts.
+msgctxt "cal.starts"
+msgid "Starts {day}, {time} UTC"
+msgstr ""
+
+#. Countdown caption.
+#. Max 10 characters.
+msgctxt "cal.endsIn"
+msgid "Ends in"
+msgstr ""
+
+#. Countdown caption: starts in.
+#. Max 10 characters.
+msgctxt "cal.in"
+msgid "In"
+msgstr ""
+
+#. Empty state.
+msgctxt "cal.nothingConfirmed"
+msgid "Nothing confirmed is coming up in the market data yet."
+msgstr ""
+
+#. Empty state.
+msgctxt "cal.nothing"
+msgid "Nothing scheduled."
+msgstr ""
+
+#. Date tile caption for an ongoing event.
+#. Max 6 characters.
+msgctxt "cal.until"
+msgid "until"
+msgstr ""
+
+#. Tag: estimated date.
+#. Max 5 characters.
+msgctxt "cal.est"
+msgid "est."
+msgstr ""
+
+#. Event timing.
+msgctxt "cal.onNow"
+msgid "on now · ends {day} {time} UTC"
+msgstr ""
+
+#. Event timing.
+msgctxt "cal.at"
+msgid "{day}, {time} UTC"
+msgstr ""
+
+#. Note.
+msgctxt "cal.youHold"
+msgid "{count, plural, one {You hold # affected item} other {You hold # affected items}}"
+msgstr ""
+
+#. Sentence.
+msgctxt "cal.youHoldStop"
+msgid "{count, plural, one {You hold # affected item.} other {You hold # affected items.}}"
+msgstr ""
+
+#. Sentence.
+msgctxt "cal.noneHeld"
+msgid "Nothing you hold is affected."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "cal.lanes"
+msgid "Next eight weeks by kind"
+msgstr ""
+
+#. Hint.
+msgctxt "cal.chooseBar"
+msgid "Choose a bar or a diamond for its dates and source. The ink line is now."
+msgstr ""
+
+#. Screen reader name of the month grid.
+msgctxt "cal.monthHelp"
+msgid "{month}. Arrow keys choose a day; Page Up and Page Down change month"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "cal.prevMonth"
+msgid "Previous month"
+msgstr ""
+
+#. Button and heading.
+msgctxt "cal.today"
+msgid "Today"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "cal.nextMonth"
+msgid "Next month"
+msgstr ""
+
+#. Screen reader name of a day.
+msgctxt "cal.dayEvents"
+msgid "{day}, {count, plural, one {# event} other {# events}}"
+msgstr ""
+
+#. Screen reader name of a day.
+msgctxt "cal.dayEmpty"
+msgid "{day}, nothing scheduled"
+msgstr ""
+
+#. Overflow button.
+#. Max 8 characters.
+msgctxt "cal.more"
+msgid "+{count} more"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "cal.selectedDay"
+msgid "Selected day"
+msgstr ""
+
+#. Heading.
+msgctxt "cal.day"
+msgid "Day"
+msgstr ""
+
+#. Note.
+msgctxt "cal.utc"
+msgid "Times in UTC"
+msgstr ""
+
+#. Label.
+msgctxt "cal.comingNext"
+msgid "Coming next:"
+msgstr ""
+
+#. View choice.
+#. Max 8 characters.
+msgctxt "cal.view.board"
+msgid "Board"
+msgstr ""
+
+#. View choice.
+#. Max 8 characters.
+msgctxt "cal.view.month"
+msgid "Month"
+msgstr ""
+
+#. View choice.
+#. Max 8 characters.
+msgctxt "cal.view.lanes"
+msgid "Lanes"
+msgstr ""
+
+#. View heading.
+msgctxt "cal.title"
+msgid "Calendar"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "cal.ledeDesktop"
+msgid "Dates that move prices, from DE and from our notices, and what they touch in your inventory."
+msgstr ""
+
+#. Line under the heading.
+msgctxt "cal.ledeSite"
+msgid "Dates that move Warframe prices, from DE and from our notices."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "cal.viewChoice"
+msgid "Calendar view"
+msgstr ""
+
+#. Screen reader legend.
+msgctxt "cal.show"
+msgid "Show on the calendar"
+msgstr ""
+
+#. Legend.
+msgctxt "cal.dashed"
+msgid "Dashed = estimated date"
+msgstr ""
+
+#. Status.
+msgctxt "cal.loading"
+msgid "Loading dates…"
+msgstr ""
+
+#. Date source. Keep worldState.
+msgctxt "cal.source.worldstate"
+msgid "DE worldState"
+msgstr ""
+
+#. Date source.
+msgctxt "cal.source.estimate"
+msgid "Estimate"
+msgstr ""
+
+#. Date source.
+msgctxt "cal.source.notice"
+msgid "TennoWorth notice"
+msgstr ""
+
+#. Date source.
+msgctxt "cal.source.official"
+msgid "DE announcement"
+msgstr ""
+
+#. Local time beside the UTC time.
+msgctxt "cal.yourTime"
+msgid "({time} your time)"
+msgstr ""
+
+#. Link.
+msgctxt "cal.source"
+msgid "Source ↗"
+msgstr ""
+
+#. Note on an estimate.
+msgctxt "cal.noAdvice"
+msgid "No advice until DE confirms it."
+msgstr ""
+
+#. Panel heading on the selling view.
+msgctxt "feed.title"
+msgid "What’s coming"
+msgstr ""
+
+#. Row title.
+msgctxt "feed.baro"
+msgid "Baro Ki’Teer"
+msgstr ""
+
+#. Row title.
+msgctxt "feed.baroAt"
+msgid "Baro Ki’Teer · {where}"
+msgstr ""
+
+#. How many items Baro brings.
+msgctxt "feed.baroStock"
+msgid "{count, plural, one {# item} other {# items}}"
+msgstr ""
+
+#. Baro’s item list is not out yet.
+msgctxt "feed.baroNoStock"
+msgid "manifest not published yet"
+msgstr ""
+
+#. Row title.
+msgctxt "feed.vault"
+msgid "Prime Vault rotation"
+msgstr ""
+
+#. Prime Vault packs.
+msgctxt "feed.packs"
+msgid "{count, plural, one {# pack} other {# packs}}"
+msgstr ""
+
+#. Row title.
+msgctxt "feed.deal"
+msgid "Darvo · {item}"
+msgstr ""
+
+#. Darvo’s discount and price.
+msgctxt "feed.dealPrice"
+msgid "{discount}% off - {price}p"
+msgstr ""
+
+#. Event rewards.
+msgctxt "feed.rewards"
+msgid "{count, plural, one {# item reward} other {# item rewards}}"
+msgstr ""
+
+#. Event reward in credits.
+msgctxt "feed.credits"
+msgid "{credits} credits"
+msgstr ""
+
+#. Not every reward could be read.
+msgctxt "feed.partial"
+msgid "partial coverage"
+msgstr ""
+
+#. Event rewards could not be read.
+msgctxt "feed.rewardsUnknown"
+msgid "fixed rewards unknown"
+msgstr ""
+
+#. Starts in N days.
+#. Max 8 characters.
+msgctxt "feed.inDays"
+msgid "in {n}d"
+msgstr ""
+
+#. Starts in N hours.
+#. Max 8 characters.
+msgctxt "feed.inHours"
+msgid "in {n}h"
+msgstr ""
+
+#. Ends in N days.
+#. Max 8 characters.
+msgctxt "feed.daysLeft"
+msgid "{n}d left"
+msgstr ""
+
+#. Ends in N hours.
+#. Max 8 characters.
+msgctxt "feed.hoursLeft"
+msgid "{n}h left"
+msgstr ""
+
+#. Scan the inventory to see what this touches.
+msgctxt "feed.scan"
+msgid "scan to check"
+msgstr ""
+
+#. Items you hold.
+msgctxt "feed.atLeast"
+msgid "affects at least {count} you hold"
+msgstr ""
+
+#. Items you hold.
+msgctxt "feed.affects"
+msgid "affects {count} you hold"
+msgstr ""
+
+#. Touches nothing you hold.
+msgctxt "feed.none"
+msgid "none you hold"
+msgstr ""
+
+#. We cannot say what it touches.
+msgctxt "feed.reachUnknown"
+msgid "reach unknown"
+msgstr ""
+
+#. Tooltip.
+msgctxt "feed.reachRewards"
+msgid "Some fixed rewards could not be matched to market items."
+msgstr ""
+
+#. Tooltip.
+msgctxt "feed.reachInventory"
+msgid "No scanned inventory, so we can’t say what this touches."
+msgstr ""
+
+#. How old the reward data is.
+msgctxt "feed.ageDays"
+msgid "reward data {n}d old"
+msgstr ""
+
+#. Reward data of unknown age.
+msgctxt "feed.ageUnknown"
+msgid "reward data age unknown"
+msgstr ""
+
+#. Button that hides an announcement.
+#. Max 12 characters.
+msgctxt "announce.dismiss"
+msgid "Dismiss"
+msgstr ""
+
+#. Screen reader name of the button.
+msgctxt "announce.dismissNamed"
+msgid "Dismiss {title}"
+msgstr ""
+
+#. Error.
+msgctxt "announce.saveFailed"
+msgid "Could not save dismissal. Try again."
 msgstr ""

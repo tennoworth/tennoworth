@@ -40,12 +40,12 @@ describe('CalendarView', () => {
     const settings = store();
     render(CalendarView, { props: { market, now: NOW, surface: 'hosted', store: settings } });
     await fireEvent.click(screen.getByRole('button', { name: 'Lanes' }));
-    await fireEvent.click(screen.getByRole('checkbox', { name: "Baro Ki'Teer" }));
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'Baro Ki’Teer' }));
     expect(JSON.parse(settings.saved.calendar)).toEqual({ view: 'lanes', hidden: ['deal', 'baro'] });
     cleanup();
     render(CalendarView, { props: { market, now: NOW, surface: 'hosted', store: settings } });
     expect(screen.getByRole('button', { name: 'Lanes' }).getAttribute('aria-pressed')).toBe('true');
-    expect(screen.queryByRole('button', { name: /Baro Ki'Teer at Pluto Relay/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Baro Ki’Teer at Pluto Relay/ })).toBeNull();
   });
 
   it('ignores a corrupt saved choice', () => {
@@ -61,14 +61,14 @@ describe('CalendarView', () => {
     expect(document.activeElement).toBe(friday);
     expect(friday.getAttribute('aria-pressed')).toBe('true');
     const day = screen.getByRole('region', { name: 'Selected day' });
-    expect(within(day).getByText("Baro Ki'Teer at Pluto Relay")).toBeTruthy();
+    expect(within(day).getByText('Baro Ki’Teer at Pluto Relay')).toBeTruthy();
     expect(within(day).getAllByText('DE worldState')).toHaveLength(2);
   });
 
   it('still shows the game calendar when the notice feed fails', async () => {
     render(CalendarView, { props: { market, now: NOW, surface: 'hosted', loadAnnouncements: async () => { throw new Error('offline'); } } });
     const next = screen.getByRole('region', { name: 'Next up' });
-    expect(await within(next).findByText("Baro Ki'Teer at Pluto Relay")).toBeTruthy();
+    expect(await within(next).findByText('Baro Ki’Teer at Pluto Relay')).toBeTruthy();
   });
 
   it('says on desktop how many held items an event touches', async () => {

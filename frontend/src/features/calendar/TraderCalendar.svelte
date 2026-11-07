@@ -9,6 +9,8 @@
   import { glyphFor } from '../../ui/glyphs';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import Glyph from '../../ui/Glyph.svelte';
+  import { t } from '../../i18n/i18n.svelte';
+  import { feedWords } from './wording';
 
   let {
     market,
@@ -36,48 +38,45 @@
     const start = Date.parse(item.at);
     if (start > now) {
       const h = Math.round((start - now) / 3_600_000);
-      return h >= 24 ? `in ${Math.round(h / 24)}d` : `in ${h}h`;
+      return h >= 24 ? t('feed.inDays', { n: Math.round(h / 24) }) : t('feed.inHours', { n: h });
     }
     const end = item.until ? Date.parse(item.until) : start;
     const h = Math.max(0, Math.round((end - now) / 3_600_000));
-    return h >= 24 ? `${Math.round(h / 24)}d left` : `${h}h left`;
+    return h >= 24 ? t('feed.daysLeft', { n: Math.round(h / 24) }) : t('feed.hoursLeft', { n: h });
   }
 </script>
 
 {#if items.length}
   <section class="wrap tw cal">
-    <div class="rail"><h3>What’s coming</h3></div>
+    <div class="rail"><h3>{t('feed.title')}</h3></div>
     <div class="calendar-body">
     <ul>
-      {#each items as item (item.id ?? item.kind + item.at + item.title)}
+      {#each items as item (item.id ?? item.kind + item.at + JSON.stringify(item.text))}
+        {@const words = feedWords(item.text)}
         <li class:hot={item.affects.length > 0 && (item.affectsKnown || item.reach === 'partial-hits')}>
           <span class="when">{when(item)}</span>
           <span class="what">
             <Glyph name={glyphFor(GLYPH[item.kind])} />
-            {item.title}
-            {#if item.detail}<span class="detail">· {item.detail}</span>{/if}
+            {words.title}
+            {#if words.detail}<span class="detail">· {words.detail}</span>{/if}
           </span>
           <span class="hits">
             {#if item.kind === 'event' && item.reach === 'scan'}
-              scan to check
+              {t('feed.scan')}
             {:else if item.kind === 'event' && item.reach === 'partial-hits'}
-              affects at least {item.affects.length} you hold
+              {t('feed.atLeast', { count: item.affects.length })}
             {:else if item.kind === 'event' && item.reach === 'hits'}
-              affects {item.affects.length} you hold
+              {t('feed.affects', { count: item.affects.length })}
             {:else if item.kind === 'event' && item.reach === 'none'}
-              none you hold
+              {t('feed.none')}
             {:else if item.kind === 'event' && item.reach === 'unknown'}
-              <span class="unknown" title="Some fixed rewards could not be matched to market items."
-                >reach unknown</span
-              >
+              <span class="unknown" title={t('feed.reachRewards')}>{t('feed.reachUnknown')}</span>
             {:else if item.affectsKnown && item.affects.length}
-              affects {item.affects.length} you hold
+              {t('feed.affects', { count: item.affects.length })}
             {:else if !item.affectsKnown}
-              <span class="unknown" title="No scanned inventory, so we can't say what this touches."
-                >reach unknown</span
-              >
+              <span class="unknown" title={t('feed.reachInventory')}>{t('feed.reachUnknown')}</span>
             {/if}
-            {#if item.stale}<span class="stale"> · reward data {item.dataAgeDays === undefined ? 'age unknown' : `${item.dataAgeDays}d old`}</span>{/if}
+            {#if item.stale}<span class="stale"> · {item.dataAgeDays === undefined ? t('feed.ageUnknown') : t('feed.ageDays', { n: item.dataAgeDays })}</span>{/if}
           </span>
         </li>
       {/each}

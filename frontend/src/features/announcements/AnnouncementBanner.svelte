@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Announcement } from '../../contracts/generated/desktop';
+  import { t } from '../../i18n/i18n.svelte';
   let { message, saving = false, error = '', ondismiss }: {
     message: Announcement; saving?: boolean; error?: string; ondismiss?: () => void;
   } = $props();
@@ -12,8 +13,8 @@
     {#if error}<p class="bad" role="alert">{error}</p>{/if}
   </div>
   <div class="gb-actions">
-    <a class="btn xs" href={message.source_url} target="_blank" rel="noopener noreferrer">Source announcement ↗</a>
-    <button type="button" class="btn ghost xs" aria-label="Dismiss {message.title}" disabled={saving || !ondismiss} onclick={ondismiss}>Dismiss</button>
+    <a class="btn xs" href={message.source_url} target="_blank" rel="noopener noreferrer">{t('note.source')}</a>
+    <button type="button" class="btn ghost xs" aria-label={t('announce.dismissNamed', { title: message.title })} disabled={saving || !ondismiss} onclick={ondismiss}>{t('announce.dismiss')}</button>
   </div>
 </section>
 

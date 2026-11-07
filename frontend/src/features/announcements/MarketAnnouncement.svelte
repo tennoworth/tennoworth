@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import AnnouncementBanner from './AnnouncementBanner.svelte';
+  import { t } from '../../i18n/i18n.svelte';
   import { activeAnnouncements, parseAnnouncements } from '../../domain/announcements';
   import type { AnnouncementFeed } from '../../contracts/generated/desktop';
   import type { SettingsStore } from '../../contracts/state-store';
@@ -51,5 +52,5 @@
 </script>
 
 {#each active as message (message.id)}
-  <AnnouncementBanner {message} {saving} error={failed === message.id ? 'Could not save dismissal. Try again.' : ''} ondismiss={() => dismiss(message.id)} />
+  <AnnouncementBanner {message} {saving} error={failed === message.id ? t('announce.saveFailed') : ''} ondismiss={() => dismiss(message.id)} />
 {/each}

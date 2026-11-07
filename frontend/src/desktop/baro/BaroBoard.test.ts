@@ -74,7 +74,7 @@ it('plans the scrap basket once, after the stock is priced', async () => {
   const ducatPlan = vi.fn().mockResolvedValue({ candidates: [], plan: { picks: [], heldBack: [] } });
   const owned = new Map([['a', { slug: 'a', name: 'A', count: 3 } as OwnedRecord]]);
   render(BaroBoard, { props: { market: null, baro: null, owned }, context: new Map([[DESKTOP_CONTEXT, { ducatPlan, baroValue: value }]]) });
-  await screen.findByText("Pricing Baro's stock…");
+  await screen.findByText('Pricing Baro’s stock…');
   expect(ducatPlan).not.toHaveBeenCalled();
   priced(emptyValue);
   await vi.waitFor(() => expect(ducatPlan).toHaveBeenCalledTimes(1));

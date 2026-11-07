@@ -27,6 +27,6 @@ it('calendar relevance agrees with the native event reminder', () => {
   const held = new Map(eventCase.held.map((slug) => [slug, { slug, count: 1 } as OwnedRecord]));
   const relevant = buildCalendar(eventCase.market as unknown as Market, held, Date.parse(eventCase.now))
     .filter((item) => item.affects.length > 0 && (item.affectsKnown || item.reach === 'partial-hits'))
-    .map((item) => item.title);
+    .map((item) => (item.text.kind === 'event' ? item.text.title : item.text.kind));
   expect(relevant).toEqual(eventCase.expected);
 });
