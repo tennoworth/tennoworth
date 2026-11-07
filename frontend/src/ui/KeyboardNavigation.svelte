@@ -139,13 +139,15 @@
     const navigation = async (event: MouseEvent) => {
       if (event.detail !== 0 || !(event.target instanceof HTMLElement)) return;
       const target = event.target;
-      // A button elsewhere that opens a view (Review My Orders, Open Ducats
-      // preset) marks itself, and lands on the view's heading the same way.
+      // Any button that changes the view (Review My Orders, the Ducats preset,
+      // a banner's link) lands on the new view's heading, as the sidebar does.
+      const shownView = () => document.querySelector('.sidebar [aria-current="page"]');
+      const before = shownView();
       const view = target.closest('.sidebar .nav-item, [data-opens-view]');
       const disclosure = target.closest<HTMLElement>('[aria-expanded][aria-controls]');
       const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
       await tick();
-      if (view) focusView();
+      if (view || shownView() !== before) focusView();
       else if (disclosure?.getAttribute('aria-expanded') === 'true') {
         const popover = document.getElementById(disclosure.getAttribute('aria-controls') ?? '');
         const controls = [...popover?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]') ?? []].filter(visible);
