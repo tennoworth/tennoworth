@@ -2,6 +2,7 @@
 import { untrack } from 'svelte';
 import { feedbackSnapshot, feedbackLink, feedbackProblems, improvementUrl } from './feedback';
 import type { DesktopServices } from '../../contracts/services';
+import { t } from '../../i18n/i18n.svelte';
 let { captureState, services, onclosed }: { captureState: () => Parameters<typeof feedbackSnapshot>[0]; services: Pick<DesktopServices, 'updateDiagnostics' | 'updateStatus' | 'desktopOpenExternalUrl'>; onclosed: () => void } = $props();
 const { updateDiagnostics, updateStatus, desktopOpenExternalUrl } = untrack(() => services);
   let feedbackDialog: HTMLDialogElement;
@@ -78,50 +79,50 @@ const { updateDiagnostics, updateStatus, desktopOpenExternalUrl } = untrack(() =
 <dialog data-shell bind:this={feedbackDialog} class="cryptobox feedback-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-description" onclose={onclosed}>
   <form data-shell method="dialog">
     <header data-shell>
-      <h3 data-shell id="feedback-title">Send feedback</h3>
-      <p data-shell id="feedback-description">Help make TennoWorth more useful.</p>
+      <h3 data-shell id="feedback-title">{t('feedback.title')}</h3>
+      <p data-shell id="feedback-description">{t('feedback.lede')}</p>
     </header>
-    <p data-shell class="feedback-note">What would you like to share?</p>
+    <p data-shell class="feedback-note">{t('feedback.ask')}</p>
     <div data-shell class="feedback-options">
       <a data-shell href={bugReport?.url} aria-disabled={feedbackLoading} onclick={(event) => openFeedbackLink(event, bugReport?.url, feedbackLoading)} target="_blank" rel="noopener noreferrer">
-        <strong data-shell>Report a bug <span data-shell aria-hidden="true">↗</span></strong>
-        <span data-shell>Something broke or didn’t work as expected.</span>
+        <strong data-shell>{t('feedback.bug')} <span data-shell aria-hidden="true">↗</span></strong>
+        <span data-shell>{t('feedback.bugHelp')}</span>
       </a>
       <a data-shell href={improvementUrl} onclick={(event) => openFeedbackLink(event, improvementUrl, false, 'improvement')} target="_blank" rel="noopener noreferrer">
-        <strong data-shell>Suggest an improvement <span data-shell aria-hidden="true">↗</span></strong>
-        <span data-shell>Tell us what would make your next trade easier.</span>
+        <strong data-shell>{t('feedback.idea')} <span data-shell aria-hidden="true">↗</span></strong>
+        <span data-shell>{t('feedback.ideaHelp')}</span>
       </a>
     </div>
-    <label data-shell class="feedback-check"><input type="checkbox" bind:checked={includeFeedbackState} /> Include app-state snapshot with bug report</label>
-    <p data-shell class="feedback-note">Version, operating system, current screen, scan, sign-in and update status, error categories, theme, and window size. No account identifiers, credentials, inventory contents, file paths, or game memory.</p>
+    <label data-shell class="feedback-check"><input type="checkbox" bind:checked={includeFeedbackState} /> {t('feedback.include')}</label>
+    <p data-shell class="feedback-note">{t('feedback.contents')}</p>
     {#if reportedProblems.length}
       <div data-shell class="ui-notice feedback-problems" data-tone="warn" data-testid="feedback-problems">
-        <strong data-shell>Included in this report</strong>
+        <strong data-shell>{t('feedback.included')}</strong>
         <ul data-shell>
           {#each reportedProblems as problem (problem.area)}<li data-shell>{problem.area}: {problem.summary}.</li>{/each}
         </ul>
-        <span data-shell>Only these categories are sent, not the error text.</span>
+        <span data-shell>{t('feedback.categoriesOnly')}</span>
       </div>
     {/if}
     {#if includeFeedbackState && feedbackState}
       <details data-shell class="feedback-state">
-        <summary data-shell>Review app-state snapshot</summary>
+        <summary data-shell>{t('feedback.review')}</summary>
         <pre data-shell>{JSON.stringify(feedbackState, null, 2)}</pre>
       </details>
       <div data-shell class="ui-toolbar">
-        <button data-shell type="button" class="btn" onclick={() => captureFeedback()} disabled={feedbackLoading}>Refresh snapshot</button>
-        <button data-shell type="button" class="btn" onclick={downloadFeedback} disabled={feedbackLoading}>Download diagnostics</button>
+        <button data-shell type="button" class="btn" onclick={() => captureFeedback()} disabled={feedbackLoading}>{t('feedback.refresh')}</button>
+        <button data-shell type="button" class="btn" onclick={downloadFeedback} disabled={feedbackLoading}>{t('feedback.download')}</button>
       </div>
     {/if}
-    {#if feedbackLoading}<p data-shell class="feedback-note" role="status">Reading app version…</p>{/if}
-    {#if bugReport?.needsAttachment}<p data-shell class="feedback-note" role="status">This snapshot is too large to prefill. Download diagnostics, then attach the file to your GitHub report.</p>{/if}
-    {#if feedbackDownloadError}<p data-shell role="alert">The download could not start. Copy the reviewed snapshot into the diagnostics field on GitHub.</p>{/if}
-    <p data-shell class="feedback-note">Opens GitHub · Account required · Reports are public.</p>
+    {#if feedbackLoading}<p data-shell class="feedback-note" role="status">{t('feedback.reading')}</p>{/if}
+    {#if bugReport?.needsAttachment}<p data-shell class="feedback-note" role="status">{t('feedback.tooLarge')}</p>{/if}
+    {#if feedbackDownloadError}<p data-shell role="alert">{t('feedback.downloadFailed')}</p>{/if}
+    <p data-shell class="feedback-note">{t('feedback.github')}</p>
     {#if feedbackFallbackUrl}
-      <p data-shell role="alert">Couldn’t open your browser. Copy this link into your browser to continue.</p>
-      <label data-shell>GitHub issue link<textarea data-shell class="ui-input" readonly value={feedbackFallbackUrl}></textarea></label>
+      <p data-shell role="alert">{t('feedback.noBrowser')}</p>
+      <label data-shell>{t('feedback.link')}<textarea data-shell class="ui-input" readonly value={feedbackFallbackUrl}></textarea></label>
     {/if}
-    <footer data-shell><button data-shell type="submit" class="btn">Close</button></footer>
+    <footer data-shell><button data-shell type="submit" class="btn">{t('feedback.close')}</button></footer>
   </form>
 </dialog>
 

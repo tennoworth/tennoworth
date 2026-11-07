@@ -10350,3 +10350,108 @@ msgstr ""
 msgctxt "drift.noItems"
 msgid "No matching items."
 msgstr ""
+
+#. Dialog heading.
+msgctxt "feedback.title"
+msgid "Send feedback"
+msgstr ""
+
+#. Dialog text.
+msgctxt "feedback.lede"
+msgid "Help make TennoWorth more useful."
+msgstr ""
+
+#. Question.
+msgctxt "feedback.ask"
+msgid "What would you like to share?"
+msgstr ""
+
+#. Choice.
+msgctxt "feedback.bug"
+msgid "Report a bug"
+msgstr ""
+
+#. Choice help.
+msgctxt "feedback.bugHelp"
+msgid "Something broke or didn’t work as expected."
+msgstr ""
+
+#. Choice.
+msgctxt "feedback.idea"
+msgid "Suggest an improvement"
+msgstr ""
+
+#. Choice help.
+msgctxt "feedback.ideaHelp"
+msgid "Tell us what would make your next trade easier."
+msgstr ""
+
+#. Checkbox.
+msgctxt "feedback.include"
+msgid "Include app-state snapshot with bug report"
+msgstr ""
+
+#. What the snapshot holds.
+msgctxt "feedback.contents"
+msgid "Version, operating system, current screen, scan, sign-in and update status, error categories, theme, and window size. No account identifiers, credentials, inventory contents, file paths, or game memory."
+msgstr ""
+
+#. Heading.
+msgctxt "feedback.included"
+msgid "Included in this report"
+msgstr ""
+
+#. Note.
+msgctxt "feedback.categoriesOnly"
+msgid "Only these categories are sent, not the error text."
+msgstr ""
+
+#. Disclosure.
+msgctxt "feedback.review"
+msgid "Review app-state snapshot"
+msgstr ""
+
+#. Button.
+msgctxt "feedback.refresh"
+msgid "Refresh snapshot"
+msgstr ""
+
+#. Button.
+msgctxt "feedback.download"
+msgid "Download diagnostics"
+msgstr ""
+
+#. Status.
+msgctxt "feedback.reading"
+msgid "Reading app version…"
+msgstr ""
+
+#. Note.
+msgctxt "feedback.tooLarge"
+msgid "This snapshot is too large to prefill. Download diagnostics, then attach the file to your GitHub report."
+msgstr ""
+
+#. Error.
+msgctxt "feedback.downloadFailed"
+msgid "The download could not start. Copy the reviewed snapshot into the diagnostics field on GitHub."
+msgstr ""
+
+#. Note. Reports are written in English on GitHub; any language is welcome.
+msgctxt "feedback.github"
+msgid "Opens GitHub · Account required · Reports are public."
+msgstr ""
+
+#. Error.
+msgctxt "feedback.noBrowser"
+msgid "Couldn’t open your browser. Copy this link into your browser to continue."
+msgstr ""
+
+#. Field label.
+msgctxt "feedback.link"
+msgid "GitHub issue link"
+msgstr ""
+
+#. Button.
+msgctxt "feedback.close"
+msgid "Close"
+msgstr ""
