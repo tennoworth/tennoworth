@@ -838,6 +838,14 @@
   table.tw.relic-table .relic-name[data-shell] { width: 16%; min-width: 9rem; }
   table.tw.relic-table .why[data-shell] { width: 34%; min-width: 16rem; }
   .relic-table td.l.relic-name a[data-shell] { font-weight: 600; }
+  /* The overrule sits under the decision as quiet text, so the advice stays
+     the louder of the two. */
+  .relic-table td.decision .overrule[data-shell] {
+    display: block; margin-top: var(--s1); padding: 0; border: 0; background: none;
+    font: inherit; font-size: var(--text-caption); color: var(--muted); text-align: left;
+    text-decoration: underline dotted; cursor: pointer;
+  }
+  .relic-table td.decision .overrule:hover[data-shell] { color: var(--fg); }
   .relic-table td.why[data-shell] { color: var(--muted); }
   /* One rung per cell: the EV over a bar on the row's scale; the chosen rung
      is the ink inversion, like any other selected state. */

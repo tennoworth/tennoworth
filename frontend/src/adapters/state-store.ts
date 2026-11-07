@@ -52,6 +52,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   keyboard: 'wfminv:keyboard-v1',
   display: 'wfminv:display-v1',
   sidebar: 'wfminv:sidebar-v1',
+  'relic-crack-anyway': 'wfminv:relic-crack-anyway-v1',
 };
 
 // The SQLite `setting.key` the desktop store parks the reload-restore snapshot

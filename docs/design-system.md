@@ -385,7 +385,13 @@ edge does not move between views; prose inside a panel caps its own line
 length. Ranked lists are tables: Set picks (a plain Do column, net plat and
 set volume aligned) and Relics (one row per relic, the refinement ladder as
 four cells on one scale with the chosen rung inverted, picked only for a crack
-or refine verdict). My orders is one listings table: listing health is a
+or refine verdict). Under a Sell intact or Refine decision a quiet text button
+reads "I'll crack this one anyway". It is English on purpose and stays that
+way: the player overrules the advice, the tag reads Cracking anyway, the
+Intact rung is picked, the row and the Expected total count the crack, Why
+keeps the original advice, and the same button turns into "Fine, sell intact"
+(or "Fine, refine") so focus never moves. The choice is kept per relic on this
+device. My orders is one listings table: listing health is a
 column and a row state with each fix beside the item, and Live ask and bid are
 always reserved so a live check fills cells rather than moving controls.
 Analytical tables fit their pane (Fitting tables). Long histories (Ledger trades,
