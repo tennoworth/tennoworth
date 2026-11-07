@@ -1,5 +1,5 @@
 {
-  "version": "0.9.100",
+  "version": "0.9.101",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1954,6 +1954,34 @@
           "kind": "fixed",
           "title": "Status menu arrows no longer change your status",
           "body": "Moving through the status menu with the arrow keys used to change what buyers saw on warframe.market. Arrows now only move between choices; Enter picks one.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.9.101",
+      "date": "2026-11-07",
+      "changes": [
+        {
+          "id": "tag-groups",
+          "kind": "improved",
+          "title": "Tags on one line, the rest grouped",
+          "body": "The Sell view keeps the main item types and slots on one line. \"+ more\" opens every other tag, grouped by type, slot, rarity, relic era, companions and the mods for one Warframe, weapon or companion, with a box that finds a tag by any part of its name or the start of its words. Companion breeds count as their species, so a Huras Kubrow's precepts are kubrow mods, and names read as the game writes them.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-filters-still",
+          "kind": "fixed",
+          "title": "Filters stay where you click",
+          "body": "Switching tags or filters used to move the tag line, because the Top picks above it changed height. The line you are using now stays put, and a tag picked from the list stays in place until the list closes.",
           "platforms": [
             "windows",
             "linux"
