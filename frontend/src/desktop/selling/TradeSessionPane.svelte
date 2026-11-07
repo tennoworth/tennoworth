@@ -15,13 +15,23 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   
   import { humanError } from '../../contracts/errors';
   import { shortStamp } from '../../ui/format';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import type { MessageKey } from '../../i18n/en';
+  const MODE_TEXT: Record<SessionMode, [MessageKey, MessageKey]> = {
+    fast: ['session.mode.fast', 'session.mode.fast.what'],
+    'per-trade': ['session.mode.per-trade', 'session.mode.per-trade.what'],
+    clear: ['session.mode.clear', 'session.mode.clear.what'],
+    max: ['session.mode.max', 'session.mode.max.what'],
+  };
+  const CONFIDENCE: Record<string, MessageKey> = { scanned: 'session.confidence.scanned', tracked: 'session.confidence.tracked', estimated: 'session.confidence.estimated', unknown: 'session.confidence.unknown' };
+  const confidenceWord = (value: string) => (CONFIDENCE[value] ? t(CONFIDENCE[value]) : value);
   import { MAX_PLAN_ITEMS } from '../../domain/limits';
   import { cachedUnitMarket } from '../../domain/order-prices';
   import type { Market, MarketItemEntry, OwnedRecord, TradeSessionState } from '../../contracts/data';
   import type { ScoredInventoryFact } from '../../contracts/generated/domain';
   import type { Verdict } from '../../contracts/generated/domain';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', keep, active = true, sessionEpoch = 0 }: {
+  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel, keep, active = true, sessionEpoch = 0 }: {
     keep?: Snippet;
     /** Bumped when the WFM session changes; live prices belong to one account. */
     sessionEpoch?: number;
@@ -131,7 +141,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     try {
       const next = await desktopTradeSessionState();
       if (disposed || current !== request) return;
-      if (!next?.allowance || !next.quantities || !Array.isArray(next.bulk_slugs)) throw new Error('Trade Session data is unavailable. Try scanning again.');
+      if (!next?.allowance || !next.quantities || !Array.isArray(next.bulk_slugs)) throw new Error(t('session.dataUnavailable'));
       if (sessionData && sessionData.allowance.snapshot_id !== next.allowance.snapshot_id) retained = null;
       sessionData = next;
       const maximum = Math.min(MAX_PLAN_ITEMS, next.allowance.remaining ?? 0);
@@ -163,11 +173,11 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       const q = quotes.find(q => q.slug === row.slug && (q.rank ?? 0) === 0 && q.subtype == null);
       if (!q || q.error) { failed++; continue; }
       next[q.slug] = { low_sell: q.low_sell ?? 0, top_buy: q.top_buy ?? 0, price_basis: 'unit' };
-      sources[q.slug] = `${q.low_sell == null ? 'No live ask; cached reference' : 'Live checked'} · ${new Date().toLocaleTimeString()}`;
+      sources[q.slug] = t(q.low_sell == null ? 'session.noLiveAsk' : 'session.liveChecked', { time: new Date().toLocaleTimeString(formatLocale()) });
     }
     livePrices = next;
     priceSources = sources;
-    priceNote = failed ? `${failed} price checks failed; those items retain their previous prices.` : 'Online competitors checked; your own orders are excluded.';
+    priceNote = failed ? t('session.checksFailed', { count: failed }) : t('session.competitorsChecked');
   }
 
   // Live prices were fetched for the previous account (its platform, its own
@@ -201,115 +211,111 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
 </script>
 
 <section class="view-header">
-  <h2>Trade Session</h2>
-  <p class="lede">Choose what matters, review a batch, return to Warframe.</p>
+  <h2>{t('session.title')}</h2>
+  <p class="lede">{t('session.lede')}</p>
 </section>
 {@render keep?.()}
 
 <div class="ui-stack">
-  <section class="ui-panel session-setup" aria-label="Trade allowance and budget">
+  <section class="ui-panel session-setup" aria-label={t('session.setup')}>
     <div class="ui-toolbar planning-controls">
       <div class="ui-field">
-        <span>Trade goal</span>
-        <div class="ui-segmented modes" role="group" aria-label="Trade intent" use:roving>
+        <span>{t('session.goal')}</span>
+        <div class="ui-segmented modes" role="group" aria-label={t('session.intent')} use:roving>
           {#each SESSION_MODES as choice}
-            <button aria-pressed={mode === choice.id} title={choice.description}
-              disabled={cap === 0 && !!retained} onclick={() => mode = choice.id}>{choice.name}</button>
+            <button aria-pressed={mode === choice.id} title={t(MODE_TEXT[choice.id][1])}
+              disabled={cap === 0 && !!retained} onclick={() => mode = choice.id}>{t(MODE_TEXT[choice.id][0])}</button>
           {/each}
         </div>
       </div>
-      <label class="ui-field budget-field">Trade budget
-        <input class="ui-input" aria-label="Trade budget" type="number" min="1" max={cap} step="1"
+      <label class="ui-field budget-field">{t('session.budget')}
+        <input class="ui-input" aria-label={t('session.budget')} type="number" min="1" max={cap} step="1"
           bind:value={budget} disabled={cap === 0} aria-describedby="budget-limit"
           aria-invalid={cap > 0 && (budget == null || budget < 1 || budget > cap) ? 'true' : undefined}
           onchange={() => { if (budget != null && cap > 0) budget = Math.min(cap, Math.max(1, Math.round(budget))); }} />
       </label>
-      <span class="muted" id="budget-limit">{cap > 0 && cap === allowance?.remaining ? `Can't exceed the ${cap} trades left today.` : `Up to ${cap} estimated trades per batch.`}</span>
+      <span class="muted" id="budget-limit">{t(cap > 0 && cap === allowance?.remaining ? 'session.cantExceed' : 'session.upTo', { count: cap })}</span>
     </div>
-    <p class="muted">{SESSION_MODES.find(choice => choice.id === mode)?.description}</p>
+    <p class="muted">{t(MODE_TEXT[mode][1])}</p>
     <details class="session-options">
-      <summary>Target and complete sets</summary>
+      <summary>{t('session.targetAndSets')}</summary>
       <div class="ui-toolbar">
-        <label class="ui-field">Platinum target · optional
-          <input class="ui-input" aria-label="Platinum target" type="number" min="1" step="1" bind:value={target} placeholder="No target" disabled={cap === 0 && !!retained} />
+        <label class="ui-field">{t('session.target')}
+          <input class="ui-input" aria-label={t('session.targetLabel')} type="number" min="1" step="1" bind:value={target} placeholder={t('session.noTarget')} disabled={cap === 0 && !!retained} />
         </label>
-        <label class="sets-check"><input type="checkbox" bind:checked={includeSets} disabled={cap === 0 && !!retained} /> Include complete owned sets</label>
+        <label class="sets-check"><input type="checkbox" bind:checked={includeSets} disabled={cap === 0 && !!retained} /> {t('session.includeSets')}</label>
       </div>
     </details>
     <div class="ui-toolbar allowance-status">
       <strong>
-        {#if loading}Reading trade allowance…
+        {#if loading}{t('session.readingAllowance')}
         {:else if allowance?.remaining != null}
-          {allowance.confidence === 'estimated' ? 'About ' : ''}{allowance.remaining} trades left today
-          {#if allowance.mastery_rank != null} · MR {allowance.mastery_rank}{/if}
-        {:else}Trade allowance unknown{/if}
+          {t(allowance.confidence === 'estimated' ? 'session.aboutTradesLeft' : 'session.tradesLeft', { count: allowance.remaining })}{#if allowance.mastery_rank != null}{t('session.mr', { rank: allowance.mastery_rank })}{/if}
+        {:else}{t('session.allowanceUnknown')}{/if}
       </strong>
-      <button class="btn" onclick={scan} disabled={scanning}>{scanning ? 'Scanning…' : 'Scan game'}</button>
-      {#if error}<button class="btn ghost" onclick={refresh}>Retry</button>{/if}
+      <button class="btn" onclick={scan} disabled={scanning}>{t(scanning ? 'session.scanning' : 'session.scan')}</button>
+      {#if error}<button class="btn ghost" onclick={refresh}>{t('session.retry')}</button>{/if}
     </div>
     {#if allowance?.observed_at}
-      <p class="muted">Last scan {shortStamp(allowance.observed_at * 1000)} · {allowance.confidence}
-        {#if allowance.monitoring} · local trade tracking active{/if}</p>
+      <p class="muted">{t('session.lastScan', { time: shortStamp(allowance.observed_at * 1000), confidence: confidenceWord(allowance.confidence) })}{#if allowance.monitoring}{t('session.tracking')}{/if}</p>
     {/if}
     {#if allowance?.reason}<p class="muted">{allowance.reason}</p>{/if}
     {#if error}<p class="ui-notice" data-tone="bad" role="alert">{error}</p>{/if}
     {#if !loading && allowance?.remaining === 0}
-      <p class="ui-notice" data-tone="warn">No trades remaining. This batch is read-only; existing WFM listings are unchanged. The allowance resets at 00:00 UTC.</p>
+      <p class="ui-notice" data-tone="warn">{t('session.noTrades')}</p>
     {/if}
   </section>
 
-  <section class="wrap tw session-batch" aria-label="Suggested batch">
-    <div class="rail"><h3>Suggested batch</h3><span class="exp">Review before posting</span></div>
+  <section class="wrap tw session-batch" aria-label={t('session.batch')}>
+    <div class="rail"><h3>{t('session.batch')}</h3><span class="exp">{t('session.reviewFirst')}</span></div>
     <div class="ui-stack session-body">
-    {#if listingBlockReason}<p class="ui-notice" data-tone="warn" role="status">{listingBlockReason} {#if onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{/if}</p>{/if}
+    {#if listingBlockReason}<p class="ui-notice" data-tone="warn" role="status">{listingBlockReason} {#if onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel ?? t('sell.checkListings')}</button>{/if}</p>{/if}
     <div class="ui-toolbar">
-      <h3>{display.rows.length} listings · {display.trades} estimated trades · {display.total.toLocaleString()}p potential</h3>
+      <h3>{t('session.summary', { listings: display.rows.length, trades: display.trades, total: display.total.toLocaleString(formatLocale()) })}</h3>
       <button class="btn ghost" onclick={refreshPrices} disabled={planning || !!planningError || !plan.rows.length || cap === 0} use:busy={liveBusy}>
-        {liveBusy ? 'Checking prices…' : 'Check live prices'}
+        {t(liveBusy ? 'session.checkingPrices' : 'session.checkPrices')}
       </button>
       <button class="btn primary" disabled={!!listingBlockReason || loading || planning || !!planningError || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
-        onclick={() => !listingBlockReason && sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>Review batch</button>
+        onclick={() => !listingBlockReason && sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>{t('session.review')}</button>
     </div>
-    <p class="muted">Potential assumes sales at the listed unit asks, rounded up to whole platinum. Bids are per-unit comparisons, not instant proceeds.
-      Cached market: {market?.updated_at ? shortStamp(market.updated_at) : 'unknown age'}.
-      </p>
-    {#if planning}<p role="status">Updating suggested batch…</p>{/if}
-    {#if planningError}<p class="ui-notice" data-tone="bad" role="alert">Could not update the suggested batch: {planningError} Change the intent or budget to retry.</p>{/if}
+    <p class="muted">{t('session.potentialNote', { age: market?.updated_at ? shortStamp(market.updated_at) : t('session.unknownAge') })}</p>
+    {#if planning}<p role="status">{t('session.updating')}</p>{/if}
+    {#if planningError}<p class="ui-notice" data-tone="bad" role="alert">{t('session.planError', { error: planningError })}</p>{/if}
     {#if priceNote}<p role="status">{priceNote}</p>{/if}
     {#if display.target != null}
       <p class="ui-notice" data-tone={display.shortfall === 0 ? 'good' : 'warn'}>
-        {display.shortfall === 0 ? 'Target covered at listing prices, if these items sell.' : `${display.shortfall?.toLocaleString()}p short of the target within this budget.`}
+        {display.shortfall === 0 ? t('session.covered') : t('session.short', { amount: display.shortfall?.toLocaleString(formatLocale()) ?? '' })}
       </p>
     {/if}
     {#if display.rows.length}
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard focus is needed to scroll the wide table.) -->
-      <div class="wrap tw"><div class="scroll" use:fitTable tabindex="0" role="region" aria-label="Suggested listings; scroll for all columns">
+      <div class="wrap tw"><div class="scroll" use:fitTable tabindex="0" role="region" aria-label={t('session.tableLabel')}>
         <table class="tw session-table">
-          <thead><tr><th class="l">Item</th><th title="Quantity to list">Qty</th><th title="Units per trade">Per trade</th><th title="Estimated trades">Trades</th><th>Unit ask</th><th data-drop="1">Unit bid</th><th>Potential</th><th class="l">Why this item</th></tr></thead>
+          <thead><tr><th class="l">{t('session.col.item')}</th><th title={t('session.col.qtyTitle')}>{t('session.col.qty')}</th><th title={t('session.col.perTradeTitle')}>{t('session.col.perTrade')}</th><th title={t('session.col.tradesTitle')}>{t('session.col.trades')}</th><th>{t('session.col.ask')}</th><th data-drop="1">{t('session.col.bid')}</th><th>{t('session.col.potential')}</th><th class="l">{t('session.col.why')}</th></tr></thead>
           <tbody>
             {#each display.rows as row (row.key)}
               <tr>
-                <td class="l">{row.name}<small>{row.sellable} confirmed sellable / {row.owned} owned · rank 0 where applicable</small>
+                <td class="l">{row.name}<small>{t('session.rowCounts', { sellable: row.sellable, owned: row.owned })}</small>
                   {#if row.components}
                     {@const reference = partsAsk(row.components)}
-                    <small>Per set: {Object.entries(row.components).map(([slug, count]) => `${parts.find(part => part.slug === slug)?.name ?? slug} ×${count}`).join(', ')}</small>
-                    <small>Parts reference: {reference == null ? 'Unknown' : `${Number(reference.toFixed(2))}p`} · set ask {row.platinum}p</small>
+                    <small>{t('session.perSet', { parts: Object.entries(row.components).map(([slug, count]) => `${parts.find(part => part.slug === slug)?.name ?? slug} ×${count}`).join(', ') })}</small>
+                    <small>{t('session.partsReference', { reference: reference == null ? t('session.unknown') : `${Number(reference.toFixed(2))}p`, ask: row.platinum })}</small>
                   {/if}
-                  <button class="btn ghost xs compare-buyers" data-row={row.key} aria-expanded={buyerSelection?.key === row.key} aria-label="Compare buyers for {row.name}" onclick={() => compareBuyers(row)}>Compare buyers</button>
+                  <button class="btn ghost xs compare-buyers" data-row={row.key} aria-expanded={buyerSelection?.key === row.key} aria-label={t('session.compareBuyersFor', { item: row.name })} onclick={() => compareBuyers(row)}>{t('session.compareBuyers')}</button>
                 </td>
-                <td>{row.quantity}</td><td>{row.per_trade}</td><td>{row.trades}</td><td>{row.platinum}p<small>{priceSources[row.slug] ?? 'Cached reference'}</small></td>
-                <td>{row.bid == null ? 'Unknown' : `${Number(row.bid.toFixed(2))}p`}</td><td>{row.quantity * row.platinum}p</td><td class="reason">{row.reason}</td>
+                <td>{row.quantity}</td><td>{row.per_trade}</td><td>{row.trades}</td><td>{row.platinum}p<small>{priceSources[row.slug] ?? t('session.cachedReference')}</small></td>
+                <td>{row.bid == null ? t('session.unknown') : `${Number(row.bid.toFixed(2))}p`}</td><td>{row.quantity * row.platinum}p</td><td class="reason">{row.reason}</td>
               </tr>
             {/each}
           </tbody>
         </table></div>
       </div>
-      <p class="muted">Estimated trades = quantity ÷ suggested units per trade, summed across the batch. Buyers may agree different quantities. Posting listings does not spend in-game trades.</p>
+      <p class="muted">{t('session.tradesNote')}</p>
     {:else if !loading && !planning && !planningError}
-      <p>No eligible batch yet. Scan the game, check protected quantities, or choose another intent.</p>
+      <p>{t('session.noBatch')}</p>
     {/if}
     {#if plan.excluded.length}
-      <details><summary>{plan.excluded.length} {plan.excluded.length === 1 ? 'item' : 'items'} not included in this mode</summary>
+      <details><summary>{t('session.excluded', { count: plan.excluded.length })}</summary>
         <ul>{#each plan.excluded as row}<li>{row.name}: {row.reason}</li>{/each}</ul>
       </details>
     {/if}

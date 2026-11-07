@@ -2076,3 +2076,1114 @@ msgstr ""
 msgctxt "table.rowsPerPage"
 msgid "Rows per page"
 msgstr ""
+
+#. Dialog title.
+msgctxt "review.title"
+msgid "List on warframe.market"
+msgstr ""
+
+#. Button.
+msgctxt "review.closeReview"
+msgid "Close review"
+msgstr ""
+
+#. Dialog introduction during a trade session.
+msgctxt "review.leadSession"
+msgid "New listings start <b>hidden</b>. Existing listings keep their visibility. Quantities replace current listing totals; rank stays at the verified unranked tier."
+msgstr ""
+
+#. Dialog introduction. A troll listing is an absurdly low price meant to mislead.
+msgctxt "review.lead"
+msgid "Review every row. Default price is the estimated clearing price - the lowest live ask, sanity-clamped against the recent median so a lone troll listing can't set it (floored at 5p). Rank 0 = unranked; set a rank only if you're listing a leveled copy. New listings go up <b>hidden</b>. Updates replace the existing quantity and preserve visibility."
+msgstr ""
+
+#. Trade session budget line.
+msgctxt "review.tradeBudget"
+msgid "{trades} estimated trades / {budget} budget · {remaining} remaining. Quantities must divide evenly by units per trade. Posting does not spend the game allowance."
+msgstr ""
+
+#. In place of the estimated trades when a quantity does not fit.
+msgctxt "review.invalidLot"
+msgid "Invalid quantity / lot"
+msgstr ""
+
+#. In place of a remaining count.
+msgctxt "review.unknown"
+msgid "unknown"
+msgstr ""
+
+#. Warning.
+msgctxt "review.overSellable"
+msgid "A selected quantity exceeds the confirmed sellable count. Your edits are retained; reduce the quantity or scan again."
+msgstr ""
+
+#. Button while busy.
+msgctxt "review.checkingOrders"
+msgid "Checking existing orders…"
+msgstr ""
+
+#. Button.
+msgctxt "review.refreshOrders"
+msgid "Refresh existing orders"
+msgstr ""
+
+#. Button.
+msgctxt "review.selectAll"
+msgid "Select all"
+msgstr ""
+
+#. Button.
+msgctxt "review.deselectAll"
+msgid "Deselect all"
+msgstr ""
+
+#. Tooltip of Check live prices.
+msgctxt "review.liveTitle"
+msgid "Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
+msgstr ""
+
+#. Button while busy.
+msgctxt "review.checkingLive"
+msgid "Checking live prices… {done}/{total}"
+msgstr ""
+
+#. Button.
+msgctxt "review.recheckLive"
+msgid "Re-check live prices"
+msgstr ""
+
+#. Button.
+msgctxt "review.checkLive"
+msgid "Check live prices"
+msgstr ""
+
+#. Button.
+msgctxt "review.matchAsks"
+msgid "Match lowest asks"
+msgstr ""
+
+#. Tooltip.
+msgctxt "review.matchAsksTitle"
+msgid "Set every selected row's price to its live lowest online ask (match it - no undercutting)."
+msgstr ""
+
+#. Screen reader name of the checkbox column.
+msgctxt "review.include"
+msgid "Include"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "review.col.item"
+msgid "Item"
+msgstr ""
+
+#. Column header: quantity.
+#. Max 6 characters.
+msgctxt "review.col.qty"
+msgid "Qty"
+msgstr ""
+
+#. Column header.
+#. Max 14 characters.
+msgctxt "review.col.unitsPerTrade"
+msgid "Units / trade"
+msgstr ""
+
+#. Column header.
+#. Max 22 characters.
+msgctxt "review.col.change"
+msgid "Existing → proposed"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "review.col.owned"
+msgid "Owned"
+msgstr ""
+
+#. Column header: platinum.
+#. Max 10 characters.
+msgctxt "review.col.price"
+msgid "Price (p)"
+msgstr ""
+
+#. Column header: average price.
+#. Max 6 characters.
+msgctxt "review.col.avg"
+msgid "Avg"
+msgstr ""
+
+#. Column header.
+#. Max 14 characters.
+msgctxt "review.col.live"
+msgid "Live ask / bid"
+msgstr ""
+
+#. Tooltip of the Live ask / bid header.
+msgctxt "review.col.liveTitle"
+msgid "Live lowest online ask / highest online bid for this exact rank or refinement (after “Check live prices”). Click a value to use it."
+msgstr ""
+
+#. Column header.
+#. Max 6 characters.
+msgctxt "review.col.rank"
+msgid "Rank"
+msgstr ""
+
+#. Tooltip of the Rank header.
+msgctxt "review.col.rankTitle"
+msgid "Mod/arcane rank of the copies you're listing. 0 = unranked (dupe stacks). Ignored for items WFM doesn't rank."
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "review.col.subtotal"
+msgid "Subtotal"
+msgstr ""
+
+#. Screen reader name of a row checkbox.
+msgctxt "review.includeItem"
+msgid "Include {item}"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "review.quantityFor"
+msgid "Quantity for {item}"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "review.unitsFor"
+msgid "Units per trade for {item}"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "review.priceFor"
+msgid "Price for {item}, platinum"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "review.rankFor"
+msgid "Rank for {item}"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.updateVisible"
+msgid "Update visible order"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.updateHidden"
+msgid "Update hidden order"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.qtyChange"
+msgid "Qty {from} → {to} · unit price {fromPrice}p → {toPrice}p"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.lotChange"
+msgid "Lot total {from}p → {to}p"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.unitsChangeVisible"
+msgid "Units / trade {from} → {to} · stays visible"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.unitsChangeHidden"
+msgid "Units / trade {from} → {to} · stays hidden"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.newListing"
+msgid "New hidden listing · {quantity} × {price}p · {units} units / trade · {lot}p per lot"
+msgstr ""
+
+#. Existing → proposed cell.
+msgctxt "review.notConfirmed"
+msgid "Existing order state not confirmed"
+msgstr ""
+
+#. Owned cell.
+msgctxt "review.owned"
+msgid "{count} owned"
+msgstr ""
+
+#. Tooltip on a price that looks wrong.
+msgctxt "review.priceOff"
+msgid "More than 30% off the 48h average ({avg}p) - double-check before sending"
+msgstr ""
+
+#. Live cell: the check failed.
+#. Max 4 characters.
+msgctxt "review.na"
+msgid "n/a"
+msgstr ""
+
+#. Tooltip.
+msgctxt "review.onlineAsks"
+msgid "Online asks: {asks}p - click to price at {price}p"
+msgstr ""
+
+#. Tooltip.
+msgctxt "review.noSellers"
+msgid "No online sellers right now"
+msgstr ""
+
+#. Live cell.
+#. Max 8 characters.
+msgctxt "review.noAsk"
+msgid "no ask"
+msgstr ""
+
+#. Tooltip.
+msgctxt "review.onlineBids"
+msgid "Online bids: {bids}p"
+msgstr ""
+
+#. Screen reader text after the top bid. Keep the leading space.
+msgctxt "review.topBidSr"
+msgid " top bid; online bids {bids}p"
+msgstr ""
+
+#. Tooltip.
+msgctxt "review.noBuyers"
+msgid "No online buyers right now"
+msgstr ""
+
+#. Live cell.
+#. Max 8 characters.
+msgctxt "review.noBid"
+msgid "no bid"
+msgstr ""
+
+#. Tooltip of ▲.
+msgctxt "review.aboveAsk"
+msgid "Your price is above the lowest online ask - it won't be the first to sell."
+msgstr ""
+
+#. Screen reader text. Keep the leading space.
+msgctxt "review.aboveAskSr"
+msgid " Your price is above the lowest online ask."
+msgstr ""
+
+#. Tooltip of ▼.
+msgctxt "review.belowBid"
+msgid "A live buyer is bidding more than your price - you'd be leaving plat on the table."
+msgstr ""
+
+#. Screen reader text. Keep the leading space.
+msgctxt "review.belowBidSr"
+msgid " A live buyer bids more than your price."
+msgstr ""
+
+#. Confirmation.
+msgctxt "review.discardAsk"
+msgid "Discard your changes to this review?"
+msgstr ""
+
+#. Button.
+msgctxt "review.keepEditing"
+msgid "Keep editing"
+msgstr ""
+
+#. Button.
+msgctxt "review.discard"
+msgid "Discard"
+msgstr ""
+
+#. Footer total. Keep <b> around the number.
+msgctxt "review.items"
+msgid "{count, plural, one {<b>{count}</b> item} other {<b>{count}</b> items}}"
+msgstr ""
+
+#. Footer total. Keep <b> around the number.
+msgctxt "review.platTotal"
+msgid "<b>{total}</b> plat total"
+msgstr ""
+
+#. Footer warning.
+msgctxt "review.batchCap"
+msgid "Batch cap is 50 - deselect some."
+msgstr ""
+
+#. Button.
+msgctxt "review.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Main button.
+msgctxt "review.send"
+msgid "{count, plural, one {Send # listing} other {Send # listings}}"
+msgstr ""
+
+#. While sending.
+msgctxt "review.sendingLead"
+msgid "Checking current orders and posting your listings. Other market activity can add waiting time."
+msgstr ""
+
+#. While stopping.
+msgctxt "review.finishing"
+msgid "Finishing the current request; unsent listings will stay saved."
+msgstr ""
+
+#. While sending.
+msgctxt "review.sending"
+msgid "Sending…"
+msgstr ""
+
+#. Button.
+msgctxt "review.stop"
+msgid "Stop after current request"
+msgstr ""
+
+#. Result heading.
+msgctxt "review.needsAttention"
+msgid "Batch results need attention."
+msgstr ""
+
+#. Result heading.
+msgctxt "review.interrupted"
+msgid "Batch interrupted. Close this review and use Resume to revalidate the saved items."
+msgstr ""
+
+#. Result heading.
+msgctxt "review.done"
+msgid "Done."
+msgstr ""
+
+#. Result count.
+msgctxt "review.created"
+msgid "{count} created"
+msgstr ""
+
+#. Result count.
+msgctxt "review.updated"
+msgid "{count} updated"
+msgstr ""
+
+#. Result count.
+msgctxt "review.failed"
+msgid "{count} failed"
+msgstr ""
+
+#. Result count.
+msgctxt "review.savedForResume"
+msgid "{count} saved for resume"
+msgstr ""
+
+#. Result note.
+msgctxt "review.nowVisible"
+msgid "Listings are <b>visible</b> - buyers can see them now."
+msgstr ""
+
+#. Result note.
+msgctxt "review.startHidden"
+msgid "New listings start <b>hidden</b> - no buyers can see them yet. Flip them visible after you've reviewed the prices."
+msgstr ""
+
+#. Result note.
+msgctxt "review.updatedKeep"
+msgid "Updated orders keep their existing visibility and price history."
+msgstr ""
+
+#. Result table column.
+#. Max 12 characters.
+msgctxt "review.col.detail"
+msgid "Detail"
+msgstr ""
+
+#. Result line.
+msgctxt "review.visibilityToggled"
+msgid "Visibility toggled."
+msgstr ""
+
+#. Result count.
+msgctxt "review.visibleCount"
+msgid "{count} now visible"
+msgstr ""
+
+#. Button while busy.
+msgctxt "review.makingVisible"
+msgid "Making visible…"
+msgstr ""
+
+#. Button.
+msgctxt "review.makeVisible"
+msgid "Make {count} visible"
+msgstr ""
+
+#. Button.
+msgctxt "review.doneButton"
+msgid "Done"
+msgstr ""
+
+#. Button.
+msgctxt "review.backToReview"
+msgid "Back to review"
+msgstr ""
+
+#. Option and summary: no set chosen to keep parts for.
+msgctxt "keep.noGoal"
+msgid "No saved crafting goal"
+msgstr ""
+
+#. Option: a saved set whose parts are unknown.
+msgctxt "keep.recipeUnresolved"
+msgid "{goal} · recipe unresolved"
+msgstr ""
+
+#. Placeholder option.
+msgctxt "keep.chooseItem"
+msgid "Choose an owned item"
+msgstr ""
+
+#. Keep rule summary.
+msgctxt "keep.copiesRule"
+msgid "{count, plural, one {# copy of each item} other {# copies of each item}}"
+msgstr ""
+
+#. Keep rule summary: ranked-up copies are never sold.
+msgctxt "keep.leveledOut"
+msgid "Leveled copies stay out"
+msgstr ""
+
+#. Keep rule summary.
+msgctxt "keep.partsFor"
+msgid "Parts for {set}"
+msgstr ""
+
+#. Keep rule summary.
+msgctxt "keep.extraRules"
+msgid "{count, plural, one {# extra item rule} other {# extra item rules}}"
+msgstr ""
+
+#. Error.
+msgctxt "keep.saveFailed"
+msgid "The copy rule could not be saved. Try again."
+msgstr ""
+
+#. Error.
+msgctxt "keep.quantityRange"
+msgid "Choose an item and a whole quantity from 0 to 1000000."
+msgstr ""
+
+#. Error.
+msgctxt "keep.wholeQuantity"
+msgid "Choose a whole quantity from 0 to 1000000."
+msgstr ""
+
+#. Error heading.
+msgctxt "keep.cannotCalculate"
+msgid "! We can’t calculate what you can sell yet"
+msgstr ""
+
+#. Error text when no detail is known.
+msgctxt "keep.notApplied"
+msgid "Keep rules could not be applied to this inventory. Quantities and sale totals are unavailable."
+msgstr ""
+
+#. Button.
+msgctxt "keep.scanAgain"
+msgid "Scan game again"
+msgstr ""
+
+#. Button.
+msgctxt "keep.recheck"
+msgid "Recheck quantities"
+msgstr ""
+
+#. Reassurance under an error.
+msgctxt "keep.notEmpty"
+msgid "Your inventory is not being treated as empty. No listings have been changed."
+msgstr ""
+
+#. Warning.
+msgctxt "keep.conflicts"
+msgid "△ Some keep rules or existing listings exceed the copies you own. Review the quantity details below."
+msgstr ""
+
+#. Warning.
+msgctxt "keep.unavailable"
+msgid "{count, plural, one {△ Quantities unavailable for # item. These items are excluded from opportunities and totals.} other {△ Quantities unavailable for # items. These items are excluded from opportunities and totals.}}"
+msgstr ""
+
+#. Section and dialog heading.
+msgctxt "keep.title"
+msgid "What I’m keeping"
+msgstr ""
+
+#. Status.
+msgctxt "keep.checking"
+msgid "Checking quantities…"
+msgstr ""
+
+#. Status.
+msgctxt "keep.waitingValid"
+msgid "Waiting for valid quantities"
+msgstr ""
+
+#. Status.
+msgctxt "keep.needsReview"
+msgid "Some quantities need review"
+msgstr ""
+
+#. Status.
+msgctxt "keep.appliedKnown"
+msgid "Applied to items with known quantities"
+msgstr ""
+
+#. Status.
+msgctxt "keep.applied"
+msgid "✓ Applied"
+msgstr ""
+
+#. Status.
+msgctxt "keep.waitingInventory"
+msgid "Waiting for inventory"
+msgstr ""
+
+#. Disclosure.
+msgctxt "keep.details"
+msgid "Quantity details"
+msgstr ""
+
+#. Button: sign in to warframe.market.
+msgctxt "keep.connectWfm"
+msgid "Connect WFM"
+msgstr ""
+
+#. Explanation.
+msgctxt "keep.detailsNote"
+msgid "Own minus kept copies and checked listings gives what you can sell. Without WFM, estimates do not subtract existing listings."
+msgstr ""
+
+#. Search field label.
+msgctxt "keep.findInDetails"
+msgid "Find an item in quantity details"
+msgstr ""
+
+#. Screen reader name of the table.
+msgctxt "keep.allocation"
+msgid "Inventory allocation"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "keep.col.item"
+msgid "Item"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "keep.col.own"
+msgid "Own"
+msgstr ""
+
+#. Column header.
+#. Max 20 characters.
+msgctxt "keep.col.keep"
+msgid "Keep / untradeable"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "keep.col.listed"
+msgid "Listed"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "keep.col.canSell"
+msgid "Can sell"
+msgstr ""
+
+#. Table cell.
+msgctxt "keep.unknown"
+msgid "Unknown"
+msgstr ""
+
+#. Table cell.
+msgctxt "keep.unavailableCell"
+msgid "Unavailable"
+msgstr ""
+
+#. Table cell.
+msgctxt "keep.estimated"
+msgid "{count} estimated"
+msgstr ""
+
+#. Below the table.
+msgctxt "keep.showing"
+msgid "Showing {shown} of {count, plural, one {# item} other {# items}}"
+msgstr ""
+
+#. Button.
+msgctxt "keep.showMore"
+msgid "Show 25 more"
+msgstr ""
+
+#. Button.
+msgctxt "keep.change"
+msgid "Change what I keep"
+msgstr ""
+
+#. Dialog introduction.
+msgctxt "keep.chooseOnce"
+msgid "Choose once. Apply across your inventory."
+msgstr ""
+
+#. Field label.
+msgctxt "keep.copiesOfEvery"
+msgid "Copies of every item · applies immediately"
+msgstr ""
+
+#. Field note.
+msgctxt "keep.leveledNote"
+msgid "Leveled copies are excluded automatically. Extra item rules and crafting needs can keep more than this minimum."
+msgstr ""
+
+#. Warning.
+msgctxt "keep.notLoaded"
+msgid "Saved item rules could not be loaded. Saving replaces them; re-enter every item and crafting goal you want to keep."
+msgstr ""
+
+#. Field label.
+msgctxt "keep.partsForSet"
+msgid "Keep parts for a set"
+msgstr ""
+
+#. Field label.
+msgctxt "keep.findOwned"
+msgid "Find an owned item"
+msgstr ""
+
+#. Placeholder.
+msgctxt "keep.searchPlaceholder"
+msgid "Search by item name"
+msgstr ""
+
+#. Field label.
+msgctxt "keep.itemToKeep"
+msgid "Item to keep"
+msgstr ""
+
+#. Field label.
+msgctxt "keep.extraCopies"
+msgid "Extra copies"
+msgstr ""
+
+#. Button.
+msgctxt "keep.setQuantity"
+msgid "Set quantity"
+msgstr ""
+
+#. Button.
+msgctxt "keep.remove"
+msgid "Remove {item}"
+msgstr ""
+
+#. Button while busy.
+msgctxt "keep.saving"
+msgid "Saving…"
+msgstr ""
+
+#. Button.
+msgctxt "keep.save"
+msgid "Save keep rules"
+msgstr ""
+
+#. Button.
+msgctxt "keep.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. View heading. A trade session is one sitting of trading in the game.
+msgctxt "session.title"
+msgid "Trade Session"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "session.lede"
+msgid "Choose what matters, review a batch, return to Warframe."
+msgstr ""
+
+#. Screen reader name of the setup panel.
+msgctxt "session.setup"
+msgid "Trade allowance and budget"
+msgstr ""
+
+#. Field label.
+msgctxt "session.goal"
+msgid "Trade goal"
+msgstr ""
+
+#. Screen reader name of the goal buttons.
+msgctxt "session.intent"
+msgid "Trade intent"
+msgstr ""
+
+#. Goal button.
+#. Max 16 characters.
+msgctxt "session.mode.fast"
+msgid "Fast Cash"
+msgstr ""
+
+#. Goal explanation.
+msgctxt "session.mode.fast.what"
+msgid "Liquid singles at credible asking prices."
+msgstr ""
+
+#. Goal button.
+#. Max 16 characters.
+msgctxt "session.mode.per-trade"
+msgid "Plat per Trade"
+msgstr ""
+
+#. Goal explanation.
+msgctxt "session.mode.per-trade.what"
+msgid "Valuable exchanges, spread across items."
+msgstr ""
+
+#. Goal button.
+#. Max 16 characters.
+msgctxt "session.mode.clear"
+msgid "Clear Inventory"
+msgstr ""
+
+#. Goal explanation.
+msgctxt "session.mode.clear.what"
+msgid "Clear safe spare stacks that have demand."
+msgstr ""
+
+#. Goal button.
+#. Max 16 characters.
+msgctxt "session.mode.max"
+msgid "Max Value"
+msgstr ""
+
+#. Goal explanation.
+msgctxt "session.mode.max.what"
+msgid "Larger valuable positions; patience may be needed."
+msgstr ""
+
+#. Field label: how many trades to plan.
+msgctxt "session.budget"
+msgid "Trade budget"
+msgstr ""
+
+#. Note beside the budget.
+msgctxt "session.cantExceed"
+msgid "Can't exceed the {count} trades left today."
+msgstr ""
+
+#. Note beside the budget.
+msgctxt "session.upTo"
+msgid "Up to {count} estimated trades per batch."
+msgstr ""
+
+#. Disclosure.
+msgctxt "session.targetAndSets"
+msgid "Target and complete sets"
+msgstr ""
+
+#. Field label.
+msgctxt "session.target"
+msgid "Platinum target · optional"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "session.targetLabel"
+msgid "Platinum target"
+msgstr ""
+
+#. Placeholder.
+msgctxt "session.noTarget"
+msgid "No target"
+msgstr ""
+
+#. Checkbox.
+msgctxt "session.includeSets"
+msgid "Include complete owned sets"
+msgstr ""
+
+#. Status.
+msgctxt "session.readingAllowance"
+msgid "Reading trade allowance…"
+msgstr ""
+
+#. Status.
+msgctxt "session.tradesLeft"
+msgid "{count, plural, one {# trade left today} other {# trades left today}}"
+msgstr ""
+
+#. Status, estimated.
+msgctxt "session.aboutTradesLeft"
+msgid "{count, plural, one {About # trade left today} other {About # trades left today}}"
+msgstr ""
+
+#. After the trades left: the player's Mastery Rank. Keep the leading " · ".
+msgctxt "session.mr"
+msgid " · MR {rank}"
+msgstr ""
+
+#. Status.
+msgctxt "session.allowanceUnknown"
+msgid "Trade allowance unknown"
+msgstr ""
+
+#. Button while busy.
+msgctxt "session.scanning"
+msgid "Scanning…"
+msgstr ""
+
+#. Button.
+msgctxt "session.scan"
+msgid "Scan game"
+msgstr ""
+
+#. Button.
+msgctxt "session.retry"
+msgid "Retry"
+msgstr ""
+
+#. Status line; confidence is a word like "scanned" or "estimated".
+msgctxt "session.lastScan"
+msgid "Last scan {time} · {confidence}"
+msgstr ""
+
+#. Added to the status line. Keep the leading " · ".
+msgctxt "session.tracking"
+msgid " · local trade tracking active"
+msgstr ""
+
+#. How the trades left were found: read from the game.
+msgctxt "session.confidence.scanned"
+msgid "scanned"
+msgstr ""
+
+#. How the trades left were found: counted from trades seen since the last scan.
+msgctxt "session.confidence.tracked"
+msgid "tracked"
+msgstr ""
+
+#. How the trades left were found: estimated.
+msgctxt "session.confidence.estimated"
+msgid "estimated"
+msgstr ""
+
+#. How the trades left were found: not known.
+msgctxt "session.confidence.unknown"
+msgid "unknown"
+msgstr ""
+
+#. Warning.
+msgctxt "session.noTrades"
+msgid "No trades remaining. This batch is read-only; existing WFM listings are unchanged. The allowance resets at 00:00 UTC."
+msgstr ""
+
+#. Panel heading.
+msgctxt "session.batch"
+msgid "Suggested batch"
+msgstr ""
+
+#. Beside the panel heading.
+msgctxt "session.reviewFirst"
+msgid "Review before posting"
+msgstr ""
+
+#. Batch summary.
+msgctxt "session.summary"
+msgid "{listings, plural, one {# listing} other {# listings}} · {trades} estimated trades · {total}p potential"
+msgstr ""
+
+#. Button while busy.
+msgctxt "session.checkingPrices"
+msgid "Checking prices…"
+msgstr ""
+
+#. Button.
+msgctxt "session.checkPrices"
+msgid "Check live prices"
+msgstr ""
+
+#. Button.
+msgctxt "session.review"
+msgid "Review batch"
+msgstr ""
+
+#. Note; age is a date and time.
+msgctxt "session.potentialNote"
+msgid "Potential assumes sales at the listed unit asks, rounded up to whole platinum. Bids are per-unit comparisons, not instant proceeds. Cached market: {age}."
+msgstr ""
+
+#. In place of the market date.
+msgctxt "session.unknownAge"
+msgid "unknown age"
+msgstr ""
+
+#. Status.
+msgctxt "session.updating"
+msgid "Updating suggested batch…"
+msgstr ""
+
+#. Error; error is a technical message.
+msgctxt "session.planError"
+msgid "Could not update the suggested batch: {error} Change the intent or budget to retry."
+msgstr ""
+
+#. Target status.
+msgctxt "session.covered"
+msgid "Target covered at listing prices, if these items sell."
+msgstr ""
+
+#. Target status.
+msgctxt "session.short"
+msgid "{amount}p short of the target within this budget."
+msgstr ""
+
+#. Screen reader name of the table.
+msgctxt "session.tableLabel"
+msgid "Suggested listings; scroll for all columns"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "session.col.item"
+msgid "Item"
+msgstr ""
+
+#. Column header.
+#. Max 6 characters.
+msgctxt "session.col.qty"
+msgid "Qty"
+msgstr ""
+
+#. Tooltip.
+msgctxt "session.col.qtyTitle"
+msgid "Quantity to list"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "session.col.perTrade"
+msgid "Per trade"
+msgstr ""
+
+#. Tooltip.
+msgctxt "session.col.perTradeTitle"
+msgid "Units per trade"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "session.col.trades"
+msgid "Trades"
+msgstr ""
+
+#. Tooltip.
+msgctxt "session.col.tradesTitle"
+msgid "Estimated trades"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "session.col.ask"
+msgid "Unit ask"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "session.col.bid"
+msgid "Unit bid"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "session.col.potential"
+msgid "Potential"
+msgstr ""
+
+#. Column header.
+#. Max 16 characters.
+msgctxt "session.col.why"
+msgid "Why this item"
+msgstr ""
+
+#. Under an item name.
+msgctxt "session.rowCounts"
+msgid "{sellable} confirmed sellable / {owned} owned · rank 0 where applicable"
+msgstr ""
+
+#. Under a set name: its parts.
+msgctxt "session.perSet"
+msgid "Per set: {parts}"
+msgstr ""
+
+#. Under a set name.
+msgctxt "session.partsReference"
+msgid "Parts reference: {reference} · set ask {ask}p"
+msgstr ""
+
+#. In place of a price.
+msgctxt "session.unknown"
+msgid "Unknown"
+msgstr ""
+
+#. Button.
+msgctxt "session.compareBuyers"
+msgid "Compare buyers"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "session.compareBuyersFor"
+msgid "Compare buyers for {item}"
+msgstr ""
+
+#. Where a price came from.
+msgctxt "session.cachedReference"
+msgid "Cached reference"
+msgstr ""
+
+#. Where a price came from.
+msgctxt "session.noLiveAsk"
+msgid "No live ask; cached reference · {time}"
+msgstr ""
+
+#. Where a price came from.
+msgctxt "session.liveChecked"
+msgid "Live checked · {time}"
+msgstr ""
+
+#. Status.
+msgctxt "session.checksFailed"
+msgid "{count, plural, one {# price check failed; that item retains its previous price.} other {# price checks failed; those items retain their previous prices.}}"
+msgstr ""
+
+#. Status.
+msgctxt "session.competitorsChecked"
+msgid "Online competitors checked; your own orders are excluded."
+msgstr ""
+
+#. Note below the table.
+msgctxt "session.tradesNote"
+msgid "Estimated trades = quantity ÷ suggested units per trade, summed across the batch. Buyers may agree different quantities. Posting listings does not spend in-game trades."
+msgstr ""
+
+#. In place of the table.
+msgctxt "session.noBatch"
+msgid "No eligible batch yet. Scan the game, check protected quantities, or choose another intent."
+msgstr ""
+
+#. Disclosure.
+msgctxt "session.excluded"
+msgid "{count, plural, one {# item not included in this mode} other {# items not included in this mode}}"
+msgstr ""
+
+#. Error.
+msgctxt "session.dataUnavailable"
+msgid "Trade Session data is unavailable. Try scanning again."
+msgstr ""

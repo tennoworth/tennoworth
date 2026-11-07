@@ -3,6 +3,7 @@
   import type { Market, OwnedRecord } from '../../contracts/data';
   import type { ProtectionController } from './protection.svelte';
   import Select from '../../ui/Select.svelte';
+  import { t } from '../../i18n/i18n.svelte';
   let { controller, owned, market, onconnect, reserveCopies, onsetKeep, unavailableCount, unavailable, onscan, scanning = false }: { controller: ProtectionController; owned: Map<string, OwnedRecord>; market: Market | null; onconnect(): void; reserveCopies: number; onsetKeep(value: number): Promise<void>; unavailableCount: number; unavailable: boolean; onscan(): void; scanning?: boolean } = $props();
   let editing = $state(false);
   let dialog: HTMLDialogElement;
@@ -19,24 +20,24 @@
     .filter((row, i, rows) => rows.findIndex(other => other.slug === row.slug) === i).sort((a, b) => a.name.localeCompare(b.name)));
   let filteredChoices = $derived(choices.filter(row => row.name.toLowerCase().includes(search.toLowerCase())));
   let goalOptions = $derived([
-    { value: '', label: 'No saved crafting goal' },
-    ...(goal && !market?.set_to_parts?.[goal] ? [{ value: goal, label: `${goal} · recipe unresolved` }] : []),
+    { value: '', label: t('keep.noGoal') },
+    ...(goal && !market?.set_to_parts?.[goal] ? [{ value: goal, label: t('keep.recipeUnresolved', { goal }) }] : []),
     ...Object.entries(market?.set_to_parts ?? {}).sort((a, b) => a[1].name.localeCompare(b[1].name)).map(([slug, set]) => ({ value: slug, label: set.name })),
   ]);
-  let itemOptions = $derived([{ value: '', label: 'Choose an owned item' }, ...filteredChoices.map(row => ({ value: row.slug, label: row.name }))]);
+  let itemOptions = $derived([{ value: '', label: t('keep.chooseItem') }, ...filteredChoices.map(row => ({ value: row.slug, label: row.name }))]);
   let goalName = $derived(controller.savedPlan?.goal ? (market?.set_to_parts?.[controller.savedPlan.goal]?.name ?? controller.savedPlan.goal) : null);
   let manualCount = $derived(Object.keys(controller.savedPlan?.reserves ?? {}).length);
   let conflicts = $derived(Object.values(controller.state?.items ?? {}).some(row => row.protected + (row.listed ?? 0) > row.owned));
   let keepRules = $derived([
-    `${reserveCopies} ${reserveCopies === 1 ? 'copy' : 'copies'} of each item`,
-    'Leveled copies stay out',
-    ...(controller.savedPlan ? [goalName ? `Parts for ${goalName}` : 'No saved crafting goal', `${manualCount} extra item ${manualCount === 1 ? 'rule' : 'rules'}`] : []),
+    t('keep.copiesRule', { count: reserveCopies }),
+    t('keep.leveledOut'),
+    ...(controller.savedPlan ? [goalName ? t('keep.partsFor', { set: goalName }) : t('keep.noGoal'), t('keep.extraRules', { count: manualCount })] : []),
   ].join(' · '));
   let invalidInventory = $derived(controller.error?.includes('Inventory quantities are invalid') ?? false);
   async function changeKeep(value: number) {
     keepBusy = true; formError = null;
     try { await onsetKeep(value); await controller.refresh(); }
-    catch { formError = 'The copy rule could not be saved. Try again.'; }
+    catch { formError = t('keep.saveFailed'); }
     finally { keepBusy = false; }
   }
   let names = $derived(new Map([...owned.values()].map(row => [row.slug, row.name])));
@@ -50,7 +51,7 @@
   }
   function reserve() {
     if (!selected || quantity == null || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > 1_000_000) {
-      formError = 'Choose an item and a whole quantity from 0 to 1000000.'; return;
+      formError = t('keep.quantityRange'); return;
     }
     const next = { ...reserves };
     if (quantity === 0) delete next[selected]; else next[selected] = quantity;
@@ -64,64 +65,64 @@
 
 {#if unavailable && !controller.loading}
   <section class="ui-notice ui-stack" data-tone="bad" role="alert">
-    <strong>! We can’t calculate what you can sell yet</strong>
-    <p>{controller.error ?? 'Keep rules could not be applied to this inventory. Quantities and sale totals are unavailable.'}</p>
-    <div class="ui-toolbar"><button class="btn primary" disabled={scanning || controller.saving} onclick={() => invalidInventory ? onscan() : controller.refresh()}>{invalidInventory ? 'Scan game again' : 'Recheck quantities'}</button></div>
-    <p class="muted">Your inventory is not being treated as empty. No listings have been changed.</p>
+    <strong>{t('keep.cannotCalculate')}</strong>
+    <p>{controller.error ?? t('keep.notApplied')}</p>
+    <div class="ui-toolbar"><button class="btn primary" disabled={scanning || controller.saving} onclick={() => invalidInventory ? onscan() : controller.refresh()}>{t(invalidInventory ? 'keep.scanAgain' : 'keep.recheck')}</button></div>
+    <p class="muted">{t('keep.notEmpty')}</p>
   </section>
 {:else if conflicts && !controller.loading}
-  <p class="ui-notice" data-tone="warn">△ Some keep rules or existing listings exceed the copies you own. Review the quantity details below.</p>
+  <p class="ui-notice" data-tone="warn">{t('keep.conflicts')}</p>
 {:else if unavailableCount && !controller.loading}
-  <p class="ui-notice" data-tone="warn">△ Quantities unavailable for {unavailableCount} {unavailableCount === 1 ? 'item' : 'items'}. These items are excluded from opportunities and totals. <button class="btn" onclick={() => controller.refresh()}>Recheck quantities</button></p>
+  <p class="ui-notice" data-tone="warn">{t('keep.unavailable', { count: unavailableCount })} <button class="btn" onclick={() => controller.refresh()}>{t('keep.recheck')}</button></p>
 {/if}
 <!-- One line while healthy: problems already surface as the notices above, so
      the settings themselves stay quiet. Details open below the line. -->
-<section class="keeping" aria-label="What I’m keeping">
-  <h3>What I’m keeping</h3>
+<section class="keeping" aria-label={t('keep.title')}>
+  <h3>{t('keep.title')}</h3>
   <p class="keep-rules">{keepRules}</p>
-  <p class="keep-status" class:verified={!conflicts && !unavailable && !unavailableCount && !!controller.state && !controller.loading && !controller.error}>{controller.loading ? 'Checking quantities…' : unavailable ? 'Waiting for valid quantities' : conflicts ? 'Some quantities need review' : unavailableCount ? 'Applied to items with known quantities' : controller.state ? '✓ Applied' : 'Waiting for inventory'}</p>
+  <p class="keep-status" class:verified={!conflicts && !unavailable && !unavailableCount && !!controller.state && !controller.loading && !controller.error}>{t(controller.loading ? 'keep.checking' : unavailable ? 'keep.waitingValid' : conflicts ? 'keep.needsReview' : unavailableCount ? 'keep.appliedKnown' : controller.state ? 'keep.applied' : 'keep.waitingInventory')}</p>
   <details>
-    <summary>Quantity details</summary>
-    <div class="ui-toolbar"><button class="btn" onclick={() => controller.refresh()} disabled={controller.loading || controller.saving}>{controller.loading ? 'Checking quantities…' : 'Recheck quantities'}</button>
-    {#if controller.state?.issues.some(issue => issue.includes('Unlock WFM'))}<button class="btn" onclick={onconnect}>Connect WFM</button>{/if}</div>
-    <p class="muted">Own minus kept copies and checked listings gives what you can sell. Without WFM, estimates do not subtract existing listings.</p>
+    <summary>{t('keep.details')}</summary>
+    <div class="ui-toolbar"><button class="btn" onclick={() => controller.refresh()} disabled={controller.loading || controller.saving}>{t(controller.loading ? 'keep.checking' : 'keep.recheck')}</button>
+    {#if controller.state?.issues.some(issue => issue.includes('Unlock WFM'))}<button class="btn" onclick={onconnect}>{t('keep.connectWfm')}</button>{/if}</div>
+    <p class="muted">{t('keep.detailsNote')}</p>
     {#if controller.error && !unavailable}<p class="ui-notice" data-tone="bad">{controller.error}</p>{/if}
     {#if controller.state?.issues.length}<ul class="ui-notice" data-tone="warn">{#each controller.state.issues as issue}<li>{issue}</li>{/each}</ul>{/if}
     {#if controller.state && Object.keys(controller.state.items).length}
-      <label class="ui-field">Find an item in quantity details<input class="ui-input" type="search" bind:value={detailSearch} oninput={() => detailLimit = 25} /></label>
+      <label class="ui-field">{t('keep.findInDetails')}<input class="ui-input" type="search" bind:value={detailSearch} oninput={() => detailLimit = 25} /></label>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users must reach every quantity column.) -->
-      <div class="wrap tw" role="region" aria-label="Inventory allocation" tabindex="0">
-        <table class="tw"><thead><tr><th class="l">Item</th><th>Own</th><th>Keep / untradeable</th><th>Listed</th><th>Can sell</th></tr></thead>
-        <tbody>{#each detailRows.slice(0, detailLimit) as [slug, row]}<tr><td class="l">{names.get(slug) ?? slug}</td><td>{row.owned}</td><td>{row.protected}</td><td>{row.listed ?? 'Unknown'}</td><td>{row.available ?? (row.estimated == null ? 'Unavailable' : `${row.estimated} estimated`)}</td></tr>{/each}</tbody></table>
+      <div class="wrap tw" role="region" aria-label={t('keep.allocation')} tabindex="0">
+        <table class="tw"><thead><tr><th class="l">{t('keep.col.item')}</th><th>{t('keep.col.own')}</th><th>{t('keep.col.keep')}</th><th>{t('keep.col.listed')}</th><th>{t('keep.col.canSell')}</th></tr></thead>
+        <tbody>{#each detailRows.slice(0, detailLimit) as [slug, row]}<tr><td class="l">{names.get(slug) ?? slug}</td><td>{row.owned}</td><td>{row.protected}</td><td>{row.listed ?? t('keep.unknown')}</td><td>{row.available ?? (row.estimated == null ? t('keep.unavailableCell') : t('keep.estimated', { count: row.estimated }))}</td></tr>{/each}</tbody></table>
       </div>
-      <div class="ui-toolbar"><span class="muted">Showing {Math.min(detailLimit, detailRows.length)} of {detailRows.length} items</span>{#if detailRows.length > detailLimit}<button class="btn" onclick={() => detailLimit += 25}>Show 25 more</button>{/if}</div>
+      <div class="ui-toolbar"><span class="muted">{t('keep.showing', { shown: Math.min(detailLimit, detailRows.length), count: detailRows.length })}</span>{#if detailRows.length > detailLimit}<button class="btn" onclick={() => detailLimit += 25}>{t('keep.showMore')}</button>{/if}</div>
     {/if}
   </details>
-  <button class="btn xs change" onclick={edit} use:busy={controller.saving}>Change what I keep</button>
+  <button class="btn xs change" onclick={edit} use:busy={controller.saving}>{t('keep.change')}</button>
 </section>
 <dialog bind:this={dialog} class="keep-dialog" aria-labelledby="keep-title" onclose={() => editing = false} onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!controller.saving && !keepBusy) dialog.close(); } }} oncancel={(event) => { if (controller.saving || keepBusy) event.preventDefault(); }}>
-  <header class="keep-head"><h2 id="keep-title">What I’m keeping</h2></header>
+  <header class="keep-head"><h2 id="keep-title">{t('keep.title')}</h2></header>
   <div class="ui-stack">
-    <p>Choose once. Apply across your inventory.</p>
-    <label class="ui-field">Copies of every item · applies immediately
-      <input class="ui-input" type="number" min="0" max="1000000" step="1" value={reserveCopies} use:busy={controller.saving || keepBusy} onchange={(e) => { const n = Number(e.currentTarget.value); if (Number.isSafeInteger(n) && n >= 0 && n <= 1000000) void changeKeep(n); else formError = 'Choose a whole quantity from 0 to 1000000.'; }} />
+    <p>{t('keep.chooseOnce')}</p>
+    <label class="ui-field">{t('keep.copiesOfEvery')}
+      <input class="ui-input" type="number" min="0" max="1000000" step="1" value={reserveCopies} use:busy={controller.saving || keepBusy} onchange={(e) => { const n = Number(e.currentTarget.value); if (Number.isSafeInteger(n) && n >= 0 && n <= 1000000) void changeKeep(n); else formError = t('keep.wholeQuantity'); }} />
     </label>
-    <p class="muted">Leveled copies are excluded automatically. Extra item rules and crafting needs can keep more than this minimum.</p>
+    <p class="muted">{t('keep.leveledNote')}</p>
   {#if editing}
     <div class="ui-stack">
-      {#if !controller.savedPlan}<p class="ui-notice" data-tone="warn">Saved item rules could not be loaded. Saving replaces them; re-enter every item and crafting goal you want to keep.</p>{/if}
-      <div class="ui-field"><span>Keep parts for a set</span>
-        <Select label="Keep parts for a set" value={goal} options={goalOptions} onchange={(next) => (goal = next)} disabled={controller.saving} />
+      {#if !controller.savedPlan}<p class="ui-notice" data-tone="warn">{t('keep.notLoaded')}</p>{/if}
+      <div class="ui-field"><span>{t('keep.partsForSet')}</span>
+        <Select label={t('keep.partsForSet')} value={goal} options={goalOptions} onchange={(next) => (goal = next)} disabled={controller.saving} />
       </div>
-      <label class="ui-field">Find an owned item<input class="ui-input" type="search" bind:value={search} placeholder="Search by item name" /></label>
+      <label class="ui-field">{t('keep.findOwned')}<input class="ui-input" type="search" bind:value={search} placeholder={t('keep.searchPlaceholder')} /></label>
       <div class="ui-toolbar">
-        <div class="ui-field"><span>Item to keep</span>
-          <Select label="Item to keep" value={selected} options={itemOptions} onchange={(next) => (selected = next)} disabled={controller.saving} />
+        <div class="ui-field"><span>{t('keep.itemToKeep')}</span>
+          <Select label={t('keep.itemToKeep')} value={selected} options={itemOptions} onchange={(next) => (selected = next)} disabled={controller.saving} />
         </div>
-        <label class="ui-field">Extra copies
+        <label class="ui-field">{t('keep.extraCopies')}
           <input class="ui-input" type="number" min="0" max="1000000" step="1" bind:value={quantity} use:busy={controller.saving} onkeydown={(event) => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); reserve(); } }} />
         </label>
-        <button class="btn" onclick={reserve} use:busy={controller.saving}>Set quantity</button>
+        <button class="btn" onclick={reserve} use:busy={controller.saving}>{t('keep.setQuantity')}</button>
       </div>
       {#each Object.entries(reserves) as [slug, count], index (slug)}
         <div class="ui-toolbar"><span>{names.get(slug) ?? slug} ×{count}</span><button class="btn ghost xs remove-rule" use:busy={controller.saving} onclick={() => {
@@ -129,12 +130,12 @@
           // The row is gone; the next rule's Remove, or the item picker, takes focus.
           focusLater(() => {
             const left = [...dialog.querySelectorAll<HTMLElement>('.remove-rule')];
-            return left[Math.min(index, left.length - 1)] ?? dialog.querySelector<HTMLElement>('[aria-label="Item to keep"], .ui-select');
+            return left[Math.min(index, left.length - 1)] ?? dialog.querySelector<HTMLElement>(`[aria-label="${CSS.escape(t('keep.itemToKeep'))}"], .ui-select`);
           });
-        }}>Remove {names.get(slug) ?? slug}</button></div>
+        }}>{t('keep.remove', { item: names.get(slug) ?? slug })}</button></div>
       {/each}
       {#if formError}<p class="ui-notice" data-tone="bad" role="alert">{formError}</p>{/if}
-      <div class="ui-toolbar"><button class="btn primary" onclick={save} use:busy={controller.saving || keepBusy}>{controller.saving ? 'Saving…' : 'Save keep rules'}</button><button class="btn ghost" use:busy={controller.saving || keepBusy} onclick={() => dialog.close()}>Cancel</button></div>
+      <div class="ui-toolbar"><button class="btn primary" onclick={save} use:busy={controller.saving || keepBusy}>{t(controller.saving ? 'keep.saving' : 'keep.save')}</button><button class="btn ghost" use:busy={controller.saving || keepBusy} onclick={() => dialog.close()}>{t('keep.cancel')}</button></div>
     </div>
   {/if}
     {#if controller.error}<p class="ui-notice" data-tone="bad" role="alert">{controller.error}</p>{/if}

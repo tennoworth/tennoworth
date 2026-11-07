@@ -9,6 +9,9 @@ import { STRIP } from './en/strip';
 import { FORMAT } from './en/format';
 import { SELL } from './en/sell';
 import { TABLE } from './en/table';
+import { REVIEW } from './en/review';
+import { KEEP } from './en/keep';
+import { SESSION } from './en/session';
 
 export const EN = {
   ...FIRST_RUN,
@@ -16,6 +19,9 @@ export const EN = {
   ...FORMAT,
   ...SELL,
   ...TABLE,
+  ...REVIEW,
+  ...KEEP,
+  ...SESSION,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

@@ -129,7 +129,7 @@ it('explains blocked review and restores the action without discarding the draft
 
 it.each([
   { error: null, low_sell: 0, top_buy: 0, note: 'Online competitors checked' },
-  { error: 'Unavailable', low_sell: 10, top_buy: 8, note: '1 price checks failed' },
+  { error: 'Unavailable', low_sell: 10, top_buy: 8, note: '1 price check failed; that item retains its previous price' },
 ])('preserves Trade Session live-book semantics ($error)', async expected => {
   services.desktopTradeSessionState.mockResolvedValue({ allowance: { remaining: 8, snapshot_id: 'one' }, quantities: { Initial: 2 }, bulk_slugs: [] });
   services.evaluateTradeSession.mockImplementation(async () => plan('Initial'));
