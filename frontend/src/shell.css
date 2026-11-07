@@ -957,6 +957,8 @@
   .faq details > p + p[data-shell] { margin-top: 8px; }
   .faq details > p code[data-shell],
   .faq details > p strong[data-shell] { color: var(--fg); }
+  /* Translated answers render their emphasis through Rich, without the shell marker. */
+  .faq details > p[data-shell] :is(b, code) { color: var(--fg); }
 
   .trust[data-shell] { scroll-margin-top: 16px; }
   .trust-lede[data-shell] {
