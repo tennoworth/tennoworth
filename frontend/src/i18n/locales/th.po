@@ -1142,6 +1142,81 @@ msgctxt "sell.tagsOr"
 msgid "tags OR together"
 msgstr "แท็กรวมแบบ OR"
 
+#. Button after the main tags: opens every other tag, grouped.
+#. Max 14 characters.
+#, fuzzy
+msgctxt "sell.tagsMore"
+msgid "+ {count} more"
+msgstr "+ อีก {count}"
+
+#. Button: closes the list of every tag.
+#. Max 14 characters.
+#, fuzzy
+msgctxt "sell.tagsFewer"
+msgid "− fewer"
+msgstr "− ย่อ"
+
+#. Placeholder of the box that narrows the full tag list, e.g. typing “nyx”.
+#. Max 24 characters.
+#, fuzzy
+msgctxt "sell.tagsNarrow"
+msgid "Narrow tags…"
+msgstr "กรองแท็ก…"
+
+#. Screen reader name of the box that narrows the full tag list.
+#, fuzzy
+msgctxt "sell.tagsNarrowLabel"
+msgid "Narrow tags"
+msgstr "กรองแท็ก"
+
+#. Shown when the narrowing text matches no tag.
+#, fuzzy
+msgctxt "sell.tagsNoMatch"
+msgid "No tag matches “{query}”."
+msgstr "ไม่มีแท็กที่ตรงกับ “{query}”"
+
+#. Tag group heading: what kind of item (mod, relic, set…).
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.type"
+msgid "Type"
+msgstr "ประเภท"
+
+#. Tag group heading: weapon slot and weapon class (primary, swords…).
+#. Max 24 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.slot"
+msgid "Slot and class"
+msgstr "ช่องและคลาส"
+
+#. Tag group heading: common, uncommon, rare, legendary.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.rarity"
+msgid "Rarity"
+msgstr "ความหายาก"
+
+#. Tag group heading: Lith, Meso, Neo, Axi, Requiem relics.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.era"
+msgid "Relic era"
+msgstr "ยุคเรลิก"
+
+#. Tag group heading: kubrows, kavats, sentinels and their mods.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.companion"
+msgid "Companions"
+msgstr "คู่หู"
+
+#. Tag group heading: tags naming the one Warframe, weapon or companion a mod belongs to.
+#. Max 48 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.name"
+msgid "Mods for a Warframe, weapon or companion"
+msgstr "ม็อดสำหรับ Warframe อาวุธ หรือคู่หู"
+
 #. Screen reader name of the filter chips.
 #, fuzzy
 msgctxt "sell.activeFilters"

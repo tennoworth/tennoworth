@@ -16,6 +16,7 @@
   import ItemArt from '../../ui/ItemArt.svelte';
   import Rich from '../../ui/Rich.svelte';
   import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import { holdPlace } from '../../ui/hold-place';
   import type { MessageKey } from '../../i18n/en';
 
   interface ColumnDef {
@@ -699,7 +700,7 @@
   </section>
 {/if}
 
-<div class="wrap results">
+<div class="wrap results" use:holdPlace={'.scope-row, .narrow-row'}>
   {#if scope}
     <div class="bar raised scope-row">
       {@render scope()}

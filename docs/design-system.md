@@ -222,6 +222,7 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 |---|---|
 | Panels and title rails | Clear heading, restrained inversion, dotted internal separation. Panel and dialog titles are always rails; controls may sit in a rail, status chips may not; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level; rail buttons are outlined in that pair rather than filled |
 | Toolbars | Group related controls; allow wrapping without changing the logical or keyboard order |
+| Tag filters | The Sell view's market tags keep one line: the broadest item types and slots (never rarity, the catch-all weapon, or names), then any selected tag, then a dashed `+ N more` button. It opens a list under the line, closed by Escape, with a box that narrows it as you type (letters running on inside a name, or the start of each name word in any order: "kit jat" finds Jat Kittag) and the tags grouped as the game sorts items: type, slot and class, rarity, relic era, companions, then the mods that belong to one Warframe, weapon or companion. Each group is a bounded `--panel-2` box under its caption; the small groups share a row. Nothing moves under the pointer: a tag picked in the list stays there, pressed, and joins the line when the list closes; Clear and the OR note keep reserved space in the list's search row; a chip reserves its bold width. The filter bars hold their place while the Top picks above them change height (`ui/hold-place.ts`): growth is scrolled away, and a shrink the scroll cannot absorb is held as a gap that later growth fills. Breeds fold into their species (a Huras Kubrow's precepts are kubrow mods), category tags read as words, and names read as the game writes them. Check it in `?preview-desktop&sample=large` |
 | Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons. Links inside table cells show their dotted rule only on row hover or focus |
 | Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it. Text-entry focus draws over the field's own border so it reads as one frame. Number fields hide spinner arrows; arrow keys still step. Dropdowns are `Select.svelte`, never a native `<select>`: the platform draws a native select's field and list (a white GTK box and menu on Linux) and neither takes the theme. Its field is the text input's box with a trailing ▾; its list is a menu (`--panel-2`, ink outline, offset shadow) in the top layer, opening below the field or above it when that has more room, and scrolling within the window. The chosen option is the ink inversion and the option under the keyboard or pointer carries the row cursor's square. It keeps a native select's keys (arrows, Home/End, Page Up/Down, typing to jump, Enter, Space, Tab and Escape) and its name and value for assistive technology. Name it with `labelledby` or `label`, not a wrapping `<label>`, which would read the chosen option into the name. Option labels do not repeat the field label |
 | Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, dotted inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
@@ -726,8 +727,8 @@ repository's shared parity-fixture approach rather than copying constants.
 `use:shimmer` in [shimmer.ts](../frontend/src/ui/shimmer.ts) draws a moving
 light, 4px scanlines and lit edge rules in `--ink-bar` over a `.shimmer-field`
 wrapper, adapted from the YoRHa terminal input shader. It is an exception to
-the rule against glows and decorative gradients, scoped to the two fields that
-start a task, and it shows their state:
+the rule against glows and decorative gradients, scoped to the fields that start a
+task, and it shows their state:
 
 - **Market lookup** (hosted site and desktop): a quiet idle sweep at rest marks
   where to start. While focused and empty it runs in full, with sparks in `--fg`
@@ -737,10 +738,13 @@ start a task, and it shows their state:
   <kbd>/</kbd> moves focus there so the jump is visible on a long table, and the
   full sweep while focused. A click gives no pass, and the filter never shows
   sparks.
+- **Sell tag list box**: nothing at rest, so it never competes with the name
+  filter's idle sweep. Opening the list with `+ N more` moves focus into it
+  with one light pass, and it runs the full sweep while focused, without sparks.
 
 The idle sweep runs at about half strength with dimmer edges, so the field
-reads as calm beside data. Never add it to a second field on the same screen,
-or to secrets, prices, quantities or writing fields. Reduced motion shows only
+reads as calm beside data. Never let two fields on one screen sweep at rest,
+and never add it to secrets, prices, quantities or writing fields. Reduced motion shows only
 the lit edges. The canvas ignores the pointer, is hidden from assistive
 technology and never replaces the focus outline; the animation stops when the
 window is hidden or the field is off screen. Select Field shimmer in the living

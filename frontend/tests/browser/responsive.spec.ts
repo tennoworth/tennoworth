@@ -382,6 +382,33 @@ test.describe('desktop responsive layout', () => {
 
   // The More menu beside it always closed on Escape; Refresh only on an
   // outside click, so a keyboard user had no way out of it.
+  test('switching tags leaves the tag being used where it was', async ({ page }) => {
+    // Top picks sits above the filters and changes height with every tag; the
+    // relic tag leaves no picks at all, which once pulled the line up 230px.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/?preview-desktop&sample=large');
+    const line = page.locator('.tagchips');
+    await line.scrollIntoViewIfNeeded();
+    const top = async () => (await line.boundingBox())!.y;
+    const start = await top();
+    for (const tag of ['prime', 'relic', 'warframe', 'relic', 'melee']) {
+      const active = line.locator('button.chip[aria-pressed="true"]');
+      while (await active.count()) await active.first().click();
+      await line.getByRole('button', { name: new RegExp(`^${tag} \\d+$`) }).click();
+      await expect.poll(top, { message: `after ${tag}` }).toBeCloseTo(start, 0);
+    }
+    // In the full list a picked tag stays where it is instead of jumping to the line.
+    await page.getByRole('button', { name: /^\+ \d+ more$/ }).click();
+    const list = page.locator('#all-tags');
+    const axi = list.getByRole('button', { name: /^axi \d+$/ });
+    await axi.scrollIntoViewIfNeeded();
+    const before = (await axi.boundingBox())!;
+    await axi.click();
+    await expect(axi).toHaveAttribute('aria-pressed', 'true');
+    expect((await axi.boundingBox())!.y).toBeCloseTo(before.y, 0);
+    expect((await axi.boundingBox())!.x).toBeCloseTo(before.x, 0);
+  });
+
   test('the status strip keeps its height when a view adds the live-order count', async ({ page }) => {
     // My orders adds "· N live" to the WFM cell, which narrows the scan cell;
     // an unbounded scan name wrapped further and moved everything below.

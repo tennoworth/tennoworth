@@ -1142,6 +1142,81 @@ msgctxt "sell.tagsOr"
 msgid "tags OR together"
 msgstr "tags combinés en OU"
 
+#. Button after the main tags: opens every other tag, grouped.
+#. Max 14 characters.
+#, fuzzy
+msgctxt "sell.tagsMore"
+msgid "+ {count} more"
+msgstr "+ {count} autres"
+
+#. Button: closes the list of every tag.
+#. Max 14 characters.
+#, fuzzy
+msgctxt "sell.tagsFewer"
+msgid "− fewer"
+msgstr "− moins"
+
+#. Placeholder of the box that narrows the full tag list, e.g. typing “nyx”.
+#. Max 24 characters.
+#, fuzzy
+msgctxt "sell.tagsNarrow"
+msgid "Narrow tags…"
+msgstr "Filtrer les tags…"
+
+#. Screen reader name of the box that narrows the full tag list.
+#, fuzzy
+msgctxt "sell.tagsNarrowLabel"
+msgid "Narrow tags"
+msgstr "Filtrer les tags"
+
+#. Shown when the narrowing text matches no tag.
+#, fuzzy
+msgctxt "sell.tagsNoMatch"
+msgid "No tag matches “{query}”."
+msgstr "Aucun tag ne correspond à « {query} »."
+
+#. Tag group heading: what kind of item (mod, relic, set…).
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.type"
+msgid "Type"
+msgstr "Type"
+
+#. Tag group heading: weapon slot and weapon class (primary, swords…).
+#. Max 24 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.slot"
+msgid "Slot and class"
+msgstr "Emplacement et classe"
+
+#. Tag group heading: common, uncommon, rare, legendary.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.rarity"
+msgid "Rarity"
+msgstr "Rareté"
+
+#. Tag group heading: Lith, Meso, Neo, Axi, Requiem relics.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.era"
+msgid "Relic era"
+msgstr "Ère de relique"
+
+#. Tag group heading: kubrows, kavats, sentinels and their mods.
+#. Max 20 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.companion"
+msgid "Companions"
+msgstr "Compagnons"
+
+#. Tag group heading: tags naming the one Warframe, weapon or companion a mod belongs to.
+#. Max 48 characters.
+#, fuzzy
+msgctxt "sell.tagGroup.name"
+msgid "Mods for a Warframe, weapon or companion"
+msgstr "Mods d’une Warframe, arme ou compagnon"
+
 #. Screen reader name of the filter chips.
 #, fuzzy
 msgctxt "sell.activeFilters"

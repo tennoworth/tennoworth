@@ -7,6 +7,7 @@
 // now exists in exactly one place; the three consumers below only differ in
 // how they combine and report the clauses.
 
+import { canonicalTags } from './tag-groups';
 import type { ScoredInventoryFact } from '../contracts/generated/domain';
 import { lookup } from './market';
 import { readDemand } from './demand';
@@ -64,8 +65,7 @@ function passesKept(rec: OwnedRecord, f: FilterState): boolean {
 }
 function passesTag(m: MarketItemEntry, f: FilterState): boolean {
   if (f.activeTags.size === 0) return true;
-  const tags = m.tags || [];
-  return tags.some((t) => f.activeTags.has(t));
+  return canonicalTags(m.tags).some((t) => f.activeTags.has(t));
 }
 function passesVault(market: Market, rec: OwnedRecord, f: FilterState): boolean {
   if (!f.vaultOnly) return true;
@@ -278,7 +278,7 @@ export function computeAvailableTags(
     if (!passesMedian(m, filters)) continue;
     if (!passesSpares(rec, filters)) continue;
     if (!passesAdvice(rec, filters, advice)) continue;
-    for (const t of m.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
+    for (const t of canonicalTags(m.tags)) counts.set(t, (counts.get(t) || 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
