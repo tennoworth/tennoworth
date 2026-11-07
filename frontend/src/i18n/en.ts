@@ -8,12 +8,14 @@ import { FIRST_RUN } from './en/first-run';
 import { STRIP } from './en/strip';
 import { FORMAT } from './en/format';
 import { SELL } from './en/sell';
+import { TABLE } from './en/table';
 
 export const EN = {
   ...FIRST_RUN,
   ...STRIP,
   ...FORMAT,
   ...SELL,
+  ...TABLE,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

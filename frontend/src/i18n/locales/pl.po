@@ -1371,3 +1371,708 @@ msgstr ""
 msgctxt "sell.preset.vault.hint"
 msgid "vaulted + vaulting-soon prime parts (prices usually climb once relics stop dropping)"
 msgstr ""
+
+#. Column header, shown in capitals. The item name.
+#. Max 12 characters.
+msgctxt "table.col.name"
+msgid "Item"
+msgstr ""
+
+#. Column header, shown in capitals. Copies owned.
+#. Max 8 characters.
+msgctxt "table.col.owned"
+msgid "Own"
+msgstr ""
+
+#. Column header, shown in capitals. Change since the last scan. Usually left as the symbol.
+#. Max 3 characters.
+msgctxt "table.col.delta"
+msgid "Δ"
+msgstr ""
+
+#. Column header, shown in capitals. How soon to list this.
+#. Max 9 characters.
+msgctxt "table.col.sell_score"
+msgid "Priority"
+msgstr ""
+
+#. Column header, shown in capitals. Average trade price.
+#. Max 5 characters.
+msgctxt "table.col.avg_price"
+msgid "Avg"
+msgstr ""
+
+#. Column header, shown in capitals. Lowest asking price.
+#. Max 8 characters.
+msgctxt "table.col.low_sell"
+msgid "Low ask"
+msgstr ""
+
+#. Column header, shown in capitals. Highest buy offer.
+#. Max 8 characters.
+msgctxt "table.col.top_buy"
+msgid "Top buy"
+msgstr ""
+
+#. Column header, shown in capitals. A small price chart; not sortable.
+#. Max 6 characters.
+msgctxt "table.col.medians_7d"
+msgid "Trend"
+msgstr ""
+
+#. Column header, shown in capitals. Change against the 90-day median.
+#. Max 6 characters.
+msgctxt "table.col.delta_90d_pct"
+msgid "Δ 90d"
+msgstr ""
+
+#. Column header, shown in capitals. Trades in the last 48 hours.
+#. Max 7 characters.
+msgctxt "table.col.volume_48h"
+msgid "Vol 48h"
+msgstr ""
+
+#. Column header, shown in capitals. Buyers per seller.
+#. Max 8 characters.
+msgctxt "table.col.ratio"
+msgid "Demand"
+msgstr ""
+
+#. Column header, shown in capitals. How much players use the item; not sortable.
+#. Max 10 characters.
+msgctxt "table.col.usage"
+msgid "Played"
+msgstr ""
+
+#. Column header, shown in capitals. Hold or sell.
+#. Max 7 characters.
+msgctxt "table.col.advice"
+msgid "Advice"
+msgstr ""
+
+#. Column header, shown in capitals. Ducat value.
+#. Max 7 characters.
+msgctxt "table.col.ducats"
+msgid "Ducats"
+msgstr ""
+
+#. Column header, shown in capitals. Platinum per 100 ducats.
+#. Max 7 characters.
+msgctxt "table.col.plat_per_100d"
+msgid "p/100d"
+msgstr ""
+
+#. Column header, shown in capitals. Value at current asks.
+#. Max 10 characters.
+msgctxt "table.col.raw_value"
+msgid "Raw value"
+msgstr ""
+
+#. Column header, shown in capitals. Value of every sellable copy.
+#. Max 12 characters.
+msgctxt "table.col.potential_plat"
+msgid "Stack value"
+msgstr ""
+
+#. Column guide: Item.
+msgctxt "table.help.name"
+msgid "Display name on warframe.market. Click to open the listing."
+msgstr ""
+
+#. Column guide: Own.
+msgctxt "table.help.owned"
+msgid "How many copies you own in your inventory. When the \"Keep copies\" reserve is set above 0, the sellable count (owned minus the reserve) shows alongside it. Leveled copies (any XP) can’t be traded in-game at all, so they’re held back the same way - shown as \"leveled\" rather than \"kept\"."
+msgstr ""
+
+#. Column guide: Δ.
+msgctxt "table.help.delta"
+msgid "Change in count vs. the previous inventory you loaded."
+msgstr ""
+
+#. Column guide: how to read Δ.
+msgctxt "table.help.delta.dir"
+msgid "positive = farmed, negative = sold"
+msgstr ""
+
+#. Column guide: Avg.
+msgctxt "table.help.avg_price"
+msgid "Volume-weighted average across closed trades in the last 48 h."
+msgstr ""
+
+#. Column guide: how to read Avg.
+msgctxt "table.help.avg_price.dir"
+msgid "noisy on low-volume items"
+msgstr ""
+
+#. Column guide: Low ask.
+msgctxt "table.help.low_sell"
+msgid "Lowest current ask: the cheapest sell listing from in-game / online players."
+msgstr ""
+
+#. Column guide: how to read Low ask.
+msgctxt "table.help.low_sell.dir"
+msgid "what you can realistically clear at right now"
+msgstr ""
+
+#. Column guide: Top buy.
+msgctxt "table.help.top_buy"
+msgid "Highest current buy offer from in-game / online players."
+msgstr ""
+
+#. Column guide: how to read Top buy.
+msgctxt "table.help.top_buy.dir"
+msgid "instant-sell ceiling"
+msgstr ""
+
+#. Column guide: Vol 48h.
+msgctxt "table.help.volume_48h"
+msgid "Trades closed in the last 48 h."
+msgstr ""
+
+#. Column guide: how to read Vol 48h.
+msgctxt "table.help.volume_48h.dir"
+msgid "higher = more liquid; ≥ 5 is healthy"
+msgstr ""
+
+#. Column guide: Demand.
+msgctxt "table.help.ratio"
+msgid "Live buyers ÷ live sellers - a rough demand signal."
+msgstr ""
+
+#. Column guide: how to read Demand.
+msgctxt "table.help.ratio.dir"
+msgid "> 1 = buyers outnumber sellers"
+msgstr ""
+
+#. Column guide: Stack value.
+msgctxt "table.help.potential_plat"
+msgid "Sellable copies × the 48 h average trade price. Optimistic - selling many copies usually clears below the average."
+msgstr ""
+
+#. Column guide: how to read Stack value.
+msgctxt "table.help.potential_plat.dir"
+msgid "upper bound, not realistic"
+msgstr ""
+
+#. Column guide: Raw value.
+msgctxt "table.help.raw_value"
+msgid "Sellable copies × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings - no liquidity discount; one troll listing barely moves it."
+msgstr ""
+
+#. Column guide: how to read Raw value.
+msgctxt "table.help.raw_value.dir"
+msgid "falls back to Sellable × Avg until the next scrape adds ask-depth data"
+msgstr ""
+
+#. Column guide: Priority. Keep the formula as written.
+msgctxt "table.help.sell_score"
+msgid "Priority ranking, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. The clearing price is the lowest live ask, clamped up to the 90-day median when that ask is a lone troll undercut, so one 1p listing cannot sink a row. Items below 3 trades / 48 h keep their priority and get a \"patience\" tag, but stay out of Top Picks."
+msgstr ""
+
+#. Column guide: how to read Priority.
+msgctxt "table.help.sell_score.dir"
+msgid "higher = list sooner; actual plat totals stay unweighted"
+msgstr ""
+
+#. Column guide: Ducats.
+msgctxt "table.help.ducats"
+msgid "Ducat value at Baro Ki’Teer."
+msgstr ""
+
+#. Column guide: how to read Ducats.
+msgctxt "table.help.ducats.dir"
+msgid "only prime parts have a non-zero value"
+msgstr ""
+
+#. Column guide: p/100d.
+msgctxt "table.help.plat_per_100d"
+msgid "Plat cost per 100 ducats of value. “Deal” badge fires below 20."
+msgstr ""
+
+#. Column guide: how to read p/100d.
+msgctxt "table.help.plat_per_100d.dir"
+msgid "lower = better ducat trade than WFM"
+msgstr ""
+
+#. Column guide: Trend.
+msgctxt "table.help.medians_7d"
+msgid "Sparkline of the last 7 days of daily median price. Hover the line for the raw values."
+msgstr ""
+
+#. Column guide: Δ 90d.
+msgctxt "table.help.delta_90d_pct"
+msgid "Latest daily median vs the 90-day median."
+msgstr ""
+
+#. Column guide: how to read Δ 90d.
+msgctxt "table.help.delta_90d_pct.dir"
+msgid "▲ = price rising into a peak (sell now); ▼ = sliding"
+msgstr ""
+
+#. Column guide: Advice.
+msgctxt "table.help.advice"
+msgid "Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only - nothing is automated."
+msgstr ""
+
+#. Column guide: how to read Advice.
+msgctxt "table.help.advice.dir"
+msgid "sell now = timing favors listing; hold = the ramp is still ahead"
+msgstr ""
+
+#. Column guide unit.
+msgctxt "table.unit.count"
+msgid "count"
+msgstr ""
+
+#. Column guide unit: platinum.
+msgctxt "table.unit.plat"
+msgid "plat"
+msgstr ""
+
+#. Column guide unit.
+msgctxt "table.unit.trades48h"
+msgid "trades / 48 h"
+msgstr ""
+
+#. Column guide unit.
+msgctxt "table.unit.ratio"
+msgid "ratio"
+msgstr ""
+
+#. Column guide unit.
+msgctxt "table.unit.priority"
+msgid "priority points"
+msgstr ""
+
+#. Column guide unit: percent.
+msgctxt "table.unit.percent"
+msgid "%"
+msgstr ""
+
+#. Column guide unit.
+msgctxt "table.unit.ducats"
+msgid "ducats"
+msgstr ""
+
+#. Column guide unit.
+msgctxt "table.unit.platPer100Ducats"
+msgid "plat / 100 ducats"
+msgstr ""
+
+#. Badge and filter chip: price near its high.
+#. Max 10 characters.
+msgctxt "table.pill.peak"
+msgid "peak"
+msgstr ""
+
+#. Tooltip of the peak filter chip.
+msgctxt "table.pill.peak.what"
+msgid "Price near its 90-day high - a good moment to sell"
+msgstr ""
+
+#. Badge and filter chip: price near its low, consider waiting.
+#. Max 10 characters.
+msgctxt "table.pill.hold"
+msgid "hold"
+msgstr ""
+
+#. Tooltip of the hold filter chip.
+msgctxt "table.pill.hold.what"
+msgid "Price near its 90-day low (e.g. Baro just flooded it) - usually recovers, consider waiting"
+msgstr ""
+
+#. Badge and filter chip: sells slowly.
+#. Max 10 characters.
+msgctxt "table.pill.patience"
+msgid "patience"
+msgstr ""
+
+#. Tooltip of the patience filter chip.
+msgctxt "table.pill.patience.what"
+msgid "Barely trades (under 3 sales in 48h) - listing it works, selling it takes a while"
+msgstr ""
+
+#. Badge and filter chip: a prime no longer obtainable.
+#. Max 10 characters.
+msgctxt "table.pill.vaulted"
+msgid "vaulted"
+msgstr ""
+
+#. Tooltip of the vaulted filter chip.
+msgctxt "table.pill.vaulted.what"
+msgid "Prime part no longer obtainable in-game - supply only shrinks"
+msgstr ""
+
+#. Badge and filter chip.
+#. Max 14 characters.
+msgctxt "table.pill.vaulting-soon"
+msgid "vaulting soon"
+msgstr ""
+
+#. Tooltip of the vaulting soon filter chip.
+msgctxt "table.pill.vaulting-soon.what"
+msgid "About to leave the drop tables - price usually rises after"
+msgstr ""
+
+#. Badge and filter chip: a syndicate augment mod. Short form.
+#. Max 6 characters.
+msgctxt "table.pill.aug"
+msgid "aug"
+msgstr ""
+
+#. Tooltip of the aug filter chip.
+msgctxt "table.pill.aug.what"
+msgid "Syndicate augment mod - rebuyable with syndicate standing, so sell freely"
+msgstr ""
+
+#. Tooltip of a selected filter chip.
+msgctxt "table.pillStop"
+msgid "{what}. Click to stop filtering by this badge."
+msgstr ""
+
+#. Tooltip of a filter chip.
+msgctxt "table.pillShow"
+msgid "{what}. Click to show only these rows."
+msgstr ""
+
+#. Tooltip of the vaulted badge.
+msgctxt "table.badge.vaulted"
+msgid "Prime is currently vaulted. Listings often command a premium."
+msgstr ""
+
+#. Tooltip of the vaulting soon badge.
+msgctxt "table.badge.vaultingSoon"
+msgid "Estimated to vault within ~60 days. Prices usually climb once its relics stop dropping."
+msgstr ""
+
+#. Badge on a relic row: the relic planner is the better place for it.
+#. Max 16 characters.
+msgctxt "table.badge.relic"
+msgid "relic → planner"
+msgstr ""
+
+#. Tooltip of the relic badge.
+msgctxt "table.badge.relicTitle"
+msgid "This is a relic. Selling it intact usually clears less than cracking it - check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action."
+msgstr ""
+
+#. Tooltip of the aug badge.
+msgctxt "table.badge.aug"
+msgid "Syndicate augment mod. Typically 25,000 standing to re-purchase from the issuing syndicate (6 mainline syndicates)."
+msgstr ""
+
+#. Tooltip of the patience badge.
+msgctxt "table.badge.patience"
+msgid "Volume under 2 trades/48h - listing will sit a while before clearing."
+msgstr ""
+
+#. Tooltip of the hold badge.
+msgctxt "table.badge.hold"
+msgid "Price is near its 90-day low - you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding."
+msgstr ""
+
+#. Tooltip of the peak badge.
+msgctxt "table.badge.peak"
+msgid "Price is near its 90-day high - a good moment to list this one."
+msgstr ""
+
+#. Screen reader name of the +N button beside an item's badges.
+msgctxt "table.moreBadges"
+msgid "{count, plural, one {# more badge for {item}} other {# more badges for {item}}}"
+msgstr ""
+
+#. Own column: copies estimated sellable.
+msgctxt "table.sellEstimated"
+msgid "{count} estimated"
+msgstr ""
+
+#. Own column: copies held back, unknown.
+msgctxt "table.keepUnknown"
+msgid "keep unknown"
+msgstr ""
+
+#. Own column: copies held back.
+msgctxt "table.keep"
+msgid "keep {count}"
+msgstr ""
+
+#. Screen reader text of the Own column note, e.g. "sell 3, keep 1".
+msgctxt "table.sellLabel"
+msgid "sell {sell}, {keep}"
+msgstr ""
+
+#. Tooltip of the Own column note.
+msgctxt "table.sellTitle"
+msgid "Sell {sell} · {keep}"
+msgstr ""
+
+#. In "sell unavailable": the sellable count is unknown.
+msgctxt "table.sellUnavailable"
+msgid "unavailable"
+msgstr ""
+
+#. Own column, after the owned count: "/ sell 3". Keep it short.
+#. Max 10 characters.
+msgctxt "table.sellNote"
+msgid "/ sell {sell}"
+msgstr ""
+
+#. Own column: copies that are ranked up and cannot be traded.
+#. Max 12 characters.
+msgctxt "table.leveled"
+msgid "{count} leveled"
+msgstr ""
+
+#. Own column: copies held back by the Keep copies setting.
+#. Max 10 characters.
+msgctxt "table.kept"
+msgid "{count} kept"
+msgstr ""
+
+#. Own column: copies listed this session. Keep the leading " · ".
+msgctxt "table.listedCount"
+msgid " · listed {count}"
+msgstr ""
+
+#. Advice chip.
+#. Max 10 characters.
+msgctxt "table.advice.sell_now"
+msgid "sell now"
+msgstr ""
+
+#. Advice chip.
+#. Max 10 characters.
+msgctxt "table.advice.hold"
+msgid "hold"
+msgstr ""
+
+#. Advice chip.
+#. Max 10 characters.
+msgctxt "table.advice.neutral"
+msgid "neutral"
+msgstr ""
+
+#. Badge: Baro gives more for this than the market.
+#. Max 6 characters.
+msgctxt "table.deal"
+msgid "deal"
+msgstr ""
+
+#. Tooltip of the deal badge.
+msgctxt "table.dealTitle"
+msgid "Listing's plat value is at or below 100 ducats - Baro is the better outlet for this row."
+msgstr ""
+
+#. Tooltip of the @ price.
+msgctxt "table.askAvgTitle"
+msgid "Average of the ~5 cheapest live asks right now"
+msgstr ""
+
+#. Tooltip of the price chart.
+msgctxt "table.sparkTitle"
+msgid "last 7d medians: {values}"
+msgstr ""
+
+#. Tooltip of the price chart.
+msgctxt "table.sparkTitleBaseline"
+msgid "last 7d medians: {values} · 90-day median {median}"
+msgstr ""
+
+#. Tooltip.
+msgctxt "table.trendUpTitle"
+msgid "Latest median {pct}% above 90d median - sell into the peak"
+msgstr ""
+
+#. Tooltip.
+msgctxt "table.trendDownTitle"
+msgid "Latest median {pct}% below 90d median - price is sliding"
+msgstr ""
+
+#. Tooltip.
+msgctxt "table.trendFlatTitle"
+msgid "Within ±1% of 90d median"
+msgstr ""
+
+#. Placeholder of the name filter.
+msgctxt "table.filterByName"
+msgid "Filter by name…"
+msgstr ""
+
+#. Placeholder of the name filter, with its keyboard shortcut.
+msgctxt "table.filterByNameKey"
+msgid "Filter by name… ( {key} )"
+msgstr ""
+
+#. Screen reader name of the name filter.
+msgctxt "table.filterByNameLabel"
+msgid "Filter by name"
+msgstr ""
+
+#. Screen reader name of the picks panel.
+msgctxt "table.topPicks"
+msgid "Top picks"
+msgstr ""
+
+#. Screen reader name of the picks table.
+msgctxt "table.topPicksTable"
+msgid "Top picks table"
+msgstr ""
+
+#. Screen reader name of the results table.
+msgctxt "table.inventoryTable"
+msgid "Inventory table"
+msgstr ""
+
+#. While the picks are calculated.
+msgctxt "table.calculating"
+msgid "Calculating sale values… Your filters remain available."
+msgstr ""
+
+#. Picks table column header. Shown in capitals.
+#. Max 16 characters.
+msgctxt "table.whyListNow"
+msgid "Why list now"
+msgstr ""
+
+#. Screen reader name of the picks action column.
+msgctxt "table.actions"
+msgid "Actions"
+msgstr ""
+
+#. Button: collapse the picks.
+#. Max 10 characters.
+msgctxt "table.hide"
+msgid "▾ Hide"
+msgstr ""
+
+#. Button: expand the picks.
+#. Max 10 characters.
+msgctxt "table.show"
+msgid "▸ Show"
+msgstr ""
+
+#. Tooltip of the row count.
+msgctxt "table.sortedBy"
+msgid "Sorted by {column}, {direction}"
+msgstr ""
+
+#. Sort direction.
+msgctxt "table.descending"
+msgid "descending"
+msgstr ""
+
+#. Sort direction.
+msgctxt "table.ascending"
+msgid "ascending"
+msgstr ""
+
+#. Row count above the table. Keep the <b> tags around the number.
+msgctxt "table.rowCount"
+msgid "{count, plural, one {<b>{count, number}</b> row} other {<b>{count, number}</b> rows}}"
+msgstr ""
+
+#. After a scan: rows kept their order.
+msgctxt "table.orderChanged"
+msgid "· order changed since the scan"
+msgstr ""
+
+#. Button.
+#. Max 10 characters.
+msgctxt "table.resort"
+msgid "Re-sort"
+msgstr ""
+
+#. Note above the table.
+msgctxt "table.formula"
+msgid "Priority = price × sell-through × usage weight, not plat/day"
+msgstr ""
+
+#. Button: choose visible columns.
+#. Max 12 characters.
+msgctxt "table.columns"
+msgid "Columns ▾"
+msgstr ""
+
+#. Screen reader name of the column chooser.
+msgctxt "table.visibleColumns"
+msgid "Visible columns"
+msgstr ""
+
+#. Button in the column chooser.
+msgctxt "table.resetToPreset"
+msgid "Reset to preset"
+msgstr ""
+
+#. Screen reader name of the Visual/Compact switch.
+msgctxt "table.itemLists"
+msgid "Item lists"
+msgstr ""
+
+#. Switch: rows with item pictures.
+#. Max 10 characters.
+msgctxt "table.visual"
+msgid "Visual"
+msgstr ""
+
+#. Tooltip of Visual. Keep the credit as is.
+msgctxt "table.visualTitle"
+msgid "Item pictures: Warframe Wiki · © Digital Extremes"
+msgstr ""
+
+#. Switch: rows without pictures.
+#. Max 10 characters.
+msgctxt "table.compact"
+msgid "Compact"
+msgstr ""
+
+#. In place of rows.
+msgctxt "table.noMatch"
+msgid "No rows match your filter."
+msgstr ""
+
+#. Button.
+msgctxt "table.clearFilters"
+msgid "Clear filters"
+msgstr ""
+
+#. Pager.
+msgctxt "table.showing"
+msgid "Showing {from, number}–{to, number} of {total, number}"
+msgstr ""
+
+#. Pager button.
+#. Max 8 characters.
+msgctxt "table.prev"
+msgid "‹ Prev"
+msgstr ""
+
+#. Pager button.
+#. Max 8 characters.
+msgctxt "table.next"
+msgid "Next ›"
+msgstr ""
+
+#. Button and dialog title: explains each column.
+msgctxt "table.guide"
+msgid "Column guide"
+msgstr ""
+
+#. Button in the column guide.
+msgctxt "table.guideClose"
+msgid "Close"
+msgstr ""
+
+#. Column guide: label before a unit. Shown in capitals.
+msgctxt "table.guideUnit"
+msgid "unit"
+msgstr ""
+
+#. Column guide: label before how to read a column. Shown in capitals.
+msgctxt "table.guideDirection"
+msgid "direction"
+msgstr ""
+
+#. Screen reader name of the page size buttons.
+msgctxt "table.rowsPerPage"
+msgid "Rows per page"
+msgstr ""

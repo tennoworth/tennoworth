@@ -14,10 +14,14 @@
   import type { SellRow as Row } from '../../contracts/selling';
   import { useDisplay } from '../../ui/display.svelte';
   import ItemArt from '../../ui/ItemArt.svelte';
+  import Rich from '../../ui/Rich.svelte';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import type { MessageKey } from '../../i18n/en';
 
   interface ColumnDef {
     key: string;
     label: string;
+    labelKey: MessageKey;
     align: 'left' | 'right';
     width: number;   // rem; 0 = takes the remainder
     noSort?: boolean;
@@ -103,19 +107,13 @@
   type PillKey = 'peak' | 'hold' | 'patience' | 'vaulted' | 'vaulting-soon' | 'aug';
   // `what` is the badge's meaning, shown in the chip tooltip - the labels
   // alone read as insider shorthand ("aug" was guessed as "August").
-  const PILL_DEFS: { key: PillKey; label: string; cls: string; what: string }[] = [
-    { key: 'peak',          label: 'peak',          cls: 'peak',
-      what: 'Price near its 90-day high - a good moment to sell' },
-    { key: 'hold',          label: 'hold',          cls: 'hold',
-      what: 'Price near its 90-day low (e.g. Baro just flooded it) - usually recovers, consider waiting' },
-    { key: 'patience',      label: 'patience',      cls: 'patience',
-      what: 'Barely trades (under 3 sales in 48h) - listing it works, selling it takes a while' },
-    { key: 'vaulted',       label: 'vaulted',       cls: 'vaulted',
-      what: 'Prime part no longer obtainable in-game - supply only shrinks' },
-    { key: 'vaulting-soon', label: 'vaulting soon', cls: 'vaulting-soon',
-      what: 'About to leave the drop tables - price usually rises after' },
-    { key: 'aug',           label: 'aug',           cls: 'augment',
-      what: 'Syndicate augment mod - rebuyable with syndicate standing, so sell freely' },
+  const PILL_DEFS: { key: PillKey; label: MessageKey; cls: string; what: MessageKey }[] = [
+    { key: 'peak', label: 'table.pill.peak', cls: 'peak', what: 'table.pill.peak.what' },
+    { key: 'hold', label: 'table.pill.hold', cls: 'hold', what: 'table.pill.hold.what' },
+    { key: 'patience', label: 'table.pill.patience', cls: 'patience', what: 'table.pill.patience.what' },
+    { key: 'vaulted', label: 'table.pill.vaulted', cls: 'vaulted', what: 'table.pill.vaulted.what' },
+    { key: 'vaulting-soon', label: 'table.pill.vaulting-soon', cls: 'vaulting-soon', what: 'table.pill.vaulting-soon.what' },
+    { key: 'aug', label: 'table.pill.aug', cls: 'augment', what: 'table.pill.aug.what' },
   ];
   let activePills = $state<Set<PillKey>>(new Set());
 
@@ -169,23 +167,23 @@
   function rowBadges(r: Row): BadgeDef[] {
     const out: BadgeDef[] = [];
     if (r.vault_status === 'vaulted') {
-      out.push({ cls: 'vaulted', label: 'vaulted', title: 'Prime is currently vaulted. Listings often command a premium.' });
+      out.push({ cls: 'vaulted', label: t('table.pill.vaulted'), title: t('table.badge.vaulted') });
     } else if (r.vault_status === 'vaulting-soon') {
-      out.push({ cls: 'vaulting-soon', label: 'vaulting soon', title: 'Estimated to vault within ~60 days. Prices usually climb once its relics stop dropping.' });
+      out.push({ cls: 'vaulting-soon', label: t('table.pill.vaulting-soon'), title: t('table.badge.vaultingSoon') });
     }
     if (r.subtype === 'intact' || r.subtype === 'exceptional' || r.subtype === 'flawless' || r.subtype === 'radiant') {
-      out.push({ cls: 'relic-tag', label: 'relic → planner', title: "This is a relic. Selling it intact usually clears less than cracking it - check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action." });
+      out.push({ cls: 'relic-tag', label: t('table.badge.relic'), title: t('table.badge.relicTitle') });
     }
     if (r.is_augment) {
-      out.push({ cls: 'augment', label: 'aug', title: 'Syndicate augment mod. Typically 25,000 standing to re-purchase from the issuing syndicate (6 mainline syndicates).' });
+      out.push({ cls: 'augment', label: t('table.pill.aug'), title: t('table.badge.aug') });
     }
     if (r.patience) {
-      out.push({ cls: 'patience', label: 'patience', title: 'Volume under 2 trades/48h - listing will sit a while before clearing.' });
+      out.push({ cls: 'patience', label: t('table.pill.patience'), title: t('table.badge.patience') });
     }
     if (r.timing === 'hold') {
-      out.push({ cls: 'hold', label: 'hold', title: "Price is near its 90-day low - you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding." });
+      out.push({ cls: 'hold', label: t('table.pill.hold'), title: t('table.badge.hold') });
     } else if (r.timing === 'peak') {
-      out.push({ cls: 'peak', label: 'peak', title: 'Price is near its 90-day high - a good moment to list this one.' });
+      out.push({ cls: 'peak', label: t('table.pill.peak'), title: t('table.badge.peak') });
     }
     return out;
   }
@@ -239,25 +237,26 @@
   // {text, unit, dir} so the guide can state the jargon-y bits explicitly (a
   // casual-user persona read a column name without knowing which direction
   // was "good").
-  interface HelpEntry { text: string; unit?: string; dir?: string; }
+  interface HelpEntry { text: MessageKey; unit?: MessageKey; dir?: MessageKey; }
   const HELP: Record<string, HelpEntry> = {
-    name:           { text: 'Display name on warframe.market. Click to open the listing.' },
-    owned:          { text: 'How many copies you own in your inventory. When the "Keep copies" reserve is set above 0, the sellable count (owned minus the reserve) shows alongside it. Leveled copies (any XP) can’t be traded in-game at all, so they’re held back the same way - shown as "leveled" rather than "kept".', unit: 'count' },
-    delta:          { text: 'Change in count vs. the previous inventory you loaded.', unit: 'count', dir: 'positive = farmed, negative = sold' },
-    avg_price:      { text: 'Volume-weighted average across closed trades in the last 48 h.', unit: 'plat', dir: 'noisy on low-volume items' },
-    low_sell:       { text: 'Lowest current ask: the cheapest sell listing from in-game / online players.', unit: 'plat', dir: 'what you can realistically clear at right now' },
-    top_buy:        { text: 'Highest current buy offer from in-game / online players.', unit: 'plat', dir: 'instant-sell ceiling' },
-    volume_48h:     { text: 'Trades closed in the last 48 h.', unit: 'trades / 48 h', dir: 'higher = more liquid; ≥ 5 is healthy' },
-    ratio:          { text: 'Live buyers ÷ live sellers - a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
-    potential_plat: { text: 'Sellable copies × the 48 h average trade price. Optimistic - selling many copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
-    raw_value:      { text: 'Sellable copies × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings - no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Sellable × Avg until the next scrape adds ask-depth data' },
-    sell_score:     { text: 'Priority ranking, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. The clearing price is the lowest live ask, clamped up to the 90-day median when that ask is a lone troll undercut, so one 1p listing cannot sink a row. Items below 3 trades / 48 h keep their priority and get a "patience" tag, but stay out of Top Picks.', unit: 'priority points', dir: 'higher = list sooner; actual plat totals stay unweighted' },
-    ducats:         { text: 'Ducat value at Baro Ki’Teer.', unit: 'ducats', dir: 'only prime parts have a non-zero value' },
-    plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
-    medians_7d:     { text: 'Sparkline of the last 7 days of daily median price. Hover the line for the raw values.' },
-    delta_90d_pct:  { text: 'Latest daily median vs the 90-day median.', unit: '%', dir: '▲ = price rising into a peak (sell now); ▼ = sliding' },
-    advice:         { text: 'Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only - nothing is automated.', dir: 'sell now = timing favors listing; hold = the ramp is still ahead' },
+    name:           { text: 'table.help.name' },
+    owned:          { text: 'table.help.owned', unit: 'table.unit.count' },
+    delta:          { text: 'table.help.delta', unit: 'table.unit.count', dir: 'table.help.delta.dir' },
+    avg_price:      { text: 'table.help.avg_price', unit: 'table.unit.plat', dir: 'table.help.avg_price.dir' },
+    low_sell:       { text: 'table.help.low_sell', unit: 'table.unit.plat', dir: 'table.help.low_sell.dir' },
+    top_buy:        { text: 'table.help.top_buy', unit: 'table.unit.plat', dir: 'table.help.top_buy.dir' },
+    volume_48h:     { text: 'table.help.volume_48h', unit: 'table.unit.trades48h', dir: 'table.help.volume_48h.dir' },
+    ratio:          { text: 'table.help.ratio', unit: 'table.unit.ratio', dir: 'table.help.ratio.dir' },
+    potential_plat: { text: 'table.help.potential_plat', unit: 'table.unit.plat', dir: 'table.help.potential_plat.dir' },
+    raw_value:      { text: 'table.help.raw_value', unit: 'table.unit.plat', dir: 'table.help.raw_value.dir' },
+    sell_score:     { text: 'table.help.sell_score', unit: 'table.unit.priority', dir: 'table.help.sell_score.dir' },
+    ducats:         { text: 'table.help.ducats', unit: 'table.unit.ducats', dir: 'table.help.ducats.dir' },
+    plat_per_100d:  { text: 'table.help.plat_per_100d', unit: 'table.unit.platPer100Ducats', dir: 'table.help.plat_per_100d.dir' },
+    medians_7d:     { text: 'table.help.medians_7d' },
+    delta_90d_pct:  { text: 'table.help.delta_90d_pct', unit: 'table.unit.percent', dir: 'table.help.delta_90d_pct.dir' },
+    advice:         { text: 'table.help.advice', dir: 'table.help.advice.dir' },
   };
+  const helpText = (key: string) => (HELP[key] ? t(HELP[key].text) : undefined);
 
   // Fixed-layout column widths (rem). A sortable column is at least as wide as
   // its label plus the sort arrow, measured in the uppercase header face: the
@@ -268,25 +267,26 @@
   // the floor the panel scrolls sideways rather than squeezing Item - and the
   // floor is derived per view, so a preset only ever pays for the columns it
   // actually renders.
-  const ALL_COLUMNS: ColumnDef[] = [
-    { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
-    { key: 'owned',          label: 'Own',      align: 'right', width: 7 },
-    { key: 'delta',          label: 'Δ',        align: 'right', width: 2.75, drop: 3 },
-    { key: 'sell_score',     label: 'Priority', align: 'right', width: 6.25 },
-    { key: 'avg_price',      label: 'Avg',      align: 'right', width: 4, drop: 2 },
-    { key: 'low_sell',       label: 'Low ask',  align: 'right', width: 5.75 },
-    { key: 'top_buy',        label: 'Top buy',  align: 'right', width: 5.75, drop: 2 },
-    { key: 'medians_7d',     label: 'Trend',    align: 'left',  width: 4.5, noSort: true, drop: 1 },
-    { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 4.5, drop: 2 },
-    { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 5.5, drop: 3 },
-    { key: 'ratio',          label: 'Demand',   align: 'right', width: 5.75, drop: 1 },
-    { key: 'usage',          label: 'Played',   align: 'left',  width: 7.5, noSort: true, drop: 1 },
-    { key: 'advice',         label: 'Advice',   align: 'left',  width: 5.5, drop: 3 },
-    { key: 'ducats',         label: 'Ducats',   align: 'right', width: 5.5 },
-    { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 5, drop: 3 },
-    { key: 'raw_value',      label: 'Raw value', align: 'right', width: 7, drop: 3 },
-    { key: 'potential_plat', label: 'Stack value', align: 'right', width: 8.5 },
+  const COLUMN_DEFS: Omit<ColumnDef, 'label'>[] = [
+    { key: 'name', labelKey: 'table.col.name', align: 'left', width: 0 },
+    { key: 'owned', labelKey: 'table.col.owned', align: 'right', width: 7 },
+    { key: 'delta', labelKey: 'table.col.delta', align: 'right', width: 2.75, drop: 3 },
+    { key: 'sell_score', labelKey: 'table.col.sell_score', align: 'right', width: 6.25 },
+    { key: 'avg_price', labelKey: 'table.col.avg_price', align: 'right', width: 4, drop: 2 },
+    { key: 'low_sell', labelKey: 'table.col.low_sell', align: 'right', width: 5.75 },
+    { key: 'top_buy', labelKey: 'table.col.top_buy', align: 'right', width: 5.75, drop: 2 },
+    { key: 'medians_7d', labelKey: 'table.col.medians_7d', align: 'left', width: 4.5, noSort: true, drop: 1 },
+    { key: 'delta_90d_pct', labelKey: 'table.col.delta_90d_pct', align: 'right', width: 4.5, drop: 2 },
+    { key: 'volume_48h', labelKey: 'table.col.volume_48h', align: 'right', width: 5.5, drop: 3 },
+    { key: 'ratio', labelKey: 'table.col.ratio', align: 'right', width: 5.75, drop: 1 },
+    { key: 'usage', labelKey: 'table.col.usage', align: 'left', width: 7.5, noSort: true, drop: 1 },
+    { key: 'advice', labelKey: 'table.col.advice', align: 'left', width: 5.5, drop: 3 },
+    { key: 'ducats', labelKey: 'table.col.ducats', align: 'right', width: 5.5 },
+    { key: 'plat_per_100d', labelKey: 'table.col.plat_per_100d', align: 'right', width: 5, drop: 3 },
+    { key: 'raw_value', labelKey: 'table.col.raw_value', align: 'right', width: 7, drop: 3 },
+    { key: 'potential_plat', labelKey: 'table.col.potential_plat', align: 'right', width: 8.5 },
   ];
+  let ALL_COLUMNS: ColumnDef[] = $derived(COLUMN_DEFS.map((c) => ({ ...c, label: t(c.labelKey) })));
 
   // Ducat-deal threshold: anything below ~20p per 100 ducats is a row
   // where Baro is the better outlet than WFM (you net ≥ 5 ducats per
@@ -310,7 +310,10 @@
     return cols;
   });
 
-  let guideEntries = $derived(columns.filter((c) => HELP[c.key]).map((c) => ({ key: c.key, label: c.label, ...HELP[c.key] })));
+  let guideEntries = $derived(columns.filter((c) => HELP[c.key]).map((c) => {
+    const help = HELP[c.key];
+    return { key: c.key, label: c.label, text: t(help.text), unit: help.unit && t(help.unit), dir: help.dir && t(help.dir) };
+  }));
 
   // Columns this data can fill; Item is always shown so it is not offered.
   let choosableColumns = $derived(ALL_COLUMNS.filter((c) => c.key !== 'name'
@@ -481,7 +484,7 @@
       if (key === 'plat_per_100d') return v.toFixed(1);
       if (key === 'avg_price' || key === 'potential_plat' || key === 'raw_value') return plat(v);
       if (key === 'sell_score') return v.toFixed(0);
-      return v.toLocaleString();
+      return v.toLocaleString(formatLocale());
     }
     return String(v);
   }
@@ -523,7 +526,7 @@
             type="button"
             class="tag badge-overflow-btn"
             onclick={(e) => toggleBadgeOverflow(rowKey, e)}
-            aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
+            aria-label={t('table.moreBadges', { count: hiddenCount, item: r.name || r.slug })}
           >+{hiddenCount}</button>
         {/if}
       </span>
@@ -539,16 +542,16 @@
     {fmt(r.owned, col.key)}
     {#if quantityStatus}
       {@const quantity = allocation?.items[r.slug]}
-      {@const sellText = quantity?.estimated == null ? null : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? null}
-      {@const keepText = quantity?.protected == null ? 'keep unknown' : `keep ${quantity.protected}`}
+      {@const sellText = quantity?.estimated == null ? null : estimatedGuidance ? t('table.sellEstimated', { count: quantity.estimated }) : quantity.available ?? null}
+      {@const keepText = quantity?.protected == null ? t('table.keepUnknown') : t('table.keep', { count: quantity.protected })}
       <!-- Only the sell count on the row: with the keep count too it wrapped
            the row or was cut off. The full wording is the label. -->
-      <span class="quantity-note" aria-label="sell {sellText ?? 'unavailable'}, {keepText}" title="Sell {sellText ?? 'unavailable'} · {keepText}">/ sell {sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText}</span>
+      <span class="quantity-note" aria-label={t('table.sellLabel', { sell: sellText ?? t('table.sellUnavailable'), keep: keepText })} title={t('table.sellTitle', { sell: sellText ?? t('table.sellUnavailable'), keep: keepText })}>{t('table.sellNote', { sell: sellText == null ? '-' : estimatedGuidance ? `~${quantity?.estimated}` : sellText })}</span>
     {:else if r.sellable < r.owned}
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
-      <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={leveledNoteTitle()}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0}{' · '}{/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
+      <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={leveledNoteTitle()}>{t('table.leveled', { count: bd.leveledPart })}</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0}{' · '}{/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{t('table.kept', { count: bd.keptPart })}</span>{/if})</span>
     {/if}
-    {#if listedFor?.(r)}<span class="quantity-note listed"> · listed {listedFor(r)}</span>{/if}
+    {#if listedFor?.(r)}<span class="quantity-note listed">{t('table.listedCount', { count: listedFor(r) ?? '' })}</span>{/if}
   {:else if col.key === 'delta'}
     {#if d > 0}
       <span class="delta up">▲+{d}</span>
@@ -560,7 +563,7 @@
   {:else if col.key === 'advice'}
     {#if r.advice}
       <span class="tag advice advice-{r.advice}" title={(r.advice_reasons ?? []).join(' · ')}>
-        {r.advice === 'sell_now' ? 'sell now' : r.advice}
+        {r.advice === 'sell_now' ? t('table.advice.sell_now') : r.advice === 'hold' ? t('table.advice.hold') : r.advice === 'neutral' ? t('table.advice.neutral') : r.advice}
       </span>
     {:else}
       <span class="muted">·</span>
@@ -569,7 +572,7 @@
     {#if r.ducats != null}
       <span class="ducat-num">{r.ducats}</span>
       {#if r.plat_per_100d != null && r.plat_per_100d <= DUCAT_DEAL_THRESHOLD}
-        <span class="ducat-badge" title="Listing's plat value is at or below 100 ducats - Baro is the better outlet for this row.">deal</span>
+        <span class="ducat-badge" title={t('table.dealTitle')}>{t('table.deal')}</span>
       {/if}
     {:else}
       <span class="muted">-</span>
@@ -584,7 +587,7 @@
     {#if r.raw_value > 0}
       {fmt(r.raw_value, col.key)}
       {#if r.low5_avg > 0}
-        <span class="ask-avg" title="Average of the ~5 cheapest live asks right now">@{fmt(r.low5_avg, 'plat_per_100d')}</span>
+        <span class="ask-avg" title={t('table.askAvgTitle')}>@{fmt(r.low5_avg, 'plat_per_100d')}</span>
       {/if}
     {:else}
       <span class="muted">-</span>
@@ -592,7 +595,7 @@
   {:else if col.key === 'medians_7d'}
     {#if hasSparkline(r.medians_7d)}
       <Sparkline class="sparkline" series={r.medians_7d} baseline={r.median_90d} trend={r.delta_90d_pct}
-        title="last 7d medians: {r.medians_7d.join(', ')}{r.median_90d != null ? ` · 90-day median ${r.median_90d}` : ''}" />
+        title={r.median_90d != null ? t('table.sparkTitleBaseline', { values: r.medians_7d.join(', '), median: r.median_90d }) : t('table.sparkTitle', { values: r.medians_7d.join(', ') })} />
     {:else}
       <span class="muted">-</span>
     {/if}
@@ -600,11 +603,11 @@
     {#if r.delta_90d_pct == null}
       <span class="muted">-</span>
     {:else if r.delta_90d_pct >= 1}
-      <span class="trend up" title="Latest median {r.delta_90d_pct.toFixed(0)}% above 90d median - sell into the peak">▲{r.delta_90d_pct.toFixed(0)}%</span>
+      <span class="trend up" title={t('table.trendUpTitle', { pct: r.delta_90d_pct.toFixed(0) })}>▲{r.delta_90d_pct.toFixed(0)}%</span>
     {:else if r.delta_90d_pct <= -1}
-      <span class="trend down" title="Latest median {Math.abs(r.delta_90d_pct).toFixed(0)}% below 90d median - price is sliding">▼{Math.abs(r.delta_90d_pct).toFixed(0)}%</span>
+      <span class="trend down" title={t('table.trendDownTitle', { pct: Math.abs(r.delta_90d_pct).toFixed(0) })}>▼{Math.abs(r.delta_90d_pct).toFixed(0)}%</span>
     {:else}
-      <span class="trend flat" title="Within ±1% of 90d median">·</span>
+      <span class="trend flat" title={t('table.trendFlatTitle')}>·</span>
     {/if}
   {:else}
     {fmt((r as unknown as Record<string, unknown>)[col.key], col.key)}
@@ -617,9 +620,9 @@
       id="inventory-name-filter"
       type="text"
       class="name-filter"
-      placeholder={keyboard.enabled ? `Filter by name… ( ${keyboard.search} )` : 'Filter by name…'}
+      placeholder={keyboard.enabled ? t('table.filterByNameKey', { key: keyboard.search }) : t('table.filterByName')}
       use:searchShortcut={() => filterPulse += 1}
-      aria-label="Filter by name"
+      aria-label={t('table.filterByNameLabel')}
       bind:value={filterDraft}
 
       oninput={typeFilter}
@@ -638,12 +641,12 @@
 {#if picksPending && !picks}
   <!-- The real picks table with placeholder cells, so its height matches the
        rows that replace it to the pixel. -->
-  <section class="wrap picks" aria-label="Top picks">
-    <div class="rail picks-head"><h3 class="pending-title">Top picks</h3><span class="exp" role="status">Calculating sale values… Your filters remain available.</span></div>
+  <section class="wrap picks" aria-label={t('table.topPicks')}>
+    <div class="rail picks-head"><h3 class="pending-title">{t('table.topPicks')}</h3><span class="exp" role="status">{t('table.calculating')}</span></div>
     <div class="scroll" aria-hidden="true">
     <table class="picks-table pending">
       <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
-      <thead><tr><th class="left">Item</th><th class="left"></th><th class="right">Low ask</th><th class="right" data-drop="1">Vol 48h</th><th class="left">Why list now</th></tr></thead>
+      <thead><tr><th class="left">{t('table.col.name')}</th><th class="left"></th><th class="right">{t('table.col.low_sell')}</th><th class="right" data-drop="1">{t('table.col.volume_48h')}</th><th class="left">{t('table.whyListNow')}</th></tr></thead>
       <tbody>
         {#each { length: 3 } as _, i (i)}
           <tr class="pick"><td class="left col-name"><span class="ph"></span></td><td class="left pick-act"><span class="ph btn-ph"></span></td><td class="right"><span class="ph short"></span></td><td class="right"><span class="ph short"></span></td><td class="left reason"><span class="ph-line"><span class="ph"></span></span></td></tr>
@@ -653,7 +656,7 @@
     </div>
   </section>
 {:else if picks}
-  <section class="wrap picks" aria-label="Top picks">
+  <section class="wrap picks" aria-label={t('table.topPicks')}>
     <div class="rail picks-head">
       {@render picksHead?.()}
       <span class="grow"></span>
@@ -662,14 +665,14 @@
         class="rail-toggle"
         aria-expanded={picksOpen}
         onclick={() => (picksOpen = !picksOpen)}
-      >{picksOpen ? '▾ Hide' : '▸ Show'}</button>
+      >{picksOpen ? t('table.hide') : t('table.show')}</button>
     </div>
     {#if picksOpen}
       {#if picks.length > 0}
-        <div class="scroll" use:fitTable use:tableNavigation={'Top picks table'}>
+        <div class="scroll" use:fitTable use:tableNavigation={t('table.topPicksTable')}>
         <table class="picks-table">
           <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
-          <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right" data-drop="1">Vol 48h</th><th class="left">Why list now</th></tr></thead>
+          <thead><tr><th class="left">{t('table.col.name')}</th><th class="left"><span class="sr-only">{t('table.actions')}</span></th><th class="right">{t('table.col.low_sell')}</th><th class="right" data-drop="1">{t('table.col.volume_48h')}</th><th class="left">{t('table.whyListNow')}</th></tr></thead>
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
               {#if i === picksCut && picksCutRow}
@@ -718,43 +721,43 @@
             class:on={activePills.has(p.key)}
             aria-pressed={activePills.has(p.key)}
             onclick={() => togglePill(p.key)}
-            title={`${p.what}. ${activePills.has(p.key) ? 'Click to stop filtering by this badge.' : 'Click to show only these rows.'}`}
-          >{p.label} <span class="pill-n">{n}</span></button>
+            title={t(activePills.has(p.key) ? 'table.pillStop' : 'table.pillShow', { what: t(p.what) })}
+          >{t(p.label)} <span class="pill-n">{n}</span></button>
         {/if}
       {/each}
     </div>
   </div>
   <div class="bar result-actions">
-    <div class="count" title="Sorted by {columns.find((c) => c.key === sortKey)?.label}, {sortDir === -1 ? 'descending' : 'ascending'}">
-      <b>{sorted.length.toLocaleString()}</b> {sorted.length === 1 ? 'row' : 'rows'} ·
+    <div class="count" title={t('table.sortedBy', { column: columns.find((c) => c.key === sortKey)?.label ?? '', direction: t(sortDir === -1 ? 'table.descending' : 'table.ascending') })}>
+      <Rich text={t('table.rowCount', { count: sorted.length })} /> ·
       <b>{columns.find((c) => c.key === sortKey)?.label}</b>
       {sortDir === -1 ? '↓' : '↑'}
-      {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}{/if}
+      {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString(formatLocale())}–{pageEnd.toLocaleString(formatLocale())}{/if}
     </div>
     {#if orderHeld}
-      <span class="held" role="status">· order changed since the scan <button type="button" class="btn xs" onclick={resort}>Re-sort</button></span>
+      <span class="held" role="status">{t('table.orderChanged')} <button type="button" class="btn xs" onclick={resort}>{t('table.resort')}</button></span>
     {/if}
     {#if columns.some((c) => c.key === 'sell_score')}
-      <span class="formula">Priority = price × sell-through × usage weight, not plat/day</span>
+      <span class="formula">{t('table.formula')}</span>
     {/if}
     <ColumnGuide entries={guideEntries} />
     {#if oncolumnschange}
       <div class="col-chooser">
-        <button type="button" class="btn" aria-expanded={columnsOpen} aria-controls="col-chooser-panel" onclick={() => (columnsOpen = !columnsOpen)}>Columns ▾</button>
+        <button type="button" class="btn" aria-expanded={columnsOpen} aria-controls="col-chooser-panel" onclick={() => (columnsOpen = !columnsOpen)}>{t('table.columns')}</button>
         {#if columnsOpen}
-          <div id="col-chooser-panel" class="col-panel" role="group" aria-label="Visible columns">
+          <div id="col-chooser-panel" class="col-panel" role="group" aria-label={t('table.visibleColumns')}>
             {#each choosableColumns as c (c.key)}
               <label><input type="checkbox" checked={columns.some((col) => col.key === c.key)} onchange={(e) => toggleColumn(c.key, e.currentTarget.checked)} /> {c.label}</label>
             {/each}
-            <button type="button" class="btn xs" disabled={!columnsCustomized} onclick={() => oncolumnschange?.(null)}>Reset to preset</button>
+            <button type="button" class="btn xs" disabled={!columnsCustomized} onclick={() => oncolumnschange?.(null)}>{t('table.resetToPreset')}</button>
           </div>
         {/if}
       </div>
     {/if}
     {#if display}
-      <div class="ui-segmented density-seg" role="group" aria-label="Item lists" use:roving>
-        <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')} title="Item pictures: Warframe Wiki · © Digital Extremes">Visual</button>
-        <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
+      <div class="ui-segmented density-seg" role="group" aria-label={t('table.itemLists')} use:roving>
+        <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')} title={t('table.visualTitle')}>{t('table.visual')}</button>
+        <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>{t('table.compact')}</button>
       </div>
     {/if}
     {@render cta?.()}
@@ -763,7 +766,7 @@
   {#if results.length === 0 && empty}
     <div class="empty-slot">{@render empty()}</div>
   {:else}
-  <div class="scroll" use:tableNavigation={'Inventory table'} use:watchPaneWidth={(width) => (paneWidth = width)} data-fit={fitAt} data-fit-note={fittedNote}>
+  <div class="scroll" use:tableNavigation={t('table.inventoryTable')} use:watchPaneWidth={(width) => (paneWidth = width)} data-fit={fitAt} data-fit-note={fittedNote}>
   <table class="fit-planned" style="min-width:{floorRem}rem">
     {@render colgroup()}
     <thead>
@@ -773,7 +776,7 @@
             class={col.align}
             class:active={sortKey === col.key}
             class:nosort={col.noSort}
-            title={HELP[col.key]?.text}
+            title={helpText(col.key)}
             aria-sort={col.noSort ? undefined : sortKey === col.key ? (sortDir === -1 ? 'descending' : 'ascending') : 'none'}
           >
             {#if col.noSort}
@@ -803,27 +806,26 @@
 
   {#if sorted.length === 0 && filterActive}
     <div class="no-match">
-      No rows match your filter.
+      {t('table.noMatch')}
       <button
         type="button"
         class="no-match-clear"
         onclick={() => { filterDraft = ''; applyFilter(''); activePills = new Set(); page = 0; }}
-      >Clear filters</button>
+      >{t('table.clearFilters')}</button>
     </div>
   {/if}
 
   {#if sorted.length > pageSize}
     <div class="pager">
       <div class="muted">
-        Showing {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}
-        of {sorted.length.toLocaleString()}
+        {t('table.showing', { from: pageStart + 1, to: pageEnd, total: sorted.length })}
       </div>
       <div class="pager-controls">
         <button
           class="page-btn"
           onclick={() => setPage(currentPage - 1)}
           disabled={currentPage === 0}
-        >‹ Prev</button>
+        >{t('table.prev')}</button>
         <span class="muted">
           {currentPage + 1} / {maxPage + 1}
         </span>
@@ -831,9 +833,9 @@
           class="page-btn"
           onclick={() => setPage(currentPage + 1)}
           disabled={currentPage >= maxPage}
-        >Next ›</button>
+        >{t('table.next')}</button>
         <span class="pager-spacer"></span>
-        <div class="ui-segmented pagesize-seg" role="group" aria-label="Rows per page" use:roving>
+        <div class="ui-segmented pagesize-seg" role="group" aria-label={t('table.rowsPerPage')} use:roving>
           {#each [20, 40, 60, 80, 100] as n}
             <button
               type="button"
