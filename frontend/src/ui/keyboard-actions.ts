@@ -103,3 +103,22 @@ export function focusLater(find: () => HTMLElement | null | undefined): void {
     if (target && target.isConnected) target.focus({ preventScroll: false });
   });
 }
+
+/** Moves focus to the current view: its heading, or the first control in
+ *  sight when a view kept its scroll and the heading is above the fold
+ *  (focus there was invisible and the next Tab jumped back to the top). */
+export function focusView(): void {
+  const main = document.querySelector<HTMLElement>('main.workspace, main.landing');
+  if (!main) return;
+  const shown = (el: HTMLElement) => el.getClientRects().length > 0;
+  const heading = [...main.querySelectorAll<HTMLElement>('h2')].find(shown);
+  const frame = main.getBoundingClientRect();
+  const inSight = (el: HTMLElement) => { const box = el.getBoundingClientRect(); return box.bottom > frame.top && box.top < frame.bottom; };
+  if (heading && !inSight(heading)) {
+    const control = [...main.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]')].find((el) => shown(el) && inSight(el));
+    if (control) { control.focus({ preventScroll: true }); return; }
+  }
+  const target = heading ?? main;
+  target.tabIndex = -1;
+  target.focus({ preventScroll: true });
+}

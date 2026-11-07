@@ -7,7 +7,7 @@
   import { orderUnitPrice } from '../../domain/order-prices';
   import { MAX_PLATINUM } from '../../domain/limits';
   import DialogHeader from '../../ui/DialogHeader.svelte';
-  import { busy, focusLater } from '../../ui/keyboard-actions';
+  import { busy, focusLater, focusView } from '../../ui/keyboard-actions';
   let { open = $bindable(false), rows, transport, onauthrequired, onclose, onsent, onvisible, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId, sessionEpoch = 0 }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
 
   const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get onsent() { return onsent; }, get onvisible() { return onvisible; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
@@ -69,7 +69,10 @@
       // that row's receipt (Make visible, My orders) instead of the page.
       else if (previous?.dataset.pick && (node.contains(document.activeElement) || document.activeElement === document.body)) {
         const key = previous.dataset.pick;
-        focusLater(() => [...document.querySelectorAll<HTMLElement>('[data-pick]')].find((el) => el.dataset.pick === key) ?? document.querySelector<HTMLElement>('main.workspace h2'));
+        requestAnimationFrame(() => {
+          const receipt = [...document.querySelectorAll<HTMLElement>('[data-pick]')].find((el) => el.dataset.pick === key);
+          if (receipt) receipt.focus(); else focusView();
+        });
       }
     } };
   }

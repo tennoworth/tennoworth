@@ -2,6 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import type { SettingsStore } from '../contracts/state-store';
   import DialogHeader from './DialogHeader.svelte';
+  import { focusView } from './keyboard-actions';
   import { characterKey, keyboard, keyboardRequest, type KeyboardDestination, matchesCharacter, readKeyboardPreferences, saveKeyboardPreferences, shortcutBlocked, visible, watchKeyboardLayout } from './keyboard.svelte';
 
   let { desktop = false, compact = false, store, extra = [] }: { desktop?: boolean; compact?: boolean; store?: SettingsStore; extra?: KeyboardDestination[] } = $props();
@@ -17,23 +18,6 @@
   let filterInput = $state<HTMLInputElement>();
   const matches = $derived(destinations.filter(item => `${item.label} ${item.keywords}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
 
-  // A view keeps its scroll when it returns, so its heading can be above the
-  // fold; focusing it there left an invisible focus and the next Tab jumped
-  // back to the top. Then the first control in sight takes focus instead.
-  function focusView() {
-    const main = document.querySelector<HTMLElement>('main.workspace, main.landing');
-    if (!main) return;
-    const heading = [...main.querySelectorAll<HTMLElement>('h2')].find(visible);
-    const frame = main.getBoundingClientRect();
-    const inSight = (el: HTMLElement) => { const box = el.getBoundingClientRect(); return box.bottom > frame.top && box.top < frame.bottom; };
-    if (heading && !inSight(heading)) {
-      const control = [...main.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), [tabindex="0"]')].find(el => visible(el) && inSight(el));
-      if (control) { control.focus({ preventScroll: true }); return; }
-    }
-    const target = heading ?? main;
-    target.tabIndex = -1;
-    target.focus({ preventScroll: true });
-  }
   async function open(next: 'help' | 'navigate') {
     if ([...document.querySelectorAll('dialog[open], [aria-modal="true"]')].some(visible)) return;
     previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;

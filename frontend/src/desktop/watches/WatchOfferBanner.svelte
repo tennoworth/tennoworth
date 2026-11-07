@@ -3,6 +3,7 @@
   // app: who to whisper, the whisper, and Copy. Rust owns the offer and its
   // 15-minute life; this banner only shows it and asks for the one recheck.
   import { onMount } from 'svelte';
+  import { focusView } from '../../ui/keyboard-actions';
   import { useDesktopServices } from '../shell/desktop-context';
   import { WATCH_OFFER_FRESH_SECS, type WatchOffer } from '../../contracts/desktop';
   import { WATCH_OFFER_EVENT } from '../../contracts/events';
@@ -93,7 +94,7 @@
     <div class="gb-actions">
       <button class="btn primary" onclick={copy}>{copied ? 'Whisper copied' : 'Copy whisper'}</button>
       {#if onwatches}<button class="btn" onclick={onwatches}>Watches</button>{/if}
-      <button class="gb-dismiss" aria-label="Dismiss price watch hit" onclick={dismiss}>×</button>
+      <button class="gb-dismiss" aria-label="Dismiss price watch hit" onclick={() => { dismiss(); requestAnimationFrame(focusView); }}>×</button>
     </div>
   </div>
 {/if}
