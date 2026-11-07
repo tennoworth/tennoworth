@@ -17,6 +17,8 @@ import { LISTING } from './en/listing';
 import { BUYERS } from './en/buyers';
 import { SHELL } from './en/shell';
 import { UI } from './en/ui';
+import { ORDERS } from './en/orders';
+import { BACKUP } from './en/backup';
 
 export const EN = {
   ...FIRST_RUN,
@@ -32,6 +34,8 @@ export const EN = {
   ...BUYERS,
   ...SHELL,
   ...UI,
+  ...ORDERS,
+  ...BACKUP,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

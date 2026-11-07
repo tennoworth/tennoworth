@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
+  import Rich from '../../ui/Rich.svelte';
   import { useDesktopServices } from '../shell/desktop-context';
   const { encryptPayload, decryptPayload } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
@@ -84,11 +86,11 @@
     e?.preventDefault();
     cryptoError = null;
     if (exportPass !== exportConfirm) {
-      cryptoError = "Passphrases don't match.";
+      cryptoError = t('backup.mismatch');
       return;
     }
     if (!hasMinimumPassphraseLength(exportPass)) {
-      cryptoError = 'Passphrase must be at least 12 characters - same floor as your login passphrase.';
+      cryptoError = t('backup.tooShort');
       return;
     }
     exportBusy = true;
@@ -152,10 +154,10 @@
     importConfirming = false;
     importBusy = true;
     try {
-      if (!importBlob) throw new Error('Choose an encrypted snapshot first.');
+      if (!importBlob) throw new Error(t('backup.chooseFirst'));
       const payload = await decryptPayload(importBlob, importPass) as { owned?: Array<[string, OwnedRecord]>; invName?: string; ts?: number } | null;
       if (!Array.isArray(payload?.owned)) {
-        throw new Error('Decrypted file is missing the owned-items array.');
+        throw new Error(t('backup.missingItems'));
       }
       // Old (pre-subtype) exports stored the slug as the map key and lacked
       // rec.slug / rec.subtype - backfill from the key so they still load.
@@ -186,26 +188,23 @@
 <dialog bind:this={exportDialog} class="cryptobox">
   <form onsubmit={performExport}>
     <header>
-      <h3>Export encrypted snapshot</h3>
-      <p class="muted">
-        Saves your resolved inventory as an encrypted JSON file. Decrypt on
-        another device with the same passphrase. Nothing leaves this app.
-      </p>
+      <h3>{t('backup.exportTitle')}</h3>
+      <p class="muted">{t('backup.exportIntro')}</p>
     </header>
     <label>
-      Passphrase
+      {t('backup.passphrase')}
       <input
         type="password"
         autocomplete="new-password"
         bind:value={exportPass}
-        placeholder="12+ characters - same floor as your login passphrase"
+        placeholder={t('backup.passphraseHint')}
         required
         minlength="12"
         bind:this={exportPassInput}
       />
     </label>
     <label>
-      Confirm
+      {t('backup.confirm')}
       <input
         type="password"
         autocomplete="new-password"
@@ -218,8 +217,8 @@
       <div class="err" role="alert">{cryptoError}</div>
     {/if}
     <footer>
-      <button type="button" class="ghost" onclick={() => exportDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={exportBusy}>{exportBusy ? 'Encrypting…' : 'Download'}</button>
+      <button type="button" class="ghost" onclick={() => exportDialog?.close()}>{t('backup.cancel')}</button>
+      <button type="submit" disabled={exportBusy}>{t(exportBusy ? 'backup.encrypting' : 'backup.download')}</button>
     </footer>
   </form>
 </dialog>
@@ -227,14 +226,11 @@
 <dialog bind:this={importDialog} class="cryptobox" onclose={resetImport}>
   <form onsubmit={requestImport}>
     <header>
-      <h3>Restore encrypted snapshot</h3>
+      <h3>{t('backup.restoreTitle')}</h3>
       {#if importConfirming}
-        <p class="muted">Review the restore before changing your inventory.</p>
+        <p class="muted">{t('backup.reviewFirst')}</p>
       {:else}
-        <p class="muted">
-          Pick a <code>wfminv-*.json</code> backup exported from another device,
-          then enter the passphrase you used when exporting it.
-        </p>
+        <p class="muted"><Rich text={t('backup.restoreIntro')} /></p>
       {/if}
     </header>
     {#if importConfirming}
@@ -244,26 +240,22 @@
         tabindex="-1"
         bind:this={restoreWarning}
       >
-        <strong id="restore-warning-title">Replace current inventory?</strong>
-        <p>
-          Restoring <span class="file-name">{importName}</span> will replace your
-          current {owned?.size ?? 0}-item inventory after the backup is decrypted
-          and validated successfully.
-        </p>
-        <p>This cannot be undone unless you have another exported backup.</p>
+        <strong id="restore-warning-title">{t('backup.replaceTitle')}</strong>
+        <p>{t('backup.replaceBody', { file: importName, count: owned?.size ?? 0 })}</p>
+        <p>{t('backup.noUndo')}</p>
       </section>
       <footer>
-        <button type="button" class="ghost" onclick={editImport}>Back</button>
+        <button type="button" class="ghost" onclick={editImport}>{t('backup.back')}</button>
         <button type="button" class="danger" disabled={importBusy} onclick={performImport}>
-          {importBusy ? 'Decrypting…' : 'Confirm restore'}
+          {t(importBusy ? 'backup.decrypting' : 'backup.confirmRestore')}
         </button>
       </footer>
     {:else}
       <label>
-        Backup file
-        <button type="button" class="ghost" onclick={pickImport}>Choose file…</button>
+        {t('backup.file')}
+        <button type="button" class="ghost" onclick={pickImport}>{t('backup.chooseFile')}</button>
         {#if importBlob}
-          <span class="muted small file-name">{importName} - selected, ready to decrypt</span>
+          <span class="muted small file-name">{t('backup.selected', { file: importName })}</span>
         {/if}
       </label>
       <input
@@ -274,12 +266,12 @@
         style="display:none"
       />
       <label>
-        Passphrase
+        {t('backup.passphrase')}
         <input
           type="password"
           autocomplete="current-password"
           bind:value={importPass}
-          placeholder="Type the passphrase this file was exported with."
+          placeholder={t('backup.passphrasePlaceholder')}
           required
           bind:this={importPassInput}
         />
@@ -288,9 +280,9 @@
         <div class="err" role="alert">{cryptoError}</div>
       {/if}
       <footer>
-        <button type="button" class="ghost" onclick={closeImport}>Cancel</button>
+        <button type="button" class="ghost" onclick={closeImport}>{t('backup.cancel')}</button>
         <button type="submit" disabled={importBusy || !importBlob}>
-          {importBusy ? 'Decrypting…' : (owned?.size ?? 0) > 0 ? 'Review restore' : 'Decrypt'}
+          {t(importBusy ? 'backup.decrypting' : (owned?.size ?? 0) > 0 ? 'backup.reviewRestore' : 'backup.decrypt')}
         </button>
       </footer>
     {/if}

@@ -14,7 +14,6 @@ describe('assessListing', () => {
     const [i] = assessListing(order({ platinum: 20, live: live({ low_sell: 15, sells: [15, 18] }) }));
     expect(i.kind).toBe('overpriced');
     expect(i.suggested).toBe(15);
-    expect(i.why).toContain('15p');
   });
 
   it('flags underbid when a live buyer bids above the ask', () => {

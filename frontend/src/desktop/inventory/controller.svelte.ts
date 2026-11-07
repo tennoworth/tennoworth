@@ -6,6 +6,7 @@ import { humanError } from '../../contracts/errors';
 import type { StateStore } from '../../contracts/state-store';
 import type { DesktopCapabilities } from '../../contracts/desktop';
 import type { Market, OwnedRecord, Inventory } from '../../contracts/data';
+import { t } from '../../i18n/i18n.svelte';
 
 type Phase = 'idle' | 'loading' | 'done' | 'error';
 
@@ -117,8 +118,8 @@ export class InventoryController {
         this.refreshFailed = false;
         this.noTradeables = true;
         this.pullError = flatCount === 0
-          ? "The scan didn't find a recognizable inventory in the game's memory. Make sure Warframe is running and you're past the login screen, then try again."
-          : 'The scan found items, but nothing in them is tradeable on warframe.market (quest items, resources, and brand-new content have no listings).';
+          ? t('inventory.notFound')
+          : t('inventory.nothingTradeable');
         this.phase = 'idle';
         return;
       }
@@ -240,7 +241,7 @@ export class InventoryController {
             // refresh must NOT throw us back to cold-start and hide the user's
             // data. Render from the snapshot; flag prices unavailable.
             console.error(e);
-            this.marketLoadError = 'Couldn’t load the price snapshot - you may be offline. Your saved inventory is shown below; prices and rankings will be unavailable until it loads. Reload to retry.';
+            this.marketLoadError = t('inventory.pricesOffline');
           }
         }
         // No explicit recompute: the results $effect tracks resolved/market and

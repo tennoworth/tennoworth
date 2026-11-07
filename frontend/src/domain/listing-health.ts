@@ -44,8 +44,6 @@ export interface HealthIssue {
   current: number;
   /** What to change it to. `0` on `not-owned` means "delete". */
   suggested: number;
-  /** One-line, user-facing explanation with the numbers in it. */
-  why: string;
 }
 
 /** Only sell listings are assessed - buy orders are the user's own bids and
@@ -60,13 +58,11 @@ export function assessListing(o: HealthInput): HealthIssue[] {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'overpriced',
         current: o.platinum, suggested: t.low_sell,
-        why: `Lowest other online ask is ${t.low_sell}p (you: ${o.platinum}p). Match it to sell first.`,
       });
     } else if (t.top_buy != null && o.platinum < t.top_buy) {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'underbid',
         current: o.platinum, suggested: t.top_buy,
-        why: `An online buyer bids ${t.top_buy}p - more than your ${o.platinum}p ask.`,
       });
     }
   }
@@ -76,13 +72,11 @@ export function assessListing(o: HealthInput): HealthIssue[] {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'not-owned',
         current: o.quantity, suggested: 0,
-        why: 'Your last scan found no tradeable copy - the listing can only disappoint a buyer.',
       });
     } else if (o.quantity > o.owned) {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'excess-qty',
         current: o.quantity, suggested: o.owned,
-        why: `Listed ×${o.quantity} but your last scan found ${o.owned} tradeable.`,
       });
     }
   }

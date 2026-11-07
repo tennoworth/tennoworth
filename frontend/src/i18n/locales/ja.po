@@ -4669,3 +4669,828 @@ msgstr ""
 msgctxt "keys.different"
 msgid "Search and help need different characters."
 msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "orders.liveProgress"
+msgid "Checking live prices {done}/{total}"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "orders.liveFailedStatus"
+msgid "Live check failed"
+msgstr ""
+
+#. Activity status.
+msgctxt "orders.liveStopped"
+msgid "Live check stopped: the WFM session changed"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "orders.liveToFix"
+msgid "Live check · {count} to fix"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "orders.liveNoIssues"
+msgid "Live check · no issues"
+msgstr ""
+
+#. View heading.
+msgctxt "orders.title"
+msgid "My orders"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "orders.lede"
+msgid "Your active warframe.market listings, fetched live from the desktop app."
+msgstr ""
+
+#. Screen reader name of the totals.
+msgctxt "orders.summary"
+msgid "Orders summary"
+msgstr ""
+
+#. Total label.
+#. Max 12 characters.
+msgctxt "orders.listed"
+msgid "Listed"
+msgstr ""
+
+#. Total label.
+#. Max 14 characters.
+msgctxt "orders.needsFixing"
+msgid "Needs fixing"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.checkLiveTitle"
+msgid "Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement - your own order excluded - and flag what's worth fixing."
+msgstr ""
+
+#. Button while busy.
+#. Max 18 characters.
+msgctxt "orders.checkingLive"
+msgid "Checking… {done}/{total}"
+msgstr ""
+
+#. Button.
+#. Max 18 characters.
+msgctxt "orders.recheckLive"
+msgid "Re-check live"
+msgstr ""
+
+#. Button.
+#. Max 18 characters.
+msgctxt "orders.checkLive"
+msgid "Check live"
+msgstr ""
+
+#. Screen reader name of the panel.
+msgctxt "orders.listingsLabel"
+msgid "My WFM listings"
+msgstr ""
+
+#. Panel heading.
+msgctxt "orders.listings"
+msgid "Listings"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.refreshing"
+msgid "refreshing…"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.fetching"
+msgid "Fetching orders…"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.unlockRequired"
+msgid "unlock required"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.couldNotLoad"
+msgid "couldn't load orders"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.needAttention"
+msgid "{issues} of {count, plural, one {# listing needs} other {# listings need}} attention · fixes apply immediately"
+msgstr ""
+
+#. Added to the panel status. Keep the leading " · ".
+msgctxt "orders.livePricesFrom"
+msgid " · live prices from {time}"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.noIssuesLive"
+msgid "no issues in {count, plural, one {# listing} other {# listings}} · checked against the live top-of-book"
+msgstr ""
+
+#. Added to the panel status. Keep the leading space.
+msgctxt "orders.at"
+msgid " at {time}"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.noIssuesScan"
+msgid "no issues in {count, plural, one {# listing} other {# listings}} · quantities checked against your last scan"
+msgstr ""
+
+#. Panel status.
+msgctxt "orders.nothingFlagged"
+msgid "nothing flagged yet - check live to compare your asks with the online top-of-book"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.fixAllTitle"
+msgid "Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each."
+msgstr ""
+
+#. Button.
+msgctxt "orders.fixAll"
+msgid "Fix all prices"
+msgstr ""
+
+#. Issue chip.
+msgctxt "orders.chip.overpriced"
+msgid "{count} above the market"
+msgstr ""
+
+#. Issue chip.
+msgctxt "orders.chip.underbid"
+msgid "{count} under a live bid"
+msgstr ""
+
+#. Issue chip.
+msgctxt "orders.chip.excess"
+msgid "{count} over-quantity"
+msgstr ""
+
+#. Issue chip.
+msgctxt "orders.chip.notOwned"
+msgid "{count} not owned"
+msgstr ""
+
+#. Error.
+msgctxt "orders.liveFailed"
+msgid "Live check failed: {error}"
+msgstr ""
+
+#. Screen reader name of the filter buttons.
+msgctxt "orders.show"
+msgid "Show"
+msgstr ""
+
+#. Filter button.
+#. Max 8 characters.
+msgctxt "orders.filter.all"
+msgid "All"
+msgstr ""
+
+#. Filter button.
+#. Max 8 characters.
+msgctxt "orders.filter.sell"
+msgid "Sell"
+msgstr ""
+
+#. Filter button.
+#. Max 8 characters.
+msgctxt "orders.filter.buy"
+msgid "Buy"
+msgstr ""
+
+#. Filter button.
+#. Max 8 characters.
+msgctxt "orders.filter.hidden"
+msgid "Hidden"
+msgstr ""
+
+#. Filter button.
+#. Max 8 characters.
+msgctxt "orders.filter.issues"
+msgid "Issues"
+msgstr ""
+
+#. Search placeholder.
+msgctxt "orders.filterPlaceholder"
+msgid "Filter by name…"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.filterLabel"
+msgid "Filter orders by name"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.allVisibleTitle"
+msgid "Make every listing visible to buyers"
+msgstr ""
+
+#. Button.
+#. Max 14 characters.
+msgctxt "orders.allVisible"
+msgid "All visible"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.allHiddenTitle"
+msgid "Hide every listing from buyers"
+msgstr ""
+
+#. Button.
+#. Max 14 characters.
+msgctxt "orders.allHidden"
+msgid "All hidden"
+msgstr ""
+
+#. Button.
+#. Max 12 characters.
+msgctxt "orders.refresh"
+msgid "Refresh"
+msgstr ""
+
+#. Error.
+msgctxt "orders.refreshFailed"
+msgid "Couldn't refresh orders: {error}. These are the last confirmed listings; changes are off until a refresh succeeds."
+msgstr ""
+
+#. Error.
+msgctxt "orders.loadFailed"
+msgid "Couldn't load orders: {error}"
+msgstr ""
+
+#. In place of the table.
+msgctxt "orders.unlockToSee"
+msgid "Unlock warframe.market to see your orders."
+msgstr ""
+
+#. In place of the table.
+msgctxt "orders.none"
+msgid "No active listings."
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "orders.col.item"
+msgid "Item"
+msgstr ""
+
+#. Screen reader name of the fix column.
+msgctxt "orders.col.fix"
+msgid "Fix"
+msgstr ""
+
+#. Column header: sell or buy.
+#. Max 8 characters.
+msgctxt "orders.col.type"
+msgid "Type"
+msgstr ""
+
+#. Column header.
+#. Max 6 characters.
+msgctxt "orders.col.qty"
+msgid "Qty"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "orders.col.lot"
+msgid "Lot price"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "orders.col.ask"
+msgid "Live ask"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.col.askTitle"
+msgid "Lowest other online ask for this exact tier (live check)"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "orders.col.bid"
+msgid "Live bid"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.col.bidTitle"
+msgid "Highest online bid for this exact tier (live check)"
+msgstr ""
+
+#. Column header: whether a listing needs fixing.
+#. Max 12 characters.
+msgctxt "orders.col.health"
+msgid "Health"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "orders.col.visible"
+msgid "Visible"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.confirmDelete"
+msgid "Confirm delete"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.confirmDeleteItem"
+msgid "Confirm delete {item}"
+msgstr ""
+
+#. Button.
+#. Max 10 characters.
+msgctxt "orders.confirm"
+msgid "Confirm"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.cancelDelete"
+msgid "Cancel delete"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.repriceTitle"
+msgid "Update this listing to {price}p per unit on warframe.market"
+msgstr ""
+
+#. Fix button.
+#. Max 10 characters.
+msgctxt "orders.action.delete"
+msgid "Delete"
+msgstr ""
+
+#. Fix button.
+#. Max 10 characters.
+msgctxt "orders.action.setQty"
+msgid "Set qty"
+msgstr ""
+
+#. Fix button.
+#. Max 10 characters.
+msgctxt "orders.action.reprice"
+msgid "Reprice"
+msgstr ""
+
+#. Order type.
+#. Max 6 characters.
+msgctxt "orders.side.sell"
+msgid "sell"
+msgstr ""
+
+#. Order type.
+#. Max 6 characters.
+msgctxt "orders.side.buy"
+msgid "buy"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.newPrice"
+msgid "New price for {item}"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.savePrice"
+msgid "Save price for {item}"
+msgstr ""
+
+#. Button.
+#. Max 8 characters.
+msgctxt "orders.save"
+msgid "save"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.cancelEdit"
+msgid "Cancel price edit"
+msgstr ""
+
+#. After a lot price. Keep the leading " / ".
+msgctxt "orders.units"
+msgid " / {count} units"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.editPrice"
+msgid "Edit price"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.editPriceFor"
+msgid "Edit price for {item}"
+msgstr ""
+
+#. Health cell.
+msgctxt "orders.health.overpriced"
+msgid "above the lowest other ask"
+msgstr ""
+
+#. Health cell.
+msgctxt "orders.health.underbid"
+msgid "under a live bid"
+msgstr ""
+
+#. Health cell.
+msgctxt "orders.health.excess"
+msgid "more listed than owned"
+msgstr ""
+
+#. Health cell.
+msgctxt "orders.health.notOwned"
+msgid "not in your inventory"
+msgstr ""
+
+#. Health cell: price above the last market snapshot.
+msgctxt "orders.drift.over"
+msgid "above market ({pct}% cut, snapshot)"
+msgstr ""
+
+#. Health cell: price below the last market snapshot.
+msgctxt "orders.drift.under"
+msgid "under market ({pct}% raise, snapshot)"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.thinTitle"
+msgid "Below the {volume}-trade/48h liquidity floor - thin books make this a weak signal."
+msgstr ""
+
+#. Tag: few trades.
+#. Max 6 characters.
+msgctxt "orders.thin"
+msgid "thin"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.visUnknownTitle"
+msgid "Visibility unavailable; refresh orders"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.makeHiddenTitle"
+msgid "Click to make hidden"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.makeVisibleTitle"
+msgid "Click to make visible"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.visUnknown"
+msgid "?: visibility of {item} unavailable"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.visOn"
+msgid "ON: {item} is visible to buyers"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.visOff"
+msgid "OFF: {item} is hidden from buyers"
+msgstr ""
+
+#. Visibility switch.
+#. Max 4 characters.
+msgctxt "orders.on"
+msgid "ON"
+msgstr ""
+
+#. Visibility switch.
+#. Max 4 characters.
+msgctxt "orders.off"
+msgid "OFF"
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.delete"
+msgid "Delete"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "orders.deleteItem"
+msgid "Delete {item}"
+msgstr ""
+
+#. Empty filter result.
+msgctxt "orders.noMatch"
+msgid "No orders match."
+msgstr ""
+
+#. Button.
+msgctxt "orders.clear"
+msgid "Clear"
+msgstr ""
+
+#. Note before a "check live" link. Keep the trailing " - ".
+msgctxt "orders.snapshotNote"
+msgid "Health compares against the last market snapshot (updated {age}) and can't tell whose order is whose - "
+msgstr ""
+
+#. In place of an age.
+msgctxt "orders.unknownTime"
+msgid "at an unknown time"
+msgstr ""
+
+#. Link.
+msgctxt "orders.checkLiveLink"
+msgid "check live"
+msgstr ""
+
+#. After the "check live" link. Keep the leading space.
+msgctxt "orders.forExact"
+msgid " for exact figures."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.why.overpriced"
+msgid "Lowest other online ask is {ask}p (you: {price}p). Match it to sell first."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.why.underbid"
+msgid "An online buyer bids {bid}p - more than your {price}p ask."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.why.notOwned"
+msgid "Your last scan found no tradeable copy - the listing can only disappoint a buyer."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.why.excess"
+msgid "Listed ×{listed} but your last scan found {owned} tradeable."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.drift.whyOver"
+msgid "Matching the last snapshot's clearing price ({price}p) cuts your ask by {pct}% - a starting point, not a quote."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.drift.whyOverThin"
+msgid "Matching the last snapshot's clearing price ({price}p) cuts your ask by {pct}% - a starting point, not a quote (thin book)."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.drift.whyUnder"
+msgid "The last snapshot's clearing price ({price}p) is {pct}% above your ask - you may be leaving plat on the table."
+msgstr ""
+
+#. Tooltip.
+msgctxt "orders.drift.whyUnderThin"
+msgid "The last snapshot's clearing price ({price}p) is {pct}% above your ask - you may be leaving plat on the table (thin book)."
+msgstr ""
+
+#. Error.
+msgctxt "orders.rejected"
+msgid "WFM rejected the update"
+msgstr ""
+
+#. Error.
+msgctxt "orders.notConfirmed"
+msgid "WFM did not confirm the update. Recheck My Orders before trusting this row."
+msgstr ""
+
+#. Error.
+msgctxt "orders.notConfirmedStatus"
+msgid "WFM did not confirm the update ({status}). Recheck My Orders before trusting this row."
+msgstr ""
+
+#. Toast.
+msgctxt "orders.toggleFailed"
+msgid "Couldn't toggle: {error}"
+msgstr ""
+
+#. Toast.
+msgctxt "orders.priceCap"
+msgid "Price {price}p is above the {cap}p cap."
+msgstr ""
+
+#. Toast.
+msgctxt "orders.updateFailed"
+msgid "Couldn't update: {error}"
+msgstr ""
+
+#. Toast.
+msgctxt "orders.deleted"
+msgid "Deleted {item}."
+msgstr ""
+
+#. Toast.
+msgctxt "orders.deleteFailed"
+msgid "Couldn't delete: {error}"
+msgstr ""
+
+#. Toast.
+msgctxt "orders.madeVisible"
+msgid "{count, plural, one {# listing made visible.} other {# listings made visible.}}"
+msgstr ""
+
+#. Toast.
+msgctxt "orders.madeHidden"
+msgid "{count, plural, one {# listing made hidden.} other {# listings made hidden.}}"
+msgstr ""
+
+#. Toast.
+msgctxt "orders.visibilityFailed"
+msgid "Couldn't update visibility: {error}"
+msgstr ""
+
+#. Error.
+msgctxt "orders.lotTooHigh"
+msgid "Suggested lot total exceeds the listing price limit. Review the lot on WFM."
+msgstr ""
+
+#. Toast.
+msgctxt "orders.repricedLot"
+msgid "{item} repriced to {total}p per lot ({unit}p / unit)."
+msgstr ""
+
+#. Toast.
+msgctxt "orders.repriceFailed"
+msgid "Couldn't reprice: {error}"
+msgstr ""
+
+#. Toast.
+msgctxt "orders.repriced"
+msgid "{item} repriced to {total}p per lot."
+msgstr ""
+
+#. Toast.
+msgctxt "orders.qtySet"
+msgid "{item} quantity set to {count}."
+msgstr ""
+
+#. Toast.
+msgctxt "orders.fixFailed"
+msgid "Couldn't fix {item}: {error}"
+msgstr ""
+
+#. Scan error.
+msgctxt "inventory.notFound"
+msgid "The scan didn't find a recognizable inventory in the game's memory. Make sure Warframe is running and you're past the login screen, then try again."
+msgstr ""
+
+#. Scan result.
+msgctxt "inventory.nothingTradeable"
+msgid "The scan found items, but nothing in them is tradeable on warframe.market (quest items, resources, and brand-new content have no listings)."
+msgstr ""
+
+#. Error.
+msgctxt "inventory.pricesOffline"
+msgid "Couldn’t load the price snapshot - you may be offline. Your saved inventory is shown below; prices and rankings will be unavailable until it loads. Reload to retry."
+msgstr ""
+
+#. Error.
+msgctxt "backup.mismatch"
+msgid "Passphrases don't match."
+msgstr ""
+
+#. Error.
+msgctxt "backup.tooShort"
+msgid "Passphrase must be at least 12 characters - same floor as your login passphrase."
+msgstr ""
+
+#. Error.
+msgctxt "backup.chooseFirst"
+msgid "Choose an encrypted snapshot first."
+msgstr ""
+
+#. Error: the backup file is damaged.
+msgctxt "backup.missingItems"
+msgid "Decrypted file is missing the owned-items array."
+msgstr ""
+
+#. Dialog title.
+msgctxt "backup.exportTitle"
+msgid "Export encrypted snapshot"
+msgstr ""
+
+#. Dialog introduction.
+msgctxt "backup.exportIntro"
+msgid "Saves your resolved inventory as an encrypted JSON file. Decrypt on another device with the same passphrase. Nothing leaves this app."
+msgstr ""
+
+#. Field label.
+msgctxt "backup.passphrase"
+msgid "Passphrase"
+msgstr ""
+
+#. Placeholder.
+msgctxt "backup.passphraseHint"
+msgid "12+ characters - same floor as your login passphrase"
+msgstr ""
+
+#. Field label: type the passphrase again.
+msgctxt "backup.confirm"
+msgid "Confirm"
+msgstr ""
+
+#. Button.
+msgctxt "backup.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Button while busy.
+msgctxt "backup.encrypting"
+msgid "Encrypting…"
+msgstr ""
+
+#. Button.
+msgctxt "backup.download"
+msgid "Download"
+msgstr ""
+
+#. Dialog title.
+msgctxt "backup.restoreTitle"
+msgid "Restore encrypted snapshot"
+msgstr ""
+
+#. Dialog introduction.
+msgctxt "backup.reviewFirst"
+msgid "Review the restore before changing your inventory."
+msgstr ""
+
+#. Dialog introduction. Keep <code>wfminv-*.json</code>.
+msgctxt "backup.restoreIntro"
+msgid "Pick a <code>wfminv-*.json</code> backup exported from another device, then enter the passphrase you used when exporting it."
+msgstr ""
+
+#. Warning heading.
+msgctxt "backup.replaceTitle"
+msgid "Replace current inventory?"
+msgstr ""
+
+#. Warning.
+msgctxt "backup.replaceBody"
+msgid "Restoring {file} will replace your current {count}-item inventory after the backup is decrypted and validated successfully."
+msgstr ""
+
+#. Warning.
+msgctxt "backup.noUndo"
+msgid "This cannot be undone unless you have another exported backup."
+msgstr ""
+
+#. Button.
+msgctxt "backup.back"
+msgid "Back"
+msgstr ""
+
+#. Button while busy.
+msgctxt "backup.decrypting"
+msgid "Decrypting…"
+msgstr ""
+
+#. Button.
+msgctxt "backup.confirmRestore"
+msgid "Confirm restore"
+msgstr ""
+
+#. Field label.
+msgctxt "backup.file"
+msgid "Backup file"
+msgstr ""
+
+#. Button.
+msgctxt "backup.chooseFile"
+msgid "Choose file…"
+msgstr ""
+
+#. Status.
+msgctxt "backup.selected"
+msgid "{file} - selected, ready to decrypt"
+msgstr ""
+
+#. Placeholder.
+msgctxt "backup.passphrasePlaceholder"
+msgid "Type the passphrase this file was exported with."
+msgstr ""
+
+#. Button.
+msgctxt "backup.reviewRestore"
+msgid "Review restore"
+msgstr ""
+
+#. Button.
+msgctxt "backup.decrypt"
+msgid "Decrypt"
+msgstr ""
