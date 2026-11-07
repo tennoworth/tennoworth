@@ -5,14 +5,17 @@
 // them. Thai is not offered: warframe.market has no Thai item names, so its
 // rewards would read in English. Its catalog stays in review meanwhile.
 // `word` is "Language" in that language: the first-run picker's title cycles
-// through them before the catalogs it would load are chosen.
+// through them before the catalogs it would load are chosen. `market` is the
+// warframe.market code a language reads item and reward names in, when it is
+// not its own: the game and the market only know Brazilian Portuguese.
 export const LANGUAGES = [
   { code: 'en', tag: 'en', native: 'English', english: 'English', word: 'Language', offered: true },
   { code: 'de', tag: 'de', native: 'Deutsch', english: 'German', word: 'Sprache', offered: true },
   { code: 'es', tag: 'es', native: 'Español', english: 'Spanish', word: 'Idioma', offered: true },
   { code: 'fr', tag: 'fr', native: 'Français', english: 'French', word: 'Langue', offered: true },
   { code: 'it', tag: 'it', native: 'Italiano', english: 'Italian', word: 'Lingua', offered: true },
-  { code: 'pt', tag: 'pt-BR', native: 'Português', english: 'Portuguese (Brazil)', word: 'Idioma', offered: true },
+  { code: 'pt', tag: 'pt-BR', native: 'Português (Brasil)', english: 'Portuguese (Brazil)', word: 'Idioma', offered: true },
+  { code: 'pt-pt', tag: 'pt-PT', native: 'Português (Portugal)', english: 'Portuguese (Portugal)', word: 'Idioma', offered: true, market: 'pt' },
   { code: 'pl', tag: 'pl', native: 'Polski', english: 'Polish', word: 'Język', offered: true },
   { code: 'ru', tag: 'ru', native: 'Русский', english: 'Russian', word: 'Язык', offered: true },
   { code: 'uk', tag: 'uk', native: 'Українська', english: 'Ukrainian', word: 'Мова', offered: true },
@@ -36,6 +39,12 @@ export function isOfferedLanguage(value: unknown): value is LanguageCode {
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return LANGUAGES.some(language => language.code === value);
+}
+
+/** The warframe.market code for a language's item and reward names. */
+export function marketLanguage(code: string): string {
+  const language = LANGUAGES.find(entry => entry.code === code);
+  return language && 'market' in language ? language.market : code;
 }
 
 export function languageTag(code: LanguageCode | 'pseudo'): string {

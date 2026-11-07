@@ -1,15 +1,20 @@
 # Translating TennoWorth
 
-TennoWorth is being translated into every language Warframe supports. Each
-language starts as an **unreviewed draft**; players who speak it turn the
-drafts into text that reads naturally. You do not need to be a developer, and
-reviewing a few lines helps.
+TennoWorth is being translated into every language Warframe supports, plus
+European Portuguese. Each language starts as an **unreviewed draft**; players
+who speak it turn the drafts into text that reads naturally. You do not need to
+be a developer, and reviewing a few lines helps.
 
-The app does not offer a language choice yet. When it does, it will offer
-every language below except Thai, drafts included, and fix wording as players
-report it. Thai stays in review for longer: warframe.market has no Thai item
-names, so the reward overlay would read Thai rewards in English. Its drafts can
-be reviewed in the meantime, and the preview shows them (`&lang=th`).
+The desktop app asks for a language on first launch and offers every language
+below except Thai, drafts included; wording is fixed as players report it.
+Thai stays in review for longer: warframe.market has no Thai item names, so the
+reward overlay would read Thai rewards in English. Its drafts can be reviewed
+in the meantime, and the preview shows them (`&lang=th`).
+
+The game and warframe.market only have Brazilian Portuguese, so European
+Portuguese (`pt-pt`) is an app language only: item and reward names stay in
+their Brazilian form, and so do game terms, because that is what the game
+shows.
 
 ## What to review
 
@@ -21,9 +26,10 @@ Each language has one file: `frontend/src/i18n/locales/<code>.po`.
 | `es` | Español | `uk` | Українська |
 | `fr` | Français | `tr` | Türkçe |
 | `it` | Italiano | `ja` | 日本語 |
-| `pt` | Português (Brazil) | `ko` | 한국어 |
-| `pl` | Polski | `zh-hans` | 简体中文 |
-| `th` | ไทย | `zh-hant` | 繁體中文 |
+| `pt` | Português (Brasil) | `ko` | 한국어 |
+| `pt-pt` | Português (Portugal) | `zh-hans` | 简体中文 |
+| `pl` | Polski | `zh-hant` | 繁體中文 |
+| `th` | ไทย | | |
 
 Every message in the file looks like this:
 

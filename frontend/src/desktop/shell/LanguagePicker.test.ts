@@ -18,9 +18,10 @@ it('starts on the game’s language and shows the app in it', async () => {
   await waitFor(() => expect(i18n.language).toBe('de'));
 });
 
-it('offers every language but Thai', () => {
+it('offers every language but Thai, and both Portugueses', () => {
   render(LanguagePicker, { props: { gameLanguage: null, save: vi.fn(async () => {}), ondone: vi.fn() } });
-  expect(screen.getAllByRole('radio')).toHaveLength(14);
+  expect(screen.getAllByRole('radio')).toHaveLength(15);
+  expect(screen.getByRole('radio', { name: /Português \(Portugal\)/ })).toBeTruthy();
   expect(screen.queryByRole('radio', { name: /ไทย/ })).toBeNull();
 });
 

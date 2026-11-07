@@ -7,4 +7,7 @@ it('follows the game when the choice matches it, and reads the choice otherwise'
   expect(rewardLanguageFor('de', 'en')).toBe('de');
   expect(rewardLanguageFor('de', null)).toBe('de');
   expect(rewardLanguageFor('en', 'ko')).toBe('en');
+  // European Portuguese reads the Brazilian names the game and the market have.
+  expect(rewardLanguageFor('pt-pt', 'pt')).toBe('auto');
+  expect(rewardLanguageFor('pt-pt', 'en')).toBe('pt');
 });
