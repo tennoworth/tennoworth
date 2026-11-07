@@ -10,6 +10,7 @@ import BaroView from '../baro/BaroView.svelte';
 import MarketAnnouncement from '../../features/announcements/MarketAnnouncement.svelte';
 import CalendarView from '../../features/calendar/CalendarView.svelte';
 import RelicPlannerView from '../relics/RelicPlannerView.svelte';
+import { CrackAnyway } from '../relics/crack-anyway.svelte';
 import SetPicksView from '../selling/SetPicksView.svelte';
 import { ActivityLog } from './activity.svelte';
 import { ListingReceipts } from '../selling/receipts.svelte';
@@ -156,6 +157,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   const appIcon = untrack(() => new AppIconController({ store, theme, native: transport }));
   onMount(() => appIcon.start());
   const display = untrack(() => new DisplayController(store));
+  const crackAnyway = untrack(() => new CrackAnyway(store));
   provideDisplay(display);
   onMount(() => {
     const stopProtection = protection.start({
@@ -607,7 +609,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {/if}
     {#if visited.has('relics')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'relics')}>
-      <RelicPlannerView bind:relicShowAll {relicResult} {relicSurfaceAge} {relicPlan} onretry={() => workspace.calculationEpoch += 1} />
+      <RelicPlannerView bind:relicShowAll {relicResult} {relicSurfaceAge} {relicPlan} {crackAnyway} onretry={() => workspace.calculationEpoch += 1} />
     </div>
     {/if}
     {#if visited.has('rivens')}

@@ -37,7 +37,8 @@ export type SettingKey =
   /** User-selected character shortcuts; keyboard layout data is never persisted. */
   | 'keyboard'
   /** How item lists draw: 'visual' (item art, roomier rows) or 'compact'. */
-  | 'display';
+  | 'display'
+  | 'relic-crack-anyway';
 
 
 /** The scalar settings every build persists. */

@@ -6,12 +6,15 @@ import { plat, wfmItemUrl } from '../../ui/format';
 import ItemArt from '../../ui/ItemArt.svelte';
 import { REFINE_WORTH_IT } from '../../domain/relic-ev';
 import type { RelicDecision } from '../../contracts/generated/domain';
-  let { relicShowAll = $bindable(false), relicResult, relicSurfaceAge, relicPlan, onretry }: {
+import type { CrackAnyway } from './crack-anyway.svelte';
+  let { relicShowAll = $bindable(false), relicResult, relicSurfaceAge, relicPlan, onretry, crackAnyway }: {
     relicShowAll?: boolean;
     relicResult: DomainResult<RelicPlanEntry[]>;
     relicSurfaceAge: string | null;
     relicPlan: RelicPlanEntry[];
     onretry: () => void;
+    /** The player's own "crack it anyway" calls; without it the advice stands. */
+    crackAnyway?: CrackAnyway;
   } = $props();
 const RELIC_PREVIEW = 6;
 let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_PREVIEW));
@@ -21,7 +24,11 @@ let ownedTotal = $derived(relicPlan.reduce((n, p) => n + p.owned, 0));
 // What following a row's decision is worth: selling intact where that clears
 // more, otherwise cracking. A Sell intact row priced at its crack value
 // undercounted the advice it gave, and the total with it.
-const sellsIntact = (p: RelicPlanEntry) => p.decision?.verdict === 'sell-intact' && p.sell_now > 0;
+// Selling intact and refining are the two pieces of advice a player can
+// overrule with a plain crack; the row then counts the crack.
+const overrulable = (p: RelicPlanEntry) => p.decision?.verdict === 'sell-intact' || p.decision?.verdict === 'refine';
+const crackingAnyway = (p: RelicPlanEntry) => overrulable(p) && !!crackAnyway?.has(p.relic_slug);
+const sellsIntact = (p: RelicPlanEntry) => p.decision?.verdict === 'sell-intact' && p.sell_now > 0 && !crackingAnyway(p);
 const advisedValue = (p: RelicPlanEntry) => (sellsIntact(p) ? p.sell_now * p.owned : p.epp_owned);
 let expectedTotal = $derived(relicPlan.reduce((n, p) => n + advisedValue(p), 0));
 function rung(decision: RelicDecision | null | undefined, refinement: string) {
@@ -69,7 +76,7 @@ function verdictText(decision: RelicDecision): string {
           <div data-shell class="vh-end">
             <div data-shell class="ui-totals" role="group" aria-label="Relics summary">
               <div data-shell class="cell"><span data-shell class="k">Relics</span><span data-shell class="v">{relicPlan.length} · ×{ownedTotal}</span></div>
-              <div data-shell class="cell"><span data-shell class="k">Expected</span><span data-shell class="v" title="Following each relic's decision: selling intact where that clears more, cracking the rest. Refining gains are not included; any single crack varies.">≈{plat(expectedTotal)}<span data-shell class="unit">p</span></span></div>
+              <div data-shell class="cell"><span data-shell class="k">Expected</span><span data-shell class="v" title="Following each relic's decision, or your own call where you chose to crack anyway: selling intact where that clears more, cracking the rest. Refining gains are not included; any single crack varies.">≈{plat(expectedTotal)}<span data-shell class="unit">p</span></span></div>
             </div>
           </div>
         {/if}
@@ -94,13 +101,22 @@ function verdictText(decision: RelicDecision): string {
             <tbody data-shell>
             {#each relicVisible as p (p.relic_slug)}
               {@const max = ladderMax(p.decision)}
+              {@const cracking = crackingAnyway(p)}
               <tr data-shell>
                 <td data-shell class="l relic-name"><span class="item-id"><ItemArt slug={p.relic_slug} /><a data-shell href={wfmItemUrl(p.relic_slug)} target="_blank" rel="noopener noreferrer">{p.relic_name}</a></span></td>
                 <td data-shell>×{p.owned}</td>
-                <td data-shell class="l"><span data-shell class="tag solid">{verdictWord(p.decision)}</span></td>
+                <td data-shell class="l decision">
+                  <span data-shell class="tag solid">{cracking ? 'Cracking anyway' : verdictWord(p.decision)}</span>
+                  <!-- One button that changes its words, so focus stays on it. -->
+                  {#if crackAnyway && overrulable(p)}
+                    <button data-shell type="button" class="overrule" onclick={() => crackAnyway?.set(p.relic_slug, !cracking)}
+                      aria-label={cracking ? `Follow the advice for ${p.relic_name}: ${verdictWord(p.decision)}` : `I'll crack ${p.relic_name} anyway`}
+                    >{cracking ? `Fine, ${verdictWord(p.decision).toLowerCase()}` : "I'll crack this one anyway"}</button>
+                  {/if}
+                </td>
                 {#each RUNGS as refinement (refinement)}
                   {@const r = rung(p.decision, refinement)}
-                  <td data-shell class="lad" class:pick={pickedRung(p.decision) === refinement}
+                  <td data-shell class="lad" class:pick={(cracking ? 'intact' : pickedRung(p.decision)) === refinement}
                     title={r ? `${refinement}: ${r.ev.toFixed(1)}p expected, solo${r.traces ? ` · ${r.traces} traces · ${r.platPerTrace?.toFixed(2)}p per trace` : ''}` : undefined}>
                     {#if r}<span data-shell class="lv">{r.ev.toFixed(1)}</span><span data-shell class="lbar" aria-hidden="true"><i data-shell style="width:{Math.max(4, (r.ev / max) * 100)}%"></i></span>{:else}<span data-shell class="muted">-</span>{/if}
                   </td>
@@ -108,7 +124,8 @@ function verdictText(decision: RelicDecision): string {
                 <td data-shell class="price" title={sellsIntact(p) ? `Selling all ${p.owned} intact at ${plat(p.sell_now)}p each.` : 'Expected value of cracking every one you own; any single crack varies.'}>≈{plat(advisedValue(p))}<span data-shell class="unit">p</span></td>
                 <td data-shell class:bad-text={p.sell_now > p.epp} title="What this relic clears at sold intact on WFM, no cracking. When this beats the crack EV, selling wins.">{#if p.sell_now > 0}{plat(p.sell_now)}<span data-shell class="unit">p ea</span>{:else}<span data-shell class="muted">-</span>{/if}</td>
                 <td data-shell class="l why">
-                  {#if p.decision}{verdictText(p.decision)}{/if}
+                  {#if cracking && p.decision}Your call: cracked intact instead. The advice was: {verdictText(p.decision)}
+                  {:else if p.decision}{verdictText(p.decision)}{/if}
                   <span data-shell class:bad-text={p.moving_count < p.total_rewards / 2}>{p.moving_count}/{p.total_rewards} rewards moving.</span>
                   <details data-shell class="relic-rewards">
                     <summary data-shell>Top drops</summary>
