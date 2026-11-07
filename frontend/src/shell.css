@@ -45,6 +45,10 @@
     min-width: 0;
     min-height: 0;
     overflow-y: auto;
+    /* The workspace never scrolls sideways: a table that cannot fit scrolls in
+       its own box. A few pixels of rounding at fractional display scales made
+       WebKitGTK draw a page-wide bar that moved nothing. */
+    overflow-x: hidden;
     scrollbar-gutter: stable;
   }
   /* The workspace scrolls as a whole; flex shrinking can otherwise collapse
@@ -297,6 +301,59 @@
     letter-spacing: 0.04em;
   }
 
+  /* ---- Sidebar width and the icon rail ------------------------------ */
+  aside.sidebar[data-shell] { position: relative; }
+  .nav-item[data-shell] { gap: var(--s2); }
+  .nav-item .label[data-shell] { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The edge is the handle: a hairline that thickens to the ink on hover,
+     focus and drag. 8px of hit area straddles the border. */
+  .sidebar-resize[data-shell] {
+    position: absolute; top: 0; bottom: 0; right: -5px; width: 9px; z-index: var(--layer-chrome);
+    cursor: col-resize; touch-action: none;
+  }
+  .sidebar-resize[data-shell]::after { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: transparent; }
+  .sidebar-resize:hover[data-shell]::after,
+  .sidebar-resize:active[data-shell]::after { left: 3px; width: 3px; background: var(--fg); }
+  .sidebar-resize:focus-visible[data-shell] { outline: none; }
+  .sidebar-resize:focus-visible[data-shell]::after { left: 3px; width: 3px; background: var(--accent); }
+  .rail-toggle[data-shell] {
+    display: flex; align-items: center; gap: var(--s2); width: 100%; min-height: var(--ctl);
+    padding: 0 var(--s1); border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer;
+  }
+  .rail-toggle:hover[data-shell] { color: var(--fg); text-decoration: underline dotted; }
+  .rail-tip[data-shell] {
+    position: fixed; z-index: var(--layer-popover); transform: translateY(-50%); pointer-events: none;
+    padding: var(--s1) var(--s2); white-space: nowrap;
+    font: 500 var(--text-caption)/1.3 var(--font-ui); letter-spacing: 0.04em;
+    color: var(--on-ink); background: var(--ink-bar); border: 1px solid var(--ink-bar);
+    box-shadow: var(--shadow-offset);
+  }
+
+  /* Rail: icons only. Labels stay in the accessibility tree; group labels
+     become the dotted rules that already separate the groups. */
+  .shell[data-sidebar="rail"] .statusbar.shell-strip .brand h1[data-shell] { font-size: 0; }
+  .shell[data-sidebar="rail"] .statusbar.shell-strip .brand h1[data-shell]::before { content: 'TW'; font-size: 0.9375rem; }
+  .shell[data-sidebar="rail"] .statusbar.shell-strip .brand[data-shell] { justify-content: center; padding-left: 0; padding-right: 0; }
+  .shell[data-sidebar="rail"] .nav-label[data-shell] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .shell[data-sidebar="rail"] .nav-group[data-shell] { padding: var(--s1) 0; }
+  .shell[data-sidebar="rail"] .nav-item[data-shell] { position: relative; justify-content: center; padding: var(--s1) 0; }
+  .shell[data-sidebar="rail"] .nav-item .label[data-shell],
+  .shell[data-sidebar="rail"] .sfoot .label[data-shell] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* A count rides the icon's corner; "here" and the countdown shrink to a mark. */
+  .shell[data-sidebar="rail"] .nav-item .badge[data-shell] {
+    position: absolute; top: 1px; right: 4px; padding: 0 2px; line-height: 1.2; font-size: 0.6875rem;
+  }
+  .shell[data-sidebar="rail"] .nav-item .badge.when[data-shell] { display: none; }
+  .shell[data-sidebar="rail"] .nav-item .badge.here[data-shell] { font-size: 0; width: 7px; height: 7px; padding: 0; top: 6px; right: 10px; background: var(--ducat); }
+  .shell[data-sidebar="rail"] .sfoot[data-shell] { align-items: center; padding-left: 0; padding-right: 0; }
+  .shell[data-sidebar="rail"] .sfoot .project-links[data-shell] { align-items: center; }
+  .shell[data-sidebar="rail"] .sfoot .project-link[data-shell],
+  .shell[data-sidebar="rail"] .sfoot .feedback-trigger[data-shell],
+  .shell[data-sidebar="rail"] .rail-toggle[data-shell] { justify-content: center; width: auto; padding: var(--s1); }
+  .shell[data-sidebar="rail"] .sfoot .keyboard-tools button { font-size: 0; justify-content: center; }
+  .shell[data-sidebar="rail"] .sfoot .keyboard-tools button kbd { font-size: var(--text-caption); }
+  .shell[data-sidebar="rail"] .sfoot .ver[data-shell] { display: none; }
+
   .recovery-details[data-shell] {
     white-space: pre-wrap;
     font-family: var(--font-mono);
@@ -454,6 +511,7 @@
      becomes a horizontal scroll strip under it. Below ~900px the 216px rail
      eats too much of the workspace, so the grid collapses. */
   @media (max-width: 900px) {
+    .sidebar-resize[data-shell], .rail-toggle[data-shell] { display: none; }
     .shell[data-shell] {
       grid-template-columns: minmax(0, 1fr);
       grid-template-rows: auto auto auto auto;

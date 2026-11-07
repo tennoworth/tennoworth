@@ -99,6 +99,7 @@
   --bar: 2.5rem;      /* 40 bar that holds controls (control rows, pager) */
   --strip: 2.5rem;    /* 40 shell-level status strip */
   --sidebar: 13.5rem; /* 216 */
+  --sidebar-rail: 3.5rem; /* 56: an icon, its active edge and a count */
 }
 /* Root type scale: 16 → 17 (≥1900) → 18 (≥2500). Everything rem-based grows
    ~6% per step, so a 1920 desk gets a wider Item column, not more columns. */
