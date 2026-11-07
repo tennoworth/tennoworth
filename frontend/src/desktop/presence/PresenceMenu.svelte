@@ -6,7 +6,8 @@
   import type { PresenceController } from './presence.svelte';
   import PresenceMark from './PresenceMark.svelte';
   import { busy, closeOnFocusOut, roving } from '../../ui/keyboard-actions';
-  import { PRESENCE_CHOICES, PRESENCE_HINT, PRESENCE_LABEL, keepForLabel, presenceAside, presenceHiddenWhilePlaying, presenceLine, presenceMark, presenceProblem, presenceUsable, presenceWord } from './presence';
+  import { t } from '../../i18n/i18n.svelte';
+  import { PRESENCE_CHOICES, presenceHint, presenceLabel, keepForLabel, presenceAside, presenceHiddenWhilePlaying, presenceLine, presenceMark, presenceProblem, presenceUsable, presenceWord } from './presence';
 
   let { presence, onsettings }: { presence: PresenceController; onsettings?: () => void } = $props();
 
@@ -20,7 +21,7 @@
   // Every word the trigger can show, so its width never depends on which one
   // is showing. A changing width rewrapped the status strip and moved the
   // whole window by a row on every status change.
-  const sizers = [...PRESENCE_CHOICES.map((choice) => PRESENCE_LABEL[choice]), 'Verify account', 'Unknown', 'Connecting…'];
+  let sizers = $derived([...new Set([...PRESENCE_CHOICES.map(presenceLabel), t('presence.verify'), t('presence.unknown'), t('presence.connecting')])]);
 
   let status = $derived(presence.status);
   let usable = $derived(presenceUsable(status));
@@ -95,49 +96,49 @@
          them changes the strip's width when it appears. -->
     <span class="aside">
       {#if aside === 'go-online'}
-        <button type="button" class="btn primary xs go" title="Set Online in game, as in the menu" use:busy={presence.pending !== null} onclick={() => void presence.set('ingame').then(() => { if (document.activeElement === document.body) trigger?.focus(); })}>Go online</button>
+        <button type="button" class="btn primary xs go" title={t('presence.goOnlineHelp')} use:busy={presence.pending !== null} onclick={() => void presence.set('ingame').then(() => { if (document.activeElement === document.body) trigger?.focus(); })}>{t('presence.goOnline')}</button>
       {:else if aside === 'auto'}
-        <span class="tag auto" title="Follow the game is keeping this status">Auto</span>
+        <span class="tag auto" title={t('presence.autoHelp')}>{t('presence.auto')}</span>
       {:else if aside === 'retrying'}
-        <span class="retry">retrying</span>
+        <span class="retry">{t('presence.retrying')}</span>
       {/if}
-      <span class="sizer btn primary xs go" aria-hidden="true">Go online</span>
+      <span class="sizer btn primary xs go" aria-hidden="true">{t('presence.goOnline')}</span>
     </span>
     {#if open}
-      <div id="presence-menu" class="pop" role="dialog" aria-label="Your warframe.market status" bind:this={pop} style:translate="{shift}px 0" use:closeOnFocusOut={{ trigger: () => trigger, close: () => (open = false) }}>
-        <p class="head">What buyers see</p>
+      <div id="presence-menu" class="pop" role="dialog" aria-label={t('presence.menu')} bind:this={pop} style:translate="{shift}px 0" use:closeOnFocusOut={{ trigger: () => trigger, close: () => (open = false) }}>
+        <p class="head">{t('presence.buyersSee')}</p>
         <fieldset bind:this={choices} disabled={!usable}>
-          <legend class="visually-hidden">Status</legend>
+          <legend class="visually-hidden">{t('presence.status')}</legend>
           {#each PRESENCE_CHOICES as choice (choice)}
             <label class="opt">
               <input type="radio" name="presence-choice" value={choice} checked={status.status === choice} use:busy={presence.pending !== null} onkeydown={radioKey} onchange={() => void pick(choice)}>
-              <span class="txt"><b><PresenceMark kind={choice} />{PRESENCE_LABEL[choice]}</b><small>{PRESENCE_HINT[choice]}</small></span>
+              <span class="txt"><b><PresenceMark kind={choice} />{presenceLabel(choice)}</b><small>{presenceHint(choice)}</small></span>
             </label>
           {/each}
         </fieldset>
         <div class="keep">
-          <span class="k" id="presence-keep-label">Keep status for</span>
+          <span class="k" id="presence-keep-label">{t('presence.keepFor')}</span>
           <div class="ui-segmented xs" role="group" aria-labelledby="presence-keep-label" use:roving>
             {#each keepChoices as minutes (minutes)}
               <button type="button" aria-pressed={!status.following && status.settings.keepForMinutes === minutes} disabled={status.following} use:busy={presence.savingSettings} onclick={() => void presence.saveSettings({ ...status.settings, keepForMinutes: minutes })}>{keepForLabel(minutes)}</button>
             {/each}
           </div>
-          {#if status.following}<small>Following the game keeps your status up for you.</small>{/if}
+          {#if status.following}<small>{t('presence.followKeeps')}</small>{/if}
         </div>
         <hr>
         <label class="opt">
           <input type="checkbox" checked={status.settings.followGame} use:busy={presence.savingSettings} onchange={(e) => void presence.saveSettings({ ...status.settings, followGame: e.currentTarget.checked })}>
-          <span class="txt"><b>Follow the game</b><small>Online in game from login to quit. {PRESENCE_LABEL[status.settings.whenClosed]} when Warframe closes.</small></span>
+          <span class="txt"><b>{t('presence.follow')}</b><small>{t('presence.followShort', { closed: presenceLabel(status.settings.whenClosed) })}</small></span>
         </label>
         <p class="now">{presenceLine(status)}</p>
         {#if status.followPaused}
-          <div class="note">You picked a status, here or on warframe.market, so following waits for your next game session. <button type="button" class="btn xs" onclick={() => { trigger?.focus(); void presence.followNow(); }}>Follow the game now</button></div>
+          <div class="note">{t('presence.pausedNote')} <button type="button" class="btn xs" onclick={() => { trigger?.focus(); void presence.followNow(); }}>{t('presence.followNow')}</button></div>
         {/if}
         {#if problem}<p class="note bad">{problem}</p>{/if}
         {#if presence.error}<p class="note bad" role="alert">{presence.error}</p>{/if}
         {#if onsettings}
           <hr>
-          <button type="button" class="more" data-opens-view onclick={() => { open = false; onsettings?.(); }}>Presence settings →</button>
+          <button type="button" class="more" data-opens-view onclick={() => { open = false; onsettings?.(); }}>{t('presence.settingsLink')}</button>
         {/if}
       </div>
     {/if}

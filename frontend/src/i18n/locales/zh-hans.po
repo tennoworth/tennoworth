@@ -9188,3 +9188,316 @@ msgstr ""
 msgctxt "baro.openPreset"
 msgid "Open Ducats preset →"
 msgstr ""
+
+#. warframe.market status. Use the name warframe.market uses in your language.
+#. Max 16 characters.
+msgctxt "presence.online"
+msgid "Online"
+msgstr ""
+
+#. warframe.market status.
+#. Max 16 characters.
+msgctxt "presence.ingame"
+msgid "Online in game"
+msgstr ""
+
+#. warframe.market status.
+#. Max 16 characters.
+msgctxt "presence.invisible"
+msgid "Invisible"
+msgstr ""
+
+#. What the status means.
+msgctxt "presence.hint.online"
+msgid "Shown as online. Buyers can whisper you."
+msgstr ""
+
+#. What the status means.
+msgctxt "presence.hint.ingame"
+msgid "Buyers can whisper and invite you now."
+msgstr ""
+
+#. What the status means.
+msgctxt "presence.hint.invisible"
+msgid "Others see you as Offline. Your orders stay up, but most buyers filter for online sellers."
+msgstr ""
+
+#. Keep-status choice: while TennoWorth runs.
+#. Max 14 characters.
+msgctxt "presence.whileRunning"
+msgid "While running"
+msgstr ""
+
+#. Keep-status choice in hours.
+#. Max 4 characters.
+msgctxt "presence.hours"
+msgid "{n}h"
+msgstr ""
+
+#. Keep-status choice in minutes.
+#. Max 4 characters.
+msgctxt "presence.minutes"
+msgid "{n}m"
+msgstr ""
+
+#. Status strip word.
+#. Max 16 characters.
+msgctxt "presence.verify"
+msgid "Verify account"
+msgstr ""
+
+#. Status strip word.
+#. Max 16 characters.
+msgctxt "presence.unknown"
+msgid "Unknown"
+msgstr ""
+
+#. Status strip word.
+#. Max 16 characters.
+msgctxt "presence.connecting"
+msgid "Connecting…"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.notVerified"
+msgid "warframe.market refused: account not verified"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.paused"
+msgid "warframe.market access is paused"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.unreachable"
+msgid "Status channel unreachable · retrying"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.connecting"
+msgid "Connecting to warframe.market…"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.followingRunning"
+msgid "Following the game · Warframe running"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.followingClosed"
+msgid "Following the game · Warframe closed"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.byHand"
+msgid "Set by hand · following resumes next game session"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.managed"
+msgid "Kept while TennoWorth runs"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.invisible"
+msgid "Others see you as Offline"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.until"
+msgid "Until {time}"
+msgstr ""
+
+#. Status line.
+msgctxt "presence.line.wfm"
+msgid "Set on warframe.market"
+msgstr ""
+
+#. Problem.
+msgctxt "presence.problem.notVerified"
+msgid "warframe.market refused the change: this account is not verified. Verify it on warframe.market, then choose a status again."
+msgstr ""
+
+#. Problem.
+msgctxt "presence.problem.refused"
+msgid "warframe.market refused the change."
+msgstr ""
+
+#. Problem; detail is the server’s reply.
+msgctxt "presence.problem.refusedDetail"
+msgid "warframe.market refused the change ({detail})."
+msgstr ""
+
+#. Problem.
+msgctxt "presence.problem.paused"
+msgid "warframe.market access is paused by the access policy or a cooldown. Your status stays as it was until access resumes."
+msgstr ""
+
+#. Problem.
+msgctxt "presence.problem.unreachable"
+msgid "TennoWorth cannot reach warframe.market’s status channel right now. It retries on its own."
+msgstr ""
+
+#. Tooltip.
+msgctxt "presence.goOnlineHelp"
+msgid "Set Online in game, as in the menu"
+msgstr ""
+
+#. Button in the status strip.
+#. Max 12 characters.
+msgctxt "presence.goOnline"
+msgid "Go online"
+msgstr ""
+
+#. Tooltip.
+msgctxt "presence.autoHelp"
+msgid "Follow the game is keeping this status"
+msgstr ""
+
+#. Tag in the status strip.
+#. Max 8 characters.
+msgctxt "presence.auto"
+msgid "Auto"
+msgstr ""
+
+#. Status strip note.
+#. Max 10 characters.
+msgctxt "presence.retrying"
+msgid "retrying"
+msgstr ""
+
+#. Screen reader name of the menu.
+msgctxt "presence.menu"
+msgid "Your warframe.market status"
+msgstr ""
+
+#. Menu heading.
+msgctxt "presence.buyersSee"
+msgid "What buyers see"
+msgstr ""
+
+#. Group name and setting.
+msgctxt "presence.status"
+msgid "Status"
+msgstr ""
+
+#. Label.
+msgctxt "presence.keepFor"
+msgid "Keep status for"
+msgstr ""
+
+#. Note.
+msgctxt "presence.followKeeps"
+msgid "Following the game keeps your status up for you."
+msgstr ""
+
+#. Setting.
+msgctxt "presence.follow"
+msgid "Follow the game"
+msgstr ""
+
+#. Setting help; closed is a status.
+msgctxt "presence.followShort"
+msgid "Online in game from login to quit. {closed} when Warframe closes."
+msgstr ""
+
+#. Note.
+msgctxt "presence.pausedNote"
+msgid "You picked a status, here or on warframe.market, so following waits for your next game session."
+msgstr ""
+
+#. Note.
+msgctxt "presence.pausedNoteSettings"
+msgid "You picked a status, here or on warframe.market, so following the game waits for your next game session."
+msgstr ""
+
+#. Button.
+msgctxt "presence.followNow"
+msgid "Follow the game now"
+msgstr ""
+
+#. Link button.
+msgctxt "presence.settingsLink"
+msgid "Presence settings →"
+msgstr ""
+
+#. Settings group heading.
+msgctxt "presence.title"
+msgid "Trade presence"
+msgstr ""
+
+#. Status.
+msgctxt "presence.reading"
+msgid "Reading your warframe.market status…"
+msgstr ""
+
+#. Note.
+msgctxt "presence.locked"
+msgid "Unlock your warframe.market session to show or change your status. Until then warframe.market keeps whatever it last had."
+msgstr ""
+
+#. Setting help; line is the status line.
+msgctxt "presence.statusHelp"
+msgid "What other traders see next to your orders. {line}."
+msgstr ""
+
+#. Setting help.
+msgctxt "presence.followHelp"
+msgid "Online in game from the moment you log in to Warframe until you quit. If you change your status yourself, here or on warframe.market, following pauses until your next game session."
+msgstr ""
+
+#. Setting help.
+msgctxt "presence.rules"
+msgid "warframe.market’s rules treat Online in game as a promise to answer whispers and trade within 15 minutes. A long mission or AFK breaks it and can get you reported, so set Invisible yourself when you can’t trade."
+msgstr ""
+
+#. Checkbox.
+#. Max 12 characters.
+msgctxt "presence.enabled"
+msgid "Enabled"
+msgstr ""
+
+#. Field label.
+msgctxt "presence.whenClosed"
+msgid "When Warframe closes"
+msgstr ""
+
+#. Setting help.
+msgctxt "presence.keepHelp"
+msgid "When you pick a status yourself. After that warframe.market sets you to Invisible, as it does on the website."
+msgstr ""
+
+#. Setting help, added while following.
+msgctxt "presence.keepFollowing"
+msgid "Following the game manages this for you right now."
+msgstr ""
+
+#. Disclosure.
+msgctxt "presence.troubleshooting"
+msgid "Troubleshooting: status connection"
+msgstr ""
+
+#. Diagnostics.
+msgctxt "presence.connected"
+msgid "Connected to warframe.market live updates."
+msgstr ""
+
+#. Diagnostics.
+msgctxt "presence.notConnected"
+msgid "Not connected."
+msgstr ""
+
+#. Diagnostics. Keep <code>.
+msgctxt "presence.lastChange"
+msgid "Last change <code>{time}</code>."
+msgstr ""
+
+#. Diagnostics.
+msgctxt "presence.lastReply"
+msgid "Last reply <code>{reply}</code>."
+msgstr ""
+
+#. Note. Keep EE.log.
+msgctxt "presence.privacy"
+msgid "Reads Warframe’s EE.log only to tell when you log in and quit. Nothing is sent to the game and no input is injected. When TennoWorth quits or you sign out, a status it was keeping up is set to Invisible."
+msgstr ""

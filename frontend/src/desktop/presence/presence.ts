@@ -3,36 +3,33 @@
  * "keep status for" choices, under the names the website uses.
  */
 import type { PresenceChoice, PresenceStatus } from '../../contracts/desktop';
+import { formatLocale, t } from '../../i18n/i18n.svelte';
 
 export const PRESENCE_CHOICES: readonly PresenceChoice[] = ['online', 'ingame', 'invisible'];
 
-export const PRESENCE_LABEL: Record<PresenceChoice, string> = {
-  online: 'Online',
-  ingame: 'Online in game',
-  invisible: 'Invisible',
-};
+export function presenceLabel(choice: PresenceChoice): string {
+  return t(`presence.${choice}`);
+}
 
 /** What other traders see, one line per choice. */
-export const PRESENCE_HINT: Record<PresenceChoice, string> = {
-  online: 'Shown as online. Buyers can whisper you.',
-  ingame: 'Buyers can whisper and invite you now.',
-  invisible: 'Others see you as Offline. Your orders stay up, but most buyers filter for online sellers.',
-};
+export function presenceHint(choice: PresenceChoice): string {
+  return t(`presence.hint.${choice}`);
+}
 
 /** warframe.market's "while connected" is `null`: kept while TennoWorth runs. */
 export function keepForLabel(minutes: number | null): string {
-  if (minutes == null) return 'While running';
-  return minutes % 60 === 0 ? `${minutes / 60}h` : `${minutes}m`;
+  if (minutes == null) return t('presence.whileRunning');
+  return minutes % 60 === 0 ? t('presence.hours', { n: minutes / 60 }) : t('presence.minutes', { n: minutes });
 }
 
 type Clock = (iso: string) => string;
-const clock: Clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const clock: Clock = (iso) => new Date(iso).toLocaleTimeString(formatLocale(), { hour: '2-digit', minute: '2-digit' });
 
 /** The status word, or what stands in for it before the server has answered. */
 export function presenceWord(status: PresenceStatus): string {
-  if (status.problem === 'not_verified') return 'Verify account';
-  if (status.status) return PRESENCE_LABEL[status.status];
-  return status.connected || status.problem === 'unreachable' ? 'Unknown' : 'Connecting…';
+  if (status.problem === 'not_verified') return t('presence.verify');
+  if (status.status) return presenceLabel(status.status);
+  return t(status.connected || status.problem === 'unreachable' ? 'presence.unknown' : 'presence.connecting');
 }
 
 /** Invisible while Warframe runs: buyers who filter for online sellers miss you. */
@@ -52,28 +49,28 @@ export function presenceAside(status: PresenceStatus): 'go-online' | 'auto' | 'r
 
 /** One line on how the status is held, for the menu and Settings. */
 export function presenceLine(status: PresenceStatus, at: Clock = clock): string {
-  if (status.problem === 'not_verified') return 'warframe.market refused: account not verified';
-  if (status.problem === 'paused') return 'warframe.market access is paused';
-  if (!status.connected) return status.problem === 'unreachable' ? 'Status channel unreachable · retrying' : 'Connecting to warframe.market…';
-  if (status.following) return status.gameRunning ? 'Following the game · Warframe running' : 'Following the game · Warframe closed';
-  if (status.followPaused) return 'Set by hand · following resumes next game session';
-  if (status.managed) return 'Kept while TennoWorth runs';
-  if (status.status === 'invisible') return 'Others see you as Offline';
-  if (status.statusUntil) return `Until ${at(status.statusUntil)}`;
-  return 'Set on warframe.market';
+  if (status.problem === 'not_verified') return t('presence.line.notVerified');
+  if (status.problem === 'paused') return t('presence.line.paused');
+  if (!status.connected) return t(status.problem === 'unreachable' ? 'presence.line.unreachable' : 'presence.line.connecting');
+  if (status.following) return t(status.gameRunning ? 'presence.line.followingRunning' : 'presence.line.followingClosed');
+  if (status.followPaused) return t('presence.line.byHand');
+  if (status.managed) return t('presence.line.managed');
+  if (status.status === 'invisible') return t('presence.line.invisible');
+  if (status.statusUntil) return t('presence.line.until', { time: at(status.statusUntil) });
+  return t('presence.line.wfm');
 }
 
 /** A notice for a problem the user can act on, or null. */
 export function presenceProblem(status: PresenceStatus): string | null {
   switch (status.problem) {
     case 'not_verified':
-      return 'warframe.market refused the change: this account is not verified. Verify it on warframe.market, then choose a status again.';
+      return t('presence.problem.notVerified');
     case 'refused':
-      return `warframe.market refused the change${status.detail ? ` (${status.detail})` : ''}.`;
+      return status.detail ? t('presence.problem.refusedDetail', { detail: status.detail }) : t('presence.problem.refused');
     case 'paused':
-      return 'warframe.market access is paused by the access policy or a cooldown. Your status stays as it was until access resumes.';
+      return t('presence.problem.paused');
     case 'unreachable':
-      return 'TennoWorth cannot reach warframe.market’s status channel right now. It retries on its own.';
+      return t('presence.problem.unreachable');
     default:
       return null;
   }

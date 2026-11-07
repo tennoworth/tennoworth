@@ -5,12 +5,14 @@
   import { PRESENCE_KEEP_FOR_CHOICES, type PresenceChoice } from '../../contracts/desktop';
   import type { PresenceController } from './presence.svelte';
   import Select from '../../ui/Select.svelte';
-  import { PRESENCE_CHOICES, PRESENCE_LABEL, keepForLabel, presenceLine, presenceProblem, presenceUsable } from './presence';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import Rich from '../../ui/Rich.svelte';
+  import { PRESENCE_CHOICES, presenceLabel, keepForLabel, presenceLine, presenceProblem, presenceUsable } from './presence';
 
   let { presence }: { presence: PresenceController } = $props();
 
   const keepChoices: (number | null)[] = [null, ...PRESENCE_KEEP_FOR_CHOICES];
-  const closedChoices = (['invisible', 'online'] as PresenceChoice[]).map((choice) => ({ value: choice, label: PRESENCE_LABEL[choice] }));
+  let closedChoices = $derived((['invisible', 'online'] as PresenceChoice[]).map((choice) => ({ value: choice, label: presenceLabel(choice) })));
 
   let status = $derived(presence.status);
   let usable = $derived(presenceUsable(status));
@@ -18,40 +20,40 @@
 </script>
 
 <div class="ui-section-group presence" aria-labelledby="set-presence">
-  <h4 id="set-presence">Trade presence</h4>
+  <h4 id="set-presence">{t('presence.title')}</h4>
   {#if !status}
-    <p class="inset-note">Reading your warframe.market status…</p>
+    <p class="inset-note">{t('presence.reading')}</p>
   {:else if !status.signedIn}
-    <p class="inset-note">Unlock your warframe.market session to show or change your status. Until then warframe.market keeps whatever it last had.</p>
+    <p class="inset-note">{t('presence.locked')}</p>
   {:else}
     {#if status.followPaused}
       <div class="ui-notice" data-tone="warn">
-        <p>You picked a status, here or on warframe.market, so following the game waits for your next game session.</p>
-        <button type="button" class="btn xs" onclick={() => void presence.followNow()}>Follow the game now</button>
+        <p>{t('presence.pausedNoteSettings')}</p>
+        <button type="button" class="btn xs" onclick={() => void presence.followNow()}>{t('presence.followNow')}</button>
       </div>
     {/if}
     {#if problem}<div class="ui-notice" data-tone="bad"><p>{problem}</p></div>{/if}
     {#if presence.error}<div class="ui-notice" data-tone="bad" role="alert"><p>{presence.error}</p></div>{/if}
     <div class="ui-setting-row">
-      <div class="ui-setting-copy"><strong id="presence-status-label">Status</strong><p>What other traders see next to your orders. {presenceLine(status)}.</p></div>
+      <div class="ui-setting-copy"><strong id="presence-status-label">{t('presence.status')}</strong><p>{t('presence.statusHelp', { line: presenceLine(status) })}</p></div>
       <div class="ui-setting-control">
         <div class="ui-segmented" role="group" aria-labelledby="presence-status-label" use:roving>
           {#each PRESENCE_CHOICES as choice (choice)}
-            <button type="button" aria-pressed={status.status === choice} disabled={!usable} use:pending={presence.pending !== null} onclick={() => void presence.set(choice)}>{PRESENCE_LABEL[choice]}{#if presence.pending === choice}…{/if}</button>
+            <button type="button" aria-pressed={status.status === choice} disabled={!usable} use:pending={presence.pending !== null} onclick={() => void presence.set(choice)}>{presenceLabel(choice)}{#if presence.pending === choice}…{/if}</button>
           {/each}
         </div>
       </div>
     </div>
     <div class="ui-setting-row">
-      <div class="ui-setting-copy"><label for="presence-follow">Follow the game</label><p>Online in game from the moment you log in to Warframe until you quit. If you change your status yourself, here or on warframe.market, following pauses until your next game session.</p><p>warframe.market's rules treat Online in game as a promise to answer whispers and trade within 15 minutes. A long mission or AFK breaks it and can get you reported, so set Invisible yourself when you can't trade.</p></div>
+      <div class="ui-setting-copy"><label for="presence-follow">{t('presence.follow')}</label><p>{t('presence.followHelp')}</p><p>{t('presence.rules')}</p></div>
       <div class="ui-setting-control">
-        <label class="ui-setting-check"><input id="presence-follow" type="checkbox" checked={status.settings.followGame} use:pending={presence.savingSettings} onchange={(e) => void presence.saveSettings({ ...status.settings, followGame: e.currentTarget.checked })}><span>Enabled</span></label>
-        <span id="presence-closed-label" class="status">When Warframe closes</span>
+        <label class="ui-setting-check"><input id="presence-follow" type="checkbox" checked={status.settings.followGame} use:pending={presence.savingSettings} onchange={(e) => void presence.saveSettings({ ...status.settings, followGame: e.currentTarget.checked })}><span>{t('presence.enabled')}</span></label>
+        <span id="presence-closed-label" class="status">{t('presence.whenClosed')}</span>
         <Select id="presence-closed" labelledby="presence-closed-label" value={status.settings.whenClosed} options={closedChoices} disabled={presence.savingSettings || !status.settings.followGame} onchange={(choice) => void presence.saveSettings({ ...status.settings, whenClosed: choice })} />
       </div>
     </div>
     <div class="ui-setting-row">
-      <div class="ui-setting-copy"><strong id="presence-keep-setting">Keep status for</strong><p>When you pick a status yourself. After that warframe.market sets you to Invisible, as it does on the website.{#if status.following}{' '}Following the game manages this for you right now.{/if}</p></div>
+      <div class="ui-setting-copy"><strong id="presence-keep-setting">{t('presence.keepFor')}</strong><p>{t('presence.keepHelp')}{#if status.following}{' '}{t('presence.keepFollowing')}{/if}</p></div>
       <div class="ui-setting-control">
         <div class="ui-segmented" role="group" aria-labelledby="presence-keep-setting" use:roving>
           {#each keepChoices as minutes (minutes)}
@@ -61,10 +63,10 @@
       </div>
     </div>
     <details class="troubleshooting">
-      <summary>Troubleshooting: status connection</summary>
+      <summary>{t('presence.troubleshooting')}</summary>
       <div class="body">
-        <p>{status.connected ? 'Connected to warframe.market live updates.' : 'Not connected.'}{#if status.statusSetAt} Last change <span class="mono">{new Date(status.statusSetAt).toLocaleTimeString()}</span>.{/if}{#if status.detail} Last reply <span class="mono">{status.detail}</span>.{/if}</p>
-        <p>Reads Warframe's EE.log only to tell when you log in and quit. Nothing is sent to the game and no input is injected. When TennoWorth quits or you sign out, a status it was keeping up is set to Invisible.</p>
+        <p>{t(status.connected ? 'presence.connected' : 'presence.notConnected')}{#if status.statusSetAt} <Rich text={t('presence.lastChange', { time: new Date(status.statusSetAt).toLocaleTimeString(formatLocale()) })} />{/if}{#if status.detail} <Rich text={t('presence.lastReply', { reply: status.detail })} />{/if}</p>
+        <p>{t('presence.privacy')}</p>
       </div>
     </details>
   {/if}
@@ -80,5 +82,5 @@
   .troubleshooting > summary { min-height: var(--ctl-lg); padding: var(--s1) var(--inset); cursor: pointer; color: var(--muted); font-size: var(--text-control); }
   .body { display: flex; flex-direction: column; gap: var(--s2); padding: 0 var(--inset) var(--s2); font-size: var(--text-control); line-height: var(--leading-body); color: var(--muted); }
   .body p { margin: 0; }
-  .mono { font-family: var(--font-mono); font-size: var(--text-caption); }
+  .body :global(code) { font-family: var(--font-mono); font-size: var(--text-caption); }
 </style>
