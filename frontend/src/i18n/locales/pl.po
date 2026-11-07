@@ -8904,3 +8904,287 @@ msgstr ""
 msgctxt "routine.notes2"
 msgid "For Endo, compare the time and difficulty of Arbitrations, Rathuum, excavation, Sorties, Archon Hunts, and Maroo’s weekly treasure hunt. Account-bound rewards can save Platinum even when they cannot be sold."
 msgstr ""
+
+#. Error.
+msgctxt "baro.scrapUnavailable"
+msgid "Scrap planning unavailable. Try reopening the Baro board."
+msgstr ""
+
+#. Verdict tag: buy and resell now.
+#. Max 14 characters.
+msgctxt "baro.verdict.flip"
+msgid "buy · flip"
+msgstr ""
+
+#. Verdict tag: buy and resell later.
+#. Max 14 characters.
+msgctxt "baro.verdict.hold"
+msgid "buy · hold"
+msgstr ""
+
+#. Verdict tag.
+#. Max 14 characters.
+msgctxt "baro.verdict.thin"
+msgid "thin market"
+msgstr ""
+
+#. Verdict tag.
+#. Max 14 characters.
+msgctxt "baro.verdict.skip"
+msgid "poor value"
+msgstr ""
+
+#. Verdict tag.
+#. Max 14 characters.
+msgctxt "baro.verdict.unpriced"
+msgid "not tradeable"
+msgstr ""
+
+#. Verdict explanation.
+msgctxt "baro.hint.flip"
+msgid "Priced above its own 90-day baseline, with enough trades to sell into."
+msgstr ""
+
+#. Verdict explanation.
+msgctxt "baro.hint.hold"
+msgid "At or below baseline - his arrival is why. The profit is in holding for the recovery."
+msgstr ""
+
+#. Verdict explanation.
+msgctxt "baro.hint.thin"
+msgid "Too few trades for the price to mean much. Treat it as a guess."
+msgstr ""
+
+#. Verdict explanation.
+msgctxt "baro.hint.skip"
+msgid "The plat it returns does not justify the ducats."
+msgstr ""
+
+#. Verdict explanation.
+msgctxt "baro.hint.unpriced"
+msgid "Cosmetic or bundle - it has no market listing, so there is no price to show."
+msgstr ""
+
+#. Credits in thousands.
+#. Max 6 characters.
+msgctxt "baro.thousands"
+msgid "{n}k"
+msgstr ""
+
+#. Credits in millions.
+#. Max 6 characters.
+msgctxt "baro.millions"
+msgid "{n}M"
+msgstr ""
+
+#. Section heading.
+msgctxt "baro.selling"
+msgid "What he is selling"
+msgstr ""
+
+#. Error.
+msgctxt "baro.pricingUnavailable"
+msgid "Stock pricing unavailable. Try reopening the Baro board."
+msgstr ""
+
+#. Warning.
+msgctxt "baro.quantitiesUnknown"
+msgid "{count, plural, one {Scrap quantities unavailable for # item.} other {Scrap quantities unavailable for # items.}}"
+msgstr ""
+
+#. Warning, after the count.
+msgctxt "baro.recheck"
+msgid "Recheck protection to calculate scrap potential."
+msgstr ""
+
+#. Warning, after the count.
+msgctxt "baro.knownOnly"
+msgid "Scrap totals include only items with known quantities."
+msgstr ""
+
+#. Status.
+msgctxt "baro.calculating"
+msgid "Calculating scrap plan…"
+msgstr ""
+
+#. Line above the table.
+msgctxt "baro.ranked"
+msgid "{count, plural, one {# item} other {# items}} · ranked by plat returned per ducat spent."
+msgstr ""
+
+#. Warning.
+msgctxt "baro.stale"
+msgid "Stock is from a previous visit - treat it as a preview."
+msgstr ""
+
+#. Meter label.
+msgctxt "baro.knownSpares"
+msgid "Ducats from known spares"
+msgstr ""
+
+#. Meter label.
+msgctxt "baro.yourSpares"
+msgid "Ducats from your spares"
+msgstr ""
+
+#. Meter value.
+msgctxt "baro.of"
+msgid "{have} of {need}"
+msgstr ""
+
+#. Summary. Keep <b>.
+msgctxt "baro.basket"
+msgid "{count, plural, one {<b>{needed}</b> ducats buys the <b>#</b> worth-buying item, about <b>{resale}p</b> resale at 90-day medians.} other {<b>{needed}</b> ducats buys the <b>#</b> worth-buying items, about <b>{resale}p</b> resale at 90-day medians.}}"
+msgstr ""
+
+#. Summary; count is the number of items.
+msgctxt "baro.covered"
+msgid "{count, plural, one {Your spares cover <b>{covered}</b> of it.} other {Your spares cover <b>{covered}</b> of them.}}"
+msgstr ""
+
+#. Note.
+msgctxt "baro.noBalance"
+msgid "We can’t see your ducat balance - it’s account state, not an item - so this is what your spares are worth, not what you can afford today."
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "baro.col.item"
+msgid "Item"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "baro.col.ducats"
+msgid "Ducats"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "baro.col.credits"
+msgid "Credits"
+msgstr ""
+
+#. Column header: current price.
+#. Max 6 characters.
+msgctxt "baro.col.now"
+msgid "Now"
+msgstr ""
+
+#. Column header: 90-day median price.
+#. Max 6 characters.
+msgctxt "baro.col.baseline"
+msgid "90d"
+msgstr ""
+
+#. Column header: platinum per ducat.
+#. Max 8 characters.
+msgctxt "baro.col.perDucat"
+msgid "p/ducat"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "baro.col.verdict"
+msgid "Verdict"
+msgstr ""
+
+#. Empty state.
+msgctxt "baro.emptyFilter"
+msgid "No items in the current value filter. Use the button below to include poor-value or untradeable stock."
+msgstr ""
+
+#. Disclosure.
+msgctxt "baro.scrapFor"
+msgid "what to scrap for {ducats} ducats"
+msgstr ""
+
+#. Note.
+msgctxt "baro.scrapHelp"
+msgid "Ranked by ducats gained per plat given up - scrapping a 65-ducat part worth 18p to save a 45-ducat part worth 3p is the trade to avoid."
+msgstr ""
+
+#. Scrap pick.
+msgctxt "baro.givenUp"
+msgid "{price}p given up"
+msgstr ""
+
+#. Scrap pick: it would not sell.
+msgctxt "baro.unsold"
+msgid "unsold anyway"
+msgstr ""
+
+#. Scrap plan total.
+msgctxt "baro.planTotal"
+msgid "<b>{ducats}</b> ducats for <b>{price}p</b> of market value."
+msgstr ""
+
+#. Scrap plan.
+msgctxt "baro.short"
+msgid "Still {ducats} short."
+msgstr ""
+
+#. Scrap plan.
+msgctxt "baro.heldBack"
+msgid "Held back as worth more sold than scrapped: {items}."
+msgstr ""
+
+#. Button.
+msgctxt "baro.hide"
+msgid "Hide poor-value and untradeable lines"
+msgstr ""
+
+#. Button.
+msgctxt "baro.showMore"
+msgid "Show {count} more (poor value or not tradeable)"
+msgstr ""
+
+#. View heading. The game’s name for Baro Ki’Teer.
+msgctxt "baro.title"
+msgid "Baro Ki’Teer"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "baro.here"
+msgid "Here at {location} - leaves in {time}."
+msgstr ""
+
+#. Line under the heading.
+msgctxt "baro.incoming"
+msgid "Arrives in {time} at {location}."
+msgstr ""
+
+#. Line under the heading.
+msgctxt "baro.next"
+msgid "Next visit at {location}."
+msgstr ""
+
+#. Warning.
+msgctxt "baro.scheduleAge"
+msgid "⚠ schedule data {age} - may be a rotation behind"
+msgstr ""
+
+#. Summary; d = ducats.
+msgctxt "baro.youHold"
+msgid "{count, plural, one {You hold <b>{ducats}d</b> across <b>#</b> ducat-earning item.} other {You hold <b>{ducats}d</b> across <b>#</b> ducat-earning items.}}"
+msgstr ""
+
+#. Advice. Ducats is the preset name; translate it as the preset is.
+msgctxt "baro.spend"
+msgid "Spend them on Baro’s offerings - open the <b>Ducats</b> preset to see what’s worth dumping."
+msgstr ""
+
+#. Advice.
+msgctxt "baro.earmark"
+msgid "Earmark these for Baro using the <b>Ducats</b> preset."
+msgstr ""
+
+#. Note.
+msgctxt "baro.yieldUnavailable"
+msgid "Ducat yield is unavailable while inventory valuation is pending or failed. Reopen Baro to retry."
+msgstr ""
+
+#. Button.
+msgctxt "baro.openPreset"
+msgid "Open Ducats preset →"
+msgstr ""

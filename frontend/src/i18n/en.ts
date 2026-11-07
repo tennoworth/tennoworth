@@ -28,6 +28,7 @@ import { ACCOUNT } from './en/account';
 import { RIVENS } from './en/rivens';
 import { RELICS } from './en/relics';
 import { ROUTINES } from './en/routines';
+import { BARO } from './en/baro';
 
 export const EN = {
   ...FIRST_RUN,
@@ -54,6 +55,7 @@ export const EN = {
   ...RIVENS,
   ...RELICS,
   ...ROUTINES,
+  ...BARO,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

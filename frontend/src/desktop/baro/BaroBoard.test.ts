@@ -35,7 +35,7 @@ it('meters spare ducats against what the worth-buying stock costs', async () => 
   expect(meter.getAttribute('aria-valuetext')).toBe('60 of 750');
   expect(meter.getAttribute('aria-valuemax')).toBe('750');
   expect(screen.getByText(/Your spares cover/).textContent).toContain('Your spares cover 0 of them.');
-  expect(screen.getByText(/We can't see your ducat balance/)).toBeTruthy();
+  expect(screen.getByText(/We can.t see your ducat balance/)).toBeTruthy();
 });
 
 it('keeps plain rounded prices with a p suffix and missing prices without a suffix', async () => {
