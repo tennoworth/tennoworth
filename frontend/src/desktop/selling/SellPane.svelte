@@ -14,6 +14,7 @@
   import type { SellRow } from '../../contracts/selling';
   import type { ListingReceipt, ListingReceipts } from './receipts.svelte';
   import { untrack } from 'svelte';
+  import { focusLater, roving } from '../../ui/keyboard-actions';
   interface Props {
     minPrice: number; minOwned: number; typeFilter: string; hideAtLvl: number;
     activeTags: Set<string>; tableView: { rows: SellRow[]; active: boolean };
@@ -172,9 +173,13 @@
     untrack(() => { if (signature !== shownSignature) { shownSignature = signature; if (receiptKeys.size) receiptKeys = new Set(); } });
   });
   let picks = $derived(allPicks.filter((p) => !snoozedPicks.has(p.key ?? p.slug) || receiptKeys.has(p.key ?? p.slug)));
+  // Hiding and undoing swap the row's buttons, so focus follows to the
+  // replacement in the same row rather than falling to the page.
+  const pickControl = (key: string, cls: string) => () => [...document.querySelectorAll<HTMLElement>(`.pick-actions .${cls}[data-pick]`)].find((el) => el.dataset.pick === key);
   function snoozePick(key: string) {
     snoozedPicks = new Set([...snoozedPicks, key]);
     receiptKeys = new Set([...receiptKeys, key]);
+    focusLater(pickControl(key, 'pick-list'));
   }
   function undoSnooze(key: string) {
     const next = new Set(snoozedPicks);
@@ -183,6 +188,7 @@
     const shown = new Set(receiptKeys);
     shown.delete(key);
     receiptKeys = shown;
+    focusLater(pickControl(key, 'pick-list'));
   }
   const isSnoozed = (p: SellRow) => snoozedPicks.has(p.key ?? p.slug);
   // Trades: each pick's count under the lot rule, and where today's trades run
@@ -405,7 +411,7 @@
   {:else if listed}
     <div class="rs receipt">
       {listed.action === 'updated' ? 'Updated to' : 'Listed'} {listed.quantity} at <b>{listed.platinum}p</b> · {clock(listed.at)}
-      {#if onopenorders}· <button type="button" class="link" onclick={onopenorders}>My orders →</button>{/if}
+      {#if onopenorders}· <button type="button" class="link" data-opens-view data-pick={p.key ?? p.slug} onclick={onopenorders}>My orders →</button>{/if}
     </div>
   {:else}
   {@const [lo, hi] = pickTradeRange(p)}
@@ -428,15 +434,15 @@
 {#snippet pickActionsCell(p: SellRow)}
   {@const listed = listedReceipt(p)}
   {#if isSnoozed(p)}
-    <span class="pick-actions"><button type="button" class="pick-list" onclick={() => undoSnooze(p.key ?? p.slug)} aria-label="Undo hiding {p.name}">Undo</button></span>
+    <span class="pick-actions"><button type="button" class="pick-list" data-pick={p.key ?? p.slug} onclick={() => undoSnooze(p.key ?? p.slug)} aria-label="Undo hiding {p.name}">Undo</button></span>
   {:else if listed}
     <span class="pick-actions">
       <span class="tag" class:hold={listed.visible === false} title={listed.visible === false ? 'New listings start hidden: buyers cannot see this one yet.' : listed.visible ? 'Buyers can see this listing.' : 'This updated an existing order, which keeps its visibility.'}>listed · {listed.visible === false ? 'hidden' : listed.visible ? 'visible' : 'updated'}</span>
-      {#if listed.visible === false && listed.orderId && onmakevisible}<button type="button" class="pick-list" onclick={() => onmakevisible(listed)} aria-label="Make {p.name} visible to buyers">Make visible</button>{/if}
+      {#if listed.visible === false && listed.orderId && onmakevisible}<button type="button" class="pick-list" data-pick={p.key ?? p.slug} onclick={() => onmakevisible(listed)} aria-label="Make {p.name} visible to buyers">Make visible</button>{/if}
     </span>
   {:else}
   <span class="pick-actions">
-    <button class="pick-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
+    <button class="pick-list" data-pick={p.key ?? p.slug} disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
     <button
       type="button"
       class="pick-snooze"
@@ -455,7 +461,7 @@
 <!-- Bar 1 · scope: presets and their hint; the table adds the name filter
      and this Filters popover at the bar's end. -->
 {#snippet scopeRow()}
-  <div class="ui-segmented presets-row" role="group" aria-label="Scope preset">
+  <div class="ui-segmented presets-row" role="group" aria-label="Scope preset" use:roving>
     {#each Object.entries(PRESETS) as [name, preset]}
       <button
         type="button"
@@ -478,7 +484,7 @@
       <span class="muted small">▾</span>
     </summary>
     <div class="filters-panel">
-      <button type="button" class="link" onclick={(event) => { const disclosure = event.currentTarget.closest('details'); if (disclosure) disclosure.open = false; }}>Close filters</button>
+      <button type="button" class="link" onclick={(event) => { const disclosure = event.currentTarget.closest('details'); if (disclosure) { disclosure.querySelector('summary')?.focus(); disclosure.open = false; } }}>Close filters</button>
       <div class="filters">
         <label>
           Min avg price
@@ -510,7 +516,7 @@
      chips beside them are the only outlined things on the line. -->
 {#snippet categoriesRow()}
   {#if availableTags.length > 0}
-    <div class="toolbar-group tagchips">
+    <div class="toolbar-group tagchips" role="group" aria-label="Item types" use:roving={':scope > button.chip'}>
       {#each availableTags as [tag, count]}
         <button
           type="button"
@@ -526,7 +532,7 @@
         </button>
       {/each}
       {#if activeTags.size > 0}
-        <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
+        <button type="button" class="chip-clear" onclick={() => { activeTags = new Set(); focusLater(() => document.querySelector<HTMLElement>('.tagchips > button.chip')); }}>
           clear ({activeTags.size})
         </button>
       {/if}
@@ -540,9 +546,16 @@
 <!-- Row B · NARROW extras: the Filters popover's state as removable chips. -->
 {#snippet narrowChips()}
   {#if activeFilterChips.length > 0}
-    <div class="toolbar-group active-filters">
-      {#each activeFilterChips as f (f.key)}
-        <button type="button" class="chip fchip" onclick={f.clear} title="Remove this filter">
+    <div class="toolbar-group active-filters" role="group" aria-label="Active filters" use:roving>
+      {#each activeFilterChips as f, index (f.key)}
+        <button type="button" class="chip fchip" aria-label="Remove filter: {f.label}" title="Remove this filter" onclick={() => {
+          f.clear();
+          // The chip is gone; the next one, or the Filters summary, takes focus.
+          focusLater(() => {
+            const left = [...document.querySelectorAll<HTMLElement>('.active-filters .fchip')];
+            return left[Math.min(index, left.length - 1)] ?? document.querySelector<HTMLElement>('.filter-disclosure summary');
+          });
+        }}>
           {f.label}<span class="rm" aria-hidden="true">×</span>
         </button>
       {/each}
@@ -555,13 +568,16 @@
   {#if !canList}
     <button class="list-cta" data-testid="desktop-list-check" onclick={oncheckListings}>{listingActionLabel}</button>
   {:else}
+    <!-- Stays focusable when there is nothing to list, so it can say why. -->
     <button
       class="list-cta"
       data-testid="desktop-list"
-      onclick={() => { if (calculationReady) openListingFlow(); }}
-      disabled={!calculationReady || listableRows.length === 0}
+      onclick={() => { if (calculationReady && listableRows.length > 0) openListingFlow(); }}
+      aria-disabled={!calculationReady || listableRows.length === 0 ? 'true' : undefined}
+      aria-describedby="list-cta-scope"
       title={listTitle}
     >List on WFM</button>
+    <span id="list-cta-scope" class="muted list-scope">{!calculationReady ? 'Sale values are still calculating.' : listableRows.length === 0 ? 'Nothing in this view can be listed.' : `${Math.min(stagedCount, 50)} ${Math.min(stagedCount, 50) === 1 ? 'row' : 'rows'} to review`}</span>
   {/if}
 {/snippet}
 

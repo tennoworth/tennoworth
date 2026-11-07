@@ -249,6 +249,9 @@ button {
   cursor: pointer;
 }
 button:hover:not(:disabled) { background: var(--hover); }
+/* Text for assistive technology only: names and explanations that sighted
+   users get from layout or a hover title. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Busy: the control's own action is running (ui/keyboard-actions.ts `busy`). It
    keeps focus, so it looks unavailable without being disabled. */
@@ -902,7 +905,7 @@ html[data-look="yorha"] .btn.primary:hover:not(:disabled) { background: var(--fg
 /* The look's ink fill outranks the base .btn:disabled rule, so a disabled
    primary kept its fill and read as clickable. One rule restores the shared
    disabled treatment for every primary kind. */
-html[data-look="yorha"] :is(.list-cta, .rp-primary, .btn.primary):disabled { opacity: 1; color: var(--muted); background: var(--panel-2); border-color: var(--border); border-style: dotted; cursor: not-allowed; }
+html[data-look="yorha"] :is(.list-cta, .rp-primary, .btn.primary):is(:disabled, [aria-disabled="true"]) { opacity: 1; color: var(--muted); background: var(--panel-2); border-color: var(--border); border-style: dotted; cursor: not-allowed; }
 /* Title rails: every panel, card, FAQ and dialog heading bar takes the
    --rail-* surface. The 2px --rail-edge rule is an inset shadow so the rail
    height does not change between modes. */

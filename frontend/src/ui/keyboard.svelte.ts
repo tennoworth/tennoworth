@@ -90,8 +90,17 @@ export function searchShortcut(node: HTMLInputElement, onjump?: () => void) {
     if (first !== node) return;
     event.preventDefault(); node.focus(); onjump?.();
   };
+  // Escape empties a search; a second Escape on the empty field, or Escape
+  // while a suggestion list is open, belongs to whatever owns the field.
+  const clear = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape' || event.isComposing || !node.value || node.getAttribute('aria-expanded') === 'true') return;
+    event.preventDefault(); event.stopPropagation();
+    node.value = '';
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  };
   document.addEventListener('keydown', handler);
-  return { destroy() { document.removeEventListener('keydown', handler); delete node.dataset.shortcutSearch; } };
+  node.addEventListener('keydown', clear);
+  return { destroy() { document.removeEventListener('keydown', handler); node.removeEventListener('keydown', clear); delete node.dataset.shortcutSearch; } };
 }
 
 /** Layout data stays in this closure; only the command key's label reaches the UI. */

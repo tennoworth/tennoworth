@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { busy, focusLater } from '../../ui/keyboard-actions';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import type { ProtectionController } from './protection.svelte';
   import Select from '../../ui/Select.svelte';
@@ -96,14 +97,14 @@
       <div class="ui-toolbar"><span class="muted">Showing {Math.min(detailLimit, detailRows.length)} of {detailRows.length} items</span>{#if detailRows.length > detailLimit}<button class="btn" onclick={() => detailLimit += 25}>Show 25 more</button>{/if}</div>
     {/if}
   </details>
-  <button class="btn xs change" onclick={edit} disabled={controller.saving}>Change what I keep</button>
+  <button class="btn xs change" onclick={edit} use:busy={controller.saving}>Change what I keep</button>
 </section>
 <dialog bind:this={dialog} class="keep-dialog" aria-labelledby="keep-title" onclose={() => editing = false} onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!controller.saving && !keepBusy) dialog.close(); } }} oncancel={(event) => { if (controller.saving || keepBusy) event.preventDefault(); }}>
   <header class="keep-head"><h2 id="keep-title">What I’m keeping</h2></header>
   <div class="ui-stack">
     <p>Choose once. Apply across your inventory.</p>
     <label class="ui-field">Copies of every item · applies immediately
-      <input class="ui-input" type="number" min="0" max="1000000" step="1" value={reserveCopies} disabled={controller.saving || keepBusy} onchange={(e) => { const n = Number(e.currentTarget.value); if (Number.isSafeInteger(n) && n >= 0 && n <= 1000000) void changeKeep(n); else formError = 'Choose a whole quantity from 0 to 1000000.'; }} />
+      <input class="ui-input" type="number" min="0" max="1000000" step="1" value={reserveCopies} use:busy={controller.saving || keepBusy} onchange={(e) => { const n = Number(e.currentTarget.value); if (Number.isSafeInteger(n) && n >= 0 && n <= 1000000) void changeKeep(n); else formError = 'Choose a whole quantity from 0 to 1000000.'; }} />
     </label>
     <p class="muted">Leveled copies are excluded automatically. Extra item rules and crafting needs can keep more than this minimum.</p>
   {#if editing}
@@ -118,15 +119,22 @@
           <Select label="Item to keep" value={selected} options={itemOptions} onchange={(next) => (selected = next)} disabled={controller.saving} />
         </div>
         <label class="ui-field">Extra copies
-          <input class="ui-input" type="number" min="0" max="1000000" step="1" bind:value={quantity} disabled={controller.saving} />
+          <input class="ui-input" type="number" min="0" max="1000000" step="1" bind:value={quantity} use:busy={controller.saving} onkeydown={(event) => { if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); reserve(); } }} />
         </label>
-        <button class="btn" onclick={reserve} disabled={controller.saving}>Set quantity</button>
+        <button class="btn" onclick={reserve} use:busy={controller.saving}>Set quantity</button>
       </div>
-      {#each Object.entries(reserves) as [slug, count]}
-        <div class="ui-toolbar"><span>{names.get(slug) ?? slug} ×{count}</span><button class="btn ghost xs" disabled={controller.saving} onclick={() => { const next = { ...reserves }; delete next[slug]; reserves = next; }}>Remove {names.get(slug) ?? slug}</button></div>
+      {#each Object.entries(reserves) as [slug, count], index (slug)}
+        <div class="ui-toolbar"><span>{names.get(slug) ?? slug} ×{count}</span><button class="btn ghost xs remove-rule" use:busy={controller.saving} onclick={() => {
+          const next = { ...reserves }; delete next[slug]; reserves = next;
+          // The row is gone; the next rule's Remove, or the item picker, takes focus.
+          focusLater(() => {
+            const left = [...dialog.querySelectorAll<HTMLElement>('.remove-rule')];
+            return left[Math.min(index, left.length - 1)] ?? dialog.querySelector<HTMLElement>('[aria-label="Item to keep"], .ui-select');
+          });
+        }}>Remove {names.get(slug) ?? slug}</button></div>
       {/each}
       {#if formError}<p class="ui-notice" data-tone="bad" role="alert">{formError}</p>{/if}
-      <div class="ui-toolbar"><button class="btn primary" onclick={save} disabled={controller.saving || keepBusy}>{controller.saving ? 'Saving…' : 'Save keep rules'}</button><button class="btn ghost" disabled={controller.saving || keepBusy} onclick={() => dialog.close()}>Cancel</button></div>
+      <div class="ui-toolbar"><button class="btn primary" onclick={save} use:busy={controller.saving || keepBusy}>{controller.saving ? 'Saving…' : 'Save keep rules'}</button><button class="btn ghost" use:busy={controller.saving || keepBusy} onclick={() => dialog.close()}>Cancel</button></div>
     </div>
   {/if}
     {#if controller.error}<p class="ui-notice" data-tone="bad" role="alert">{controller.error}</p>{/if}

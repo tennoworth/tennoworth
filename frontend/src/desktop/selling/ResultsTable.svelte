@@ -622,6 +622,12 @@
       bind:value={filterDraft}
 
       oninput={typeFilter}
+      onkeydown={(event) => {
+        // Enter goes from the filter to the rows it found.
+        if (event.key !== 'Enter' || event.isComposing) return;
+        const region = event.currentTarget.closest('.sell-table, section, .wrap')?.querySelector<HTMLElement>('[role="region"]') ?? document.querySelector<HTMLElement>('main.workspace [role="region"]:last-of-type');
+        if (region) { event.preventDefault(); region.focus(); }
+      }}
       onfocus={() => (filterFocused = true)}
       onblur={() => (filterFocused = false)}
     />

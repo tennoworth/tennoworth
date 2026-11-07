@@ -77,19 +77,6 @@ export function roving(node: HTMLElement, selector = ':scope > button, :scope > 
   };
 }
 
-/** Escape empties a filter field (and tells bound state); a second Escape,
- *  on the empty field, is left to whatever owns it. */
-export function clearOnEscape(node: HTMLInputElement) {
-  const key = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.isComposing || !node.value) return;
-    event.preventDefault(); event.stopPropagation();
-    node.value = '';
-    node.dispatchEvent(new Event('input', { bubbles: true }));
-  };
-  node.addEventListener('keydown', key);
-  return { destroy() { node.removeEventListener('keydown', key); } };
-}
-
 /** Closes a popover when focus leaves both it and its trigger, so a menu
  *  tabbed away from does not stay open and hold the shortcuts. */
 export function closeOnFocusOut(node: HTMLElement, options: { trigger: () => HTMLElement | null | undefined; close: () => void }) {
