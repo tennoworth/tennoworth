@@ -397,9 +397,9 @@ set volume aligned) and Relics (one row per relic, the refinement ladder as
 four cells on one scale with the chosen rung inverted, picked only for a crack
 or refine verdict). Under a Sell intact or Refine decision a quiet text button
 reads "I'll crack this one anyway". It speaks in the player's voice on
-purpose, in every language: the player overrules the advice, the tag reads Cracking anyway, the
-Intact rung is picked, the row and the Expected total count the crack, Why
-keeps the original advice, and the same button turns into "Fine, sell intact"
+purpose, in every language: the player overrules the advice, the tag reads
+Cracking anyway, the Intact rung is picked, the row and the Expected total
+count the crack, Why keeps the original advice, and the same button turns into "Fine, sell intact"
 (or "Fine, refine") so focus never moves. The choice is kept per relic on this
 device. My orders is one listings table: listing health is a
 column and a row state with each fix beside the item, and Live ask and bid are
