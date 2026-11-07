@@ -207,7 +207,8 @@ Above 900px the sidebar's right edge is a separator: drag it to set the width
 to the narrowest and widest, and Enter collapses or expands; Space does not,
 so tabbing past never collapses it. A double-click or the foot's rail button
 toggles it too. The width and the collapsed state persist (`sidebar` setting).
-On the rail each view keeps its icon (`NavIcon`) and its badge; its name is
+On the rail each view keeps its icon (`NavIcon`) and its badge, a count
+under the icon so a long one never covers it; its name is
 the button's accessible name and shows in a tooltip on hover or focus. The
 handle follows the view list in Tab order.
 Below 900px the sidebar foot (project links, feedback and the build label)
