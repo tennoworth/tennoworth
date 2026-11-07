@@ -24,6 +24,7 @@ import { WATCHES } from './en/watches';
 import { SETTINGS } from './en/settings';
 import { PRIVACY } from './en/privacy';
 import { NOTIFICATIONS } from './en/notifications';
+import { ACCOUNT } from './en/account';
 
 export const EN = {
   ...FIRST_RUN,
@@ -46,6 +47,7 @@ export const EN = {
   ...SETTINGS,
   ...PRIVACY,
   ...NOTIFICATIONS,
+  ...ACCOUNT,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

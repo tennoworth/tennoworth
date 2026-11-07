@@ -122,14 +122,14 @@ export function tagsIn(source: string): string[] {
   return (source.match(/<\/?[a-z]+>/g) ?? []).sort();
 }
 
-export type RichTag = 'em' | 'b' | 'code' | 'good' | 'bad';
+export type RichTag = 'em' | 'b' | 'code' | 'kbd' | 'good' | 'bad';
 
 /** Split formatted text on <em>, <b>, <code>, <good> and <bad> so a template
  *  renders them as elements; the text itself is never parsed as HTML. <good>
  *  and <bad> are bold text in the gain or loss colour. */
 export function richParts(text: string): { text: string; tag: RichTag | null }[] {
-  return text.split(/(<(?:em|b|code|good|bad)>.*?<\/(?:em|b|code|good|bad)>)/).filter(Boolean).map(part => {
-    const tagged = /^<(em|b|code|good|bad)>(.*)<\/\1>$/.exec(part);
+  return text.split(/(<(?:em|b|code|kbd|good|bad)>.*?<\/(?:em|b|code|kbd|good|bad)>)/).filter(Boolean).map(part => {
+    const tagged = /^<(em|b|code|kbd|good|bad)>(.*)<\/\1>$/.exec(part);
     return tagged ? { text: tagged[2], tag: tagged[1] as RichTag } : { text: part, tag: null };
   });
 }

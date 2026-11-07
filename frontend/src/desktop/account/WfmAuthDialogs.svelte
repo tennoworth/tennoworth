@@ -5,12 +5,10 @@
   import WfmTokenGuide from './WfmTokenGuide.svelte';
   import Select from '../../ui/Select.svelte';
 
-  const PLATFORM_OPTIONS = [
-    { value: 'pc', label: 'PC (Steam & Epic)' },
-    { value: 'ps4', label: 'PlayStation' },
-    { value: 'xbox', label: 'Xbox' },
-    { value: 'switch', label: 'Switch' },
-  ];
+  import { t } from '../../i18n/i18n.svelte';
+
+  const PLATFORMS = ['pc', 'ps4', 'xbox', 'switch'] as const;
+  let platformOptions = $derived(PLATFORMS.map(value => ({ value, label: t(`auth.platform.${value}`) })));
   
 import { DesktopCmdError } from '../../contracts/errors';
 
@@ -111,7 +109,7 @@ import { DesktopCmdError } from '../../contracts/errors';
     wfmAuthError = null;
     wfmAuthReportable = false;
     if (wfmLoginPassphrase !== wfmLoginConfirm) {
-      wfmAuthError = "Passphrases don't match.";
+      wfmAuthError = t('auth.mismatch');
       return;
     }
     wfmAuthBusy = true;
@@ -133,7 +131,7 @@ import { DesktopCmdError } from '../../contracts/errors';
       } else if (wfmLoginDialog?.open) {
         // Closing the WFM window is a choice, not a failure; the Cancel path
         // has already closed this dialog.
-        wfmAuthError = 'The warframe.market window was closed before you signed in.';
+        wfmAuthError = t('auth.windowClosed');
       }
     } finally {
       wfmLoginToken = '';
@@ -180,16 +178,14 @@ import { DesktopCmdError } from '../../contracts/errors';
 <dialog bind:this={wfmLoginDialog} class="cryptobox" data-testid="wfm-login-dialog" oncancel={cancelWfmLogin}>
   <form onsubmit={performWfmLogin}>
     <header>
-      <h3>Log in to warframe.market</h3>
+      <h3>{t('auth.loginTitle')}</h3>
       <p class="muted">
-        You sign in on warframe.market's own page - your WFM password never
-        passes through TennoWorth. The sign-in token is encrypted on this PC
-        with a passphrase you choose.
+        {t('auth.loginLede')}
       </p>
     </header>
     {#if wfmLoginMode === 'token'}
       <label>
-        Session token
+        {t('auth.sessionToken')}
         <input
           type="password"
           autocomplete="off"
@@ -201,76 +197,70 @@ import { DesktopCmdError } from '../../contracts/errors';
       </label>
       <WfmTokenGuide />
       <p class="forgot-row muted">
-        <button type="button" class="forgot" onclick={() => (wfmLoginMode = 'window')}>Use the sign-in window instead</button>
+        <button type="button" class="forgot" onclick={() => (wfmLoginMode = 'window')}>{t('auth.useWindow')}</button>
       </p>
     {:else}
       <p class="forgot-row muted">
-        Window not working?
-        <button type="button" class="forgot" data-testid="wfm-login-use-token" onclick={() => (wfmLoginMode = 'token')}>Paste a session token</button>
-        from your browser instead.
+        {t('auth.windowBroken')}
+        <button type="button" class="forgot" data-testid="wfm-login-use-token" onclick={() => (wfmLoginMode = 'token')}>{t('auth.pasteToken')}</button>
+        {t('auth.fromBrowser')}
       </p>
     {/if}
     <div class="field">
-      <span>Platform</span>
-      <Select label="Platform" value={wfmLoginPlatform} options={PLATFORM_OPTIONS} onchange={(next) => (wfmLoginPlatform = next)} />
+      <span>{t('auth.platform')}</span>
+      <Select label={t('auth.platform')} value={wfmLoginPlatform} options={platformOptions} onchange={(next) => (wfmLoginPlatform = next)} />
     </div>
     <label>
-      Encryption passphrase
+      {t('auth.passphrase')}
       <input
         type="password"
         autocomplete="new-password"
         bind:value={wfmLoginPassphrase}
         bind:this={wfmLoginPassInput}
-        placeholder="12+ characters - you may need it again after a restart"
+        placeholder={t('auth.passphraseHint')}
         required
         minlength="12"
       />
     </label>
     <p class="muted">
-      Locks your WFM sign-in token to this PC, so the app can list and manage
-      your orders all session without signing in to WFM again.
+      {t('auth.passphraseHelp')}
     </p>
     <label>
-      Confirm passphrase
+      {t('auth.confirm')}
       <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12"
         aria-describedby="wfm-confirm-hint{wfmAuthError ? ' wfm-login-error' : ''}"
-        aria-invalid={wfmAuthError === "Passphrases don't match." ? 'true' : undefined} />
-      <span class="muted" id="wfm-confirm-hint">Forgot it? No problem - just log in again and set a new one. Your WFM account is never locked out.</span>
+        aria-invalid={wfmAuthError === t('auth.mismatch') ? 'true' : undefined} />
+      <span class="muted" id="wfm-confirm-hint">{t('auth.confirmHelp')}</span>
     </label>
     <label class="remember">
       <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device - stores the unlock key in your OS keyring
-      (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
-      each launch. Never the passphrase itself.
+      {t('auth.rememberLong')}
     </label>
     {#if rememberAvailable === false}
       <p class="muted" data-testid="wfm-remember-unavailable">
-        Your system's keyring isn't available, so TennoWorth can't remember
-        this device and will ask for your passphrase each launch. On KDE, turn
-        on KDE Wallet in System Settings.
+        {t('auth.noKeyring')}
       </p>
     {/if}
     {#if wfmAuthBusy && wfmLoginMode === 'window'}
       <p class="muted" role="status" data-testid="wfm-login-waiting">
-        Finish signing in in the warframe.market window. It closes by itself
-        once you're in.
+        {t('auth.waiting')}
       </p>
     {/if}
     {#if wfmAuthError}
       <div class="err" id="wfm-login-error" role="alert" data-testid="wfm-auth-error">
         {wfmAuthError}
         {#if wfmAuthReportable && onreport}
-          <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>Report a bug</button> if this keeps happening.</p>
+          <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>{t('auth.report')}</button>{t('auth.reportAfter')}</p>
         {/if}
       </div>
     {/if}
     <footer>
-      <button type="button" class="ghost" onclick={cancelWfmLogin}>Cancel</button>
+      <button type="button" class="ghost" onclick={cancelWfmLogin}>{t('auth.cancel')}</button>
       <button type="submit" disabled={wfmAuthBusy}>
         {#if wfmLoginMode === 'token'}
-          {wfmAuthBusy ? 'Checking token…' : 'Save token'}
+          {t(wfmAuthBusy ? 'auth.checkingToken' : 'auth.saveToken')}
         {:else}
-          {wfmAuthBusy ? 'Waiting for sign-in…' : 'Continue to warframe.market'}
+          {t(wfmAuthBusy ? 'auth.waitingSignIn' : 'auth.continue')}
         {/if}
       </button>
     </footer>
@@ -280,15 +270,13 @@ import { DesktopCmdError } from '../../contracts/errors';
 <dialog bind:this={wfmUnlockDialog} class="cryptobox" data-testid="wfm-unlock-dialog">
   <form onsubmit={performWfmUnlock}>
     <header>
-      <h3>Unlock warframe.market listing</h3>
+      <h3>{t('auth.unlockTitle')}</h3>
       <p class="muted">
-        Enter the passphrase you set at login to decrypt your WFM token for
-        this session. It stays in the app's memory - never on disk, never in
-        this window.
+        {t('auth.unlockLede')}
       </p>
     </header>
     <label>
-      Passphrase
+      {t('auth.passphraseLabel')}
       <input
         type="password"
         autocomplete="current-password"
@@ -302,30 +290,27 @@ import { DesktopCmdError } from '../../contracts/errors';
     </label>
     <label class="remember">
       <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device - stores the unlock key in your OS keyring so
-      you're not asked each launch. Never the passphrase itself.
+      {t('auth.remember')}
     </label>
     {#if rememberAvailable === false}
       <p class="muted" data-testid="wfm-remember-unavailable">
-        Your system's keyring isn't available, so TennoWorth can't remember
-        this device and will ask for your passphrase each launch. On KDE, turn
-        on KDE Wallet in System Settings.
+        {t('auth.noKeyring')}
       </p>
     {/if}
     {#if wfmAuthError}
       <div class="err" id="wfm-unlock-error" role="alert" data-testid="wfm-auth-error">
         {wfmAuthError}
         {#if wfmAuthReportable && onreport}
-          <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>Report a bug</button> if this keeps happening.</p>
+          <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>{t('auth.report')}</button>{t('auth.reportAfter')}</p>
         {/if}
       </div>
     {/if}
     <p class="forgot-row muted">
-      Forgot it? <button type="button" class="forgot" onclick={goToLogin}>Log in again</button> to set a new passphrase.
+      {t('auth.forgot')} <button type="button" class="forgot" onclick={goToLogin}>{t('auth.loginAgain')}</button>{t('auth.forgotAfter')}
     </p>
     <footer>
-      <button type="button" class="ghost" onclick={() => wfmUnlockDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Unlocking…' : 'Unlock'}</button>
+      <button type="button" class="ghost" onclick={() => wfmUnlockDialog?.close()}>{t('auth.cancel')}</button>
+      <button type="submit" disabled={wfmAuthBusy}>{t(wfmAuthBusy ? 'auth.unlocking' : 'auth.unlock')}</button>
     </footer>
   </form>
 </dialog>

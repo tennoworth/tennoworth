@@ -7499,3 +7499,248 @@ msgstr ""
 msgctxt "notify.footnote"
 msgid "Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days."
 msgstr ""
+
+#. Platform choice.
+msgctxt "auth.platform.pc"
+msgid "PC (Steam & Epic)"
+msgstr ""
+
+#. Platform choice.
+msgctxt "auth.platform.ps4"
+msgid "PlayStation"
+msgstr ""
+
+#. Platform choice.
+msgctxt "auth.platform.xbox"
+msgid "Xbox"
+msgstr ""
+
+#. Platform choice.
+msgctxt "auth.platform.switch"
+msgid "Switch"
+msgstr ""
+
+#. Error.
+msgctxt "auth.mismatch"
+msgid "Passphrases don’t match."
+msgstr ""
+
+#. Error.
+msgctxt "auth.windowClosed"
+msgid "The warframe.market window was closed before you signed in."
+msgstr ""
+
+#. Dialog heading.
+msgctxt "auth.loginTitle"
+msgid "Log in to warframe.market"
+msgstr ""
+
+#. Dialog text. WFM = warframe.market.
+msgctxt "auth.loginLede"
+msgid "You sign in on warframe.market’s own page - your WFM password never passes through TennoWorth. The sign-in token is encrypted on this PC with a passphrase you choose."
+msgstr ""
+
+#. Field label; the token guide refers to it.
+msgctxt "auth.sessionToken"
+msgid "Session token"
+msgstr ""
+
+#. Link button.
+msgctxt "auth.useWindow"
+msgid "Use the sign-in window instead"
+msgstr ""
+
+#. Text before a link button.
+msgctxt "auth.windowBroken"
+msgid "Window not working?"
+msgstr ""
+
+#. Link button.
+msgctxt "auth.pasteToken"
+msgid "Paste a session token"
+msgstr ""
+
+#. Text after the link button.
+msgctxt "auth.fromBrowser"
+msgid "from your browser instead."
+msgstr ""
+
+#. Field label.
+msgctxt "auth.platform"
+msgid "Platform"
+msgstr ""
+
+#. Field label.
+msgctxt "auth.passphrase"
+msgid "Encryption passphrase"
+msgstr ""
+
+#. Field placeholder.
+msgctxt "auth.passphraseHint"
+msgid "12+ characters - you may need it again after a restart"
+msgstr ""
+
+#. Field help.
+msgctxt "auth.passphraseHelp"
+msgid "Locks your WFM sign-in token to this PC, so the app can list and manage your orders all session without signing in to WFM again."
+msgstr ""
+
+#. Field label.
+msgctxt "auth.confirm"
+msgid "Confirm passphrase"
+msgstr ""
+
+#. Field help.
+msgctxt "auth.confirmHelp"
+msgid "Forgot it? No problem - just log in again and set a new one. Your WFM account is never locked out."
+msgstr ""
+
+#. Checkbox. Keep the product names.
+msgctxt "auth.rememberLong"
+msgid "Remember on this device - stores the unlock key in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager) so you’re not asked each launch. Never the passphrase itself."
+msgstr ""
+
+#. Checkbox.
+msgctxt "auth.remember"
+msgid "Remember on this device - stores the unlock key in your OS keyring so you’re not asked each launch. Never the passphrase itself."
+msgstr ""
+
+#. Note.
+msgctxt "auth.noKeyring"
+msgid "Your system’s keyring isn’t available, so TennoWorth can’t remember this device and will ask for your passphrase each launch. On KDE, turn on KDE Wallet in System Settings."
+msgstr ""
+
+#. Status.
+msgctxt "auth.waiting"
+msgid "Finish signing in in the warframe.market window. It closes by itself once you’re in."
+msgstr ""
+
+#. Link button.
+msgctxt "auth.report"
+msgid "Report a bug"
+msgstr ""
+
+#. Text after "Report a bug". Keep the leading space.
+msgctxt "auth.reportAfter"
+msgid " if this keeps happening."
+msgstr ""
+
+#. Button.
+msgctxt "auth.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Button while busy.
+msgctxt "auth.checkingToken"
+msgid "Checking token…"
+msgstr ""
+
+#. Button.
+msgctxt "auth.saveToken"
+msgid "Save token"
+msgstr ""
+
+#. Button while busy.
+msgctxt "auth.waitingSignIn"
+msgid "Waiting for sign-in…"
+msgstr ""
+
+#. Button.
+msgctxt "auth.continue"
+msgid "Continue to warframe.market"
+msgstr ""
+
+#. Dialog heading.
+msgctxt "auth.unlockTitle"
+msgid "Unlock warframe.market listing"
+msgstr ""
+
+#. Dialog text.
+msgctxt "auth.unlockLede"
+msgid "Enter the passphrase you set at login to decrypt your WFM token for this session. It stays in the app’s memory - never on disk, never in this window."
+msgstr ""
+
+#. Field label.
+msgctxt "auth.passphraseLabel"
+msgid "Passphrase"
+msgstr ""
+
+#. Text before a link button.
+msgctxt "auth.forgot"
+msgid "Forgot it?"
+msgstr ""
+
+#. Link button.
+msgctxt "auth.loginAgain"
+msgid "Log in again"
+msgstr ""
+
+#. Text after "Log in again". Keep the leading space.
+msgctxt "auth.forgotAfter"
+msgid " to set a new passphrase."
+msgstr ""
+
+#. Button while busy.
+msgctxt "auth.unlocking"
+msgid "Unlocking…"
+msgstr ""
+
+#. Button.
+msgctxt "auth.unlock"
+msgid "Unlock"
+msgstr ""
+
+#. Screen reader name of the browser choice.
+msgctxt "guide.browser"
+msgid "Your browser"
+msgstr ""
+
+#. Link.
+msgctxt "guide.open"
+msgid "Open warframe.market"
+msgstr ""
+
+#. Text after the link. Keep the leading space.
+msgctxt "guide.openAfter"
+msgid " in your browser and sign in."
+msgstr ""
+
+#. Firefox step. Keep the keys; use the panel name Firefox shows in your language.
+msgctxt "guide.ff1"
+msgid "Press <kbd>Shift</kbd>+<kbd>F9</kbd> to open the Storage panel."
+msgstr ""
+
+#. Firefox step. Use the names Firefox shows in your language.
+msgctxt "guide.ff2"
+msgid "Expand <b>Cookies</b> and select <b>https://warframe.market</b>."
+msgstr ""
+
+#. Firefox step. Keep JWT and the keys.
+msgctxt "guide.ff3"
+msgid "Double-click the <b>Value</b> of the <b>JWT</b> row, then press <kbd>Ctrl</kbd>+<kbd>A</kbd> and <kbd>Ctrl</kbd>+<kbd>C</kbd>."
+msgstr ""
+
+#. Chrome step. Use the tab name Chrome shows in your language.
+msgctxt "guide.cr1"
+msgid "Press <kbd>F12</kbd> and open the <b>Application</b> tab (behind <b>»</b> if it is hidden)."
+msgstr ""
+
+#. Chrome step.
+msgctxt "guide.cr2"
+msgid "Under <b>Storage</b> → <b>Cookies</b>, select <b>https://warframe.market</b>."
+msgstr ""
+
+#. Chrome step. Keep JWT and the keys.
+msgctxt "guide.cr3"
+msgid "Double-click the <b>Value</b> of the <b>JWT</b> row, then press <kbd>Ctrl</kbd>+<kbd>C</kbd>."
+msgstr ""
+
+#. Last step; field is the token field label.
+msgctxt "guide.paste"
+msgid "Paste it into <b>{field}</b> above."
+msgstr ""
+
+#. Note.
+msgctxt "guide.note"
+msgid "TennoWorth checks the token with warframe.market before saving it, encrypted. It signs in as you, so don’t share it. Close the tab rather than logging out of warframe.market there - logging out may end this token too."
+msgstr ""
