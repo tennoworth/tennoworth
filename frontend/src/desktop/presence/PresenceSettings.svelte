@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { busy as pending, roving } from '../../ui/keyboard-actions';
   // Settings → warframe.market account → Trade presence: the status, following
   // the game, and how long a status picked by hand is kept.
   import { PRESENCE_KEEP_FOR_CHOICES, type PresenceChoice } from '../../contracts/desktop';
@@ -34,9 +35,9 @@
     <div class="ui-setting-row">
       <div class="ui-setting-copy"><strong id="presence-status-label">Status</strong><p>What other traders see next to your orders. {presenceLine(status)}.</p></div>
       <div class="ui-setting-control">
-        <div class="ui-segmented" role="group" aria-labelledby="presence-status-label">
+        <div class="ui-segmented" role="group" aria-labelledby="presence-status-label" use:roving>
           {#each PRESENCE_CHOICES as choice (choice)}
-            <button type="button" aria-pressed={status.status === choice} disabled={!usable || presence.pending !== null} onclick={() => void presence.set(choice)}>{PRESENCE_LABEL[choice]}{#if presence.pending === choice}…{/if}</button>
+            <button type="button" aria-pressed={status.status === choice} disabled={!usable} use:pending={presence.pending !== null} onclick={() => void presence.set(choice)}>{PRESENCE_LABEL[choice]}{#if presence.pending === choice}…{/if}</button>
           {/each}
         </div>
       </div>
@@ -44,7 +45,7 @@
     <div class="ui-setting-row">
       <div class="ui-setting-copy"><label for="presence-follow">Follow the game</label><p>Online in game from the moment you log in to Warframe until you quit. If you change your status yourself, here or on warframe.market, following pauses until your next game session.</p><p>warframe.market's rules treat Online in game as a promise to answer whispers and trade within 15 minutes. A long mission or AFK breaks it and can get you reported, so set Invisible yourself when you can't trade.</p></div>
       <div class="ui-setting-control">
-        <label class="ui-setting-check"><input id="presence-follow" type="checkbox" checked={status.settings.followGame} disabled={presence.savingSettings} onchange={(e) => void presence.saveSettings({ ...status.settings, followGame: e.currentTarget.checked })}><span>Enabled</span></label>
+        <label class="ui-setting-check"><input id="presence-follow" type="checkbox" checked={status.settings.followGame} use:pending={presence.savingSettings} onchange={(e) => void presence.saveSettings({ ...status.settings, followGame: e.currentTarget.checked })}><span>Enabled</span></label>
         <span id="presence-closed-label" class="status">When Warframe closes</span>
         <Select id="presence-closed" labelledby="presence-closed-label" value={status.settings.whenClosed} options={closedChoices} disabled={presence.savingSettings || !status.settings.followGame} onchange={(choice) => void presence.saveSettings({ ...status.settings, whenClosed: choice })} />
       </div>
@@ -52,9 +53,9 @@
     <div class="ui-setting-row">
       <div class="ui-setting-copy"><strong id="presence-keep-setting">Keep status for</strong><p>When you pick a status yourself. After that warframe.market sets you to Invisible, as it does on the website.{#if status.following}{' '}Following the game manages this for you right now.{/if}</p></div>
       <div class="ui-setting-control">
-        <div class="ui-segmented" role="group" aria-labelledby="presence-keep-setting">
+        <div class="ui-segmented" role="group" aria-labelledby="presence-keep-setting" use:roving>
           {#each keepChoices as minutes (minutes)}
-            <button type="button" aria-pressed={!status.following && status.settings.keepForMinutes === minutes} disabled={status.following || presence.savingSettings} onclick={() => void presence.saveSettings({ ...status.settings, keepForMinutes: minutes })}>{keepForLabel(minutes)}</button>
+            <button type="button" aria-pressed={!status.following && status.settings.keepForMinutes === minutes} disabled={status.following} use:pending={presence.savingSettings} onclick={() => void presence.saveSettings({ ...status.settings, keepForMinutes: minutes })}>{keepForLabel(minutes)}</button>
           {/each}
         </div>
       </div>

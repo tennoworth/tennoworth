@@ -37,7 +37,9 @@ export type SettingKey =
   /** User-selected character shortcuts; keyboard layout data is never persisted. */
   | 'keyboard'
   /** How item lists draw: 'visual' (item art, roomier rows) or 'compact'. */
-  | 'display';
+  | 'display'
+  /** Desktop sidebar (JSON: width in px, collapsed to the icon rail). */
+  | 'sidebar';
 
 
 /** The scalar settings every build persists. */

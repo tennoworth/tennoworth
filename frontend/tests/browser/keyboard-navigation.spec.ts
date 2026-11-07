@@ -55,7 +55,7 @@ test('skip links and keyboard view changes bypass sidebar while preserving filte
   const picker = page.getByRole('combobox', { name: 'Find a view' });
   await expect(picker).toBeFocused(); await picker.fill('price watches'); await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Price watches', exact: true })).toBeFocused();
-  await page.keyboard.press('/'); await expect(page.getByRole('textbox', { name: 'Item to watch' })).toBeFocused();
+  await page.keyboard.press('/'); await expect(page.getByRole('combobox', { name: 'Item to watch' })).toBeFocused();
 });
 
 test('hosted search, custom characters, disable and unsupported layout fallback', async ({ page }) => {
@@ -144,7 +144,18 @@ test('a custom view key works without layout discovery, and picker handles arrow
 
  test('shortcut utilities live in the footer and leave view navigation first', async ({ page }) => {
   await desktop(page);
-  await expect(page.locator('.sidebar nav').getByRole('button').first()).toHaveText(/^Sell/);
+  await expect(page.locator('.sidebar nav').getByRole('button').first()).toHaveAccessibleName(/^Sell/);
+  // Wide: the key legend under the view is the clickable reference, so the
+  // sidebar foot does not repeat it. Narrow: the legend hides and the foot has it.
+  const legend = page.locator('.key-legend');
+  await expect(page.locator('.sfoot').getByRole('button', { name: /^Keyboard shortcuts/ })).toBeHidden();
+  await legend.getByRole('button', { name: /^Go to a view/ }).click();
+  await expect(page.getByRole('combobox', { name: 'Find a view' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await legend.getByRole('button', { name: /^Keyboard shortcuts/ }).click();
+  await expect(help(page)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 800, height: 700 });
+  await expect(legend).toBeHidden();
   await expect(page.locator('.sfoot').getByRole('button', { name: /^Keyboard shortcuts/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /^Go to/ })).toHaveCount(0);
 });

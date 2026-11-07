@@ -4,6 +4,7 @@
   const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent, evaluateTradeSession } = useDesktopServices();
   import { onMount, onDestroy, untrack, type Snippet } from 'svelte';
   import BuyerAlternatives from './BuyerAlternatives.svelte';
+  import { busy, focusLater, roving } from '../../ui/keyboard-actions';
   import { LiveTopController } from './live-top.svelte';
   const liveTop = new LiveTopController({ desktopLiveTopPrices, listenForTauriEvent });
   onDestroy(() => liveTop.dispose());
@@ -46,6 +47,18 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   let livePrices = $state<Record<string, Partial<MarketItemEntry>>>({});
   let priceSources = $state<Record<string, string>>({});
   let buyerSelection = $state<SessionRow | null>(null);
+  const buyerButton = (key: string) => () => [...document.querySelectorAll<HTMLElement>('.compare-buyers')].find((el) => el.dataset.row === key);
+  // The comparison opens below the table; focus goes to it so it is seen and
+  // read, and back to the row's button when it closes.
+  function compareBuyers(row: SessionRow) {
+    buyerSelection = { ...row };
+    focusLater(() => document.querySelector<HTMLElement>('.buyer-alternatives h3'));
+  }
+  function closeBuyers() {
+    const key = buyerSelection?.key;
+    buyerSelection = null;
+    if (key) focusLater(buyerButton(key));
+  }
   let disposed = false;
   let request = 0;
   let budgetInitialized = false;
@@ -198,7 +211,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     <div class="ui-toolbar planning-controls">
       <div class="ui-field">
         <span>Trade goal</span>
-        <div class="ui-segmented modes" role="group" aria-label="Trade intent">
+        <div class="ui-segmented modes" role="group" aria-label="Trade intent" use:roving>
           {#each SESSION_MODES as choice}
             <button aria-pressed={mode === choice.id} title={choice.description}
               disabled={cap === 0 && !!retained} onclick={() => mode = choice.id}>{choice.name}</button>
@@ -207,9 +220,11 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       </div>
       <label class="ui-field budget-field">Trade budget
         <input class="ui-input" aria-label="Trade budget" type="number" min="1" max={cap} step="1"
-          bind:value={budget} disabled={cap === 0} />
+          bind:value={budget} disabled={cap === 0} aria-describedby="budget-limit"
+          aria-invalid={cap > 0 && (budget == null || budget < 1 || budget > cap) ? 'true' : undefined}
+          onchange={() => { if (budget != null && cap > 0) budget = Math.min(cap, Math.max(1, Math.round(budget))); }} />
       </label>
-      <span class="muted">{cap > 0 && cap === allowance?.remaining ? `Can't exceed the ${cap} trades left today.` : `Up to ${cap} estimated trades per batch.`}</span>
+      <span class="muted" id="budget-limit">{cap > 0 && cap === allowance?.remaining ? `Can't exceed the ${cap} trades left today.` : `Up to ${cap} estimated trades per batch.`}</span>
     </div>
     <p class="muted">{SESSION_MODES.find(choice => choice.id === mode)?.description}</p>
     <details class="session-options">
@@ -249,7 +264,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     {#if listingBlockReason}<p class="ui-notice" data-tone="warn" role="status">{listingBlockReason} {#if onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{/if}</p>{/if}
     <div class="ui-toolbar">
       <h3>{display.rows.length} listings · {display.trades} estimated trades · {display.total.toLocaleString()}p potential</h3>
-      <button class="btn ghost" onclick={refreshPrices} disabled={planning || !!planningError || liveBusy || !plan.rows.length || cap === 0}>
+      <button class="btn ghost" onclick={refreshPrices} disabled={planning || !!planningError || !plan.rows.length || cap === 0} use:busy={liveBusy}>
         {liveBusy ? 'Checking prices…' : 'Check live prices'}
       </button>
       <button class="btn primary" disabled={!!listingBlockReason || loading || planning || !!planningError || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
@@ -280,7 +295,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
                     <small>Per set: {Object.entries(row.components).map(([slug, count]) => `${parts.find(part => part.slug === slug)?.name ?? slug} ×${count}`).join(', ')}</small>
                     <small>Parts reference: {reference == null ? 'Unknown' : `${Number(reference.toFixed(2))}p`} · set ask {row.platinum}p</small>
                   {/if}
-                  <button class="btn ghost xs" onclick={() => buyerSelection = { ...row }}>Compare buyers</button>
+                  <button class="btn ghost xs compare-buyers" data-row={row.key} aria-expanded={buyerSelection?.key === row.key} aria-label="Compare buyers for {row.name}" onclick={() => compareBuyers(row)}>Compare buyers</button>
                 </td>
                 <td>{row.quantity}</td><td>{row.per_trade}</td><td>{row.trades}</td><td>{row.platinum}p<small>{priceSources[row.slug] ?? 'Cached reference'}</small></td>
                 <td>{row.bid == null ? 'Unknown' : `${Number(row.bid.toFixed(2))}p`}</td><td>{row.quantity * row.platinum}p</td><td class="reason">{row.reason}</td>
@@ -303,7 +318,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   {#if buyerSelection}
     {#key buyerSelection}
       <BuyerAlternatives slug={buyerSelection.slug} name={buyerSelection.name} quantity={buyerSelection.quantity}
-        ask={buyerSelection.platinum} onclose={() => buyerSelection = null} />
+        ask={buyerSelection.platinum} onclose={closeBuyers} />
     {/key}
   {/if}
 </div>

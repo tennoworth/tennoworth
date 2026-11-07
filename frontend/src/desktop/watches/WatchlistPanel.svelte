@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
+  import { busy, focusLater } from '../../ui/keyboard-actions';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopAddWatch, desktopCheckWatchesNow, desktopDeleteWatch, desktopListWatches, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy } from 'svelte';
@@ -40,6 +41,28 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
 
   let index = $derived(buildBrowseIndex(market));
   let results = $derived(picked ? [] : searchItems(market, index, query, 8));
+  // The suggestions are a listbox driven from the field: arrows choose, Enter
+  // picks, Escape closes the list and a second Escape clears the field.
+  let active = $state(-1);
+  let suggestOpen = $state(true);
+  let listShown = $derived(!picked && suggestOpen && results.length > 0);
+  let atLimit = $derived(watches.length >= MAX_WATCHES);
+  let confirmRemove = $state<number | null>(null);
+  function searchKey(event: KeyboardEvent): void {
+    if (event.isComposing) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (!results.length || picked) return;
+      event.preventDefault();
+      if (!listShown) { suggestOpen = true; active = event.key === 'ArrowDown' ? 0 : results.length - 1; return; }
+      active = event.key === 'ArrowDown' ? (active + 1) % results.length : (active - 1 + results.length) % results.length;
+    } else if (event.key === 'Enter' && listShown) {
+      event.preventDefault();
+      pick(results[active >= 0 ? active : 0]);
+    } else if (event.key === 'Escape' && listShown) {
+      event.preventDefault(); event.stopPropagation();
+      suggestOpen = false; active = -1;
+    }
+  }
 
   const toastQueue = createToastQueue(4500);
   const pushToast = toastQueue.push;
@@ -76,6 +99,8 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
   function pick(r: BrowseRow): void {
     picked = r;
     query = r.name;
+    active = -1;
+    focusLater(() => document.querySelector<HTMLInputElement>('.watchlist .threshold input'));
     // Sensible default: a "buy cheap" watch 20% under the current avg, or a
     // "sell dear" watch 20% over it. The user edits before saving.
     threshold = Math.max(1, Math.round(side === 'sell' ? r.avg * 0.8 : r.avg * 1.2));
@@ -101,6 +126,7 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
       watches = next;
       pushToast(`Watching ${picked.name}: ${side === 'sell' ? '≤' : '≥'} ${threshold}p.`);
       clearPick();
+      focusLater(() => document.getElementById('watch-item'));
     } catch (e) {
       pushToast(humanError(e), 'error');
     } finally {
@@ -108,7 +134,8 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
     }
   }
 
-  async function remove(w: Watch): Promise<void> {
+  async function remove(w: Watch, row: number): Promise<void> {
+    confirmRemove = null;
     busyIds = new Set([...busyIds, w.id]);
     loadGeneration++;
     try {
@@ -116,6 +143,12 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
       if (disposed) return;
       loadGeneration++;
       watches = next;
+      pushToast(`Stopped watching ${w.name}.`);
+      // The row is gone: the next watch's Remove, or the item field, takes focus.
+      focusLater(() => {
+        const left = [...document.querySelectorAll<HTMLElement>('.watchlist .remove-watch')];
+        return left[Math.min(row, left.length - 1)] ?? document.getElementById('watch-item');
+      });
     } catch (e) {
       pushToast(humanError(e), 'error');
     } finally {
@@ -168,7 +201,7 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
   <header class="view-header">
     <h2>Price watches</h2><p class="lede">Get a desktop notification when an item reaches your target price.</p>
     <div class="vh-end">
-      <button class="btn ghost" onclick={checkNow} disabled={checking || watches.length === 0}
+      <button class="btn ghost" onclick={checkNow} disabled={watches.length === 0} use:busy={checking}
         title="Run a check right now (the app also checks every 10 minutes in the background and notifies you).">
         {checking ? 'Checking…' : 'Check now'}
       </button>
@@ -177,7 +210,7 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
 
   <section class="wrap tw watch-create" aria-labelledby="watch-create-title">
     <div class="rail"><h3 id="watch-create-title">Add a watch</h3></div>
-  <div class="add">
+  <form class="add" onsubmit={(event) => { event.preventDefault(); if (!atLimit) void add(); }}>
     <div class="pick ui-field">
       <label for="watch-item">Item to watch</label>
       <div class="pick-input">
@@ -186,23 +219,33 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
         class="ui-input"
         type="text"
         placeholder="Item to watch - try “primed flow”, “ash prime set”…"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={listShown}
+        aria-controls="watch-suggest"
+        aria-activedescendant={listShown && active >= 0 ? `watch-option-${active}` : undefined}
         bind:value={query}
-        oninput={() => { if (picked && query !== picked.name) picked = null; }}
+        oninput={() => { if (picked && query !== picked.name) picked = null; suggestOpen = true; active = -1; }}
+        onkeydown={searchKey}
+        onblur={() => { suggestOpen = false; active = -1; }}
+        onfocus={() => (suggestOpen = true)}
       />
       {#if picked}
-        <button class="btn xs ghost" onclick={clearPick} aria-label="Clear item">×</button>
+        <button type="button" class="btn xs ghost" onclick={() => { clearPick(); focusLater(() => document.getElementById('watch-item')); }} aria-label="Clear item">×</button>
       {/if}
       </div>
-      {#if !picked && results.length}
-        <ul class="suggest" role="listbox">
-          {#each results as r (r.slug)}
-            <li><button type="button" onclick={() => pick(r)}>
+      <ul class="suggest" id="watch-suggest" role="listbox" aria-label="Matching items" hidden={!listShown}>
+        {#if listShown}
+          {#each results as r, i (r.slug)}
+            <!-- svelte-ignore a11y_click_events_have_key_events (The field above drives the list from the keyboard.) -->
+            <li id="watch-option-{i}" role="option" aria-selected={i === active} class:active={i === active}
+              onpointerdown={(event) => event.preventDefault()} onclick={() => pick(r)}>
               <span class="name">{r.name}</span>
               <span class="muted">{plat(r.avg)}p · {r.vol}/48h</span>
-            </button></li>
+            </li>
           {/each}
-        </ul>
-      {/if}
+        {/if}
+      </ul>
     </div>
     <div class="ui-field">
       <span>Notify when</span>
@@ -212,8 +255,10 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
       <span>Target price (p)</span>
       <input class="ui-input" type="number" min="1" bind:value={threshold} disabled={!picked} />
     </label>
-    <button class="btn primary" onclick={add} disabled={!picked || threshold < 1 || adding}>Add watch</button>
-  </div>
+    <button type="submit" class="btn primary" disabled={!picked || threshold < 1 || atLimit} use:busy={adding}
+      aria-describedby={atLimit ? 'watch-limit' : undefined}>Add watch</button>
+  </form>
+  {#if atLimit}<p class="ui-notice limit" data-tone="warn" id="watch-limit">You have {MAX_WATCHES} watches, the most the app keeps. Remove one to add another.</p>{/if}
 
     <div class="foot">New listings alert within seconds. Existing orders, excluding your own, are rechecked every 10 minutes, or hourly while the live feed is connected. At most one notification per watch every 6 hours.</div>
   </section>
@@ -229,7 +274,7 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
         <colgroup><col /><col style="width:10rem" /><col style="width:11rem" /><col style="width:8rem" /><col style="width:7rem" /></colgroup>
         <thead><tr><th class="l">Item</th><th>Condition</th><th>Last seen</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
-          {#each watches as w (w.id)}
+          {#each watches as w, row (w.id)}
             {@const st = status(w)}
             {@const o = lastOutcomes.get(w.id)}
             <tr>
@@ -240,7 +285,17 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
                 <span class="muted"> · {ago(w.last_checked_at)}</span>
               </td>
               <td class={st.cls}>{st.label}</td>
-              <td><button class="btn xs ghost" onclick={() => remove(w)} disabled={busyIds.has(w.id)} aria-label="Remove {w.name}{w.subtype ? ` · ${w.subtype}` : ''}">Remove</button></td>
+              <td>
+                {#if confirmRemove === w.id}
+                  <!-- svelte-ignore a11y_no_static_element_interactions (Escape backs out of the confirmation.) -->
+                  <span class="confirm-pair" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); confirmRemove = null; focusLater(() => document.querySelector<HTMLElement>(`.remove-watch[data-watch="${w.id}"]`)); } }}>
+                    <button class="btn xs bad" use:busy={busyIds.has(w.id)} onclick={() => remove(w, row)} aria-label="Confirm removing {w.name}">Remove</button>
+                    <button class="btn xs ghost" onclick={() => { confirmRemove = null; focusLater(() => document.querySelector<HTMLElement>(`.remove-watch[data-watch="${w.id}"]`)); }} aria-label="Keep watching {w.name}">Keep</button>
+                  </span>
+                {:else}
+                  <button class="btn xs ghost remove-watch" data-watch={w.id} onclick={() => { confirmRemove = w.id; focusLater(() => document.querySelector<HTMLElement>('.watchlist .confirm-pair .bad')); }} aria-label="Remove {w.name}{w.subtype ? ` · ${w.subtype}` : ''}">Remove…</button>
+                {/if}
+              </td>
             </tr>
           {/each}
         </tbody>
@@ -270,11 +325,15 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel);
     box-shadow: var(--shadow-pop);
   }
-  .suggest li button {
-    width: 100%; display: flex; justify-content: space-between; gap: var(--s3);
-    background: none; border: 0; padding: 6px 8px; color: var(--fg); cursor: pointer; text-align: left; font: inherit; border-radius: var(--radius-ctl);
+  .suggest li {
+    display: flex; justify-content: space-between; gap: var(--s3);
+    padding: 6px 8px; color: var(--fg); cursor: pointer; border-radius: var(--radius-ctl);
   }
-  .suggest li button:hover { background: var(--panel-2); }
+  .suggest li:hover { background: var(--panel-2); }
+  /* The keyboard's current option: focus stays in the field, so the option
+     carries the focus ring itself. */
+  .suggest li.active { background: var(--panel-2); outline: 2px solid var(--accent); outline-offset: -2px; }
+  .limit { margin: 0 var(--inset) var(--s3); }
   table { min-width: 40rem; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .good { color: var(--good); font-weight: 600; }

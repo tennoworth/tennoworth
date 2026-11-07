@@ -205,6 +205,8 @@ describe('SettingsPanel', () => {
     expect(updateOverlaySettings).toHaveBeenCalledWith({ ...settings, enabled: true });
 
     const diagnostics = screen.getByRole('checkbox', { name: /Save local recognition diagnostics/ });
+    // Settings ignore changes while the previous one is still saving.
+    await waitFor(() => expect(diagnostics.getAttribute('aria-disabled')).toBeNull());
     await fireEvent.click(diagnostics);
     expect(await screen.findByText(/Diagnostic captures may contain player or game information/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open diagnostics' })).toBeTruthy();

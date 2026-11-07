@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { busy as pending, roving } from '../../ui/keyboard-actions';
   import UsageSettings from './UsageSettings.svelte';
   import PriceReportSettings from './PriceReportSettings.svelte';
   import NotificationSettings from '../notifications/NotificationSettings.svelte';
@@ -38,7 +39,7 @@
     onwfmlogout?: () => Promise<void>;
     /** Opens the page at this section (the inbox's "Notification settings",
      *  the price sharing prompt's "What is sent"). */
-    section?: 'notifications' | 'price-sharing' | 'account' | null;
+    section?: 'notifications' | 'price-sharing' | 'account' | 'scan' | 'overlay' | 'app' | null;
     /** Whether Settings is on screen; it stays mounted while hidden. */
     active?: boolean;
     onsectionshown?: () => void;
@@ -267,13 +268,13 @@
       <a href="#settings-account"><span class="k">warframe.market</span><strong class:ok={wfmStatus?.unlocked}>{sessionText()}</strong><span>Encrypted login on this device</span></a>
     {/if}
   </div>
+  <!-- Only sections the cards above do not already link to: each extra link
+       was another Tab stop to the same place. -->
   <nav class="jump" aria-label="Settings sections">
     <span class="k">Everyday</span>
-    {#if autoScan}<a href="#settings-scan">Automatic scan</a>{/if}
-    <a href="#settings-overlay">Relic overlay</a>
+    {#if !transport}<a href="#settings-overlay">Relic overlay</a>{/if}
     <a href="#settings-notifications">Notifications</a>
     <span class="k">Set once</span>
-    <a href="#settings-account">Account</a>
     <a href="#settings-app">Appearance, updates and privacy</a>
   </nav>
 
@@ -288,7 +289,7 @@
         <div class="ui-setting-row">
           <div class="ui-setting-copy"><label for="auto-scan-enabled">Scan automatically while Warframe is running</label><p>Off: TennoWorth scans only when you ask. On: it looks for the game and rescans on the chosen cadence. Each rescan reads the game's memory and requests your account inventory from Digital Extremes. Nothing is scanned while the game is closed or logged out, and a rescan never interrupts a listing review.</p></div>
           <div class="ui-setting-control">
-            <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} disabled={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, enabled: input.checked }, (stored) => (input.checked = stored.enabled)); }}><span>Enabled</span></label>
+            <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} use:pending={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, enabled: input.checked }, (stored) => (input.checked = stored.enabled)); }}><span>Enabled</span></label>
             {#if autoScan.settings.enabled}
               <Select id="auto-scan-cadence" label="Scan every" value={autoScan.settings.cadenceMinutes} options={cadenceOptions} disabled={savingAutoScan} onchange={(minutes) => void saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: minutes }, () => {})} />
             {/if}
@@ -296,7 +297,7 @@
         </div>
         <div class="ui-setting-row">
           <div class="ui-setting-copy"><label for="auto-scan-adopt">Update the open app automatically</label><p>When a scan finishes in the background - on the cadence, or Rescan from the tray - replace the inventory on screen. While a listing review or Trade Session is being prepared the scan waits for “Load new scan” instead.</p></div>
-          <label class="ui-setting-check"><input id="auto-scan-adopt" type="checkbox" checked={autoScan.settings.adoptAutomatically} disabled={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, adoptAutomatically: input.checked }, (stored) => (input.checked = stored.adoptAutomatically)); }}><span>Automatic</span></label>
+          <label class="ui-setting-check"><input id="auto-scan-adopt" type="checkbox" checked={autoScan.settings.adoptAutomatically} use:pending={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, adoptAutomatically: input.checked }, (stored) => (input.checked = stored.adoptAutomatically)); }}><span>Automatic</span></label>
         </div>
       {:else}<p class="exp inset">Loading automatic-scan settings…</p>{/if}
       {#if autoScan.settingsError}<p class="error inset" role="alert">{autoScan.settingsError}</p>{/if}
@@ -305,13 +306,13 @@
   <section class="wrap tw" id="settings-overlay" tabindex="-1" aria-labelledby="set-relic-overlay">
     <div class="rail">
       <h3 id="set-relic-overlay">Relic reward overlay</h3>
-      {#if overlay}<button class="btn xs" onclick={previewOverlay} disabled={!overlay.enabled || savingOverlay}>Preview overlay</button><button class="btn xs" onclick={testOverlay} disabled={!overlay.enabled || savingOverlay}>Scan reward screen now</button>{/if}
+      {#if overlay}<button class="btn xs" onclick={previewOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>Preview overlay</button><button class="btn xs" onclick={testOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>Scan reward screen now</button>{/if}
     </div>
     {#if overlay}
       <div class="ui-setting-row">
         <div class="ui-setting-copy"><label for="overlay-enabled">Enable local screen recognition</label><p>Captures only after a reward event or your retry shortcut. Frames stay in memory and are never uploaded.</p>{#if overlay.enabled && overlayStatus?.lastRun}<p>{lastRunText()}</p>{/if}</div>
         <div class="ui-setting-control">
-          <label class="ui-setting-check"><input id="overlay-enabled" type="checkbox" checked={overlay.enabled} disabled={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, enabled: event.currentTarget.checked })}><span>Enabled</span></label>
+          <label class="ui-setting-check"><input id="overlay-enabled" type="checkbox" checked={overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, enabled: event.currentTarget.checked })}><span>Enabled</span></label>
           {#if overlayStatus}<span class="status" class:good={['watching', 'showing'].includes(overlayStatus.state)}>{overlayStatus.state.replaceAll('-', ' ')} · {overlayStatus.ocrReady ? 'OCR ready' : 'OCR unavailable'}</span>{/if}
         </div>
       </div>
@@ -320,20 +321,20 @@
           <h4>Detection</h4>
           <div class="ui-setting-row">
             <div class="ui-setting-copy"><label for="overlay-auto">Automatic reward detection</label><p>Watches EE.log for “Got rewards”.</p></div>
-            <label class="ui-setting-check"><input id="overlay-auto" type="checkbox" checked={overlay.autoDetect} disabled={!overlay.enabled || savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, autoDetect: event.currentTarget.checked })}><span>Enabled</span></label>
+            <label class="ui-setting-check"><input id="overlay-auto" type="checkbox" checked={overlay.autoDetect} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, autoDetect: event.currentTarget.checked })}><span>Enabled</span></label>
           </div>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-shortcut">Retry shortcut</label><p>Still available when the game delays that line.</p></div><div class="ui-setting-control"><input id="overlay-shortcut" class="ui-input shortcut" value={overlay.shortcut} disabled={!overlay.enabled || savingOverlay} onblur={(event) => saveOverlay({ ...overlay!, shortcut: event.currentTarget.value })}></div></div>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-shortcut">Retry shortcut</label><p>Still available when the game delays that line.</p></div><div class="ui-setting-control"><input id="overlay-shortcut" class="ui-input shortcut" value={overlay.shortcut} disabled={!overlay.enabled} use:pending={savingOverlay} onblur={(event) => saveOverlay({ ...overlay!, shortcut: event.currentTarget.value })}></div></div>
         </div>
         <div class="ui-section-group">
           <h4>Reward cards</h4>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-scale">Card scale</label></div><div class="ui-setting-control"><input id="overlay-scale" type="range" min="0.75" max="1.5" step="0.05" value={overlay.scale} disabled={!overlay.enabled || savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, scale: Number(event.currentTarget.value) })}><output class="mono" for="overlay-scale">{Math.round(overlay.scale * 100)}%</output></div></div>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-prices">Live online asks</label><p>Replace cached prices with live online asks.</p></div><label class="ui-setting-check"><input id="overlay-prices" type="checkbox" checked={overlay.livePrices} disabled={!overlay.enabled || savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, livePrices: event.currentTarget.checked })}><span>Enabled</span></label></div>
-          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-owned">Owned count</label><p>Show count from the latest inventory scan.</p></div><label class="ui-setting-check"><input id="overlay-owned" type="checkbox" checked={overlay.showOwned} disabled={!overlay.enabled || savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, showOwned: event.currentTarget.checked })}><span>Shown</span></label></div>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-scale">Card scale</label></div><div class="ui-setting-control"><input id="overlay-scale" type="range" min="0.75" max="1.5" step="0.05" value={overlay.scale} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, scale: Number(event.currentTarget.value) })}><output class="mono" for="overlay-scale">{Math.round(overlay.scale * 100)}%</output></div></div>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-prices">Live online asks</label><p>Replace cached prices with live online asks.</p></div><label class="ui-setting-check"><input id="overlay-prices" type="checkbox" checked={overlay.livePrices} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, livePrices: event.currentTarget.checked })}><span>Enabled</span></label></div>
+          <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-owned">Owned count</label><p>Show count from the latest inventory scan.</p></div><label class="ui-setting-check"><input id="overlay-owned" type="checkbox" checked={overlay.showOwned} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, showOwned: event.currentTarget.checked })}><span>Shown</span></label></div>
         </div>
       </div>
       <details class="troubleshooting" bind:open={troubleshootingOpen}>
         <summary>Troubleshooting: diagnostics and display requirements</summary>
-        <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-diagnostics">Save local recognition diagnostics</label><p>Keep captures on this device to investigate recognition problems.</p></div><label class="ui-setting-check"><input id="overlay-diagnostics" type="checkbox" checked={overlay.diagnostics} disabled={!overlay.enabled || savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, diagnostics: event.currentTarget.checked })}><span>Enabled</span></label></div>
+        <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-diagnostics">Save local recognition diagnostics</label><p>Keep captures on this device to investigate recognition problems.</p></div><label class="ui-setting-check"><input id="overlay-diagnostics" type="checkbox" checked={overlay.diagnostics} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, diagnostics: event.currentTarget.checked })}><span>Enabled</span></label></div>
         {#if overlay.diagnostics}<div class="diagnostics"><p class="warning">Diagnostic captures may contain player or game information. They stay on this device and are never uploaded automatically.</p><div class="ui-toolbar"><button class="btn" onclick={() => diagnosticsAction('open')}>Open diagnostics</button><button class="btn" onclick={() => diagnosticsAction('clear')}>Clear diagnostics</button></div></div>{/if}
         <div class="requirements">
           {#if overlayStatus}<p class="status">{overlayStatus.backend} capture · {overlayStatus.presentationBackend} display</p>{/if}
@@ -353,8 +354,8 @@
       <div class="ui-setting-control">
         <span class="status" class:ok={wfmStatus?.unlocked}>{sessionText()}</span>
         {#if wfmStatus?.logged_in || wfmStatus?.unlocked}
-          <button class="btn" class:bad={confirmingLogout} onclick={logOutWfm} disabled={loggingOut}>{loggingOut ? 'Logging out…' : confirmingLogout ? 'Confirm log out' : 'Log out'}</button>
-          {#if confirmingLogout}<button class="btn ghost" onclick={() => { confirmingLogout = false; logoutError = ''; }} disabled={loggingOut}>Cancel</button>{/if}
+          <button class="btn" class:bad={confirmingLogout} onclick={logOutWfm} use:pending={loggingOut}>{loggingOut ? 'Logging out…' : confirmingLogout ? 'Confirm log out' : 'Log out'}</button>
+          {#if confirmingLogout}<button class="btn ghost" onclick={() => { confirmingLogout = false; logoutError = ''; }} use:pending={loggingOut}>Cancel</button>{/if}
         {/if}
       </div>
     </div>
@@ -375,7 +376,7 @@
         <div class="ui-setting-row">
           <div class="ui-setting-copy"><strong>Item lists</strong><p>Visual shows each item's picture in roomier rows. Compact keeps dense text rows and fits more on screen.</p><p class="credit">Item pictures: Warframe Wiki · © Digital Extremes. TennoWorth is not affiliated with either.</p></div>
           <div class="ui-setting-control">
-            <div class="ui-segmented" role="group" aria-label="Item lists">
+            <div class="ui-segmented" role="group" aria-label="Item lists" use:roving>
               <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>Visual</button>
               <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
             </div>
@@ -394,9 +395,9 @@
             {#if updates.installed}
               <button class="btn primary" onclick={() => updates.restart()}>Restart now</button>
             {:else if info?.available}
-              <button class="btn primary" onclick={() => updates.install()} disabled={updates.installing || updates.checking}>{updates.installing ? 'Installing…' : 'Install update'}</button>
+              <button class="btn primary" onclick={() => updates.install()} use:pending={updates.installing || updates.checking}>{updates.installing ? 'Installing…' : 'Install update'}</button>
             {:else}
-              <button class="btn" onclick={() => updates.check()} disabled={updates.checking}>{updates.checking ? 'Checking…' : 'Check for updates'}</button>
+              <button class="btn" onclick={() => updates.check()} use:pending={updates.checking}>{updates.checking ? 'Checking…' : 'Check for updates'}</button>
             {/if}
             <span class="status" role="status">
               {#if updates.installed}Version {info?.version} is installed and takes over the next time TennoWorth starts.

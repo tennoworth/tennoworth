@@ -1,6 +1,8 @@
 <script lang="ts">
 import KeyboardNavigation from '../../ui/KeyboardNavigation.svelte';
 import KeyLegend from './KeyLegend.svelte';
+import NavIcon from './NavIcon.svelte';
+import { SidebarLayout, SIDEBAR_MAX } from './sidebar.svelte';
 import { createDesktopSession } from './desktop-session.svelte';
 import { createSellWorkspace } from '../selling/sell-workspace.svelte';
 import StatusStrip from './StatusStrip.svelte';
@@ -78,7 +80,16 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   // the desktop app, driven by the wfm_session commands.
   let updateNotesRef: UpdateNotes;
   // Set only by the inbox's settings link; every other way in opens the top.
-  let settingsSection = $state<'notifications' | 'price-sharing' | 'account' | null>(null);
+  let settingsSection = $state<'notifications' | 'price-sharing' | 'account' | 'scan' | 'overlay' | 'app' | null>(null);
+  // Settings people look for by name ("dark mode", "popups") rather than by view.
+  const openSettings = (section: NonNullable<typeof settingsSection>) => { settingsSection = section; filters.setView('settings'); };
+  const settingsDestinations = [
+    { label: 'Settings › Appearance and updates', keywords: 'dark light theme colour color mode updates privacy app icon item pictures visual compact', run: () => openSettings('app') },
+    { label: 'Settings › Notifications', keywords: 'popups alerts sounds in game price watches inbox', run: () => openSettings('notifications') },
+    { label: 'Settings › Automatic scan', keywords: 'auto scan cadence rescan', run: () => openSettings('scan') },
+    { label: 'Settings › Account', keywords: 'warframe.market sign in log out status presence online invisible', run: () => openSettings('account') },
+    { label: 'Settings › Relic overlay', keywords: 'reward screen ocr', run: () => openSettings('overlay') },
+  ];
 
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
@@ -97,6 +108,33 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   const filters = untrack(() => new FilterController(store));
   const prompts = untrack(() => new PromptSession(store, PROMPT_ORDER));
   const routines = untrack(() => new RoutineController(store));
+  const sidebar = untrack(() => new SidebarLayout(store));
+  let shellElement = $state<HTMLElement>();
+  function startResize(event: PointerEvent) {
+    if (event.button !== 0 || !shellElement) return;
+    event.preventDefault();
+    const handle = event.currentTarget as HTMLElement;
+    handle.setPointerCapture(event.pointerId);
+    const left = shellElement.getBoundingClientRect().left;
+    const move = (e: PointerEvent) => sidebar.dragTo(e.clientX - left);
+    const end = () => { handle.removeEventListener('pointermove', move); sidebar.save(); };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('lostpointercapture', end, { once: true });
+  }
+  // On the rail the labels are hidden, so the entry under the pointer or
+  // keyboard names itself beside the rail. One tip, fixed to the window, so the
+  // scrolling view list cannot clip it.
+  let tip = $state<{ text: string; top: number; left: number } | null>(null);
+  function showTip(event: Event) {
+    if (!sidebar.collapsed || matchMedia('(max-width: 900px)').matches) { tip = null; return; }
+    const target = (event.target as Element | null)?.closest<HTMLElement>('.nav-item, .project-link, .feedback-trigger, .rail-toggle');
+    if (!target) { tip = null; return; }
+    const label = target.querySelector('.label')?.textContent?.trim() ?? target.getAttribute('aria-label') ?? target.textContent?.trim() ?? '';
+    const badge = target.querySelector('.badge')?.textContent?.trim();
+    const box = target.getBoundingClientRect();
+    tip = { text: badge && badge !== '—' ? `${label} · ${badge}` : label, top: box.top + box.height / 2, left: box.right + 6 };
+  }
+  const hideTip = () => { tip = null; };
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
@@ -424,32 +462,36 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
-<div data-shell data-testid="desktop-mode" class={showWorkspace ? 'shell' : 'desktop-landing'}>
+<div data-shell data-testid="desktop-mode" class={showWorkspace ? 'shell' : 'desktop-landing'} bind:this={shellElement} data-sidebar={showWorkspace && sidebar.collapsed ? 'rail' : undefined} style:--sidebar={showWorkspace ? (sidebar.collapsed ? 'var(--sidebar-rail)' : `${sidebar.width}px`) : undefined}>
   <StatusStrip keyboardTools={firstRunKeyboard} bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
-  <aside data-shell class="sidebar">
+  <aside data-shell class="sidebar" onpointerover={showTip} onpointerleave={hideTip} onfocusin={showTip} onfocusout={hideTip}>
     <nav data-shell aria-label="App views">
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Trade</div>
         <button data-shell type="button" class="nav-item" data-testid="nav-sell" class:active={effectiveView === 'sell'} aria-current={effectiveView === 'sell' ? 'page' : undefined} onclick={() => filters.setView('sell')}>
-          <span data-shell>{hasInventory ? estimatedGuidance ? 'Opportunities' : 'Sell' : 'Inventory'}</span>
+          <NavIcon name="sell" />
+          <span data-shell class="label">{hasInventory ? estimatedGuidance ? 'Opportunities' : 'Sell' : 'Inventory'}</span>
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven
                "Sell 0" reads as "your inventory got wiped". -->
           {#if hasInventory}<span data-shell class="badge">{defaultFacts.phase === 'done' && !guidanceUnavailable ? sellableCount : '—'}</span>{/if}
         </button>
         
-          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} aria-current={effectiveView === 'session' ? 'page' : undefined} onclick={() => filters.setView('session')}><span data-shell>Trade Session</span></button>
+          <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} aria-current={effectiveView === 'session' ? 'page' : undefined} onclick={() => filters.setView('session')}>
+          <NavIcon name="session" /><span data-shell class="label">Trade Session</span></button>
         
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sets'} aria-current={effectiveView === 'sets' ? 'page' : undefined} onclick={() => filters.setView('sets')}>
-            <span data-shell>Set picks</span>
+          <NavIcon name="sets" />
+            <span data-shell class="label">Set picks</span>
             <span data-shell class="badge">{setResult.phase === 'done' ? setRecos.length : '—'}</span>
           </button>
         <!-- Hidden only once the plan is known to be empty, so the nav does not
              shift when relic values arrive after the inventory. -->
         {#if relicPlan.length > 0 || relicResult.phase !== 'done' || relicResult.error}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} aria-current={effectiveView === 'relics' ? 'page' : undefined} onclick={() => filters.setView('relics')}>
-            <span data-shell>Relics</span>
+          <NavIcon name="relics" />
+            <span data-shell class="label">Relics</span>
             <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
         {/if}
@@ -457,26 +499,31 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
              not shift when the market snapshot lands after the inventory. -->
         {#if resolvedRivens.length > 0 || (inventory.ownedRivens.length > 0 && !inventory.market)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} aria-current={effectiveView === 'rivens' ? 'page' : undefined} onclick={() => filters.setView('rivens')}>
-            <span data-shell>Rivens</span>
+          <NavIcon name="rivens" />
+            <span data-shell class="label">Rivens</span>
             <span data-shell class="badge">{resolvedRivens.length}</span>
           </button>
         {/if}
         {#if showBaroCard || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} aria-current={effectiveView === 'baro' ? 'page' : undefined} onclick={() => filters.setView('baro')}>
-            <span data-shell>Baro</span>
+          <NavIcon name="baro" />
+            <span data-shell class="label">Baro</span>
             {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>
             {:else if baroState && baroState.phase !== 'unknown'}<span data-shell class="badge when" title="Baro arrives in {humanWindow(baroState.windowMs)}">{humanWindow(baroState.windowMs).split(' ')[0]}</span>{/if}
           </button>
         {/if}
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} aria-current={effectiveView === 'routines' ? 'page' : undefined} onclick={() => filters.setView('routines')}>
-          <span data-shell>Routines</span>
+          <NavIcon name="routines" />
+          <span data-shell class="label">Routines</span>
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'calendar'} aria-current={effectiveView === 'calendar' ? 'page' : undefined} onclick={() => filters.setView('calendar')}>
-          <span data-shell>Calendar</span>
+          <NavIcon name="calendar" />
+          <span data-shell class="label">Calendar</span>
         </button>
         {#if buildMetaDrift(inventory.market) || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'meta'} aria-current={effectiveView === 'meta' ? 'page' : undefined} onclick={() => filters.setView('meta')}>
-            <span data-shell>Meta Drift</span>
+          <NavIcon name="meta" />
+            <span data-shell class="label">Meta Drift</span>
           </button>
         {/if}
       </div>
@@ -484,31 +531,41 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Manage</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} aria-current={effectiveView === 'orders' ? 'page' : undefined} onclick={() => filters.setView('orders')}>
-          <span data-shell>My orders</span>
+          <NavIcon name="orders" />
+          <span data-shell class="label">My orders</span>
           {#if ordersToFix > 0}<span data-shell class="badge warn" title="{ordersToFix} {ordersToFix === 1 ? 'order' : 'orders'} to fix">{ordersToFix}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'watches'} aria-current={effectiveView === 'watches' ? 'page' : undefined} onclick={() => filters.setView('watches')}>
-          <span data-shell>Price watches</span>
+          <NavIcon name="watches" />
+          <span data-shell class="label">Price watches</span>
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'notifications'} aria-current={effectiveView === 'notifications' ? 'page' : undefined} onclick={() => filters.setView('notifications')}>
-          <span data-shell>Notifications</span>{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}
+          <NavIcon name="notifications" />
+          <span data-shell class="label">Notifications</span>{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'ledger'} aria-current={effectiveView === 'ledger' ? 'page' : undefined} onclick={() => filters.setView('ledger')}>
-          <span data-shell>Ledger</span>
+          <NavIcon name="ledger" />
+          <span data-shell class="label">Ledger</span>
         </button>
       </div>
 
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Library</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'install'} aria-current={effectiveView === 'install' ? 'page' : undefined} onclick={() => filters.setView('install')}>
-          <span data-shell>FAQ</span>
+          <NavIcon name="faq" />
+          <span data-shell class="label">FAQ</span>
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'settings'} aria-current={effectiveView === 'settings' ? 'page' : undefined} onclick={() => filters.setView('settings')}>
-          <span data-shell>Settings</span>
+          <NavIcon name="settings" />
+          <span data-shell class="label">Settings</span>
         </button>
       </div>
     </nav>
-
+    <!-- After the views in tab order: it is absolutely placed on the edge, and
+         Enter collapsing the sidebar was easy to hit on the way to the views. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div data-shell class="sidebar-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Sidebar width" aria-valuemin={56} aria-valuemax={SIDEBAR_MAX} aria-valuenow={sidebar.collapsed ? 56 : sidebar.width} aria-valuetext={sidebar.collapsed ? 'Icons only' : `${sidebar.width} pixels`} title="Drag to resize · ← → resize · Enter or double-click collapses"
+      onpointerdown={startResize} ondblclick={() => sidebar.toggle()} onkeydown={(e) => { if (sidebar.key(e.key)) e.preventDefault(); }}></div>
   </aside>
 
   {/if}
@@ -689,17 +746,23 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   <!-- After main in source so a narrow window reaches its links at the page
        foot instead of above the first decision; wide windows place it under
        the sidebar. -->
-  <div data-shell class="sfoot">
-    <KeyboardNavigation desktop compact {store} />
+  <!-- The rail tip only repeats each control's own name; the controls inside stay the interaction. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div data-shell class="sfoot" onpointerover={showTip} onpointerleave={hideTip} onfocusin={showTip} onfocusout={hideTip}>
+    <button data-shell type="button" class="rail-toggle" aria-label={sidebar.collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebar.collapsed} onclick={() => { sidebar.toggle(); tip = null; }}>
+      <NavIcon name={sidebar.collapsed ? 'expand' : 'collapse'} /><span data-shell class="label">Collapse</span>
+    </button>
+    <KeyboardNavigation desktop compact {store} extra={settingsDestinations} />
     <nav data-shell class="project-links" aria-label="Project links">
       {@render projectLinkAnchors()}
     </nav>
     <button data-shell type="button" class="feedback-trigger" onclick={openFeedback}>
       <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
-      Send feedback
+      <span data-shell class="label">Send feedback</span>
     </button>
     <div data-shell class="ver" title="build {APP_COMMIT}" data-testid="app-version">{versionLabel}</div>
   </div>
+  {#if tip}<div data-shell class="rail-tip" aria-hidden="true" style:top="{tip.top}px" style:left="{tip.left}px">{tip.text}</div>{/if}
   {/if}
 </div>
 
@@ -717,13 +780,13 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     <svg data-shell class="github-mark" viewBox="0 0 24 24" aria-hidden="true">
       <path data-shell d="M12 2.7a9.5 9.5 0 0 0-3 18.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 0 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.7-1.3-2.2-.3-4.6-1.1-4.6-4.7 0-1 .4-1.9 1-2.6-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.6 0 3.7-2.4 4.5-4.6 4.7.4.3.7.9.7 1.8v2.8c0 .4.2.6.7.5A9.5 9.5 0 0 0 12 2.7Z" />
     </svg>
-    <span data-shell>GitHub</span>
+    <span data-shell class="label">GitHub</span>
   </a>
   <a data-shell class="project-link" href="https://ko-fi.com/prowly" target="_blank" rel="noopener noreferrer">
     <svg data-shell viewBox="0 0 24 24" aria-hidden="true">
       <path data-shell d="M4 7 H17 V16 H6 L4 14 Z M17 9 H19 L21 11 V13 L19 15 H17 M7 10 L10 13 L14 9" />
     </svg>
-    <span data-shell>Buy me a coffee</span>
+    <span data-shell class="label">Buy me a coffee</span>
   </a>
 {/snippet}
 
@@ -824,4 +887,4 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
 
 <UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} onautomatic={(state) => prompts.notes(state)} />
 
-{#snippet firstRunKeyboard()}<KeyboardNavigation {store} />{/snippet}
+{#snippet firstRunKeyboard()}<KeyboardNavigation desktop {store} />{/snippet}

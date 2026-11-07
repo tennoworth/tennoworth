@@ -320,7 +320,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 // Half a 1920px screen, so snapping still works. The status
                 // strip fits one line at this width in every state; narrower,
                 // its fullest state would clip.
-                .min_inner_size(960.0, 480.0);
+                .min_inner_size(1200.0, 480.0);
             // Without an explicit icon the window (and its taskbar/switcher
             // entry) falls back to a generic WM avatar. The App icon setting's
             // last applied colour, so the window opens in it.

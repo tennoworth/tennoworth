@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { busy as pending } from '../../ui/keyboard-actions';
   import { fitTable } from '../../ui/table-fit';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopNotificationPreferences, desktopSaveNotificationPreferences, desktopTestNotification } = useDesktopServices();
@@ -54,12 +55,12 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   }
 </script>
 <section class="wrap tw notification-settings" id="settings-notifications" tabindex="-1" aria-labelledby="notification-settings-title">
-  <div class="rail"><h3 id="notification-settings-title">Notifications</h3><button class="btn xs" disabled={busy} onclick={test}>Send test notification</button></div>
-  {#if error}<div class="ui-notice notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} disabled={busy}>Retry loading preferences</button></div>{/if}
+  <div class="rail"><h3 id="notification-settings-title">Notifications</h3><button class="btn xs" use:pending={busy} onclick={test}>Send test notification</button></div>
+  {#if error}<div class="ui-notice notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} use:pending={busy}>Retry loading preferences</button></div>{/if}
   {#if preferences}
     <div class="ui-setting-row">
       <div class="ui-setting-copy"><label for="notification-popups">Desktop popups</label><p>Pause popups to keep alerts in your inbox without interruptions. Operating-system settings may also suppress popups.</p></div>
-      <label class="ui-setting-check"><input id="notification-popups" type="checkbox" checked={preferences.popups} disabled={busy} onchange={(e) => change(e)} /><span>Enabled</span></label>
+      <label class="ui-setting-check"><input id="notification-popups" type="checkbox" checked={preferences.popups} use:pending={busy} onchange={(e) => change(e)} /><span>Enabled</span></label>
     </div>
     <div class="scroll" use:fitTable>
       <table class="tw categories">
@@ -68,9 +69,9 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
           {#each NOTIFICATION_CATEGORIES as category}
             <tr>
               <td><strong>{labels[category]}</strong>{#if timing[category]}<small>{timing[category]}</small>{/if}</td>
-              <td><input type="checkbox" aria-label={`${labels[category]} in inbox`} checked={preferences.categories[category].enabled} disabled={busy} onchange={(e) => change(e, category, 'enabled')} /></td>
-              <td><input type="checkbox" aria-label={`${labels[category]} popup`} checked={preferences.categories[category].native} disabled={busy || !preferences.popups || !preferences.categories[category].enabled} onchange={(e) => change(e, category, 'native')} /></td>
-              <td>{#if offersInGame(category)}<input type="checkbox" aria-label={`${labels[category]} in game`} checked={preferences.categories[category].in_game} disabled={busy || !preferences.popups || !preferences.categories[category].enabled} onchange={(e) => change(e, category, 'in_game')} />{:else}<span class="visually-hidden">Not offered</span>{/if}</td>
+              <td><input type="checkbox" aria-label={`${labels[category]} in inbox`} checked={preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'enabled')} /></td>
+              <td><input type="checkbox" aria-label={`${labels[category]} popup`} checked={preferences.categories[category].native} disabled={!preferences.popups || !preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'native')} /></td>
+              <td>{#if offersInGame(category)}<input type="checkbox" aria-label={`${labels[category]} in game`} checked={preferences.categories[category].in_game} disabled={!preferences.popups || !preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'in_game')} />{:else}<span class="visually-hidden">Not offered</span>{/if}</td>
             </tr>
           {/each}
         </tbody>
@@ -79,7 +80,7 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
     <p class="inset in-game-note">In game shows a short card over Warframe instead of a popup while the game is the window in front, and a popup otherwise. The card never takes focus or clicks. On Linux this needs Warframe running through XWayland, as Steam’s Proton does.</p>
     <div class="ui-setting-row">
       <div class="ui-setting-copy"><label for="notification-copy-whisper">Copy the whisper in game</label><p>When a price watch names the player, the card puts a ready warframe.market whisper on your clipboard, so you can press Ctrl+V in chat. This replaces what you had copied. Off, the whisper waits in TennoWorth with a Copy button.</p></div>
-      <label class="ui-setting-check"><input id="notification-copy-whisper" type="checkbox" checked={preferences.copy_whisper} disabled={busy || !anyInGame} onchange={changeCopy} /><span>Enabled</span></label>
+      <label class="ui-setting-check"><input id="notification-copy-whisper" type="checkbox" checked={preferences.copy_whisper} disabled={!anyInGame} use:pending={busy} onchange={changeCopy} /><span>Enabled</span></label>
     </div>
   {:else if !error}<p class="inset" role="status">Loading notification preferences…</p>{/if}
   <p class="inset footnote">Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days.</p>

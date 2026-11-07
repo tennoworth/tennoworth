@@ -4,6 +4,7 @@
   // timed lines, and the chosen day's events in a panel beside it.
   import { eventEnd, type CalendarEvent, type EventKind } from '../../domain/calendar-events';
   import EventDetail from './EventDetail.svelte';
+  import { focusLater } from '../../ui/keyboard-actions';
   import { DAY, dayStart, utcDay, utcTime, weekStart } from './time';
 
   let { events, now, surface }: { events: CalendarEvent[]; now: number; surface: 'desktop' | 'hosted' } = $props();
@@ -21,6 +22,31 @@
   function goToday() {
     month = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), 1);
     day = today;
+  }
+  // The day grid is one Tab stop, the chosen day, moved with the arrows as in
+  // a date picker. Event bars repeat what the day panel lists, so they stay
+  // out of the Tab order instead of adding dozens of stops.
+  function dayKey(event: KeyboardEvent, d: number) {
+    const date = new Date(d);
+    const step: Record<string, number> = { ArrowLeft: -DAY, ArrowRight: DAY, ArrowUp: -7 * DAY, ArrowDown: 7 * DAY };
+    let next: number | null = null;
+    if (event.key in step) next = d + step[event.key];
+    else if (event.key === 'Home') next = weekStart(d);
+    else if (event.key === 'End') next = weekStart(d) + 6 * DAY;
+    else if (event.key === 'PageUp' || event.key === 'PageDown') {
+      const by = event.key === 'PageUp' ? -1 : 1;
+      const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + by + 1, 0)).getUTCDate();
+      next = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + by, Math.min(date.getUTCDate(), lastDay));
+    }
+    if (next === null || event.altKey || event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+    day = next;
+    const target = new Date(next);
+    if (target.getUTCMonth() !== new Date(month).getUTCMonth() || target.getUTCFullYear() !== new Date(month).getUTCFullYear()) {
+      month = Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), 1);
+    }
+    const chosen = next;
+    focusLater(() => [...document.querySelectorAll<HTMLElement>('.month .cell[data-day]')].find((el) => Number(el.dataset.day) === chosen));
   }
   const label = $derived(new Date(month).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
   const weeks = $derived.by(() => {
@@ -53,7 +79,7 @@
 </script>
 
 <div class="month-view">
-  <section class="month" aria-label={label}>
+  <section class="month" aria-label="{label}. Arrow keys choose a day; Page Up and Page Down change month">
     <div class="mhead">
       <h3>{label}</h3>
       <div class="ui-toolbar">
@@ -68,18 +94,20 @@
         {#each week.days as d, i (d)}
           {@const n = count(d)}
           <button type="button" class="cell" class:out={new Date(d).getUTCMonth() !== week.month} style:grid-column={i + 1}
+            data-day={d} tabindex={d === day || (!weeks.some((w) => w.days.includes(day)) && d === month) ? 0 : -1}
+            onkeydown={(event) => dayKey(event, d)}
             aria-pressed={d === day} aria-label="{utcDay(d, true)}, {n ? `${n} event${n === 1 ? '' : 's'}` : 'nothing scheduled'}" onclick={() => { day = d; }}></button>
           <span class="num" class:out={new Date(d).getUTCMonth() !== week.month} class:today={d === today} style:grid-column={i + 1} aria-hidden="true"><b>{new Date(d).getUTCDate()}</b></span>
         {/each}
         {#each week.bars as bar (bar.event.id)}
           <button type="button" class={bar.event.to === null ? 'ev-moment' : 'ev-run'} class:estimate={bar.event.estimate} data-kind={bar.event.kind}
-            style:grid-column="{bar.first + 1} / {bar.lastCol + 2}" style:grid-row={bar.lane + 2} title={bar.event.title} aria-label={bar.event.title}
+            style:grid-column="{bar.first + 1} / {bar.lastCol + 2}" style:grid-row={bar.lane + 2} title={bar.event.title} aria-label={bar.event.title} tabindex="-1"
             onclick={() => { day = Math.max(dayStart(bar.event.from), week.start); }}>
             {#if bar.event.to === null}<span class="tm">{utcTime(bar.event.from)}</span>{/if}<span class="ev-text">{bar.continued ? '◂ ' : ''}{bar.event.short}</span>
           </button>
         {/each}
         {#each week.more as n, i (i)}
-          {#if n}<button type="button" class="more" style:grid-column={i + 1} style:grid-row={LANES + 2} onclick={() => { day = week.start + i * DAY; }}>+{n} more</button>{/if}
+          {#if n}<button type="button" class="more" tabindex="-1" style:grid-column={i + 1} style:grid-row={LANES + 2} onclick={() => { day = week.start + i * DAY; }}>+{n} more</button>{/if}
         {/each}
       </div>
     {/each}

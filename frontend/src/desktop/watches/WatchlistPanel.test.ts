@@ -82,7 +82,7 @@ describe('WatchlistPanel', () => {
     await screen.findByText('No watches yet. Pick an item above.');
 
     await fireEvent.input(screen.getByLabelText('Item to watch'), { target: { value: 'primed' } });
-    await fireEvent.click(await screen.findByRole('button', { name: /Primed Flow/ }));
+    await fireEvent.click(await screen.findByRole('option', { name: /Primed Flow/ }));
     // default threshold for a 'sell' watch = 80% of avg 20 = 16
     expect((screen.getByLabelText('Target price (p)') as HTMLInputElement).value).toBe('16');
     await fireEvent.input(screen.getByLabelText('Target price (p)'), { target: { value: '15' } });
@@ -93,8 +93,30 @@ describe('WatchlistPanel', () => {
     await screen.findByText('ask ≤ 15p');
 
     await fireEvent.click(screen.getByRole('button', { name: /^Remove / }));
+    expect(invoke).not.toHaveBeenCalledWith('delete_watch', { id: 1 });
+    await fireEvent.click(screen.getByRole('button', { name: /^Confirm removing / }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('delete_watch', { id: 1 }));
     await screen.findByText('No watches yet. Pick an item above.');
+  });
+
+  it('picks a suggestion from the keyboard and adds the watch with Enter', async () => {
+    const store = { watches: [] as unknown[] };
+    const invoke = makeInvoke(store);
+    installTauri(invoke, undefined);
+    render(WatchlistPanel, { props: { market } });
+    await screen.findByText('No watches yet. Pick an item above.');
+    const field = screen.getByRole('combobox', { name: 'Item to watch' });
+    field.focus();
+    await fireEvent.input(field, { target: { value: 'primed' } });
+    expect(field.getAttribute('aria-expanded')).toBe('true');
+    await fireEvent.keyDown(field, { key: 'ArrowDown' });
+    const option = screen.getByRole('option', { name: /Primed Flow/ });
+    expect(field.getAttribute('aria-activedescendant')).toBe(option.id);
+    await fireEvent.keyDown(field, { key: 'Enter' });
+    expect((field as HTMLInputElement).value).toBe('Primed Flow');
+    const target = screen.getByLabelText('Target price (p)');
+    await fireEvent.submit(target.closest('form')!);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('add_watch', expect.anything()));
   });
 
   it('check now runs a pass and reports satisfied watches', async () => {

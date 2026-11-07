@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { busy } from '../../ui/keyboard-actions';
   import { fitTable } from '../../ui/table-fit';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopEelogStatus, desktopListTrades, desktopListingOutcomes, desktopSetListingOutcomes, listenForTauriEvent } = useDesktopServices();
@@ -185,7 +186,7 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
     {/if}
     <!-- One setting, so one line rather than a titled panel. -->
     <div class="setting-line" role="group" aria-label="Listing automation">
-      <label class="check" for="ledger-auto-close"><input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} /> After a sale, reduce or remove the matching warframe.market listing</label>
+      <label class="check" for="ledger-auto-close"><input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={!status.path} use:busy={savingAutoClose} /> After a sale, reduce or remove the matching warframe.market listing</label>
       <span class="muted">Only ever lowers a quantity by what you sold; never touches price or visibility.</span>
     </div>
   {/if}
@@ -270,7 +271,7 @@ import { type EeLogStatus, type ListingOutcomes, type TradeDetected, type TradeR
         </div>
       {/if}
       <div class="setting-line">
-        <label class="check" for="ledger-outcomes"><input id="ledger-outcomes" type="checkbox" checked={outcomes.enabled} onchange={toggleOutcomes} disabled={savingOutcomes} /> Keep a record of listings sent from TennoWorth</label>
+        <label class="check" for="ledger-outcomes"><input id="ledger-outcomes" type="checkbox" checked={outcomes.enabled} onchange={toggleOutcomes} use:busy={savingOutcomes} /> Keep a record of listings sent from TennoWorth</label>
         <span class="muted">Stays on this device. Turning it off deletes the record.</span>
       </div>
     </details>

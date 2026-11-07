@@ -360,9 +360,15 @@ test('theme radio navigation and listing-review focus stay keyboard accessible',
   await trigger.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  // The review opens on the first price, the thing it exists to check.
+  const firstPrice = dialog.getByRole('spinbutton', { name: /^Price for / }).first();
+  await expect(firstPrice).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   expect(await dialog.evaluate(node => node.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Tab');
+  await expect(firstPrice).toBeFocused();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).focus();
+  await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');

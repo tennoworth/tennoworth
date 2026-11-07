@@ -5,6 +5,7 @@
   import { humanError } from '../../contracts/errors';
   import type { LiveTop } from '../../contracts/desktop';
   import { wfmItemUrl } from '../../ui/format';
+  import { busy } from '../../ui/keyboard-actions';
 
   let { slug, name, quantity, ask, onclose }: {
     slug: string; name: string; quantity: number; ask: number; onclose(): void;
@@ -51,10 +52,12 @@
   });
 </script>
 
-<section class="ui-panel ui-stack" aria-label="Buyer alternatives">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions (Escape closes the comparison from any control inside it.) -->
+<section class="ui-panel ui-stack buyer-alternatives" aria-label="Buyer alternatives"
+  onkeydown={(event) => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); onclose(); } }}>
   <div class="ui-toolbar">
-    <h3>Buyers for {name} ×{quantity}</h3>
-    <button class="btn" onclick={refresh} disabled={loading}>{loading ? 'Checking buyers…' : 'Refresh buyers'}</button>
+    <h3 tabindex="-1">Buyers for {name} ×{quantity}</h3>
+    <button class="btn" onclick={refresh} use:busy={loading}>{loading ? 'Checking buyers…' : 'Refresh buyers'}</button>
     <button class="btn ghost" onclick={onclose}>Close buyer comparison</button>
   </div>
   <p>Compare visible bids with the selected reference of {ask}p per unit. Rank 0 where applicable.</p>
@@ -85,7 +88,8 @@
 </section>
 
 <style>
-  h3 { margin: 0; font-size: var(--text-section); }
+  h3 { margin: 0; font-size: var(--text-section); scroll-margin: var(--s4); }
+  h3:focus { outline: none; }
   p { margin: 0; }
   table { min-width: 38rem; }
 </style>

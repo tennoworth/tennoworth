@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { roving } from '../../ui/keyboard-actions';
   // Steps for copying the warframe.market `JWT` cookie out of the user's own
   // browser - the fallback sign-in when the in-app window cannot load WFM.
   // Text steps rather than screenshots or drawings: browser devtools are
@@ -11,7 +12,7 @@
 </script>
 
 <div class="token-guide" data-testid="wfm-token-guide">
-  <div class="ui-segmented xs" role="group" aria-label="Your browser">
+  <div class="ui-segmented xs" role="group" aria-label="Your browser" use:roving>
     <button type="button" aria-pressed={browser === 'firefox'} onclick={() => (browser = 'firefox')}>Firefox</button>
     <button type="button" aria-pressed={browser === 'chromium'} onclick={() => (browser = 'chromium')}>Chrome / Edge</button>
   </div>

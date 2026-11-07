@@ -74,7 +74,7 @@ import ItemArt from '../../ui/ItemArt.svelte';
                 </span>
                 {#if av}
                   <span data-shell class="tag advice advice-{av.advice}" title={av.reasons.join(' · ')}>
-                    {av.advice === 'sell_now' ? 'sell now' : av.advice}
+                    {av.advice === 'sell_now' ? 'sell now' : av.advice}<span class="visually-hidden">: {av.reasons.join('; ')}</span>
                   </span>
                 {/if}
               </td>
@@ -83,9 +83,9 @@ import ItemArt from '../../ui/ItemArt.svelte';
               <td data-shell>
                 {#if r.set_vol !== undefined && (r.kind === 'near-complete' || r.kind === 'complete-with-extras')}
                   {#if r.set_vol < 1}
-                    <span data-shell class="set-liq cold" title="The assembled set has traded under 1×/48h - a flip may sit unsold for a while.">set rarely trades</span>
+                    <span data-shell class="set-liq cold" title="The assembled set has traded under 1×/48h - a flip may sit unsold for a while.">set rarely trades<span class="visually-hidden">: under once in 48 hours</span></span>
                   {:else if r.set_vol < 5}
-                    <span data-shell class="set-liq thin" title="Thin set volume - expect to wait for a buyer before you recoup the plat.">thin · {r.set_vol}</span>
+                    <span data-shell class="set-liq thin" title="Thin set volume - expect to wait for a buyer before you recoup the plat.">thin · {r.set_vol}<span class="visually-hidden"> sets in 48 hours; expect to wait for a buyer</span></span>
                   {:else}
                     <span data-shell class="set-liq moving" title="Healthy set volume.">{r.set_vol}</span>
                   {/if}

@@ -190,7 +190,7 @@
             <td class="num">{ratio(row.platPerDucat)}</td>
             <td>
               <span class="tag {row.verdict}" title={VERDICT_HINT[row.verdict]}>
-                {VERDICT_LABEL[row.verdict]}
+                {VERDICT_LABEL[row.verdict]}<span class="visually-hidden">: {VERDICT_HINT[row.verdict]}</span>
               </span>
             </td>
           </tr>
@@ -238,7 +238,7 @@
   {/if}
 
   {#if hiddenCount > 0 || showAll}
-    <button type="button" class="more" onclick={() => (showAll = !showAll)}>
+    <button type="button" class="more" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>
       {showAll ? 'Hide poor-value and untradeable lines' : `Show ${hiddenCount} more (poor value or not tradeable)`}
     </button>
   {/if}
