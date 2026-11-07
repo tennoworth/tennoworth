@@ -7,314 +7,370 @@ msgstr ""
 
 #. Desktop first-run page, the main heading. Shown in capitals.
 #. Max 40 characters.
+#, fuzzy
 msgctxt "firstRun.heading"
 msgid "Get your personal sell list"
-msgstr ""
+msgstr "Ваш особистий список продажу"
 
 #. First-run page, under the heading. Keep <em>…</em> around the word that is stressed.
+#, fuzzy
 msgctxt "firstRun.pitch"
 msgid "Scan once and TennoWorth ranks <em>your</em> inventory by what to sell right now."
-msgstr ""
+msgstr "Одне сканування - і TennoWorth упорядкує <em>ваш</em> інвентар за тим, що вигідно продати зараз."
 
 #. First-run page, a condition for scanning.
+#, fuzzy
 msgctxt "firstRun.requirement"
 msgid "Warframe must be open and past the login screen."
-msgstr ""
+msgstr "Warframe має бути запущено, екран входу пройдено."
 
 #. First-run page, the main button. Reads the game's inventory.
 #. Max 26 characters.
+#, fuzzy
 msgctxt "firstRun.scan"
 msgid "Scan inventory"
-msgstr ""
+msgstr "Сканувати інвентар"
 
 #. The same button while a scan runs.
 #. Max 26 characters.
+#, fuzzy
 msgctxt "firstRun.scanning"
 msgid "Scanning game…"
-msgstr ""
+msgstr "Сканування гри…"
 
 #. First-run page, privacy line under the button.
+#, fuzzy
 msgctxt "firstRun.trust"
 msgid "Reads the running game's memory only - nothing leaves your machine."
-msgstr ""
+msgstr "Читає лише пам’ять запущеної гри - нічого не залишає ваш комп’ютер."
 
 #. First-run page, label above the market search. Shown in capitals.
 #. Max 32 characters.
+#, fuzzy
 msgctxt "firstRun.lookup"
 msgid "Or look anything up"
-msgstr ""
+msgstr "Або знайдіть будь-що"
 
 #. Status bar next to the brand on the first-run page. Cut short when space runs out.
+#, fuzzy
 msgctxt "strip.tagline"
 msgid "warframe.market prices, ranked by what actually sells"
-msgstr ""
+msgstr "Ціни warframe.market, упорядковані за тим, що справді продається"
 
 #. Status bar, inventory cell before the first scan.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.noInventory"
 msgid "No inventory yet"
-msgstr ""
+msgstr "Інвентаря ще немає"
 
 #. Status bar, inventory cell while the saved scan loads.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.loadingScan"
 msgid "Loading saved scan…"
-msgstr ""
+msgstr "Завантаження скану…"
 
 #. Status bar, inventory cell: the inventory came from an imported file.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.imported"
 msgid "Imported"
-msgstr ""
+msgstr "Імпорт"
 
 #. Status bar, inventory cell: showing the last saved scan.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.savedScan"
 msgid "Saved scan"
-msgstr ""
+msgstr "Збережений скан"
 
 #. Status bar, inventory cell label.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.inventory"
 msgid "Inventory"
-msgstr ""
+msgstr "Інвентар"
 
 #. Status bar, when a scan has no time.
+#, fuzzy
 msgctxt "strip.timestampUnavailable"
 msgid "Timestamp unavailable"
-msgstr ""
+msgstr "Час невідомий"
 
 #. Status bar, after a failed rescan.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.refreshFailed"
 msgid "Last refresh failed"
-msgstr ""
+msgstr "Збій оновлення"
 
 #. Status bar button that opens the scan menu. Keep the ▾.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.refresh"
 msgid "Refresh ▾"
-msgstr ""
+msgstr "Оновити ▾"
 
 #. The same button while a scan runs.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.refreshing"
 msgid "Scanning…"
-msgstr ""
+msgstr "Сканую…"
 
 #. Tooltip on the Refresh button.
+#, fuzzy
 msgctxt "strip.refreshTitle"
 msgid "Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too."
-msgstr ""
+msgstr "Знову завантажити інвентар із гри. Експорт, відновлення й очищення теж у цьому меню."
 
 #. Tooltip on the Refresh button while scanning.
+#, fuzzy
 msgctxt "strip.refreshingTitle"
 msgid "Reading the running game’s memory - this can take a few seconds."
-msgstr ""
+msgstr "Читання пам’яті запущеної гри - це може тривати кілька секунд."
 
 #. Scan menu, first line.
+#, fuzzy
 msgctxt "strip.menuLede"
 msgid "Scan the running game - no file needed."
-msgstr ""
+msgstr "Сканувати запущену гру - файл не потрібен."
 
 #. Scan menu button.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.scanGame"
 msgid "Scan game"
-msgstr ""
+msgstr "Сканувати гру"
 
 #. Scan menu button: save an encrypted copy of the inventory.
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.export"
 msgid "Export…"
-msgstr ""
+msgstr "Експорт…"
 
 #. Tooltip on Export.
+#, fuzzy
 msgctxt "strip.exportTitle"
 msgid "Download an encrypted snapshot for another device or backup."
-msgstr ""
+msgstr "Завантажити зашифровану копію для іншого пристрою або як резерв."
 
 #. Scan menu button: load an exported copy.
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.restore"
 msgid "Restore…"
-msgstr ""
+msgstr "Відновити…"
 
 #. Tooltip on Restore.
+#, fuzzy
 msgctxt "strip.restoreTitle"
 msgid "Restore an encrypted snapshot exported from another device."
-msgstr ""
+msgstr "Відновити зашифровану копію, експортовану з іншого пристрою."
 
 #. Scan menu, confirmation question before clearing.
+#, fuzzy
 msgctxt "strip.clearAsk"
 msgid "Forget the saved scan? Scan again to get it back."
-msgstr ""
+msgstr "Забути збережений скан? Нове сканування поверне його."
 
 #. Scan menu, confirms clearing.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.clearConfirm"
 msgid "Clear saved scan"
-msgstr ""
+msgstr "Видалити скан"
 
 #. Scan menu, cancels clearing.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.clearKeep"
 msgid "Keep it"
-msgstr ""
+msgstr "Залишити"
 
 #. Scan menu button that asks before clearing.
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.clear"
 msgid "Clear…"
-msgstr ""
+msgstr "Очистити…"
 
 #. Tooltip on Clear.
+#, fuzzy
 msgctxt "strip.clearTitle"
 msgid "Forget the saved inventory entirely."
-msgstr ""
+msgstr "Повністю забути збережений інвентар."
 
 #. Tooltip on the inventory cell. count is a number of items; summary lists them by kind, in English.
+#, fuzzy
 msgctxt "strip.unmatched"
 msgid "{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} ({summary}) - usually untradeable blueprints, quest items and very new content."
-msgstr ""
+msgstr "{count, plural, one {# предмет без ціни} few {# предмети без ціни} many {# предметів без ціни} other {# предмета без ціни}} ({summary}) - зазвичай кресленики, якими не можна торгувати, предмети із завдань і зовсім новий вміст."
 
 #. Scan menu note. count is a number of items.
+#, fuzzy
 msgctxt "strip.unmatchedNote"
 msgid "{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected."
-msgstr ""
+msgstr "{count, plural, one {# предмет без ціни} few {# предмети без ціни} many {# предметів без ціни} other {# предмета без ціни}} (приховано) - зазвичай кресленики, якими не можна торгувати, предмети із завдань і зовсім новий вміст; на ваші предмети для продажу це не впливає."
 
 #. Tooltip on that note; summary lists items by kind, in English.
+#, fuzzy
 msgctxt "strip.unmatchedBreakdown"
 msgid "Breakdown: {summary}."
-msgstr ""
+msgstr "Докладно: {summary}."
 
 #. Status bar note after a scan that found nothing to sell.
+#, fuzzy
 msgctxt "strip.noTradeables"
 msgid "No tradeable items found; showing saved inventory"
-msgstr ""
+msgstr "Предметів для обміну не знайдено; показано збережений інвентар"
 
 #. Screen reader label for the inventory status dot.
+#, fuzzy
 msgctxt "strip.inventoryFailedLabel"
 msgid "Inventory refresh failed"
-msgstr ""
+msgstr "Не вдалося оновити інвентар"
 
 #. Screen reader label for the inventory status dot. age is like "12 h ago" (English for now).
+#, fuzzy
 msgctxt "strip.inventoryRecordedLabel"
 msgid "Inventory recorded {age}"
-msgstr ""
+msgstr "Інвентар записано {age}"
 
 #. Screen reader label for the inventory status dot.
+#, fuzzy
 msgctxt "strip.inventoryUnknownTime"
 msgid "Inventory recorded at an unknown time"
-msgstr ""
+msgstr "Час запису інвентаря невідомий"
 
 #. Status bar, market data cell label. Shown in capitals.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.market"
 msgid "Market"
-msgstr ""
+msgstr "Ринок"
 
 #. Screen reader label for the market status dot; state is one of the four words below.
+#, fuzzy
 msgctxt "strip.marketLabel"
 msgid "Market data {state}"
-msgstr ""
+msgstr "Дані ринку: {state}"
 
 #. Market data age: recent. Shown in capitals after "Market 2 h ago ·".
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.fresh"
 msgid "fresh"
-msgstr ""
+msgstr "свіжі"
 
 #. Market data age: getting old.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.aging"
 msgid "aging"
-msgstr ""
+msgstr "старіють"
 
 #. Market data age: too old to trust.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.stale"
 msgid "stale"
-msgstr ""
+msgstr "застарілі"
 
 #. Market data age: not known.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.unknown"
 msgid "unknown"
-msgstr ""
+msgstr "невідомо"
 
 #. Status bar tag when market data is too old; age is like "3 d ago" (English for now).
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.stale"
 msgid "Stale · {age}"
-msgstr ""
+msgstr "Застарілі · {age}"
 
 #. Status bar, followed by a time such as "1d 3h".
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.baroLeaves"
 msgid "Baro leaves in"
-msgstr ""
+msgstr "Баро полетить через"
 
 #. Status bar, followed by a time such as "1d 3h".
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.baroArrives"
 msgid "Baro arrives in"
-msgstr ""
+msgstr "Баро прилетить через"
 
 #. Status bar button. Shown in capitals.
 #. Max 16 characters.
+#, fuzzy
 msgctxt "strip.notifications"
 msgid "Notifications"
-msgstr ""
+msgstr "Сповіщення"
 
 #. Status bar button. Shown in capitals.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.settings"
 msgid "Settings"
-msgstr ""
+msgstr "Налаштування"
 
 #. Status bar menu button. Keep the ▾.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.more"
 msgid "More ▾"
-msgstr ""
+msgstr "Ще ▾"
 
 #. More menu.
+#, fuzzy
 msgctxt "strip.checkUpdates"
 msgid "Check for updates"
-msgstr ""
+msgstr "Перевірити оновлення"
 
 #. More menu.
+#, fuzzy
 msgctxt "strip.sendFeedback"
 msgid "Send feedback"
-msgstr ""
+msgstr "Надіслати відгук"
 
 #. More menu, link to the questions section.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "strip.faq"
 msgid "FAQ"
-msgstr ""
+msgstr "Питання"
 
 #. Status bar, warframe.market account cell: signed in but locked.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.locked"
 msgid "Locked"
-msgstr ""
+msgstr "Заблоковано"
 
 #. Status bar, warframe.market account cell.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.signedOut"
 msgid "Signed out"
-msgstr ""
+msgstr "Ви не увійшли"
 
 #. Status bar button.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.unlock"
 msgid "Unlock"
-msgstr ""
+msgstr "Розблокувати"
 
 #. Status bar button: sign in to warframe.market.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.signIn"
 msgid "Sign in"
-msgstr ""
+msgstr "Увійти"

@@ -7,314 +7,370 @@ msgstr ""
 
 #. Desktop first-run page, the main heading. Shown in capitals.
 #. Max 40 characters.
+#, fuzzy
 msgctxt "firstRun.heading"
 msgid "Get your personal sell list"
-msgstr ""
+msgstr "你的專屬出售清單"
 
 #. First-run page, under the heading. Keep <em>…</em> around the word that is stressed.
+#, fuzzy
 msgctxt "firstRun.pitch"
 msgid "Scan once and TennoWorth ranks <em>your</em> inventory by what to sell right now."
-msgstr ""
+msgstr "掃描一次，TennoWorth 就會依目前最值得賣的順序整理<em>你的</em>倉庫。"
 
 #. First-run page, a condition for scanning.
+#, fuzzy
 msgctxt "firstRun.requirement"
 msgid "Warframe must be open and past the login screen."
-msgstr ""
+msgstr "Warframe 需已啟動，並已越過登入畫面。"
 
 #. First-run page, the main button. Reads the game's inventory.
 #. Max 26 characters.
+#, fuzzy
 msgctxt "firstRun.scan"
 msgid "Scan inventory"
-msgstr ""
+msgstr "掃描倉庫"
 
 #. The same button while a scan runs.
 #. Max 26 characters.
+#, fuzzy
 msgctxt "firstRun.scanning"
 msgid "Scanning game…"
-msgstr ""
+msgstr "正在掃描遊戲…"
 
 #. First-run page, privacy line under the button.
+#, fuzzy
 msgctxt "firstRun.trust"
 msgid "Reads the running game's memory only - nothing leaves your machine."
-msgstr ""
+msgstr "只讀取正在執行的遊戲記憶體，任何資料都不會離開你的電腦。"
 
 #. First-run page, label above the market search. Shown in capitals.
 #. Max 32 characters.
+#, fuzzy
 msgctxt "firstRun.lookup"
 msgid "Or look anything up"
-msgstr ""
+msgstr "或搜尋任何物品"
 
 #. Status bar next to the brand on the first-run page. Cut short when space runs out.
+#, fuzzy
 msgctxt "strip.tagline"
 msgid "warframe.market prices, ranked by what actually sells"
-msgstr ""
+msgstr "warframe.market 價格，依真正賣得出去的排序"
 
 #. Status bar, inventory cell before the first scan.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.noInventory"
 msgid "No inventory yet"
-msgstr ""
+msgstr "尚無倉庫資料"
 
 #. Status bar, inventory cell while the saved scan loads.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.loadingScan"
 msgid "Loading saved scan…"
-msgstr ""
+msgstr "正在載入已儲存的掃描…"
 
 #. Status bar, inventory cell: the inventory came from an imported file.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.imported"
 msgid "Imported"
-msgstr ""
+msgstr "已匯入"
 
 #. Status bar, inventory cell: showing the last saved scan.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.savedScan"
 msgid "Saved scan"
-msgstr ""
+msgstr "已儲存的掃描"
 
 #. Status bar, inventory cell label.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.inventory"
 msgid "Inventory"
-msgstr ""
+msgstr "倉庫"
 
 #. Status bar, when a scan has no time.
+#, fuzzy
 msgctxt "strip.timestampUnavailable"
 msgid "Timestamp unavailable"
-msgstr ""
+msgstr "時間未知"
 
 #. Status bar, after a failed rescan.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.refreshFailed"
 msgid "Last refresh failed"
-msgstr ""
+msgstr "重新整理失敗"
 
 #. Status bar button that opens the scan menu. Keep the ▾.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.refresh"
 msgid "Refresh ▾"
-msgstr ""
+msgstr "重新整理 ▾"
 
 #. The same button while a scan runs.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.refreshing"
 msgid "Scanning…"
-msgstr ""
+msgstr "掃描中…"
 
 #. Tooltip on the Refresh button.
+#, fuzzy
 msgctxt "strip.refreshTitle"
 msgid "Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too."
-msgstr ""
+msgstr "從遊戲重新讀取倉庫。匯出、還原和清除也在此選單中。"
 
 #. Tooltip on the Refresh button while scanning.
+#, fuzzy
 msgctxt "strip.refreshingTitle"
 msgid "Reading the running game’s memory - this can take a few seconds."
-msgstr ""
+msgstr "正在讀取執行中遊戲的記憶體，可能需要幾秒鐘。"
 
 #. Scan menu, first line.
+#, fuzzy
 msgctxt "strip.menuLede"
 msgid "Scan the running game - no file needed."
-msgstr ""
+msgstr "掃描正在執行的遊戲，不需要任何檔案。"
 
 #. Scan menu button.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.scanGame"
 msgid "Scan game"
-msgstr ""
+msgstr "掃描遊戲"
 
 #. Scan menu button: save an encrypted copy of the inventory.
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.export"
 msgid "Export…"
-msgstr ""
+msgstr "匯出…"
 
 #. Tooltip on Export.
+#, fuzzy
 msgctxt "strip.exportTitle"
 msgid "Download an encrypted snapshot for another device or backup."
-msgstr ""
+msgstr "下載加密副本，供其他裝置使用或備份。"
 
 #. Scan menu button: load an exported copy.
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.restore"
 msgid "Restore…"
-msgstr ""
+msgstr "還原…"
 
 #. Tooltip on Restore.
+#, fuzzy
 msgctxt "strip.restoreTitle"
 msgid "Restore an encrypted snapshot exported from another device."
-msgstr ""
+msgstr "還原從其他裝置匯出的加密副本。"
 
 #. Scan menu, confirmation question before clearing.
+#, fuzzy
 msgctxt "strip.clearAsk"
 msgid "Forget the saved scan? Scan again to get it back."
-msgstr ""
+msgstr "要忘記已儲存的掃描嗎？重新掃描即可找回。"
 
 #. Scan menu, confirms clearing.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.clearConfirm"
 msgid "Clear saved scan"
-msgstr ""
+msgstr "清除掃描"
 
 #. Scan menu, cancels clearing.
 #. Max 22 characters.
+#, fuzzy
 msgctxt "strip.clearKeep"
 msgid "Keep it"
-msgstr ""
+msgstr "保留"
 
 #. Scan menu button that asks before clearing.
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.clear"
 msgid "Clear…"
-msgstr ""
+msgstr "清除…"
 
 #. Tooltip on Clear.
+#, fuzzy
 msgctxt "strip.clearTitle"
 msgid "Forget the saved inventory entirely."
-msgstr ""
+msgstr "完全忘記已儲存的倉庫。"
 
 #. Tooltip on the inventory cell. count is a number of items; summary lists them by kind, in English.
+#, fuzzy
 msgctxt "strip.unmatched"
 msgid "{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} ({summary}) - usually untradeable blueprints, quest items and very new content."
-msgstr ""
+msgstr "{count, plural, other {# 個物品無法比對價格}}（{summary}）——通常是無法交易的藍圖、任務物品和最新內容。"
 
 #. Scan menu note. count is a number of items.
+#, fuzzy
 msgctxt "strip.unmatchedNote"
 msgid "{count, plural, one {# item couldn't be price-matched} other {# items couldn't be price-matched}} (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected."
-msgstr ""
+msgstr "{count, plural, other {# 個物品無法比對價格}}（未顯示）——通常是無法交易的藍圖、任務物品和最新內容；不影響你可出售的物品。"
 
 #. Tooltip on that note; summary lists items by kind, in English.
+#, fuzzy
 msgctxt "strip.unmatchedBreakdown"
 msgid "Breakdown: {summary}."
-msgstr ""
+msgstr "明細：{summary}。"
 
 #. Status bar note after a scan that found nothing to sell.
+#, fuzzy
 msgctxt "strip.noTradeables"
 msgid "No tradeable items found; showing saved inventory"
-msgstr ""
+msgstr "找不到可交易物品；顯示已儲存的倉庫"
 
 #. Screen reader label for the inventory status dot.
+#, fuzzy
 msgctxt "strip.inventoryFailedLabel"
 msgid "Inventory refresh failed"
-msgstr ""
+msgstr "倉庫重新整理失敗"
 
 #. Screen reader label for the inventory status dot. age is like "12 h ago" (English for now).
+#, fuzzy
 msgctxt "strip.inventoryRecordedLabel"
 msgid "Inventory recorded {age}"
-msgstr ""
+msgstr "倉庫記錄於 {age}"
 
 #. Screen reader label for the inventory status dot.
+#, fuzzy
 msgctxt "strip.inventoryUnknownTime"
 msgid "Inventory recorded at an unknown time"
-msgstr ""
+msgstr "倉庫記錄時間未知"
 
 #. Status bar, market data cell label. Shown in capitals.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.market"
 msgid "Market"
-msgstr ""
+msgstr "市場"
 
 #. Screen reader label for the market status dot; state is one of the four words below.
+#, fuzzy
 msgctxt "strip.marketLabel"
 msgid "Market data {state}"
-msgstr ""
+msgstr "市場資料：{state}"
 
 #. Market data age: recent. Shown in capitals after "Market 2 h ago ·".
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.fresh"
 msgid "fresh"
-msgstr ""
+msgstr "最新"
 
 #. Market data age: getting old.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.aging"
 msgid "aging"
-msgstr ""
+msgstr "漸舊"
 
 #. Market data age: too old to trust.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.stale"
 msgid "stale"
-msgstr ""
+msgstr "過時"
 
 #. Market data age: not known.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.state.unknown"
 msgid "unknown"
-msgstr ""
+msgstr "未知"
 
 #. Status bar tag when market data is too old; age is like "3 d ago" (English for now).
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.stale"
 msgid "Stale · {age}"
-msgstr ""
+msgstr "過時 · {age}"
 
 #. Status bar, followed by a time such as "1d 3h".
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.baroLeaves"
 msgid "Baro leaves in"
-msgstr ""
+msgstr "Baro 離開還有"
 
 #. Status bar, followed by a time such as "1d 3h".
 #. Max 18 characters.
+#, fuzzy
 msgctxt "strip.baroArrives"
 msgid "Baro arrives in"
-msgstr ""
+msgstr "Baro 抵達還有"
 
 #. Status bar button. Shown in capitals.
 #. Max 16 characters.
+#, fuzzy
 msgctxt "strip.notifications"
 msgid "Notifications"
-msgstr ""
+msgstr "通知"
 
 #. Status bar button. Shown in capitals.
 #. Max 14 characters.
+#, fuzzy
 msgctxt "strip.settings"
 msgid "Settings"
-msgstr ""
+msgstr "設定"
 
 #. Status bar menu button. Keep the ▾.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "strip.more"
 msgid "More ▾"
-msgstr ""
+msgstr "更多 ▾"
 
 #. More menu.
+#, fuzzy
 msgctxt "strip.checkUpdates"
 msgid "Check for updates"
-msgstr ""
+msgstr "檢查更新"
 
 #. More menu.
+#, fuzzy
 msgctxt "strip.sendFeedback"
 msgid "Send feedback"
-msgstr ""
+msgstr "傳送意見"
 
 #. More menu, link to the questions section.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "strip.faq"
 msgid "FAQ"
-msgstr ""
+msgstr "常見問題"
 
 #. Status bar, warframe.market account cell: signed in but locked.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.locked"
 msgid "Locked"
-msgstr ""
+msgstr "已鎖定"
 
 #. Status bar, warframe.market account cell.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.signedOut"
 msgid "Signed out"
-msgstr ""
+msgstr "未登入"
 
 #. Status bar button.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.unlock"
 msgid "Unlock"
-msgstr ""
+msgstr "解鎖"
 
 #. Status bar button: sign in to warframe.market.
 #. Max 12 characters.
+#, fuzzy
 msgctxt "strip.signIn"
 msgid "Sign in"
-msgstr ""
+msgstr "登入"
