@@ -8,24 +8,26 @@
 import { NOTIFICATION_CATEGORIES, IN_GAME_CATEGORIES } from '../../contracts/desktop';
 import { type NotificationPreferences, type NotificationCategory } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
+  import { t } from '../../i18n/i18n.svelte';
   let preferences = $state<NotificationPreferences | null>(null);
   let error = $state('');
   let message = $state('');
   let busy = $state(false);
-  const labels = { trades: 'Completed trades and listing follow-up', watches: 'Price watches', baro: 'Baro arrival and departure', calendar: 'Events affecting your holdings', digest: 'Daily sell opportunities', announcements: 'Market announcements' };
-  const timing: Partial<Record<NotificationCategory, string>> = { baro: 'One hour before arrival, on arrival, and one hour before departure.', calendar: 'When active and one hour before ending.', digest: 'Once daily after 18:00 local time, with inventory and prices no older than 24 hours.', announcements: 'Once per announcement while active. Checks every 15 minutes while the app is running; offline delivery may be delayed.' };
+  const label = (category: NotificationCategory) => t(`notify.label.${category}`);
+  const TIMED = ['baro', 'calendar', 'digest', 'announcements'] as const;
+  const timing = (category: NotificationCategory) => ((TIMED as readonly string[]).includes(category) ? t(`notify.timing.${category as (typeof TIMED)[number]}`) : '');
   async function load() {
     error = '';
     try {
       const value = await desktopNotificationPreferences();
-      if (!value || typeof value.popups !== 'boolean' || NOTIFICATION_CATEGORIES.some(k => typeof value.categories?.[k]?.enabled !== 'boolean' || typeof value.categories?.[k]?.native !== 'boolean')) throw new Error('Notification preferences could not be read. Please retry.');
+      if (!value || typeof value.popups !== 'boolean' || NOTIFICATION_CATEGORIES.some(k => typeof value.categories?.[k]?.enabled !== 'boolean' || typeof value.categories?.[k]?.native !== 'boolean')) throw new Error(t('notify.readFailed'));
       preferences = value;
     } catch (e) { error = humanError(e); }
   }
   onMount(() => { void load(); });
   async function save(next: NotificationPreferences) {
     busy = true; error = ''; message = '';
-    try { preferences = await desktopSaveNotificationPreferences(next); message = 'Preferences saved.'; }
+    try { preferences = await desktopSaveNotificationPreferences(next); message = t('notify.saved'); }
     catch (e) { error = humanError(e); }
     finally { busy = false; }
   }
@@ -55,35 +57,35 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   }
 </script>
 <section class="wrap tw notification-settings" id="settings-notifications" tabindex="-1" aria-labelledby="notification-settings-title">
-  <div class="rail"><h3 id="notification-settings-title">Notifications</h3><button class="btn xs" use:pending={busy} onclick={test}>Send test notification</button></div>
-  {#if error}<div class="ui-notice notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} use:pending={busy}>Retry loading preferences</button></div>{/if}
+  <div class="rail"><h3 id="notification-settings-title">{t('inbox.title')}</h3><button class="btn xs" use:pending={busy} onclick={test}>{t('notify.test')}</button></div>
+  {#if error}<div class="ui-notice notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} use:pending={busy}>{t('notify.retryLoad')}</button></div>{/if}
   {#if preferences}
     <div class="ui-setting-row">
-      <div class="ui-setting-copy"><label for="notification-popups">Desktop popups</label><p>Pause popups to keep alerts in your inbox without interruptions. Operating-system settings may also suppress popups.</p></div>
-      <label class="ui-setting-check"><input id="notification-popups" type="checkbox" checked={preferences.popups} use:pending={busy} onchange={(e) => change(e)} /><span>Enabled</span></label>
+      <div class="ui-setting-copy"><label for="notification-popups">{t('notify.popups')}</label><p>{t('notify.popupsHelp')}</p></div>
+      <label class="ui-setting-check"><input id="notification-popups" type="checkbox" checked={preferences.popups} use:pending={busy} onchange={(e) => change(e)} /><span>{t('notify.enabled')}</span></label>
     </div>
     <div class="scroll" use:fitTable>
       <table class="tw categories">
-        <thead><tr><th>Alert</th><th>Inbox</th><th>Popup</th><th>In game</th></tr></thead>
+        <thead><tr><th>{t('notify.col.alert')}</th><th>{t('notify.col.inbox')}</th><th>{t('notify.col.popup')}</th><th>{t('notify.col.inGame')}</th></tr></thead>
         <tbody>
           {#each NOTIFICATION_CATEGORIES as category}
             <tr>
-              <td><strong>{labels[category]}</strong>{#if timing[category]}<small>{timing[category]}</small>{/if}</td>
-              <td><input type="checkbox" aria-label={`${labels[category]} in inbox`} checked={preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'enabled')} /></td>
-              <td><input type="checkbox" aria-label={`${labels[category]} popup`} checked={preferences.categories[category].native} disabled={!preferences.popups || !preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'native')} /></td>
-              <td>{#if offersInGame(category)}<input type="checkbox" aria-label={`${labels[category]} in game`} checked={preferences.categories[category].in_game} disabled={!preferences.popups || !preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'in_game')} />{:else}<span class="visually-hidden">Not offered</span>{/if}</td>
+              <td><strong>{label(category)}</strong>{#if timing(category)}<small>{timing(category)}</small>{/if}</td>
+              <td><input type="checkbox" aria-label={t('notify.inInbox', { alert: label(category) })} checked={preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'enabled')} /></td>
+              <td><input type="checkbox" aria-label={t('notify.popup', { alert: label(category) })} checked={preferences.categories[category].native} disabled={!preferences.popups || !preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'native')} /></td>
+              <td>{#if offersInGame(category)}<input type="checkbox" aria-label={t('notify.inGame', { alert: label(category) })} checked={preferences.categories[category].in_game} disabled={!preferences.popups || !preferences.categories[category].enabled} use:pending={busy} onchange={(e) => change(e, category, 'in_game')} />{:else}<span class="visually-hidden">{t('notify.notOffered')}</span>{/if}</td>
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
-    <p class="inset in-game-note">In game shows a short card over Warframe instead of a popup while the game is the window in front, and a popup otherwise. The card never takes focus or clicks. On Linux this needs Warframe running through XWayland, as Steam’s Proton does.</p>
+    <p class="inset in-game-note">{t('notify.inGameNote')}</p>
     <div class="ui-setting-row">
-      <div class="ui-setting-copy"><label for="notification-copy-whisper">Copy the whisper in game</label><p>When a price watch names the player, the card puts a ready warframe.market whisper on your clipboard, so you can press Ctrl+V in chat. This replaces what you had copied. Off, the whisper waits in TennoWorth with a Copy button.</p></div>
-      <label class="ui-setting-check"><input id="notification-copy-whisper" type="checkbox" checked={preferences.copy_whisper} disabled={!anyInGame} use:pending={busy} onchange={changeCopy} /><span>Enabled</span></label>
+      <div class="ui-setting-copy"><label for="notification-copy-whisper">{t('notify.copyWhisper')}</label><p>{t('notify.copyWhisperHelp')}</p></div>
+      <label class="ui-setting-check"><input id="notification-copy-whisper" type="checkbox" checked={preferences.copy_whisper} disabled={!anyInGame} use:pending={busy} onchange={changeCopy} /><span>{t('notify.enabled')}</span></label>
     </div>
-  {:else if !error}<p class="inset" role="status">Loading notification preferences…</p>{/if}
-  <p class="inset footnote">Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days.</p>
+  {:else if !error}<p class="inset" role="status">{t('notify.loading')}</p>{/if}
+  <p class="inset footnote">{t('notify.footnote')}</p>
   {#if message}<p class="ui-notice notice" data-tone="good" role="status">{message}</p>{/if}
 </section>
 <style>

@@ -23,6 +23,7 @@ import { LEDGER } from './en/ledger';
 import { WATCHES } from './en/watches';
 import { SETTINGS } from './en/settings';
 import { PRIVACY } from './en/privacy';
+import { NOTIFICATIONS } from './en/notifications';
 
 export const EN = {
   ...FIRST_RUN,
@@ -44,6 +45,7 @@ export const EN = {
   ...WATCHES,
   ...SETTINGS,
   ...PRIVACY,
+  ...NOTIFICATIONS,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

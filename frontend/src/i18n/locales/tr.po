@@ -7024,3 +7024,478 @@ msgstr ""
 msgctxt "usage.terms3"
 msgid " for retention details."
 msgstr ""
+
+#. View heading and settings section.
+msgctxt "inbox.title"
+msgid "Notifications"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "inbox.lede"
+msgid "Trade results and timely opportunities, with a next step when you need one."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "inbox.history"
+msgid "Notification history"
+msgstr ""
+
+#. Button.
+msgctxt "inbox.settings"
+msgid "Notification settings"
+msgstr ""
+
+#. Button.
+msgctxt "inbox.markAll"
+msgid "Mark all read"
+msgstr ""
+
+#. Button.
+msgctxt "inbox.clear"
+msgid "Clear history"
+msgstr ""
+
+#. Checkbox.
+msgctxt "inbox.unreadOnly"
+msgid "Unread only"
+msgstr ""
+
+#. Count.
+msgctxt "inbox.count"
+msgid "{unread} unread · {count, plural, one {# notification} other {# notifications}}"
+msgstr ""
+
+#. Confirmation.
+msgctxt "inbox.clearAsk"
+msgid "Clear notification history? Your trade ledger and reminders are kept."
+msgstr ""
+
+#. Button.
+msgctxt "inbox.clearConfirm"
+msgid "Clear notifications"
+msgstr ""
+
+#. Button.
+msgctxt "inbox.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Button.
+msgctxt "inbox.retry"
+msgid "Retry"
+msgstr ""
+
+#. Status.
+msgctxt "inbox.loading"
+msgid "Loading notifications…"
+msgstr ""
+
+#. Empty state with the unread filter on.
+msgctxt "inbox.caughtUp"
+msgid "You’re all caught up."
+msgstr ""
+
+#. Empty state.
+msgctxt "inbox.empty"
+msgid "No notifications yet. Trades, price watches, and timely reminders will appear here."
+msgstr ""
+
+#. Screen reader name of the pager.
+msgctxt "inbox.pages"
+msgid "Notification pages"
+msgstr ""
+
+#. Notification category.
+msgctxt "note.cat.trades"
+msgid "Completed trade"
+msgstr ""
+
+#. Notification category.
+msgctxt "note.cat.watches"
+msgid "Price watch"
+msgstr ""
+
+#. Notification category.
+msgctxt "note.cat.baro"
+msgid "Baro"
+msgstr ""
+
+#. Notification category.
+msgctxt "note.cat.calendar"
+msgid "Calendar"
+msgstr ""
+
+#. Notification category.
+msgctxt "note.cat.digest"
+msgid "Daily digest"
+msgstr ""
+
+#. Notification category.
+msgctxt "note.cat.announcements"
+msgid "Market announcement"
+msgstr ""
+
+#. Button.
+msgctxt "note.go.sell"
+msgid "Open Sell"
+msgstr ""
+
+#. Button.
+msgctxt "note.go.orders"
+msgid "Review My Orders"
+msgstr ""
+
+#. Button.
+msgctxt "note.go.ledger"
+msgid "Open Ledger"
+msgstr ""
+
+#. Button.
+msgctxt "note.go.watches"
+msgid "Open price watches"
+msgstr ""
+
+#. Button.
+msgctxt "note.go.baro"
+msgid "Open Baro and ducat planner"
+msgstr ""
+
+#. Button.
+msgctxt "note.go.routines"
+msgid "Open calendar"
+msgstr ""
+
+#. In place of a date.
+msgctxt "note.unknown"
+msgid "Unknown"
+msgstr ""
+
+#. Notification state.
+msgctxt "note.read"
+msgid "Read"
+msgstr ""
+
+#. Notification state.
+msgctxt "note.unread"
+msgid "Unread"
+msgstr ""
+
+#. Announcement state.
+msgctxt "note.ended"
+msgid "Ended"
+msgstr ""
+
+#. Announcement state.
+msgctxt "note.ends"
+msgid "Ends"
+msgstr ""
+
+#. Link.
+msgctxt "note.source"
+msgid "Source announcement ↗"
+msgstr ""
+
+#. Baro stock count.
+msgctxt "note.stock"
+msgid "{count, plural, one {# stock item} other {# stock items}}"
+msgstr ""
+
+#. Baro timing.
+msgctxt "note.arrives"
+msgid "Arrives"
+msgstr ""
+
+#. Baro timing.
+msgctxt "note.departure"
+msgid "Departure"
+msgstr ""
+
+#. Baro note.
+msgctxt "note.unverified"
+msgid "Current stock is not yet verified."
+msgstr ""
+
+#. Heading.
+msgctxt "note.bestValue"
+msgid "Best value"
+msgstr ""
+
+#. After "Best value".
+msgctxt "note.atStale"
+msgid "at last snapshot asking prices"
+msgstr ""
+
+#. After "Best value".
+msgctxt "note.atSnapshot"
+msgid "at snapshot asking prices"
+msgstr ""
+
+#. Platinum per ducat.
+msgctxt "note.perDucat"
+msgid "{price}p/ducat"
+msgstr ""
+
+#. Note.
+msgctxt "note.moreTradeable"
+msgid "{count} more tradeable"
+msgstr ""
+
+#. Note.
+msgctxt "note.prices"
+msgid "Prices · {time}"
+msgstr ""
+
+#. Note.
+msgctxt "note.arrivalWarning"
+msgid "Arrival can depress prices; resale is not guaranteed."
+msgstr ""
+
+#. Figure label.
+msgctxt "note.ducatYield"
+msgid "Ducat yield · all copies"
+msgstr ""
+
+#. Figure label.
+msgctxt "note.ducatCopies"
+msgid "Ducat-earning copies"
+msgstr ""
+
+#. Figure label.
+msgctxt "note.under4"
+msgid "Under 4p each"
+msgstr ""
+
+#. Figure note.
+msgctxt "note.atStalePrices"
+msgid "At last snapshot asking prices"
+msgstr ""
+
+#. Figure note.
+msgctxt "note.atSnapshotPrices"
+msgid "At snapshot asking prices"
+msgstr ""
+
+#. Note.
+msgctxt "note.checkKeep"
+msgid "Check keep rules in the planner before scrapping."
+msgstr ""
+
+#. Note.
+msgctxt "note.scanToEstimate"
+msgid "Scan to estimate ducat yield from items you hold."
+msgstr ""
+
+#. Disclosure.
+msgctxt "note.youHold"
+msgid "{count, plural, one {You hold # item from this stock} other {You hold # items from this stock}}"
+msgstr ""
+
+#. Disclosure.
+msgctxt "note.schedule"
+msgid "Published schedule"
+msgstr ""
+
+#. Label.
+msgctxt "note.arrival"
+msgid "Arrival"
+msgstr ""
+
+#. Label.
+msgctxt "note.sourceLabel"
+msgid "Source"
+msgstr ""
+
+#. Label.
+msgctxt "note.pricesLabel"
+msgid "Prices"
+msgstr ""
+
+#. Digest price.
+msgctxt "note.each"
+msgid "~{price}p each"
+msgstr ""
+
+#. Note.
+msgctxt "note.estimates"
+msgid "Estimated market values, not guaranteed sales."
+msgstr ""
+
+#. Disclosure.
+msgctxt "note.timestamps"
+msgid "Snapshot timestamps"
+msgstr ""
+
+#. Label.
+msgctxt "note.inventory"
+msgid "Inventory"
+msgstr ""
+
+#. Warning.
+msgctxt "note.popupFailed"
+msgid "Desktop popup could not be delivered. This notification is saved here."
+msgstr ""
+
+#. Note.
+msgctxt "note.popupPending"
+msgid "Desktop delivery was not confirmed. This notification is saved here."
+msgstr ""
+
+#. Button.
+msgctxt "note.markRead"
+msgid "Mark read"
+msgstr ""
+
+#. Alert type.
+msgctxt "notify.label.trades"
+msgid "Completed trades and listing follow-up"
+msgstr ""
+
+#. Alert type.
+msgctxt "notify.label.watches"
+msgid "Price watches"
+msgstr ""
+
+#. Alert type.
+msgctxt "notify.label.baro"
+msgid "Baro arrival and departure"
+msgstr ""
+
+#. Alert type.
+msgctxt "notify.label.calendar"
+msgid "Events affecting your holdings"
+msgstr ""
+
+#. Alert type.
+msgctxt "notify.label.digest"
+msgid "Daily sell opportunities"
+msgstr ""
+
+#. Alert type.
+msgctxt "notify.label.announcements"
+msgid "Market announcements"
+msgstr ""
+
+#. When the alert comes.
+msgctxt "notify.timing.baro"
+msgid "One hour before arrival, on arrival, and one hour before departure."
+msgstr ""
+
+#. When the alert comes.
+msgctxt "notify.timing.calendar"
+msgid "When active and one hour before ending."
+msgstr ""
+
+#. When the alert comes.
+msgctxt "notify.timing.digest"
+msgid "Once daily after 18:00 local time, with inventory and prices no older than 24 hours."
+msgstr ""
+
+#. When the alert comes.
+msgctxt "notify.timing.announcements"
+msgid "Once per announcement while active. Checks every 15 minutes while the app is running; offline delivery may be delayed."
+msgstr ""
+
+#. Error.
+msgctxt "notify.readFailed"
+msgid "Notification preferences could not be read. Please retry."
+msgstr ""
+
+#. Status.
+msgctxt "notify.saved"
+msgid "Preferences saved."
+msgstr ""
+
+#. Button.
+msgctxt "notify.test"
+msgid "Send test notification"
+msgstr ""
+
+#. Button.
+msgctxt "notify.retryLoad"
+msgid "Retry loading preferences"
+msgstr ""
+
+#. Setting.
+msgctxt "notify.popups"
+msgid "Desktop popups"
+msgstr ""
+
+#. Setting help.
+msgctxt "notify.popupsHelp"
+msgid "Pause popups to keep alerts in your inbox without interruptions. Operating-system settings may also suppress popups."
+msgstr ""
+
+#. Checkbox.
+#. Max 12 characters.
+msgctxt "notify.enabled"
+msgid "Enabled"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "notify.col.alert"
+msgid "Alert"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "notify.col.inbox"
+msgid "Inbox"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "notify.col.popup"
+msgid "Popup"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "notify.col.inGame"
+msgid "In game"
+msgstr ""
+
+#. Screen reader name of a checkbox.
+msgctxt "notify.inInbox"
+msgid "{alert} in inbox"
+msgstr ""
+
+#. Screen reader name of a checkbox.
+msgctxt "notify.popup"
+msgid "{alert} popup"
+msgstr ""
+
+#. Screen reader name of a checkbox.
+msgctxt "notify.inGame"
+msgid "{alert} in game"
+msgstr ""
+
+#. Screen reader text.
+msgctxt "notify.notOffered"
+msgid "Not offered"
+msgstr ""
+
+#. Note.
+msgctxt "notify.inGameNote"
+msgid "In game shows a short card over Warframe instead of a popup while the game is the window in front, and a popup otherwise. The card never takes focus or clicks. On Linux this needs Warframe running through XWayland, as Steam’s Proton does."
+msgstr ""
+
+#. Setting.
+msgctxt "notify.copyWhisper"
+msgid "Copy the whisper in game"
+msgstr ""
+
+#. Setting help.
+msgctxt "notify.copyWhisperHelp"
+msgid "When a price watch names the player, the card puts a ready warframe.market whisper on your clipboard, so you can press Ctrl+V in chat. This replaces what you had copied. Off, the whisper waits in TennoWorth with a Copy button."
+msgstr ""
+
+#. Status.
+msgctxt "notify.loading"
+msgid "Loading notification preferences…"
+msgstr ""
+
+#. Note.
+msgctxt "notify.footnote"
+msgid "Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days."
+msgstr ""

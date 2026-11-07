@@ -3,79 +3,79 @@
   import type { NotificationEntry } from '../../contracts/desktop';
   import { notificationDate, plat, baroLocation } from '../../ui/format';
   import { announcementSource } from '../../domain/announcements';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
   let { entry, now, busy = false, onopen, onread }: {
     entry: NotificationEntry; now: number; busy?: boolean;
     onopen: () => void; onread: () => void;
   } = $props();
-  const categories = { trades: 'Completed trade', watches: 'Price watch', baro: 'Baro', calendar: 'Calendar', digest: 'Daily digest', announcements: 'Market announcement' };
-  const targets = { sell: 'Open Sell', orders: 'Review My Orders', ledger: 'Open Ledger', watches: 'Open price watches', baro: 'Open Baro and ducat planner', routines: 'Open calendar' };
+
   let date = $derived(notificationDate(entry.created_at, now));
   let content = $derived(entry.content);
   function stamp(raw: string, options: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }) {
     const parsed = new Date(raw);
-    return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString(undefined, options) : 'Unknown';
+    return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString(formatLocale(), options) : t('note.unknown');
   }
 </script>
 
 <article class="notification-entry" class:unread={!entry.read} aria-label={entry.title}>
   <header class="entry-head">
-    <div class="entry-title"><h3>{entry.title}</h3><div class="entry-meta"><span>{entry.read ? 'Read' : 'Unread'} · {categories[entry.category]}</span></div></div>
+    <div class="entry-title"><h3>{entry.title}</h3><div class="entry-meta"><span>{t(entry.read ? 'note.read' : 'note.unread')} · {t(`note.cat.${entry.category}`)}</span></div></div>
     <div class="entry-time"><time class="clock" datetime={date.iso}>{date.time}</time><span>{date.label}{date.shortDate ? ` · ${date.shortDate}` : ''}</span></div>
   </header>
   {#if content?.kind === 'announcement'}
     <p class="body">{entry.body}</p>
     <div class="ui-toolbar">
-      <span class="evidence">{now >= Date.parse(content.ends_at) ? 'Ended' : 'Ends'} · {stamp(content.ends_at)}</span>
-      {#if announcementSource(content.source_url)}<a href={announcementSource(content.source_url)} target="_blank" rel="noopener noreferrer">Source announcement ↗</a>{/if}
+      <span class="evidence">{t(now >= Date.parse(content.ends_at) ? 'note.ended' : 'note.ends')} · {stamp(content.ends_at)}</span>
+      {#if announcementSource(content.source_url)}<a href={announcementSource(content.source_url)} target="_blank" rel="noopener noreferrer">{t('note.source')}</a>{/if}
     </div>
   {:else if content?.kind === 'baro'}
     <div class="entry-content">
-      <p class="context"><span>{baroLocation(content.location)}</span>{#if content.stock_count !== null}<span>{content.stock_count} stock {content.stock_count === 1 ? 'item' : 'items'}</span>{/if}<span>{now < Date.parse(content.activation) ? 'Arrives' : 'Departure'} · {stamp(now < Date.parse(content.activation) ? content.activation : content.expiry, { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</span></p>
+      <p class="context"><span>{baroLocation(content.location)}</span>{#if content.stock_count !== null}<span>{t('note.stock', { count: content.stock_count })}</span>{/if}<span>{t(now < Date.parse(content.activation) ? 'note.arrives' : 'note.departure')} · {stamp(now < Date.parse(content.activation) ? content.activation : content.expiry, { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</span></p>
       {#if content.stock_count === null}
-        <p>Current stock is not yet verified.</p>
+        <p>{t('note.unverified')}</p>
       {:else if content.value}
         {@const value = content.value}
         {#if value.best.length}
           <div class="ui-stack best-value">
-            <p><strong>Best value</strong> · {value.prices_stale ? 'at last snapshot asking prices' : 'at snapshot asking prices'}</p>
-            <ul class="digest-list">{#each value.best as pick}<li><span>{pick.name}</span><b>{pick.platPerDucat.toFixed(2)}p/ducat</b></li>{/each}</ul>
-            {#if value.more_tradeable > 0}<p class="evidence">{value.more_tradeable} more tradeable</p>{/if}
-            <p class="evidence">Prices · {stamp(value.price_at)}</p>
-            <p class="keeping-note">Arrival can depress prices; resale is not guaranteed.</p>
+            <p><strong>{t('note.bestValue')}</strong> · {t(value.prices_stale ? 'note.atStale' : 'note.atSnapshot')}</p>
+            <ul class="digest-list">{#each value.best as pick}<li><span>{pick.name}</span><b>{t('note.perDucat', { price: pick.platPerDucat.toLocaleString(formatLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}</b></li>{/each}</ul>
+            {#if value.more_tradeable > 0}<p class="evidence">{t('note.moreTradeable', { count: value.more_tradeable })}</p>{/if}
+            <p class="evidence">{t('note.prices', { time: stamp(value.price_at) })}</p>
+            <p class="keeping-note">{t('note.arrivalWarning')}</p>
           </div>
         {/if}
         {#if value.fodder_ducats !== null && value.fodder_items !== null && value.cheap_fodder !== null}
           <dl class="yield-strip">
-            <div><dt>Ducat yield · all copies</dt><dd>{plat(value.fodder_ducats)}d</dd></div>
-            <div><dt>Ducat-earning copies</dt><dd>{plat(value.fodder_items)}</dd></div>
-            <div><dt>Under 4p each</dt><dd>{plat(value.cheap_fodder)}</dd><small>At {value.prices_stale ? 'last snapshot' : 'snapshot'} asking prices</small></div>
+            <div><dt>{t('note.ducatYield')}</dt><dd>{plat(value.fodder_ducats)}d</dd></div>
+            <div><dt>{t('note.ducatCopies')}</dt><dd>{plat(value.fodder_items)}</dd></div>
+            <div><dt>{t('note.under4')}</dt><dd>{plat(value.cheap_fodder)}</dd><small>{t(value.prices_stale ? 'note.atStalePrices' : 'note.atSnapshotPrices')}</small></div>
           </dl>
-          <p class="keeping-note">Check keep rules in the planner before scrapping.</p>
-        {:else}<p>Scan to estimate ducat yield from items you hold.</p>{/if}
+          <p class="keeping-note">{t('note.checkKeep')}</p>
+        {:else}<p>{t('note.scanToEstimate')}</p>{/if}
       {/if}
       {#if content.held.length}
-        <details class="holding-details"><summary>You hold {content.held.length} {content.held.length === 1 ? 'item' : 'items'} from this stock</summary><ul class="holding-list">{#each content.held as item}<li>{item}</li>{/each}</ul></details>
+        <details class="holding-details"><summary>{t('note.youHold', { count: content.held.length })}</summary><ul class="holding-list">{#each content.held as item}<li>{item}</li>{/each}</ul></details>
       {/if}
-      <details class="schedule-details"><summary>Published schedule</summary><dl><dt>Arrival</dt><dd>{stamp(content.activation)}</dd><dt>Departure</dt><dd>{stamp(content.expiry)}</dd><dt>Source</dt><dd>{content.activation} → {content.expiry}</dd>{#if content.value}<dt>Prices</dt><dd>{content.value.price_at || 'Unknown'}</dd>{/if}</dl></details>
+      <details class="schedule-details"><summary>{t('note.schedule')}</summary><dl><dt>{t('note.arrival')}</dt><dd>{stamp(content.activation)}</dd><dt>{t('note.departure')}</dt><dd>{stamp(content.expiry)}</dd><dt>{t('note.sourceLabel')}</dt><dd>{content.activation} → {content.expiry}</dd>{#if content.value}<dt>{t('note.pricesLabel')}</dt><dd>{content.value.price_at || t('note.unknown')}</dd>{/if}</dl></details>
     </div>
   {:else if content?.kind === 'digest'}
     <div class="entry-content">
-      <ul class="digest-list">{#each content.opportunities as item}<li><span>{item.name} ×{plat(item.quantity)}</span><b>~{plat(item.price)}p each</b></li>{/each}</ul>
-      <p class="keeping-note">Estimated market values, not guaranteed sales.</p>
+      <ul class="digest-list">{#each content.opportunities as item}<li><span>{item.name} ×{plat(item.quantity)}</span><b>{t('note.each', { price: plat(item.price) })}</b></li>{/each}</ul>
+      <p class="keeping-note">{t('note.estimates')}</p>
       <p class="evidence"><span>Inventory · {stamp(content.inventory_at)}</span><span>Prices · {stamp(content.price_at)}</span></p>
-      <details class="schedule-details"><summary>Snapshot timestamps</summary><dl><dt>Inventory</dt><dd>{content.inventory_at || 'Unknown'}</dd><dt>Prices</dt><dd>{content.price_at || 'Unknown'}</dd></dl></details>
+      <details class="schedule-details"><summary>{t('note.timestamps')}</summary><dl><dt>{t('note.inventory')}</dt><dd>{content.inventory_at || t('note.unknown')}</dd><dt>{t('note.pricesLabel')}</dt><dd>{content.price_at || t('note.unknown')}</dd></dl></details>
     </div>
   {:else}<p class="body">{entry.body}</p>{/if}
-  {#if entry.delivery === 'failed'}<p class="ui-notice" data-tone="warn">Desktop popup could not be delivered. This notification is saved here.</p>{/if}
-  {#if entry.delivery === 'pending'}<p class="evidence">Desktop delivery was not confirmed. This notification is saved here.</p>{/if}
+  {#if entry.delivery === 'failed'}<p class="ui-notice" data-tone="warn">{t('note.popupFailed')}</p>{/if}
+  {#if entry.delivery === 'pending'}<p class="evidence">{t('note.popupPending')}</p>{/if}
   <div class="ui-toolbar entry-actions">
-    <button class="btn" use:pending={busy} onclick={onopen}>{targets[entry.target]}</button>
+    <button class="btn" use:pending={busy} onclick={onopen}>{t(`note.go.${entry.target}`)}</button>
     {#if !entry.read}<button class="btn ghost" use:pending={busy} onclick={() => {
       // The button goes once the entry is read; its row's open action keeps focus.
       const row = document.activeElement?.closest('li');
       onread();
       focusLater(() => row?.querySelector<HTMLElement>('.btn'));
-    }}>Mark read</button>{/if}
+    }}>{t('note.markRead')}</button>{/if}
   </div>
 </article>
 
