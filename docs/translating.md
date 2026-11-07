@@ -6,9 +6,10 @@ drafts into text that reads naturally. You do not need to be a developer, and
 reviewing a few lines helps.
 
 The app does not offer a language choice yet. When it does, it will offer
-every language whose item names warframe.market provides, drafts included, and
-fix wording as players report it. Thai waits until its item names are
-available; its drafts can be reviewed in the meantime.
+every language below except Thai, drafts included, and fix wording as players
+report it. Thai stays in review for longer: warframe.market has no Thai item
+names, so the reward overlay would read Thai rewards in English. Its drafts can
+be reviewed in the meantime, and the preview shows them (`&lang=th`).
 
 ## What to review
 

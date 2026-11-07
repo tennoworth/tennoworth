@@ -4,7 +4,7 @@
 import { EN, type MessageKey } from './en';
 import { formatMessage, parseMessage, type MessageArgs } from './message';
 import { parsePo } from './po';
-import { isLanguageCode, languageTag, type LanguageCode } from './languages';
+import { isLanguageCode, isOfferedLanguage, languageTag, type LanguageCode } from './languages';
 import { pseudoLocalize } from './pseudo';
 
 export type AppLanguage = LanguageCode | 'pseudo';
@@ -49,7 +49,12 @@ class I18n {
 export const i18n = new I18n();
 export const t = i18n.t;
 
-/** Read the saved language; an unknown or missing value means English. */
+/** Read the saved language; one that is unknown or not offered means English. */
 export function savedLanguage(value: string | null | undefined): AppLanguage {
+  return isOfferedLanguage(value) ? value : 'en';
+}
+
+/** A language to preview: any catalog, offered or not, or the pseudo-locale. */
+export function previewLanguage(value: string | null | undefined): AppLanguage {
   return value === 'pseudo' || isLanguageCode(value) ? value : 'en';
 }

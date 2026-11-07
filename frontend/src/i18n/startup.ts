@@ -1,12 +1,12 @@
 // The desktop loads its language before mounting, so nothing renders in
 // English first. The hosted site stays English.
 import type { SettingsStore } from '../contracts/state-store';
-import { i18n, savedLanguage } from './i18n.svelte';
+import { i18n, previewLanguage, savedLanguage } from './i18n.svelte';
 
 export async function startLanguage(store: SettingsStore): Promise<void> {
   // Dev-only override for reviewing a language in the preview: `?lang=fr`, `?lang=pseudo`.
   const override = import.meta.env.DEV ? new URLSearchParams(location.search).get('lang') : null;
-  const language = savedLanguage(override ?? store.getSetting('app-language'));
+  const language = override === null ? savedLanguage(store.getSetting('app-language')) : previewLanguage(override);
   try {
     await i18n.use(language);
   } catch (error) {

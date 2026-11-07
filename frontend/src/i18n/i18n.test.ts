@@ -4,7 +4,7 @@ import { argumentNames, formatMessage, mapText, parseMessage, richParts } from '
 import { formatPo, parsePo } from './po';
 import { checkCatalogs, syncCatalog } from './catalog';
 import { pseudoLocalize } from './pseudo';
-import { i18n } from './i18n.svelte';
+import { i18n, previewLanguage, savedLanguage } from './i18n.svelte';
 import { EN } from './en';
 import { TRANSLATED } from './languages';
 
@@ -94,5 +94,17 @@ describe('runtime', () => {
     await i18n.use('en');
     expect(i18n.t('strip.unmatched', { count: 1, summary: 'quests' })).toMatch(/^1 item couldn't be price-matched \(quests\)/);
     expect(i18n.tag).toBe('en');
+  });
+
+  it('starts only in a language a player can choose, but previews any catalog', () => {
+    expect(savedLanguage('fr')).toBe('fr');
+    expect(savedLanguage('zh-hant')).toBe('zh-hant');
+    expect(savedLanguage('th')).toBe('en');
+    expect(savedLanguage('pseudo')).toBe('en');
+    expect(savedLanguage('klingon')).toBe('en');
+    expect(savedLanguage(null)).toBe('en');
+    expect(previewLanguage('th')).toBe('th');
+    expect(previewLanguage('pseudo')).toBe('pseudo');
+    expect(previewLanguage('klingon')).toBe('en');
   });
 });
