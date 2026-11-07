@@ -6,7 +6,7 @@
   import { onMount, tick } from 'svelte';
   import { i18n, t } from '../../i18n/i18n.svelte';
   import { LANGUAGES, type LanguageCode } from '../../i18n/languages';
-  import { decodePage, scramble } from '../../ui/decode';
+  import { decodeChange, decodePage, scramble } from '../../ui/decode';
   import Rich from '../../ui/Rich.svelte';
 
   type Choice = (typeof LANGUAGES)[number];
@@ -62,8 +62,10 @@
     placeMark();
     if (focus) grid?.querySelector<HTMLElement>(`[data-code="${language.code}"]`)?.focus();
     try {
-      await i18n.use(language.code);
-      document.documentElement.lang = i18n.tag;
+      await decodeChange(document.querySelector('#app'), ms(420), async () => {
+        await i18n.use(language.code);
+        document.documentElement.lang = i18n.tag;
+      });
       decodeText();
     } catch (error) {
       // A catalog that fails to load keeps the last language on screen; the
@@ -134,7 +136,7 @@
 </script>
 
 <!-- The choice is the point of the dialog, so Escape does not dismiss it; Enter continues with the cursor's language. -->
-<dialog bind:this={dialog} class="language-picker" class:entering={phase === 'entering'} class:closing={phase === 'closing'}
+<dialog bind:this={dialog} data-no-decode class="language-picker" class:entering={phase === 'entering'} class:closing={phase === 'closing'}
   aria-labelledby="language-title" lang={i18n.tag} oncancel={(event) => event.preventDefault()}>
   <header class="rail">
     <span class="sq" aria-hidden="true"></span>

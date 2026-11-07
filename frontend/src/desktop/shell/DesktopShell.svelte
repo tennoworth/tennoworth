@@ -30,6 +30,7 @@ import type { PlanResponse, TradeAllowance } from '../../contracts/data';
   import { type WfmSession } from '../../features/feedback/feedback';
   import { humanError, DesktopCmdError } from '../../contracts/errors';
   import { humanWindow } from '../../ui/format';
+  import { decodeChange } from '../../ui/decode';
   
   import { onMount, tick, untrack } from 'svelte';
   import Faq from '../../features/faq/Faq.svelte';
@@ -211,8 +212,12 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     notesServices.desktopEelogStatus().then((status) => { gameLanguage = status.game_language ?? null; }, () => { gameLanguage = null; });
   });
   async function changeLanguage(code: LanguageCode) {
-    await i18n.use(code);
-    document.documentElement.lang = i18n.tag;
+    // The same decode the first-run picker plays, so a switch reads the same everywhere.
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    await decodeChange(document.querySelector('#app'), reduced ? 0 : 420, async () => {
+      await i18n.use(code);
+      document.documentElement.lang = i18n.tag;
+    });
     await store.setSetting('app-language', code);
   }
   async function saveLanguage(code: LanguageCode) {

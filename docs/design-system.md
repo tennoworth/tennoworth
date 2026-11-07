@@ -768,7 +768,13 @@ every language until the player acts, changed text decodes character by
 character, and Continue collapses the dialog like a CRT switching off before
 the page behind decodes once into the chosen language. The decode writes only
 text node values and yields to any update the page makes. Reduced motion shows
-the same dialog and text with none of it. Open it in the desktop preview with
+the same dialog and text with none of it.
+
+The decode is also the one motion of a language switch anywhere, so a switch
+reads the same in the picker and in Settings: each change decodes only the
+text it rewrote (item names, numbers and native language names stay still),
+and a newer switch settles the running decode first (`decodeChange` in
+`ui/decode.ts`). Mark a region `data-no-decode` when it animates its own text. Open it in the desktop preview with
 `&sample=first-language` (and `&game=pt` for a detected game language).
 
 ### Landing strip tagline
