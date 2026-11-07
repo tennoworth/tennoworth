@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { t } from '../../i18n/i18n.svelte';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
   import { richParts } from '../../i18n/message';
 import KeyboardNavigation from '../../ui/KeyboardNavigation.svelte';
 import KeyLegend from './KeyLegend.svelte';
@@ -86,13 +86,13 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   let settingsSection = $state<'notifications' | 'price-sharing' | 'account' | 'scan' | 'overlay' | 'app' | null>(null);
   // Settings people look for by name ("dark mode", "popups") rather than by view.
   const openSettings = (section: NonNullable<typeof settingsSection>) => { settingsSection = section; filters.setView('settings'); };
-  const settingsDestinations = [
-    { label: 'Settings › Appearance and updates', keywords: 'dark light theme colour color mode updates privacy app icon item pictures visual compact', run: () => openSettings('app') },
-    { label: 'Settings › Notifications', keywords: 'popups alerts sounds in game price watches inbox', run: () => openSettings('notifications') },
-    { label: 'Settings › Automatic scan', keywords: 'auto scan cadence rescan', run: () => openSettings('scan') },
-    { label: 'Settings › Account', keywords: 'warframe.market sign in log out status presence online invisible', run: () => openSettings('account') },
-    { label: 'Settings › Relic overlay', keywords: 'reward screen ocr', run: () => openSettings('overlay') },
-  ];
+  let settingsDestinations = $derived([
+    { label: t('shell.go.app'), keywords: 'dark light theme colour color mode updates privacy app icon item pictures visual compact', run: () => openSettings('app') },
+    { label: t('shell.go.notifications'), keywords: 'popups alerts sounds in game price watches inbox', run: () => openSettings('notifications') },
+    { label: t('shell.go.scan'), keywords: 'auto scan cadence rescan', run: () => openSettings('scan') },
+    { label: t('shell.go.account'), keywords: 'warframe.market sign in log out status presence online invisible', run: () => openSettings('account') },
+    { label: t('shell.go.overlay'), keywords: 'reward screen ocr', run: () => openSettings('overlay') },
+  ]);
 
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
@@ -333,24 +333,24 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   let scanActivity: number | null = null;
   let lastApplied: number | null = null;
   function scanSummary(): string {
-    if (!inventory.previousOwned) return 'Scan applied';
+    if (!inventory.previousOwned) return t('shell.scanApplied');
     let added = 0, changed = 0;
     for (const [key, d] of inventory.deltas) {
       if (!inventory.previousOwned.has(key)) added += 1;
       else if (d !== 0) changed += 1;
     }
-    return added + changed === 0 ? 'Scan applied · no changes' : `Scan applied · ${changed} changed · ${added} new`;
+    return added + changed === 0 ? t('shell.scanNoChanges') : t('shell.scanChanges', { changed, added });
   }
   $effect(() => {
     const pulling = inventory.pullingInventory;
     untrack(() => {
-      if (pulling && scanActivity == null) scanActivity = activity.begin('Scanning game…');
+      if (pulling && scanActivity == null) scanActivity = activity.begin(t('shell.scanning'));
       else if (!pulling && scanActivity != null) {
         const id = scanActivity;
         scanActivity = null;
-        if (inventory.pullError) activity.finish(id, inventory.noTradeables ? 'Scan found nothing tradeable' : 'Scan failed', 'bad');
+        if (inventory.pullError) activity.finish(id, t(inventory.noTradeables ? 'shell.scanNothing' : 'shell.scanFailed'), 'bad');
         else if (inventory.lastUpdated !== lastApplied) { lastApplied = inventory.lastUpdated; activity.finish(id, scanSummary()); }
-        else activity.finish(id, 'Scan stopped');
+        else activity.finish(id, t('shell.scanStopped'));
       }
     });
   });
@@ -368,7 +368,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   async function makeReceiptVisible(receipt: { orderId: string | null; slug: string }): Promise<void> {
     if (!receipt.orderId) return;
     try {
-      const { results } = await activity.track('Making visible…', () => transport.bulkVisibility([receipt.orderId!], true), (r) => r.results.some((x) => x.status === 'ok') ? 'Now visible to buyers' : 'Visibility not changed', () => 'Visibility not changed');
+      const { results } = await activity.track(t('shell.makingVisible'), () => transport.bulkVisibility([receipt.orderId!], true), (r) => t(r.results.some((x) => x.status === 'ok') ? 'shell.nowVisible' : 'shell.visibilityUnchanged'), () => t('shell.visibilityUnchanged'));
       receipts.markVisible(results);
     } catch (error) {
       if (error instanceof DesktopCmdError && (error.code === 'needs_login' || error.code === 'needs_unlock')) void wfmAuthDialogsRef?.open(error.code);
@@ -379,9 +379,9 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     const created = ok.filter((r) => r.action !== 'updated').length;
     const updated = ok.length - created;
     const open = response.results.filter((r) => r.status === 'pending' || r.status === 'uncertain_mutation').length;
-    if (open > 0) return `Batch interrupted · ${open} to resume`;
-    const parts = [created ? `Listed ${created} · hidden` : '', updated ? `Updated ${updated}` : ''].filter(Boolean);
-    return parts.join(' · ') || 'Nothing was listed';
+    if (open > 0) return t('shell.batchInterrupted', { count: open });
+    const parts = [created ? t('shell.listedHidden', { count: created }) : '', updated ? t('shell.updated', { count: updated }) : ''].filter(Boolean);
+    return parts.join(' · ') || t('shell.nothingListed');
   }
 
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
@@ -461,7 +461,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   let restoring = $derived(!inventory.restored && !hasInventory);
 </script>
 
-<a class="skip-navigation" href="#workspace" onclick={(event) => { event.preventDefault(); workspaceElement?.focus(); }}>Skip to current view</a>
+<a class="skip-navigation" href="#workspace" onclick={(event) => { event.preventDefault(); workspaceElement?.focus(); }}>{t('shell.skip')}</a>
 
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
@@ -470,12 +470,12 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   <StatusStrip keyboardTools={firstRunKeyboard} bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
   <aside data-shell class="sidebar" onpointerover={showTip} onpointerleave={hideTip} onfocusin={showTip} onfocusout={hideTip}>
-    <nav data-shell aria-label="App views">
+    <nav data-shell aria-label={t('shell.views')}>
       <div data-shell class="nav-group">
-        <div data-shell class="nav-label">Trade</div>
+        <div data-shell class="nav-label">{t('shell.group.trade')}</div>
         <button data-shell type="button" class="nav-item" data-testid="nav-sell" class:active={effectiveView === 'sell'} aria-current={effectiveView === 'sell' ? 'page' : undefined} onclick={() => filters.setView('sell')}>
           <NavIcon name="sell" />
-          <span data-shell class="label">{hasInventory ? estimatedGuidance ? 'Opportunities' : 'Sell' : 'Inventory'}</span>
+          <span data-shell class="label">{t(hasInventory ? estimatedGuidance ? 'shell.nav.opportunities' : 'shell.nav.sell' : 'shell.nav.inventory')}</span>
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven
                "Sell 0" reads as "your inventory got wiped". -->
@@ -483,11 +483,11 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
         </button>
         
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} aria-current={effectiveView === 'session' ? 'page' : undefined} onclick={() => filters.setView('session')}>
-          <NavIcon name="session" /><span data-shell class="label">Trade Session</span></button>
+          <NavIcon name="session" /><span data-shell class="label">{t('shell.nav.session')}</span></button>
         
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sets'} aria-current={effectiveView === 'sets' ? 'page' : undefined} onclick={() => filters.setView('sets')}>
           <NavIcon name="sets" />
-            <span data-shell class="label">Set picks</span>
+            <span data-shell class="label">{t('shell.nav.sets')}</span>
             <span data-shell class="badge">{setResult.phase === 'done' ? setRecos.length : '—'}</span>
           </button>
         <!-- Hidden only once the plan is known to be empty, so the nav does not
@@ -495,7 +495,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
         {#if relicPlan.length > 0 || relicResult.phase !== 'done' || relicResult.error}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} aria-current={effectiveView === 'relics' ? 'page' : undefined} onclick={() => filters.setView('relics')}>
           <NavIcon name="relics" />
-            <span data-shell class="label">Relics</span>
+            <span data-shell class="label">{t('shell.nav.relics')}</span>
             <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
         {/if}
@@ -504,76 +504,76 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
         {#if resolvedRivens.length > 0 || (inventory.ownedRivens.length > 0 && !inventory.market)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} aria-current={effectiveView === 'rivens' ? 'page' : undefined} onclick={() => filters.setView('rivens')}>
           <NavIcon name="rivens" />
-            <span data-shell class="label">Rivens</span>
+            <span data-shell class="label">{t('shell.nav.rivens')}</span>
             <span data-shell class="badge">{resolvedRivens.length}</span>
           </button>
         {/if}
         {#if showBaroCard || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} aria-current={effectiveView === 'baro' ? 'page' : undefined} onclick={() => filters.setView('baro')}>
           <NavIcon name="baro" />
-            <span data-shell class="label">Baro</span>
-            {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>
-            {:else if baroState && baroState.phase !== 'unknown'}<span data-shell class="badge when" title="Baro arrives in {humanWindow(baroState.windowMs)}">{humanWindow(baroState.windowMs).split(' ')[0]}</span>{/if}
+            <span data-shell class="label">{t('shell.nav.baro')}</span>
+            {#if baroState?.phase === 'here'}<span data-shell class="badge here">{t('shell.nav.baroHere')}</span>
+            {:else if baroState && baroState.phase !== 'unknown'}<span data-shell class="badge when" title={t('shell.nav.baroArrives', { time: humanWindow(baroState.windowMs) })}>{humanWindow(baroState.windowMs).split(' ')[0]}</span>{/if}
           </button>
         {/if}
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} aria-current={effectiveView === 'routines' ? 'page' : undefined} onclick={() => filters.setView('routines')}>
           <NavIcon name="routines" />
-          <span data-shell class="label">Routines</span>
+          <span data-shell class="label">{t('shell.nav.routines')}</span>
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'calendar'} aria-current={effectiveView === 'calendar' ? 'page' : undefined} onclick={() => filters.setView('calendar')}>
           <NavIcon name="calendar" />
-          <span data-shell class="label">Calendar</span>
+          <span data-shell class="label">{t('shell.nav.calendar')}</span>
         </button>
         {#if buildMetaDrift(inventory.market) || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'meta'} aria-current={effectiveView === 'meta' ? 'page' : undefined} onclick={() => filters.setView('meta')}>
           <NavIcon name="meta" />
-            <span data-shell class="label">Meta Drift</span>
+            <span data-shell class="label">{t('shell.nav.meta')}</span>
           </button>
         {/if}
       </div>
 
       <div data-shell class="nav-group">
-        <div data-shell class="nav-label">Manage</div>
+        <div data-shell class="nav-label">{t('shell.group.manage')}</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} aria-current={effectiveView === 'orders' ? 'page' : undefined} onclick={() => filters.setView('orders')}>
           <NavIcon name="orders" />
-          <span data-shell class="label">My orders</span>
-          {#if ordersToFix > 0}<span data-shell class="badge warn" title="{ordersToFix} {ordersToFix === 1 ? 'order' : 'orders'} to fix">{ordersToFix}</span>{/if}
+          <span data-shell class="label">{t('shell.nav.orders')}</span>
+          {#if ordersToFix > 0}<span data-shell class="badge warn" title={t('shell.nav.ordersToFix', { count: ordersToFix })}>{ordersToFix}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'watches'} aria-current={effectiveView === 'watches' ? 'page' : undefined} onclick={() => filters.setView('watches')}>
           <NavIcon name="watches" />
-          <span data-shell class="label">Price watches</span>
+          <span data-shell class="label">{t('shell.nav.watches')}</span>
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'notifications'} aria-current={effectiveView === 'notifications' ? 'page' : undefined} onclick={() => filters.setView('notifications')}>
           <NavIcon name="notifications" />
-          <span data-shell class="label">Notifications</span>{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}
+          <span data-shell class="label">{t('shell.nav.notifications')}</span>{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'ledger'} aria-current={effectiveView === 'ledger' ? 'page' : undefined} onclick={() => filters.setView('ledger')}>
           <NavIcon name="ledger" />
-          <span data-shell class="label">Ledger</span>
+          <span data-shell class="label">{t('shell.nav.ledger')}</span>
         </button>
       </div>
 
       <div data-shell class="nav-group">
-        <div data-shell class="nav-label">Library</div>
+        <div data-shell class="nav-label">{t('shell.group.library')}</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'install'} aria-current={effectiveView === 'install' ? 'page' : undefined} onclick={() => filters.setView('install')}>
           <NavIcon name="faq" />
-          <span data-shell class="label">FAQ</span>
+          <span data-shell class="label">{t('shell.nav.faq')}</span>
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'settings'} aria-current={effectiveView === 'settings' ? 'page' : undefined} onclick={() => filters.setView('settings')}>
           <NavIcon name="settings" />
-          <span data-shell class="label">Settings</span>
+          <span data-shell class="label">{t('shell.nav.settings')}</span>
         </button>
       </div>
     </nav>
     <!-- After the views in tab order: it is absolutely placed on the edge, and
          Enter collapsing the sidebar was easy to hit on the way to the views. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-    <div data-shell class="sidebar-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Sidebar width" aria-valuemin={56} aria-valuemax={SIDEBAR_MAX} aria-valuenow={sidebar.collapsed ? 56 : sidebar.width} aria-valuetext={sidebar.collapsed ? 'Icons only' : `${sidebar.width} pixels`} title="Drag to resize · ← → resize · Enter or double-click collapses"
+    <div data-shell class="sidebar-resize" role="separator" tabindex="0" aria-orientation="vertical" aria-label={t('shell.sidebarWidth')} aria-valuemin={56} aria-valuemax={SIDEBAR_MAX} aria-valuenow={sidebar.collapsed ? 56 : sidebar.width} aria-valuetext={sidebar.collapsed ? t('shell.iconsOnly') : t('shell.pixels', { count: sidebar.width })} title={t('shell.resizeTitle')}
       onpointerdown={startResize} ondblclick={() => sidebar.toggle()} onkeydown={(e) => { if (sidebar.key(e.key)) e.preventDefault(); }}></div>
   </aside>
 
   {/if}
-  <main id="workspace" tabindex="-1" aria-label="Current view" bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-first-run' : undefined}>
+  <main id="workspace" tabindex="-1" aria-label={t('shell.currentView')} bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-first-run' : undefined}>
     {@render generalBanners()}
     {#if !showWorkspace}
   {#if !inventory.error && !inventory.pullError}
@@ -597,16 +597,16 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   <Faq />
 
   <footer data-shell class="sitefoot">
-    <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us. Item images from the Warframe Wiki, © Digital Extremes.</span>
-    {#if inventory.market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
-    <a data-shell href="#trust">Trust &amp; safety</a>
-    <span data-shell class="ver" title="build {APP_COMMIT}">{versionLabel}</span>
-    <div data-shell class="foot-theme"><ThemeSwitcher {theme} compact label="Colour mode" /></div>
+    <span data-shell class="grow">{t('shell.footer')}</span>
+    {#if inventory.market?.updated_at}<span data-shell title={t('shell.snapshotTitle')}>{t('shell.snapshot', { time: snapshotStamp })}</span>{/if}
+    <a data-shell href="#trust">{t('shell.trust')}</a>
+    <span data-shell class="ver" title={t('shell.build', { commit: APP_COMMIT })}>{versionLabel}</span>
+    <div data-shell class="foot-theme"><ThemeSwitcher {theme} compact label={t('shell.colourMode')} /></div>
   </footer>
     {:else}
     {@render marketAnnouncement()}
     {#if advisorResult.error && !filterState.adviceOnly && ['sell', 'sets', 'session'].includes(effectiveView)}
-      <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
+      <div class="ui-notice" data-tone="warn" role="status">{t('shell.adviceUnavailable', { error: advisorResult.error })} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>{t('shell.retryCalculations')}</button></div>
     {/if}
 
     <!-- Each view stays mounted once visited and is hidden while another is
@@ -616,8 +616,8 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
       <!-- Startup is still looking for the saved scan: hold the Sell layout
            with placeholder rows so the real ones fill in where they will stay. -->
       <section data-shell class="view-header">
-        <h2 data-shell>Sell</h2>
-        <p data-shell class="lede" role="status">Loading your saved scan…</p>
+        <h2 data-shell>{t('shell.sellTitle')}</h2>
+        <p data-shell class="lede" role="status">{t('shell.loadingScan')}</p>
       </section>
       <div data-shell class="restoring" aria-hidden="true">
         {#each { length: 3 } as _, i (i)}<div data-shell class="ph-row pick"><span data-shell></span><span data-shell></span><span data-shell></span></div>{/each}
@@ -650,9 +650,9 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {#if visited.has('session')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'session')}>
       {#if defaultFacts.phase === 'loading'}
-        <div class="ui-notice" role="status">Calculating safe quantities and sale values…</div>
+        <div class="ui-notice" role="status">{t('shell.calculating')}</div>
       {:else if defaultFacts.error}
-        <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
+        <div class="ui-notice" data-tone="bad" role="alert">{t('shell.salesUnavailable', { error: defaultFacts.error })} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>{t('shell.retryCalculations')}</button></div>
       {/if}
       <TradeSessionPane active={effectiveView === 'session'} sessionEpoch={listing.sessionEpoch} keep={keepSection} {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
         scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => { if (!listingQuantitiesKnown) return; listing.openListingFlow(rows.map(r => ({
@@ -731,8 +731,8 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {#if visited.has('install')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'install')}>
       <section data-shell class="view-header">
-        <h2 data-shell>FAQ</h2>
-        <p data-shell class="lede">Answers to common questions.</p>
+        <h2 data-shell>{t('shell.faqTitle')}</h2>
+        <p data-shell class="lede">{t('shell.faqLede')}</p>
       </section>
       <Faq />
     </div>
@@ -753,18 +753,18 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   <!-- The rail tip only repeats each control's own name; the controls inside stay the interaction. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div data-shell class="sfoot" onpointerover={showTip} onpointerleave={hideTip} onfocusin={showTip} onfocusout={hideTip}>
-    <button data-shell type="button" class="rail-toggle" aria-label={sidebar.collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-expanded={!sidebar.collapsed} onclick={() => { sidebar.toggle(); tip = null; }}>
-      <NavIcon name={sidebar.collapsed ? 'expand' : 'collapse'} /><span data-shell class="label">Collapse</span>
+    <button data-shell type="button" class="rail-toggle" aria-label={t(sidebar.collapsed ? 'shell.expandSidebar' : 'shell.collapseSidebar')} aria-expanded={!sidebar.collapsed} onclick={() => { sidebar.toggle(); tip = null; }}>
+      <NavIcon name={sidebar.collapsed ? 'expand' : 'collapse'} /><span data-shell class="label">{t('shell.collapse')}</span>
     </button>
     <KeyboardNavigation desktop compact {store} extra={settingsDestinations} />
-    <nav data-shell class="project-links" aria-label="Project links">
+    <nav data-shell class="project-links" aria-label={t('shell.projectLinks')}>
       {@render projectLinkAnchors()}
     </nav>
     <button data-shell type="button" class="feedback-trigger" onclick={openFeedback}>
       <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
-      <span data-shell class="label">Send feedback</span>
+      <span data-shell class="label">{t('shell.sendFeedback')}</span>
     </button>
-    <div data-shell class="ver" title="build {APP_COMMIT}" data-testid="app-version">{versionLabel}</div>
+    <div data-shell class="ver" title={t('shell.build', { commit: APP_COMMIT })} data-testid="app-version">{versionLabel}</div>
   </div>
   {#if tip}<div data-shell class="rail-tip" aria-hidden="true" style:top="{tip.top}px" style:left="{tip.left}px">{tip.text}</div>{/if}
   {/if}
@@ -775,7 +775,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     reserveCopies={filters.reserveCopies} onsetKeep={async (value) => { await store.setSetting('reserve-copies', String(value)); filters.reserveCopies = value; }}
     unavailableCount={unknownSlugs.size} unavailable={guidanceUnavailable} scanning={inventory.pullingInventory} onscan={() => inventory.pullInventory()} />
   {#if estimatedGuidance && !guidanceUnavailable}
-    <p class="ui-notice" role="status" aria-label="Estimated guidance">Estimates apply your keep rules. Existing WFM listings are not subtracted. Check WFM listings before posting.</p>
+    <p class="ui-notice" role="status" aria-label={t('shell.estimated')}>{t('shell.estimatedNote')}</p>
   {/if}
 {/snippet}
 
@@ -790,7 +790,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     <svg data-shell viewBox="0 0 24 24" aria-hidden="true">
       <path data-shell d="M4 7 H17 V16 H6 L4 14 Z M17 9 H19 L21 11 V13 L19 15 H17 M7 10 L10 13 L14 9" />
     </svg>
-    <span data-shell class="label">Buy me a coffee</span>
+    <span data-shell class="label">{t('shell.coffee')}</span>
   </a>
 {/snippet}
 
@@ -799,52 +799,50 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     <div class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</div>
   {/if}
   {#if inventory.noTradeables && inventory.pullError}
-    <section data-shell class="ui-notice ui-stack" data-tone="warn" role="status" aria-label="No tradeable items found">
-      <strong data-shell>No tradeable items found</strong>
+    <section data-shell class="ui-notice ui-stack" data-tone="warn" role="status" aria-label={t('shell.noTradeables')}>
+      <strong data-shell>{t('shell.noTradeables')}</strong>
       <p data-shell>{inventory.pullError}</p>
-      {#if hasInventory}<p data-shell>Showing your saved inventory. This scan did not replace its quantities.</p>{/if}
+      {#if hasInventory}<p data-shell>{t('shell.savedKept')}</p>{/if}
       <div data-shell class="ui-toolbar">
-        <button data-shell class="btn" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>Scan again</button>
-        <button data-shell class="btn ghost" onclick={() => { inventory.pullError = null; }}>Dismiss scan notice</button>
+        <button data-shell class="btn" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{t('shell.scanAgain')}</button>
+        <button data-shell class="btn ghost" onclick={() => { inventory.pullError = null; }}>{t('shell.dismissScanNotice')}</button>
       </div>
     </section>
   {:else if inventory.error || inventory.pullError}
-    <section data-shell class="ui-notice ui-stack" data-tone="bad" role="alert" aria-label="Inventory unavailable">
-      <strong data-shell>Your inventory couldn’t be refreshed</strong>
-      <p data-shell>{hasInventory ? 'Showing your last successful inventory. Its quantities have not been refreshed.' : 'Try scanning again, or check for an app update. Settings and help are still available.'}</p>
+    <section data-shell class="ui-notice ui-stack" data-tone="bad" role="alert" aria-label={t('shell.inventoryUnavailable')}>
+      <strong data-shell>{t('shell.refreshFailed')}</strong>
+      <p data-shell>{t(hasInventory ? 'shell.showingLast' : 'shell.tryAgain')}</p>
       <details data-shell>
-        <summary data-shell>Technical details</summary>
+        <summary data-shell>{t('shell.technical')}</summary>
         <p data-shell class="recovery-details">{inventory.pullError ?? inventory.error}</p>
       </details>
       <div data-shell class="ui-toolbar">
-        <button data-shell class="btn primary" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? 'Scanning game…' : 'Retry scan'}</button>
-        <button data-shell class="btn" onclick={() => updates.check({ announce: true })}>Check for updates</button>
-        <button data-shell class="btn" onclick={() => filters.setView('settings')}>Settings</button>
-        <button data-shell class="btn" onclick={openFeedback}>Report a bug</button>
-        <button data-shell class="btn ghost" onclick={() => { inventory.error = null; inventory.pullError = null; }}>Dismiss scan error</button>
+        <button data-shell class="btn primary" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{t(inventory.pullingInventory ? 'shell.scanning' : 'shell.retryScan')}</button>
+        <button data-shell class="btn" onclick={() => updates.check({ announce: true })}>{t('shell.checkUpdates')}</button>
+        <button data-shell class="btn" onclick={() => filters.setView('settings')}>{t('shell.nav.settings')}</button>
+        <button data-shell class="btn" onclick={openFeedback}>{t('shell.reportBug')}</button>
+        <button data-shell class="btn ghost" onclick={() => { inventory.error = null; inventory.pullError = null; }}>{t('shell.dismissScanError')}</button>
       </div>
     </section>
   {/if}
   {#if trayHint}
     <div data-shell class="card ui-panel warn-banner general-banner" role="status">
       <div data-shell class="gb-body">
-        Still running in your tray. Closing the window keeps TennoWorth in the
-        background - use the tray icon's Quit to exit.
+        {t('shell.tray')}
       </div>
       <div data-shell class="gb-actions">
-        <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => (session.trayHint = false)}>×</button>
+        <button data-shell class="gb-dismiss" aria-label={t('shell.dismiss')} onclick={() => (session.trayHint = false)}>×</button>
       </div>
     </div>
   {/if}
   {#if autoScan.pending}
     <div data-shell class="card ui-panel warn-banner general-banner" role="status">
       <div data-shell class="gb-body">
-        An automatic scan finished at {new Date(autoScan.pending.at).toLocaleTimeString()}.
-        Load it to update quantities in the tables.
+        {t('shell.autoScanDone', { time: new Date(autoScan.pending.at).toLocaleTimeString(formatLocale()) })}
       </div>
       <div data-shell class="gb-actions">
-        <button data-shell class="btn" onclick={() => void autoScan.loadPending()}>Load new scan</button>
-        <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => autoScan.dismiss()}>×</button>
+        <button data-shell class="btn" onclick={() => void autoScan.loadPending()}>{t('shell.loadScan')}</button>
+        <button data-shell class="gb-dismiss" aria-label={t('shell.dismiss')} onclick={() => autoScan.dismiss()}>×</button>
       </div>
     </div>
   {/if}
@@ -873,9 +871,9 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  sendThrough={(send) => activity.track('Sending listings…', () => listing.trackSend(send), (response) => sendSummary(response as PlanResponse), () => 'Listing failed')}
+  sendThrough={(send) => activity.track(t('shell.sendingListings'), () => listing.trackSend(send), (response) => sendSummary(response as PlanResponse), () => t('shell.listingFailed'))}
   onsent={(sent, results) => receipts.record(sent, results)}
-  onvisible={(results) => { receipts.markVisible(results); const shown = results.filter((r) => r.status === 'ok').length; if (shown) activity.finish(activity.begin(''), `${shown} now visible`); }}
+  onvisible={(results) => { receipts.markVisible(results); const shown = results.filter((r) => r.status === 'ok').length; if (shown) activity.finish(activity.begin(''), t('shell.visibleCount', { count: shown })); }}
   onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void listing.refreshPendingPlan(); }}
 />
 

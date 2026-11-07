@@ -3911,3 +3911,497 @@ msgstr ""
 msgctxt "demand.inherited"
 msgid "inherited from the set"
 msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.app"
+msgid "Settings › Appearance and updates"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.notifications"
+msgid "Settings › Notifications"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.scan"
+msgid "Settings › Automatic scan"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.account"
+msgid "Settings › Account"
+msgstr ""
+
+#. Command palette entry. The overlay reads the relic reward screen.
+msgctxt "shell.go.overlay"
+msgid "Settings › Relic overlay"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.scanApplied"
+msgid "Scan applied"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.scanNoChanges"
+msgid "Scan applied · no changes"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.scanChanges"
+msgid "Scan applied · {changed} changed · {added} new"
+msgstr ""
+
+#. Activity status and button.
+#. Max 22 characters.
+msgctxt "shell.scanning"
+msgid "Scanning game…"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.scanNothing"
+msgid "Scan found nothing tradeable"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.scanFailed"
+msgid "Scan failed"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.scanStopped"
+msgid "Scan stopped"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.makingVisible"
+msgid "Making visible…"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.nowVisible"
+msgid "Now visible to buyers"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.visibilityUnchanged"
+msgid "Visibility not changed"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.visibleCount"
+msgid "{count} now visible"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.batchInterrupted"
+msgid "Batch interrupted · {count} to resume"
+msgstr ""
+
+#. Activity status part.
+msgctxt "shell.listedHidden"
+msgid "Listed {count} · hidden"
+msgstr ""
+
+#. Activity status part.
+msgctxt "shell.updated"
+msgid "Updated {count}"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.nothingListed"
+msgid "Nothing was listed"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.sendingListings"
+msgid "Sending listings…"
+msgstr ""
+
+#. Activity status.
+#. Max 30 characters.
+msgctxt "shell.listingFailed"
+msgid "Listing failed"
+msgstr ""
+
+#. Keyboard skip link.
+msgctxt "shell.skip"
+msgid "Skip to current view"
+msgstr ""
+
+#. Screen reader name of the navigation.
+msgctxt "shell.views"
+msgid "App views"
+msgstr ""
+
+#. Navigation group.
+#. Max 12 characters.
+msgctxt "shell.group.trade"
+msgid "Trade"
+msgstr ""
+
+#. Navigation group.
+#. Max 12 characters.
+msgctxt "shell.group.manage"
+msgid "Manage"
+msgstr ""
+
+#. Navigation group.
+#. Max 12 characters.
+msgctxt "shell.group.library"
+msgid "Library"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.opportunities"
+msgid "Opportunities"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.sell"
+msgid "Sell"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.inventory"
+msgid "Inventory"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.session"
+msgid "Trade Session"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.sets"
+msgid "Set picks"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.relics"
+msgid "Relics"
+msgstr ""
+
+#. Navigation item. Riven mods.
+#. Max 16 characters.
+msgctxt "shell.nav.rivens"
+msgid "Rivens"
+msgstr ""
+
+#. Navigation item. Baro Ki’Teer, the travelling trader. Keep the name.
+#. Max 16 characters.
+msgctxt "shell.nav.baro"
+msgid "Baro"
+msgstr ""
+
+#. Badge: Baro is here now.
+#. Max 6 characters.
+msgctxt "shell.nav.baroHere"
+msgid "here"
+msgstr ""
+
+#. Tooltip.
+msgctxt "shell.nav.baroArrives"
+msgid "Baro arrives in {time}"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.routines"
+msgid "Routines"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.calendar"
+msgid "Calendar"
+msgstr ""
+
+#. Navigation item: what players use more or less lately.
+#. Max 16 characters.
+msgctxt "shell.nav.meta"
+msgid "Meta Drift"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.orders"
+msgid "My orders"
+msgstr ""
+
+#. Tooltip on a badge.
+msgctxt "shell.nav.ordersToFix"
+msgid "{count, plural, one {# order to fix} other {# orders to fix}}"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.watches"
+msgid "Price watches"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.notifications"
+msgid "Notifications"
+msgstr ""
+
+#. Navigation item: the record of trades.
+#. Max 16 characters.
+msgctxt "shell.nav.ledger"
+msgid "Ledger"
+msgstr ""
+
+#. Navigation item.
+#. Max 16 characters.
+msgctxt "shell.nav.faq"
+msgid "FAQ"
+msgstr ""
+
+#. Navigation item and button.
+#. Max 16 characters.
+msgctxt "shell.nav.settings"
+msgid "Settings"
+msgstr ""
+
+#. Screen reader name of the resize handle.
+msgctxt "shell.sidebarWidth"
+msgid "Sidebar width"
+msgstr ""
+
+#. Screen reader value of the resize handle.
+msgctxt "shell.iconsOnly"
+msgid "Icons only"
+msgstr ""
+
+#. Screen reader value of the resize handle.
+msgctxt "shell.pixels"
+msgid "{count} pixels"
+msgstr ""
+
+#. Tooltip of the resize handle.
+msgctxt "shell.resizeTitle"
+msgid "Drag to resize · ← → resize · Enter or double-click collapses"
+msgstr ""
+
+#. Screen reader name of the main area.
+msgctxt "shell.currentView"
+msgid "Current view"
+msgstr ""
+
+#. Page footer. Keep the names.
+msgctxt "shell.footer"
+msgid "TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us. Item images from the Warframe Wiki, © Digital Extremes."
+msgstr ""
+
+#. Tooltip.
+msgctxt "shell.snapshotTitle"
+msgid "When the market snapshot was taken"
+msgstr ""
+
+#. Footer: when the prices were taken.
+msgctxt "shell.snapshot"
+msgid "Snapshot {time}"
+msgstr ""
+
+#. Footer link and FAQ heading.
+msgctxt "shell.trust"
+msgid "Trust & safety"
+msgstr ""
+
+#. Tooltip on the version number.
+msgctxt "shell.build"
+msgid "build {commit}"
+msgstr ""
+
+#. Theme switcher label.
+msgctxt "shell.colourMode"
+msgid "Colour mode"
+msgstr ""
+
+#. Warning; error is technical.
+msgctxt "shell.adviceUnavailable"
+msgid "Hold/sell advice unavailable: {error}"
+msgstr ""
+
+#. Button.
+msgctxt "shell.retryCalculations"
+msgid "Retry calculations"
+msgstr ""
+
+#. View heading.
+msgctxt "shell.sellTitle"
+msgid "Sell"
+msgstr ""
+
+#. Status.
+msgctxt "shell.loadingScan"
+msgid "Loading your saved scan…"
+msgstr ""
+
+#. Status.
+msgctxt "shell.calculating"
+msgid "Calculating safe quantities and sale values…"
+msgstr ""
+
+#. Error; error is technical.
+msgctxt "shell.salesUnavailable"
+msgid "Sale calculations unavailable: {error}"
+msgstr ""
+
+#. View heading.
+msgctxt "shell.faqTitle"
+msgid "FAQ"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "shell.faqLede"
+msgid "Answers to common questions."
+msgstr ""
+
+#. Button.
+msgctxt "shell.expandSidebar"
+msgid "Expand sidebar"
+msgstr ""
+
+#. Button.
+msgctxt "shell.collapseSidebar"
+msgid "Collapse sidebar"
+msgstr ""
+
+#. Button label beside the icon.
+#. Max 14 characters.
+msgctxt "shell.collapse"
+msgid "Collapse"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "shell.projectLinks"
+msgid "Project links"
+msgstr ""
+
+#. Button.
+#. Max 18 characters.
+msgctxt "shell.sendFeedback"
+msgid "Send feedback"
+msgstr ""
+
+#. Screen reader name of the notice.
+msgctxt "shell.estimated"
+msgid "Estimated guidance"
+msgstr ""
+
+#. Notice.
+msgctxt "shell.estimatedNote"
+msgid "Estimates apply your keep rules. Existing WFM listings are not subtracted. Check WFM listings before posting."
+msgstr ""
+
+#. Link to a donation page.
+#. Max 18 characters.
+msgctxt "shell.coffee"
+msgid "Buy me a coffee"
+msgstr ""
+
+#. Notice heading.
+msgctxt "shell.noTradeables"
+msgid "No tradeable items found"
+msgstr ""
+
+#. Notice.
+msgctxt "shell.savedKept"
+msgid "Showing your saved inventory. This scan did not replace its quantities."
+msgstr ""
+
+#. Button.
+msgctxt "shell.scanAgain"
+msgid "Scan again"
+msgstr ""
+
+#. Button.
+msgctxt "shell.dismissScanNotice"
+msgid "Dismiss scan notice"
+msgstr ""
+
+#. Screen reader name of the error.
+msgctxt "shell.inventoryUnavailable"
+msgid "Inventory unavailable"
+msgstr ""
+
+#. Error heading.
+msgctxt "shell.refreshFailed"
+msgid "Your inventory couldn’t be refreshed"
+msgstr ""
+
+#. Error text.
+msgctxt "shell.showingLast"
+msgid "Showing your last successful inventory. Its quantities have not been refreshed."
+msgstr ""
+
+#. Error text.
+msgctxt "shell.tryAgain"
+msgid "Try scanning again, or check for an app update. Settings and help are still available."
+msgstr ""
+
+#. Disclosure.
+msgctxt "shell.technical"
+msgid "Technical details"
+msgstr ""
+
+#. Button.
+msgctxt "shell.retryScan"
+msgid "Retry scan"
+msgstr ""
+
+#. Button.
+msgctxt "shell.checkUpdates"
+msgid "Check for updates"
+msgstr ""
+
+#. Button.
+msgctxt "shell.reportBug"
+msgid "Report a bug"
+msgstr ""
+
+#. Button.
+msgctxt "shell.dismissScanError"
+msgid "Dismiss scan error"
+msgstr ""
+
+#. Banner. The tray is the system tray.
+msgctxt "shell.tray"
+msgid "Still running in your tray. Closing the window keeps TennoWorth in the background - use the tray icon's Quit to exit."
+msgstr ""
+
+#. Screen reader name of ×.
+msgctxt "shell.dismiss"
+msgid "Dismiss"
+msgstr ""
+
+#. Banner.
+msgctxt "shell.autoScanDone"
+msgid "An automatic scan finished at {time}. Load it to update quantities in the tables."
+msgstr ""
+
+#. Button.
+msgctxt "shell.loadScan"
+msgid "Load new scan"
+msgstr ""
