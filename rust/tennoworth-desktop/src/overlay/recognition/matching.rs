@@ -9,7 +9,23 @@ pub(in crate::overlay) struct FoundMatch {
 }
 
 pub(in crate::overlay) fn normalize(text: &str) -> String {
-    let words: Vec<String> = text
+    // Chinese names put a space between Latin and Chinese ("Forma 蓝图"), and
+    // Tesseract sometimes loses it; a script change is always a word break.
+    let mut spaced = String::with_capacity(text.len());
+    let mut previous: Option<char> = None;
+    for c in text.chars() {
+        if let Some(before) = previous {
+            if before.is_alphanumeric()
+                && c.is_alphanumeric()
+                && is_unspaced_script(before) != is_unspaced_script(c)
+            {
+                spaced.push(' ');
+            }
+        }
+        spaced.push(c);
+        previous = Some(c);
+    }
+    let words: Vec<String> = spaced
         .chars()
         .flat_map(|c| {
             if c.is_alphanumeric() {

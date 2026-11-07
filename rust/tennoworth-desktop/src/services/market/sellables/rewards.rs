@@ -4,7 +4,29 @@ use crate::persistence::Db;
 
 use super::{MarketData, OverlayCatalogItem, OverlayMarketFacts};
 
-const LATIN_SCRIPT_LANGUAGES: &[&str] = &["de", "es", "fr", "it", "pl", "pt", "tr"];
+/// What the reward screen shows for the Forma Blueprint, which warframe.market
+/// does not list. Each word is the game's own (its exported item names):
+/// "Forma" in Latin script and Chinese, Форма in Russian and Ukrainian, フォーマ
+/// and 포르마. Matching takes whole words, so in a spaced script the word alone
+/// finds the title in either order ("Forma (Schéma)", "Форма (Чертёж)").
+/// Japanese and Chinese write no spaces between words, so they carry the whole
+/// name, with the game's word for blueprint after the item as on every other
+/// blueprint.
+const FORMA_BLUEPRINT_NAMES: &[(&str, &str)] = &[
+    ("de", "Forma"),
+    ("es", "Forma"),
+    ("fr", "Forma"),
+    ("it", "Forma"),
+    ("pl", "Forma"),
+    ("pt", "Forma"),
+    ("tr", "Forma"),
+    ("ru", "Форма"),
+    ("uk", "Форма"),
+    ("ko", "포르마"),
+    ("ja", "フォーマ設計図"),
+    ("zh-hans", "Forma 蓝图"),
+    ("zh-hant", "Forma 藍圖"),
+];
 
 impl MarketData {
     /// The names a reward screen can show. `language` is a WFM language code;
@@ -29,14 +51,16 @@ impl MarketData {
                 });
             }
         }
-        // warframe.market does not list Forma, so there is no localized name
-        // for its blueprint. Latin-script clients keep the word "Forma" (the
-        // French export confirms it), so a title holding it is the blueprint.
-        if LATIN_SCRIPT_LANGUAGES.contains(&language) && seen.insert("forma".into()) {
-            catalog.push(OverlayCatalogItem {
-                name: "Forma".into(),
-                slug: None,
-            });
+        if let Some((_, name)) = FORMA_BLUEPRINT_NAMES
+            .iter()
+            .find(|(code, _)| *code == language)
+        {
+            if seen.insert(name.to_lowercase()) {
+                catalog.push(OverlayCatalogItem {
+                    name: (*name).into(),
+                    slug: None,
+                });
+            }
         }
         catalog
     }
@@ -155,10 +179,17 @@ mod localized_catalog_tests {
                 ("Forma", None),
             ]
         );
-        // No "Forma" stand-in for a script that does not write it that way.
-        assert_eq!(market.overlay_catalog(Some("ru")).len(), 3);
-        // A language the snapshot has no names for reads English.
-        assert_eq!(market.overlay_catalog(Some("ja")), english);
+        // Each script gets the Forma Blueprint as its game writes it.
+        let russian = market.overlay_catalog(Some("ru"));
+        assert_eq!(russian.len(), 4);
+        assert_eq!(names(&russian[3..]), vec![("Форма", None)]);
+        // A language the snapshot has no names for reads English, plus the
+        // Forma Blueprint, which never comes from the snapshot.
+        let japanese = market.overlay_catalog(Some("ja"));
+        assert_eq!(&japanese[..2], &english[..]);
+        assert_eq!(names(&japanese[2..]), vec![("フォーマ設計図", None)]);
+        // Thai has no names, so it reads English only.
+        assert_eq!(market.overlay_catalog(Some("th")), english);
     }
 
     #[test]

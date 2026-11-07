@@ -720,12 +720,39 @@ fn a_forma_title_in_a_latin_script_language_is_the_forma_blueprint() {
 }
 
 #[test]
+fn the_forma_blueprint_is_found_in_every_script_the_game_writes_it_in() {
+    let with = |name: &str| {
+        let mut items = catalog();
+        items.push(OverlayCatalogItem {
+            name: name.into(),
+            slug: None,
+        });
+        items
+    };
+    for (read, name) in [
+        ("Форма (Чертёж)", "Форма"),
+        ("Чертёж: Форма", "Форма"),
+        ("포르마 설계도", "포르마"),
+        ("フ ォ ー マ 設 計 図", "フォーマ設計図"),
+        ("Forma 蓝 图", "Forma 蓝图"),
+        ("Forma藍圖", "Forma 藍圖"),
+    ] {
+        let got = match_ocr_lines(read, &with(name));
+        assert_eq!(got.len(), 1, "{read}: {got:?}");
+        assert_eq!(got[0].item.name, name, "{read}");
+        assert!(got[0].confidence >= 0.9, "{read}: {}", got[0].confidence);
+    }
+}
+
+#[test]
 fn spaces_tesseract_puts_between_cjk_characters_are_dropped() {
     assert_eq!(normalize("伏 特 Prime 头 部 蓝 图"), "伏特 prime 头部蓝图");
     assert_eq!(normalize("ヴォルト プライム"), "ヴォルトプライム");
     // Korean writes spaces between words, so they stay.
     assert_eq!(normalize("볼트 프라임"), "볼트 프라임");
     assert_eq!(normalize("Нейрооптика (Чертёж)"), "нейрооптика чертёж");
+    assert_eq!(normalize("Forma蓝图"), "forma 蓝图");
+    assert_eq!(normalize("伏特Prime头部"), "伏特 prime 头部");
     let catalog = vec![OverlayCatalogItem {
         name: "伏特 Prime 头部神经光元蓝图".into(),
         slug: Some("volt_prime_neuroptics_blueprint".into()),
