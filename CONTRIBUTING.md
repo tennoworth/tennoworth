@@ -167,8 +167,8 @@ runtime measurements remain separate from the mock and browser checks.
 
 ## Translations
 
-Translatable text lives in `frontend/src/i18n/en.ts`, and each language's catalog
-in `frontend/src/i18n/locales/`. Reviewing a language needs no toolchain:
+Translatable English lives in `frontend/src/i18n/en/<area>.ts`, and each
+language's catalog in `frontend/src/i18n/locales/`. Reviewing a language needs no toolchain:
 [docs/translating.md](docs/translating.md) explains how, and how a developer
 adds or changes a message.
 

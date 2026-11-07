@@ -217,6 +217,8 @@ and crate.
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) for a working local setup,
 contribution tiers, checks, and the pull-request workflow. You can work on the
 hosted site and a populated desktop preview without Warframe or credentials.
+Speak a language Warframe supports? [Translating](docs/translating.md) shows how
+to review the app's text in it, no developer tools needed.
 
 The [architecture guide](docs/architecture.md) explains feature ownership and
 allowed dependencies. UI changes follow the [design system](docs/design-system.md)
