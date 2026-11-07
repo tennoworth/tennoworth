@@ -110,7 +110,10 @@ the credit line). The wiki is someone else's site, and the art Digital
 Extremes': keep the request pattern polite - `/images/thumb/` paths only, one
 request a second, a per-run budget, conditional rechecks after a month, misses
 retried after a month, and a 429 or server error ends the run. It runs from
-its own daily `tennoworth-art.timer`, never the sweep. Credit the source once,
+its own daily `tennoworth-art.timer`, never the sweep. The timer fires within
+a random hour, so a run is skipped only when the last one was under 20 hours
+ago; and when a sweep holds the output directory, `art` waits up to 30 minutes
+for it, then leaves the day to the next run rather than failing. Credit the source once,
 in the app's and site's footers, not on each picture.
 
 `--stats-cache <FILE> --stats-interval <6h>` (`src/scrape/stats_cache.rs`) reuses an
