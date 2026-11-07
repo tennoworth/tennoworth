@@ -88,6 +88,7 @@ impl MarketData {
             usage: HashMap::new(),
             set_to_parts: HashMap::new(),
             relic_rewards: HashMap::new(),
+            reward_names: HashMap::new(),
             usage_parent_by_part: HashMap::new(),
         });
         market.build_usage_parent_index();

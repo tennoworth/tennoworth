@@ -9,18 +9,65 @@ pub(in crate::overlay) struct FoundMatch {
 }
 
 pub(in crate::overlay) fn normalize(text: &str) -> String {
-    text.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c.to_ascii_lowercase()
+    // Chinese names put a space between Latin and Chinese ("Forma 蓝图"), and
+    // Tesseract sometimes loses it; a script change is always a word break.
+    let mut spaced = String::with_capacity(text.len());
+    let mut previous: Option<char> = None;
+    for c in text.chars() {
+        if let Some(before) = previous {
+            if before.is_alphanumeric()
+                && c.is_alphanumeric()
+                && is_unspaced_script(before) != is_unspaced_script(c)
+            {
+                spaced.push(' ');
+            }
+        }
+        spaced.push(c);
+        previous = Some(c);
+    }
+    let words: Vec<String> = spaced
+        .chars()
+        .flat_map(|c| {
+            if c.is_alphanumeric() {
+                c.to_lowercase().collect::<Vec<_>>()
             } else {
-                ' '
+                vec![' ']
             }
         })
         .collect::<String>()
         .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+        .map(String::from)
+        .collect();
+    // Chinese and Japanese names have no spaces, but Tesseract often puts one
+    // between characters; a space between two such characters is noise.
+    let mut joined = String::new();
+    for word in words {
+        let glue = joined.chars().last().is_some_and(is_unspaced_script)
+            && word.chars().next().is_some_and(is_unspaced_script);
+        if !joined.is_empty() && !glue {
+            joined.push(' ');
+        }
+        joined.push_str(&word);
+    }
+    joined
+}
+
+fn is_unspaced_script(c: char) -> bool {
+    matches!(c,
+        '\u{3040}'..='\u{30ff}' // Hiragana, Katakana
+        | '\u{3400}'..='\u{4dbf}' // CJK Extension A
+        | '\u{4e00}'..='\u{9fff}' // CJK Unified Ideographs
+        | '\u{f900}'..='\u{faff}' // CJK Compatibility Ideographs
+        | '\u{ff66}'..='\u{ff9f}' // Half-width Katakana
+    )
+}
+
+/// The item a match stands for: two names of one slug (English and
+/// localized) are the same reward when reads are compared or voted on.
+pub(in crate::overlay) fn identity(item: &OverlayCatalogItem) -> String {
+    item.slug
+        .clone()
+        .unwrap_or_else(|| item.name.to_lowercase())
 }
 
 #[allow(
@@ -107,7 +154,7 @@ pub(in crate::overlay) fn match_ocr_lines(
         };
         if let Some(existing) = found
             .iter_mut()
-            .find(|existing| existing.item.name.eq_ignore_ascii_case(&item.name))
+            .find(|existing| identity(&existing.item) == identity(item))
         {
             if candidate.confidence > existing.confidence {
                 *existing = candidate;

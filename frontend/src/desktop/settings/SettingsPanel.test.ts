@@ -52,8 +52,8 @@ function fakeTheme(pref: ModePref = 'system') {
 describe('SettingsPanel', () => {
   function pollingTransport() {
     const settings: OverlaySettings = { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1,
-      livePrices: true, showOwned: true, diagnostics: false };
-    const status = { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true };
+      livePrices: true, showOwned: true, diagnostics: false, ocrLanguage: 'auto' };
+    const status = { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en' };
     let resolve!: (value: typeof status) => void;
     let reject!: (error: Error) => void;
     const pending = new Promise<typeof status>((yes, no) => { resolve = yes; reject = no; });
@@ -181,7 +181,7 @@ describe('SettingsPanel', () => {
     const settings: OverlaySettings = {
       enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1,
       livePrices: true, showOwned: true,
-      diagnostics: false,
+      diagnostics: false, ocrLanguage: 'auto',
     };
     const updateOverlaySettings = vi.fn(async (next: OverlaySettings) => next);
     const transport = {
@@ -190,8 +190,8 @@ describe('SettingsPanel', () => {
       setUsagePreferences: vi.fn(async (enabled: boolean) => ({ enabled, available: true })),
       getOverlaySettings: vi.fn(async () => settings),
       updateOverlaySettings,
-      overlayStatus: vi.fn(async () => ({ state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true })),
-      setupOverlayCapture: vi.fn(async () => ({ state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true })),
+      overlayStatus: vi.fn(async () => ({ state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en' })),
+      setupOverlayCapture: vi.fn(async () => ({ state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en' })),
       previewRelicOverlay: vi.fn(async () => {}),
       scanOverlayNow: vi.fn(async () => {}),
       openOverlayDiagnostics: vi.fn(async () => {}),
@@ -211,6 +211,31 @@ describe('SettingsPanel', () => {
     expect(await screen.findByText(/Diagnostic captures may contain player or game information/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open diagnostics' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Clear diagnostics' })).toBeTruthy();
+  });
+
+  it('saves the reward name language and says why recognition still reads English', async () => {
+    const { theme } = fakeTheme();
+    const settings: OverlaySettings = {
+      enabled: true, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1,
+      livePrices: true, showOwned: true, diagnostics: false, ocrLanguage: 'auto',
+    };
+    const note = 'Preparing the fr reward-name model; until then names are read in English.';
+    const updateOverlaySettings = vi.fn(async (next: OverlaySettings) => next);
+    const transport = {
+      getUsagePreferences: vi.fn(async () => ({ enabled: false, available: true })),
+      getPriceReportPreferences: vi.fn(async () => ({ enabled: false, available: true, sent_this_week: 0 })),
+      getOverlaySettings: vi.fn(async () => settings),
+      updateOverlaySettings,
+      overlayStatus: vi.fn(async () => ({ state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en', ocrLanguageNote: note })),
+    } as unknown as DesktopCapabilities;
+    render(SettingsPanel, { props: { theme, transport } });
+
+    expect(await screen.findByText(note)).toBeTruthy();
+    const field = screen.getByRole('combobox', { name: 'Reward name language' });
+    expect(field.textContent).toContain('Same as the game');
+    await fireEvent.click(field);
+    await fireEvent.click(screen.getByRole('option', { name: 'Français' }));
+    expect(updateOverlaySettings).toHaveBeenCalledWith({ ...settings, ocrLanguage: 'fr' });
   });
 
   it('checks for desktop updates on demand and reports the current version', async () => {

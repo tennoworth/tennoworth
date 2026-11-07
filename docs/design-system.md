@@ -745,6 +745,32 @@ technology and never replaces the focus outline; the animation stops when the
 window is hidden or the field is off screen. Select Field shimmer in the living
 styleguide's Data state control.
 
+### Language picker
+
+The desktop's first launch asks which language TennoWorth should speak, once,
+in a modal dialog (`LanguagePicker.svelte`) over the app. The cursor starts on
+the game's own language, read from the head of EE.log and tagged Your game;
+without one it starts on English. Every offered language is a row in a
+three-column radio grid (two below 40rem), named in its own script with the
+English name under it, and the selected row is the ink inversion with the row
+cursor's square. Moving the cursor switches the whole app behind the scrim to
+that language, so the choice is seen rather than imagined. Enter or Continue
+saves it; Escape does not dismiss it, because the dialog exists to make that
+choice. One choice sets the app language and the relic overlay's reward
+language (following the game when they agree); both stay separately
+changeable in Settings. A failed save says so in place and lets the second
+press go on, and the next launch asks again.
+
+It is an exception to the rules against entrance animation and decorative
+motion, scoped to this one dialog, which appears once: the title rail draws
+across, the body scans in under a 2px line, the title cycles "Language" in
+every language until the player acts, changed text decodes character by
+character, and Continue collapses the dialog like a CRT switching off before
+the page behind decodes once into the chosen language. The decode writes only
+text node values and yields to any update the page makes. Reduced motion shows
+the same dialog and text with none of it. Open it in the desktop preview with
+`&sample=first-language` (and `&game=pt` for a detected game language).
+
 ### Landing strip tagline
 
 The landing strips' tagline beside the brand (hosted site and desktop first

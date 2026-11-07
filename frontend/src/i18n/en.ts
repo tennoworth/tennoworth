@@ -36,6 +36,7 @@ import { DRIFT } from './en/drift';
 import { FEEDBACK } from './en/feedback';
 import { FAQ } from './en/faq';
 import { CALENDAR } from './en/calendar';
+import { LANGUAGE } from './en/language';
 
 export const EN = {
   ...FIRST_RUN,
@@ -70,6 +71,7 @@ export const EN = {
   ...FEEDBACK,
   ...FAQ,
   ...CALENDAR,
+  ...LANGUAGE,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

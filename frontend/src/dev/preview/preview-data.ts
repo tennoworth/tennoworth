@@ -67,6 +67,9 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
     ['last-owned-v2', serializeSnapshot({ invName: 'Sample inventory with a deliberately long name', owned, rivens, nativeSnapshotId: 1 }, Date.now())],
     ['sell-onboarding-dismissed', '1'], ['keep-copies-nudge-dismissed', '1'],
   ]);
+  // A language already chosen, so the first-run language picker stays away;
+  // `first-language` opens it.
+  if (scenario !== 'first-language') settings.set('app-language', 'en');
   // An earlier install, so this launch counts as use rather than a first run.
   if (scenario === 'support-prompt') settings.set('prompts', JSON.stringify({ first_seen: Date.now() - 21 * 86_400_000, launches: 6, prompts: {} }));
   const empty = scenario === 'empty';
@@ -136,6 +139,8 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
           : scenario === 'log-unreadable'
             ? { paused: { log: { error: 'the game log could not be read' } } }
             : 'recording',
+      // `&game=pt` stands in for a game running in another language.
+      game_language: new URLSearchParams(location.search).get('game'),
     },
     // An interrupted batch the SPA has to describe. `batch-pending` is work that
     // was never sent; `batch-uncertain` is work whose outcome the market never

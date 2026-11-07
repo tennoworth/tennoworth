@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import { formatLocale, i18n, t } from '../../i18n/i18n.svelte';
   import { richParts } from '../../i18n/message';
 import KeyboardNavigation from '../../ui/KeyboardNavigation.svelte';
 import KeyLegend from './KeyLegend.svelte';
@@ -57,6 +57,9 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   import RivensPanel from '../rivens/RivensPanel.svelte';
   import ThemeSwitcher from '../../ui/ThemeSwitcher.svelte';
   import UpdateNotes from '../updates/UpdateNotes.svelte';
+  import LanguagePicker from './LanguagePicker.svelte';
+  import { rewardLanguageFor } from './language-choice';
+  import type { LanguageCode } from '../../i18n/languages';
   import SettingsPanel from '../settings/SettingsPanel.svelte';
   import PriceSharingPrompt from '../settings/PriceSharingPrompt.svelte';
   import SupportPrompt from '../community/SupportPrompt.svelte';
@@ -199,6 +202,30 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   const display = untrack(() => new DisplayController(store));
   const crackAnyway = untrack(() => new CrackAnyway(store));
   provideDisplay(display);
+  // The first launch asks for a language once; the game's own language, from
+  // its log, is where the cursor starts. Undefined while that is being read.
+  let askLanguage = $state(untrack(() => store.getSetting('app-language') === null));
+  let gameLanguage = $state<string | null | undefined>(undefined);
+  onMount(() => {
+    if (!askLanguage) return;
+    notesServices.desktopEelogStatus().then((status) => { gameLanguage = status.game_language ?? null; }, () => { gameLanguage = null; });
+  });
+  async function changeLanguage(code: LanguageCode) {
+    await i18n.use(code);
+    document.documentElement.lang = i18n.tag;
+    await store.setSetting('app-language', code);
+  }
+  async function saveLanguage(code: LanguageCode) {
+    await store.setSetting('app-language', code);
+    // The reward language is a convenience on top: a failure leaves it following the game.
+    try {
+      const overlay = await transport.getOverlaySettings();
+      const wanted = rewardLanguageFor(code, gameLanguage ?? null);
+      if (overlay.ocrLanguage !== wanted) await transport.updateOverlaySettings({ ...overlay, ocrLanguage: wanted });
+    } catch (error) {
+      console.error(error);
+    }
+  }
   onMount(() => {
     const stopProtection = protection.start({
       listen: (event, cb) => listenForTauriEvent(event, cb),
@@ -739,7 +766,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {/if}
     {#if visited.has('settings')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'settings')}>
-      <SettingsPanel active={effectiveView === 'settings'} {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+      <SettingsPanel active={effectiveView === 'settings'} onlanguage={changeLanguage} {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
     </div>
     {/if}
 
@@ -887,6 +914,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   onimport={(result) => inventory.handleImported(result)}
 />
 
-<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} onautomatic={(state) => prompts.notes(state)} />
+{#if askLanguage && gameLanguage !== undefined}<LanguagePicker {gameLanguage} save={saveLanguage} ondone={() => (askLanguage = false)} />{/if}
+<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle' || askLanguage} onautomatic={(state) => prompts.notes(state)} />
 
 {#snippet firstRunKeyboard()}<KeyboardNavigation desktop {store} />{/snippet}

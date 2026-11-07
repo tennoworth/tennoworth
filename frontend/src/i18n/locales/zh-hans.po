@@ -11316,3 +11316,70 @@ msgstr ""
 msgctxt "announce.saveFailed"
 msgid "Could not save dismissal. Try again."
 msgstr ""
+
+#. First-run language picker, the question. Shown in the language the cursor is on.
+msgctxt "lang.lead"
+msgid "Which language should TennoWorth speak?"
+msgstr ""
+
+#. First-run language picker, under the question.
+msgctxt "lang.sub"
+msgid "Relic reward names are read in it too. Change either one any time in Settings."
+msgstr ""
+
+#. First-run language picker, the button that confirms the choice.
+#. Max 16 characters.
+msgctxt "lang.continue"
+msgid "Continue"
+msgstr ""
+
+#. Tag on the language the game itself runs in.
+#. Max 12 characters.
+msgctxt "lang.yourGame"
+msgid "Your game"
+msgstr ""
+
+#. Keyboard hint under the language list. Keep the keys in <kbd>.
+msgctxt "lang.keys"
+msgid "<kbd>←</kbd><kbd>→</kbd> choose · <kbd>Enter</kbd> continue"
+msgstr ""
+
+#. Error after choosing a language.
+msgctxt "lang.saveFailed"
+msgid "Could not save the language, so TennoWorth will ask again next time."
+msgstr ""
+
+#. Setting.
+msgctxt "settings.appLanguage"
+msgid "App language"
+msgstr ""
+
+#. Setting help.
+msgctxt "settings.appLanguageHelp"
+msgid "TennoWorth’s own words. Item names stay as warframe.market lists them in English; the relic overlay has its own reward language."
+msgstr ""
+
+#. Error.
+msgctxt "settings.appLanguageFailed"
+msgid "Could not switch the language. Try again."
+msgstr ""
+
+#. Setting: which language the relic overlay reads reward names in.
+msgctxt "settings.rewardLanguage"
+msgid "Reward name language"
+msgstr ""
+
+#. Setting help. Keep EE.log.
+msgctxt "settings.rewardLanguageHelp"
+msgid "Same as the game follows the language EE.log reports. A language other than English downloads its 1–5 MB text model once."
+msgstr ""
+
+#. Status under the setting; language is a language name.
+msgctxt "settings.rewardLanguageNow"
+msgid "Reading {language} names."
+msgstr ""
+
+#. Choice: follow the game’s language.
+msgctxt "settings.sameAsGame"
+msgid "Same as the game"
+msgstr ""

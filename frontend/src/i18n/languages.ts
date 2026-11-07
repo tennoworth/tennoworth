@@ -4,22 +4,24 @@
 // the ones a player can choose: the app and the reward overlay both work in
 // them. Thai is not offered: warframe.market has no Thai item names, so its
 // rewards would read in English. Its catalog stays in review meanwhile.
+// `word` is "Language" in that language: the first-run picker's title cycles
+// through them before the catalogs it would load are chosen.
 export const LANGUAGES = [
-  { code: 'en', tag: 'en', native: 'English', english: 'English', offered: true },
-  { code: 'de', tag: 'de', native: 'Deutsch', english: 'German', offered: true },
-  { code: 'es', tag: 'es', native: 'Español', english: 'Spanish', offered: true },
-  { code: 'fr', tag: 'fr', native: 'Français', english: 'French', offered: true },
-  { code: 'it', tag: 'it', native: 'Italiano', english: 'Italian', offered: true },
-  { code: 'pt', tag: 'pt-BR', native: 'Português', english: 'Portuguese (Brazil)', offered: true },
-  { code: 'pl', tag: 'pl', native: 'Polski', english: 'Polish', offered: true },
-  { code: 'ru', tag: 'ru', native: 'Русский', english: 'Russian', offered: true },
-  { code: 'uk', tag: 'uk', native: 'Українська', english: 'Ukrainian', offered: true },
-  { code: 'tr', tag: 'tr', native: 'Türkçe', english: 'Turkish', offered: true },
-  { code: 'ja', tag: 'ja', native: '日本語', english: 'Japanese', offered: true },
-  { code: 'ko', tag: 'ko', native: '한국어', english: 'Korean', offered: true },
-  { code: 'zh-hans', tag: 'zh-Hans', native: '简体中文', english: 'Chinese (Simplified)', offered: true },
-  { code: 'zh-hant', tag: 'zh-Hant', native: '繁體中文', english: 'Chinese (Traditional)', offered: true },
-  { code: 'th', tag: 'th', native: 'ไทย', english: 'Thai', offered: false },
+  { code: 'en', tag: 'en', native: 'English', english: 'English', word: 'Language', offered: true },
+  { code: 'de', tag: 'de', native: 'Deutsch', english: 'German', word: 'Sprache', offered: true },
+  { code: 'es', tag: 'es', native: 'Español', english: 'Spanish', word: 'Idioma', offered: true },
+  { code: 'fr', tag: 'fr', native: 'Français', english: 'French', word: 'Langue', offered: true },
+  { code: 'it', tag: 'it', native: 'Italiano', english: 'Italian', word: 'Lingua', offered: true },
+  { code: 'pt', tag: 'pt-BR', native: 'Português', english: 'Portuguese (Brazil)', word: 'Idioma', offered: true },
+  { code: 'pl', tag: 'pl', native: 'Polski', english: 'Polish', word: 'Język', offered: true },
+  { code: 'ru', tag: 'ru', native: 'Русский', english: 'Russian', word: 'Язык', offered: true },
+  { code: 'uk', tag: 'uk', native: 'Українська', english: 'Ukrainian', word: 'Мова', offered: true },
+  { code: 'tr', tag: 'tr', native: 'Türkçe', english: 'Turkish', word: 'Dil', offered: true },
+  { code: 'ja', tag: 'ja', native: '日本語', english: 'Japanese', word: '言語', offered: true },
+  { code: 'ko', tag: 'ko', native: '한국어', english: 'Korean', word: '언어', offered: true },
+  { code: 'zh-hans', tag: 'zh-Hans', native: '简体中文', english: 'Chinese (Simplified)', word: '语言', offered: true },
+  { code: 'zh-hant', tag: 'zh-Hant', native: '繁體中文', english: 'Chinese (Traditional)', word: '語言', offered: true },
+  { code: 'th', tag: 'th', native: 'ไทย', english: 'Thai', word: 'ภาษา', offered: false },
 ] as const;
 
 export type LanguageCode = (typeof LANGUAGES)[number]['code'];

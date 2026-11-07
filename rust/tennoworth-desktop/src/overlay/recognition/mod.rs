@@ -66,7 +66,7 @@ impl RecognitionConsensus {
                 BTreeMap::new();
             for read in reads {
                 for (index, found) in &read.matches {
-                    let identity = found.item.name.to_ascii_lowercase();
+                    let identity = matching::identity(&found.item);
                     let entry = candidates
                         .entry(*index)
                         .or_default()

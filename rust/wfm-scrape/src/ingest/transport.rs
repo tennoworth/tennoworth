@@ -30,6 +30,11 @@ pub trait Http {
             None => Ok(text.into_bytes()),
         }
     }
+    /// A WFM GET with a non-English `Language` header. The default impl serves
+    /// the fixture recorded under `<url>#language=<language>`.
+    fn get_json_localized(&self, url: &str, language: &str) -> Result<serde_json::Value, String> {
+        self.get_json(&format!("{url}#language={language}"))
+    }
 }
 
 /// Live implementation using `wfm_client`.
@@ -104,6 +109,25 @@ impl Http for LiveHttp {
     }
     fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> {
         self.request(url)
+    }
+    /// Localized names are a carried, optional surface: a failure here keeps
+    /// the prior names and must not mark the snapshot's WFM access as failed.
+    fn get_json_localized(&self, url: &str, language: &str) -> Result<serde_json::Value, String> {
+        let response = wfm_client::transport::send(
+            wfm_client::wfm_headers_for_language(self.client.get(url), "pc", language),
+            wfm_client::governor::Kind::Read,
+        )
+        .map_err(|e| format!("{url} ({language}): {e}"))?;
+        if !response.status().is_success() {
+            return Err(format!(
+                "{url} ({language}): WFM HTTP {}",
+                response.status()
+            ));
+        }
+        let bytes = response
+            .bytes()
+            .map_err(|e| format!("{url} ({language}): {e}"))?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("{url} ({language}): JSON parse: {e}"))
     }
 }
 

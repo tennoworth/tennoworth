@@ -71,10 +71,21 @@ pub fn wfm_headers(
     builder: reqwest::blocking::RequestBuilder,
     platform: &str,
 ) -> reqwest::blocking::RequestBuilder {
+    wfm_headers_for_language(builder, platform, "en")
+}
+
+/// [`wfm_headers`] with another `Language`. WFM then adds that language's
+/// `i18n` entry beside English; a second header after `wfm_headers` would be
+/// sent as a duplicate rather than replace it.
+pub fn wfm_headers_for_language(
+    builder: reqwest::blocking::RequestBuilder,
+    platform: &str,
+    language: &str,
+) -> reqwest::blocking::RequestBuilder {
     builder
         .header(HEADER_CROSSPLAY, "true")
         .header(HEADER_PLATFORM, platform)
-        .header(HEADER_LANGUAGE, "en")
+        .header(HEADER_LANGUAGE, language)
 }
 
 /// [`wfm_headers`] plus the JWT cookie + Origin/Referer an authed v2 call

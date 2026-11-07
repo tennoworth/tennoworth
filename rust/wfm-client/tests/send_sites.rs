@@ -148,6 +148,9 @@ fn raw_http_send_sites_are_classified() {
         ("tennoworth-desktop/src/services/market/definitions.rs", 1),
         // First-party item pictures from tennoworth.app, cached on disk.
         ("tennoworth-desktop/src/services/market/art.rs", 1),
+        // Tesseract's own release, one model per game language, pinned by
+        // size and SHA-256 before it is saved or loaded.
+        ("tennoworth-desktop/src/vision/ocr_models.rs", 1),
         ("wfm-scrape/src/ingest/catalog.rs", 1),
         ("wfm-scrape/src/ingest/transport.rs", 1),
         // Warframe wiki thumbnails: paced, budgeted and conditional (art.rs).

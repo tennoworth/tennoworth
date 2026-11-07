@@ -121,7 +121,10 @@ The product crosses the following trust boundaries:
 - **Relic reward screenshots stay local and ephemeral.** The overlay is off by
   default. After the user enables it, a reward log marker or retry shortcut
   captures the Warframe window into memory, crops the reward band, and runs
-  bundled English Tesseract OCR in-process. Frames are not saved by default and
+  Tesseract OCR in-process: the bundled English model, or for another game
+  language a `tessdata_fast` 4.1.0 model downloaded once from Tesseract's
+  release and loaded only when its pinned size and SHA-256 match. That download
+  reveals only which language model is fetched. Frames are not saved by default and
   are never uploaded. Explicit local diagnostics retain at most ten runs in the
   app cache after warning that captures may contain player/game information.
   Optional live pricing sends only resolved public item slugs to

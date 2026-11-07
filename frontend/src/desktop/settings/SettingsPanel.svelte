@@ -17,10 +17,11 @@
   import type { DesktopWfmStatus, DesktopCapabilities } from '../../contracts/desktop';
   import { AUTO_SCAN_CADENCE_CHOICES, type AutoScanSettings, type AutoScanStatus } from '../../contracts/desktop';
   import type { AutoScanController } from '../inventory/auto-scan.svelte';
-  import type { OverlaySettings, OverlayStatus } from '../../contracts/data';
+  import { OVERLAY_LANGUAGES, type OverlayLanguage, type OverlaySettings, type OverlayStatus } from '../../contracts/data';
   import { LATEST_RELEASE_URL, type UpdateController } from '../updates/update-controller.svelte';
   import { humanError } from '../../contracts/errors';
-  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import { formatLocale, i18n, t } from '../../i18n/i18n.svelte';
+  import { LANGUAGES, type LanguageCode } from '../../i18n/languages';
 
   interface Props {
     /** The boot-time controller from src/lib/theme.ts. */
@@ -44,8 +45,10 @@
     /** Whether Settings is on screen; it stays mounted while hidden. */
     active?: boolean;
     onsectionshown?: () => void;
+    /** Desktop only: switches and saves the app language. */
+    onlanguage?: (code: LanguageCode) => Promise<void>;
   }
-  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true }: Props = $props();
+  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true, onlanguage }: Props = $props();
   const display = useDisplay();
 
   let overlay = $state<OverlaySettings | null>(null);
@@ -145,6 +148,23 @@
     const settings = autoScan?.settings;
     if (!settings) return t('settings.loading');
     return settings.enabled ? t('settings.onEvery', { minutes: settings.cadenceMinutes }) : t('settings.off');
+  }
+
+  // Each language under its own name, the way language menus list them.
+  let rewardLanguageChoices = $derived<{ value: OverlayLanguage; label: string }[]>([
+    { value: 'auto', label: t('settings.sameAsGame') },
+    ...OVERLAY_LANGUAGES.map((code) => ({ value: code, label: languageName(code) })),
+  ]);
+  const appLanguageChoices = LANGUAGES.filter((language) => language.offered).map((language) => ({ value: language.code as LanguageCode, label: language.native }));
+  let switchingLanguage = $state(false);
+  let languageFailed = $state(false);
+  async function switchLanguage(code: LanguageCode) {
+    switchingLanguage = true;
+    languageFailed = false;
+    try { await onlanguage?.(code); } catch (error) { console.error(error); languageFailed = true; } finally { switchingLanguage = false; }
+  }
+  function languageName(code: string): string {
+    return LANGUAGES.find((language) => language.code === code)?.native ?? code;
   }
 
   function overlaySummary(): string {
@@ -329,6 +349,14 @@
             <label class="ui-setting-check"><input id="overlay-auto" type="checkbox" checked={overlay.autoDetect} disabled={!overlay.enabled} use:pending={savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, autoDetect: event.currentTarget.checked })}><span>{t('settings.enabled')}</span></label>
           </div>
           <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-shortcut">{t('settings.retryShortcut')}</label><p>{t('settings.retryShortcutHelp')}</p></div><div class="ui-setting-control"><input id="overlay-shortcut" class="ui-input shortcut" value={overlay.shortcut} disabled={!overlay.enabled} use:pending={savingOverlay} onblur={(event) => saveOverlay({ ...overlay!, shortcut: event.currentTarget.value })}></div></div>
+          <div class="ui-setting-row">
+            <div class="ui-setting-copy">
+              <label id="overlay-language-label" for="overlay-language">{t('settings.rewardLanguage')}</label>
+              <p>{t('settings.rewardLanguageHelp')}</p>
+              {#if overlay.enabled && overlayStatus}<p>{overlayStatus.ocrLanguageNote ?? t('settings.rewardLanguageNow', { language: languageName(overlayStatus.ocrLanguage) })}</p>{/if}
+            </div>
+            <div class="ui-setting-control"><Select id="overlay-language" labelledby="overlay-language-label" value={overlay.ocrLanguage} options={rewardLanguageChoices} disabled={!overlay.enabled || savingOverlay} onchange={(choice) => saveOverlay({ ...overlay!, ocrLanguage: choice })} /></div>
+          </div>
         </div>
         <div class="ui-section-group">
           <h4>{t('settings.rewardCards')}</h4>
@@ -372,6 +400,13 @@
     <div class="rail"><h3 id="set-app">{t('settings.thisApp')}</h3></div>
     <div class="ui-section-group first">
       <h4>{t('settings.appearance')}</h4>
+      {#if onlanguage}
+        <div class="ui-setting-row">
+          <div class="ui-setting-copy"><strong id="app-language-label">{t('settings.appLanguage')}</strong><p>{t('settings.appLanguageHelp')}</p>
+            {#if languageFailed}<p class="ui-notice" data-tone="bad" role="alert">{t('settings.appLanguageFailed')}</p>{/if}</div>
+          <div class="ui-setting-control"><Select id="app-language" labelledby="app-language-label" value={i18n.language as LanguageCode} options={appLanguageChoices} disabled={switchingLanguage} onchange={(code) => void switchLanguage(code)} /></div>
+        </div>
+      {/if}
       <div class="ui-setting-row">
         <div class="ui-setting-copy"><strong>{t('settings.colourMode')}</strong><p>{t('settings.colourModeHelp')}</p></div>
         <div class="ui-setting-control"><ThemeSwitcher {theme} label={t('settings.colourMode')} /></div>

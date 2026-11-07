@@ -57,9 +57,9 @@ export async function installPreview() {
     try_silent_unlock: false,
     wfm_remember_available: true,
     get_usage_preferences: { enabled: false, available: false },
-    get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
-    overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
-    setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
+    get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false, ocrLanguage: 'auto' },
+    overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en' },
+    setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en' },
   };
   // The automatic-scan status mirrors the stored preferences in the real app
   // (the loop republishes them every tick), so the preview carries the two
