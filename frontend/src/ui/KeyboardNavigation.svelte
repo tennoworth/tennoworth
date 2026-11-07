@@ -88,7 +88,9 @@
   function cycleRegion(backwards: boolean) {
     // Notices (a fresh price-watch hit) sit above the view's heading, and the
     // sidebar foot follows the view in source; both are their own stops.
-    const regions = ['.statusbar', '.sidebar nav', '[data-region="notices"]', 'main.workspace, main.landing', '.sfoot'].map(selector => document.querySelector<HTMLElement>(selector)).filter((element): element is HTMLElement => !!element && visible(element));
+    // The sidebar foot follows the views it sits under, so the view still
+    // hands F6 straight back to the status strip.
+    const regions = ['.statusbar', '.sidebar nav', '.sfoot', '[data-region="notices"]', 'main.workspace, main.landing'].map(selector => document.querySelector<HTMLElement>(selector)).filter((element): element is HTMLElement => !!element && visible(element));
     const current = regions.findIndex(region => region.contains(document.activeElement));
     const next = regions[current < 0 ? backwards ? regions.length - 1 : 0 : (current + (backwards ? -1 : 1) + regions.length) % regions.length];
     if (!next) return;

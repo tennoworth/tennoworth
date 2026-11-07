@@ -251,7 +251,7 @@ button {
 button:hover:not(:disabled) { background: var(--hover); }
 /* Text for assistive technology only: names and explanations that sighted
    users get from layout or a hover title. */
-.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.visually-hidden { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Busy: the control's own action is running (ui/keyboard-actions.ts `busy`). It
    keeps focus, so it looks unavailable without being disabled. */

@@ -191,7 +191,9 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(inventory).not.toContainText('Last refresh failed');
     await expect(inventory.locator('time')).toContainText('just now');
     await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
-    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear…', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Keep it', exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Clear saved scan', exact: true }).click();
     await expect(inventory).toContainText('No inventory yet');
     await expect(inventory.locator('time')).toHaveCount(0);
   });
