@@ -190,20 +190,14 @@ describe('appraise', () => {
     const a = appraise(200, tier({ pop: LOW_POPULARITY }), 0);
     expect(a.unavailable).toBeUndefined();
     expect(a.placement).not.toBeNull();
-    expect(a.caveats.some((c) => c.includes('Rarely traded'))).toBe(true);
-    expect(appraise(200, tier({ pop: LOW_POPULARITY + 1 }), 0).caveats.some((c) => c.includes('Rarely traded'))).toBe(false);
+    expect(a.caveats).toContain('rare');
+    expect(appraise(200, tier({ pop: LOW_POPULARITY + 1 }), 0).caveats).not.toContain('rare');
   });
 
   it('reports no data when DE published no price', () => {
     const a = appraise(200, tier({ median: 0 }), 0);
     expect(a.unavailable).toBe('no-data');
     expect(a.placement).toBeNull();
-  });
-
-  it('never calls popularity a number of trades', () => {
-    const text = appraise(200, tier({}), 0).caveats.join(' ');
-    expect(text).toContain('Popularity 37/100');
-    expect(text).not.toMatch(/\b37 trades\b/);
   });
 
   it('prices a reroll with the lock when one is set', () => {
@@ -220,14 +214,13 @@ describe('appraise', () => {
 
   it('always carries the caveat that stat quality is not modelled', () => {
     const a = appraise(250, tier({}), 2);
-    expect(a.caveats.some((c) => c.includes('Stat desirability is not modelled'))).toBe(true);
-    expect(a.caveats.some((c) => c.includes('spliced and classic'))).toBe(true);
+    expect(a.caveats).toEqual(expect.arrayContaining(['band', 'desirability', 'spliced']));
   });
 
   it('warns when the average is not a typical price', () => {
     const a = appraise(10, SKEWED_MARKET, 0);
     expect(a.skewed).toBe(true);
-    expect(a.caveats.some((c) => c.includes('read the median'))).toBe(true);
+    expect(a.caveats).toContain('skewed');
   });
 
   it('never reports a negative or impossible price on the skewed market', () => {

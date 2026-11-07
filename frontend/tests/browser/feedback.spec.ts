@@ -155,7 +155,7 @@ test('a sign-in failure offers a bug report that carries its code, not its text'
   await passphrase.fill('a-long-enough-passphrase');
   await confirm.fill('a-different-passphrase!');
   await submit.click();
-  await expect(login.getByTestId('wfm-auth-error')).toContainText('don\'t match');
+  await expect(login.getByTestId('wfm-auth-error')).toContainText('don’t match');
   await expect(login.getByRole('button', { name: 'Report a bug' })).toHaveCount(0);
 
   await passphrase.fill('a-long-enough-passphrase');

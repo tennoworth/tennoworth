@@ -8,6 +8,7 @@
   import { NOTIFICATIONS_EVENT } from '../../contracts/events';
   import { type NotificationEntry, type NotificationTarget } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
+  import { t } from '../../i18n/i18n.svelte';
   import Pager from '../../ui/Pager.svelte';
   import { pageWindow } from '../../ui/paging';
   let { onopen, onsettings }: { onopen: (target: NotificationTarget) => void; onsettings: () => void } = $props();
@@ -60,29 +61,29 @@
   }
 </script>
 <section class="view-header">
-  <h2>Notifications</h2>
-  <p class="lede">Trade results and timely opportunities, with a next step when you need one.</p>
+  <h2>{t('inbox.title')}</h2>
+  <p class="lede">{t('inbox.lede')}</p>
 </section>
-<section class="ui-panel ui-stack inbox" aria-label="Notification history" aria-busy={loading || busy}>
+<section class="ui-panel ui-stack inbox" aria-label={t('inbox.history')} aria-busy={loading || busy}>
   <div class="ui-toolbar inbox-controls">
-    <div class="ui-toolbar"><button class="btn" onclick={onsettings}>Notification settings</button>
-    <button class="btn" disabled={!entries.some(n => !n.read)} use:pending={busy} onclick={() => action(() => desktopReadNotifications())}>Mark all read</button>
-    <button class="btn clear-history" disabled={!entries.length} use:pending={busy} onclick={() => { confirmClear = true; focusLater(() => document.querySelector<HTMLElement>('.clear-confirm .keep')); }}>Clear history</button></div>
-    <label><input type="checkbox" bind:checked={unreadOnly} onchange={() => (page = 0)} /> Unread only</label>
-    <span class="history-count">{unread} unread · {entries.length} {entries.length === 1 ? 'notification' : 'notifications'}</span>
+    <div class="ui-toolbar"><button class="btn" onclick={onsettings}>{t('inbox.settings')}</button>
+    <button class="btn" disabled={!entries.some(n => !n.read)} use:pending={busy} onclick={() => action(() => desktopReadNotifications())}>{t('inbox.markAll')}</button>
+    <button class="btn clear-history" disabled={!entries.length} use:pending={busy} onclick={() => { confirmClear = true; focusLater(() => document.querySelector<HTMLElement>('.clear-confirm .keep')); }}>{t('inbox.clear')}</button></div>
+    <label><input type="checkbox" bind:checked={unreadOnly} onchange={() => (page = 0)} /> {t('inbox.unreadOnly')}</label>
+    <span class="history-count">{t('inbox.count', { unread, count: entries.length })}</span>
   </div>
   {#if confirmClear}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions (Escape backs out of the confirmation.) -->
     <div class="ui-notice ui-toolbar clear-confirm" data-tone="warn" role="group" aria-labelledby="clear-question"
       onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelClear(); } }}>
-      <span id="clear-question">Clear notification history? Your trade ledger and reminders are kept.</span>
-      <button class="btn bad" use:pending={busy} onclick={() => action(async () => { await desktopClearNotifications(); confirmClear = false; focusLater(() => document.querySelector<HTMLElement>('.inbox-controls .btn')); })}>Clear notifications</button>
-      <button class="btn keep" use:pending={busy} onclick={cancelClear}>Cancel</button>
+      <span id="clear-question">{t('inbox.clearAsk')}</span>
+      <button class="btn bad" use:pending={busy} onclick={() => action(async () => { await desktopClearNotifications(); confirmClear = false; focusLater(() => document.querySelector<HTMLElement>('.inbox-controls .btn')); })}>{t('inbox.clearConfirm')}</button>
+      <button class="btn keep" use:pending={busy} onclick={cancelClear}>{t('inbox.cancel')}</button>
     </div>
   {/if}
-  {#if error}<div class="ui-notice" data-tone="bad" role="alert">{error} <button class="btn xs" use:pending={busy} onclick={load}>Retry</button></div>{/if}
-  {#if loading}<p role="status">Loading notifications…</p>
-  {:else if !visible.length && !error}<p>{unreadOnly ? 'You’re all caught up.' : 'No notifications yet. Trades, price watches, and timely reminders will appear here.'}</p>
+  {#if error}<div class="ui-notice" data-tone="bad" role="alert">{error} <button class="btn xs" use:pending={busy} onclick={load}>{t('inbox.retry')}</button></div>{/if}
+  {#if loading}<p role="status">{t('inbox.loading')}</p>
+  {:else if !visible.length && !error}<p>{t(unreadOnly ? 'inbox.caughtUp' : 'inbox.empty')}</p>
   {:else}
     <ol class="history" bind:this={historyEl}>
       {#each groups as group (group.date.key)}
@@ -96,7 +97,7 @@
         </li>
       {/each}
     </ol>
-    <Pager window={win} total={visible.length} label="Notification pages" target={historyEl} onpage={(p) => (page = p)} />
+    <Pager window={win} total={visible.length} label={t('inbox.pages')} target={historyEl} onpage={(p) => (page = p)} />
   {/if}
 </section>
 <style>

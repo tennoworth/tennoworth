@@ -55,7 +55,7 @@ test('notification errors, empty state and first-run entry are reachable', async
   await expect(page.getByRole('heading', { name: 'Notifications', exact: true })).toBeVisible();
   await expect(page.getByText('No notifications yet.', { exact: false })).toBeVisible();
   await page.locator('.sidebar').getByRole('button', { name: /^Baro/ }).click();
-  await expect(page.getByRole('heading', { name: "Baro Ki'Teer", exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Baro Ki’Teer', exact: true })).toBeVisible();
 });
 
 test('failed preference save retains the persisted selection', async ({ page }) => {

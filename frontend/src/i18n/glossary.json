@@ -1,0 +1,101 @@
+{
+  "about": "Warframe terms and how the game writes them in each language. 'game' entries are taken from the game's own text (WFCD/warframe-items i18n at commit 23804b64bc24); 'verify' entries are drafts to confirm in the game. Item names are never translated here: they come from warframe.market. Keep Prime, Warframe and warframe.market as they are. pt-pt starts from pt: the game ships only Brazilian Portuguese, so its terms are what a Portuguese player sees in game.",
+  "terms": [
+    {
+      "en": "Platinum", "note": "The premium currency; 'p' after a number stays 'p'.", "source": "verify",
+      "de": "Platin", "es": "Platino", "fr": "Platine", "it": "Platino", "ja": "プラチナ", "ko": "플래티넘", "pl": "Platyna", "pt": "Platina", "pt-pt": "Platina", "ru": "Платина", "th": "แพลทินัม", "tr": "Platin", "uk": "Платина", "zh-hans": "白金", "zh-hant": "白金"
+    },
+    {
+      "en": "Ducats", "note": "Orokin Ducats, short form. Game: 'Orokin Ducats'.", "source": "game",
+      "de": "Dukaten", "es": "ducados", "fr": "Ducats", "it": "Ducati", "ja": "デュカット", "ko": "두캇", "pl": "dukaty", "pt": "Ducats", "pt-pt": "Ducats", "ru": "дукаты", "th": "Ducat", "tr": "Ducat", "uk": "дукати", "zh-hans": "杜卡德金币", "zh-hant": "杜卡德金幣"
+    },
+    {
+      "en": "Relic", "note": "Void Relic; the game names relics like 'Relique Lith A1'.", "source": "game",
+      "de": "Relikt", "es": "reliquia", "fr": "relique", "it": "reliquia", "ja": "レリック", "ko": "성유물", "pl": "relikt", "pt": "relíquia", "pt-pt": "relíquia", "ru": "реликвия", "th": "เรลิก", "tr": "Relik", "uk": "реліквія", "zh-hans": "遗物", "zh-hant": "遺物"
+    },
+    {
+      "en": "Void Relic", "source": "game",
+      "de": "Void-Relikt", "es": "Reliquia del Vacío", "fr": "Relique du Néant", "it": "Reliquia Void", "ja": "Voidレリック", "ko": "보이드 성유물", "pl": "Relikt Pustki", "pt": "Relíquia do Void", "pt-pt": "Relíquia do Void", "ru": "Реликвия Бездны", "th": "วอยด์เรลิก", "tr": "Void Relik", "uk": "реліквія Порожнечі", "zh-hans": "虚空遗物", "zh-hant": "虛空遺物"
+    },
+    {
+      "en": "Void Traces", "source": "game",
+      "de": "Void-Spuren", "es": "Vestigios del Vacío", "fr": "Vestiges du Néant", "it": "Tracce Void", "ja": "Voidトレース", "ko": "보이드 잔영물", "pl": "Łzy Pustki", "pt": "Traços do Void", "pt-pt": "Traços do Void", "ru": "Отголоски Бездны", "th": "ร่องรอยของวอยด์", "tr": "Void İzi", "uk": "Відлуння", "zh-hans": "虚空光体", "zh-hant": "虛空光體"
+    },
+    {
+      "en": "Void Fissure", "source": "game",
+      "de": "Void-Riss", "es": "Fisura del Vacío", "fr": "Fissure du Néant", "it": "Frattura Void", "ja": "Void亀裂", "ko": "보이드 균열", "pl": "Szczelina Pustki", "pt": "Fenda do Void", "pt-pt": "Fenda do Void", "ru": "Разрыв Бездны", "th": "รอยแยกของวอยด์", "tr": "Void Çatlağı", "uk": "прорив Порожнечі", "zh-hans": "虚空裂缝", "zh-hant": "虛空裂縫"
+    },
+    {
+      "en": "Intact", "note": "Relic refinement levels, lowest to highest: Intact, Exceptional, Flawless, Radiant. Use the words the relic screen shows.", "source": "verify",
+      "de": "Intakt", "es": "Intacta", "fr": "Intacte", "it": "Intatta", "ja": "完全", "ko": "원형", "pl": "Nienaruszony", "pt": "Intacta", "pt-pt": "Intacta", "ru": "Целая", "th": "Intact", "tr": "Sağlam", "uk": "Ціла", "zh-hans": "完整", "zh-hant": "完整"
+    },
+    {
+      "en": "Exceptional", "source": "verify",
+      "de": "Außergewöhnlich", "es": "Excepcional", "fr": "Exceptionnelle", "it": "Eccezionale", "ja": "優良", "ko": "특별", "pl": "Wyjątkowy", "pt": "Excepcional", "pt-pt": "Excepcional", "ru": "Исключительная", "th": "Exceptional", "tr": "Olağanüstü", "uk": "Виняткова", "zh-hans": "优良", "zh-hant": "優良"
+    },
+    {
+      "en": "Flawless", "source": "verify",
+      "de": "Makellos", "es": "Impecable", "fr": "Impeccable", "it": "Impeccabile", "ja": "完璧", "ko": "무결점", "pl": "Bezbłędny", "pt": "Impecável", "pt-pt": "Impecável", "ru": "Безупречная", "th": "Flawless", "tr": "Kusursuz", "uk": "Бездоганна", "zh-hans": "无暇", "zh-hant": "無瑕"
+    },
+    {
+      "en": "Radiant", "source": "verify",
+      "de": "Strahlend", "es": "Radiante", "fr": "Éclatante", "it": "Radiosa", "ja": "光輝", "ko": "광휘", "pl": "Promienisty", "pt": "Radiante", "pt-pt": "Radiante", "ru": "Сияющая", "th": "Radiant", "tr": "Parlak", "uk": "Сяйлива", "zh-hans": "光辉", "zh-hant": "光輝"
+    },
+    {
+      "en": "refine", "note": "Spend Void Traces to raise a relic's refinement. Polish is from the game ('rafinowania Reliktów').", "source": "verify",
+      "de": "verfeinern", "es": "refinar", "fr": "raffiner", "it": "raffinare", "ja": "精錬する", "ko": "정제하다", "pl": "rafinować", "pt": "refinar", "pt-pt": "refinar", "ru": "улучшить", "th": "อัปเกรด", "tr": "geliştirmek", "uk": "покращити", "zh-hans": "精炼", "zh-hant": "精煉"
+    },
+    {
+      "en": "Riven Mod", "source": "game",
+      "de": "Riven-Mod", "es": "mod agrietado", "fr": "mod Riven", "it": "Riven Mod", "ja": "Riven Mod", "ko": "리벤 모드", "pl": "mod Riven", "pt": "mod Riven", "pt-pt": "mod Riven", "ru": "мод Разлома", "th": "Riven Mod", "tr": "Riven Mod", "uk": "модифікатор розколу", "zh-hans": "裂罅 Mod", "zh-hant": "裂罅 MOD"
+    },
+    {
+      "en": "Kuva", "source": "game",
+      "de": "Kuva", "es": "Kuva", "fr": "Kuva", "it": "Kuva", "ja": "クバ", "ko": "쿠바", "pl": "Kuva", "pt": "Kuva", "pt-pt": "Kuva", "ru": "Кува", "th": "คูวา", "tr": "Kuva", "uk": "Кува", "zh-hans": "赤毒", "zh-hant": "赤毒"
+    },
+    {
+      "en": "Forma", "source": "game",
+      "de": "Forma", "es": "Forma", "fr": "Forma", "it": "Forma", "ja": "フォーマ", "ko": "포르마", "pl": "Forma", "pt": "Forma", "pt-pt": "Forma", "ru": "Форма", "th": "Forma", "tr": "Forma", "uk": "Форма", "zh-hans": "Forma", "zh-hant": "Forma"
+    },
+    {
+      "en": "Credits", "note": "In-game credits, not platinum. Chinese uses 'cash' (现金).", "source": "game",
+      "de": "Credits", "es": "créditos", "fr": "Crédits", "it": "Crediti", "ja": "クレジット", "ko": "크레딧", "pl": "Kredyty", "pt": "Créditos", "pt-pt": "Créditos", "ru": "кредиты", "th": "เครดิต", "tr": "Kredi", "uk": "кредити", "zh-hans": "现金", "zh-hant": "現金"
+    },
+    {
+      "en": "Endo", "source": "game",
+      "de": "Endo", "es": "Endo", "fr": "Endo", "it": "Endo", "ja": "Endo", "ko": "엔도", "pl": "Endo", "pt": "Endo", "pt-pt": "Endo", "ru": "Эндо", "th": "Endo", "tr": "Endo", "uk": "ендо", "zh-hans": "内融核心", "zh-hant": "內融核心"
+    },
+    {
+      "en": "Blueprint", "source": "game",
+      "de": "Blaupause", "es": "plano", "fr": "Schéma", "it": "schema", "ja": "設計図", "ko": "설계도", "pl": "schemat", "pt": "diagrama", "pt-pt": "diagrama", "ru": "чертёж", "th": "พิมพ์เขียว", "tr": "kalıp", "uk": "кресленик", "zh-hans": "蓝图", "zh-hant": "藍圖"
+    },
+    {
+      "en": "Inventory", "note": "The player's in-game inventory. Game text confirms de, es, fr, it, pl, pt, ru, tr.", "source": "verify",
+      "de": "Inventar", "es": "inventario", "fr": "Inventaire", "it": "Inventario", "ja": "インベントリ", "ko": "소지품", "pl": "Ekwipunek", "pt": "inventário", "pt-pt": "inventário", "ru": "инвентарь", "th": "คลัง", "tr": "Envanter", "uk": "інвентар", "zh-hans": "仓库", "zh-hant": "倉庫"
+    },
+    {
+      "en": "sell", "source": "game",
+      "de": "verkaufen", "es": "vender", "fr": "vendre", "it": "vendere", "ja": "売る", "ko": "팔기", "pl": "sprzedać", "pt": "vender", "pt-pt": "vender", "ru": "продать", "th": "ขาย", "tr": "satmak", "uk": "продати", "zh-hans": "出售", "zh-hant": "出售"
+    },
+    {
+      "en": "Set", "note": "A complete Prime set (all parts plus the main blueprint).", "source": "verify",
+      "de": "Set", "es": "conjunto", "fr": "Set", "it": "Set", "ja": "セット", "ko": "세트", "pl": "zestaw", "pt": "conjunto", "pt-pt": "conjunto", "ru": "набор", "th": "เซ็ต", "tr": "Set", "uk": "набір", "zh-hans": "套装", "zh-hant": "套裝"
+    },
+    {
+      "en": "Vaulted", "note": "Removed from the drop tables (the Prime Vault).", "source": "verify",
+      "de": "im Tresor", "es": "en la Bóveda", "fr": "au Coffre", "it": "nel Caveau", "ja": "Vault入り", "ko": "볼트됨", "pl": "w Skarbcu", "pt": "no Cofre", "pt-pt": "no Cofre", "ru": "в Хранилище", "th": "Vaulted", "tr": "Kasada", "uk": "у Сховищі", "zh-hans": "已入库", "zh-hant": "已入庫"
+    },
+    {
+      "en": "Baro Ki'Teer", "note": "The Void Trader. Name only; check how the game spells it.", "source": "verify",
+      "de": "Baro Ki'Teer", "es": "Baro Ki'Teer", "fr": "Baro Ki'Teer", "it": "Baro Ki'Teer", "ja": "Baro Ki'Teer", "ko": "바로 키티어", "pl": "Baro Ki'Teer", "pt": "Baro Ki'Teer", "pt-pt": "Baro Ki'Teer", "ru": "Баро Ки'Тиир", "th": "Baro Ki'Teer", "tr": "Baro Ki'Teer", "uk": "Баро Кі'Тір", "zh-hans": "Baro Ki'Teer", "zh-hant": "Baro Ki'Teer"
+    },
+    {
+      "en": "Relay", "note": "The hub where Baro appears.", "source": "verify",
+      "de": "Relais", "es": "Repetidor", "fr": "Relais", "it": "Relè", "ja": "リレー", "ko": "릴레이", "pl": "Przekaźnik", "pt": "Retransmissor", "pt-pt": "Retransmissor", "ru": "Реле", "th": "รีเลย์", "tr": "Röle", "uk": "ретранслятор", "zh-hans": "中继站", "zh-hant": "中繼站"
+    },
+    {
+      "en": "Arcane", "source": "verify",
+      "de": "Arkana", "es": "Arcano", "fr": "Arcane", "it": "Arcano", "ja": "アルケイン", "ko": "아케인", "pl": "Arkana", "pt": "Arcano", "pt-pt": "Arcano", "ru": "Мистификатор", "th": "Arcane", "tr": "Arcane", "uk": "містифікатор", "zh-hans": "赋能", "zh-hant": "賦能"
+    }
+  ]
+}

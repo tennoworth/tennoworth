@@ -14,6 +14,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import type { OwnOrder } from '../../contracts/generated/desktop';
 
 import { untrack } from 'svelte';
+import { t } from '../../i18n/i18n.svelte';
 import { createToastQueue } from '../../ui/toast-queue.svelte';
 
 import type { DesktopServices } from '../../contracts/services';
@@ -152,10 +153,8 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     // 'uncertain_mutation' mean the outcome is unknown; letting those fall through
     // as success is the same silent desync in a different disguise.
     if (res?.status === 'ok') return;
-    if (res?.status === 'error') throw new Error(res.message || 'WFM rejected the update');
-    throw new Error(
-      `WFM did not confirm the update${res?.status ? ` (${res.status})` : ''}. Recheck My Orders before trusting this row.`,
-    );
+    if (res?.status === 'error') throw new Error(res.message || t('orders.rejected'));
+    throw new Error(res?.status ? t('orders.notConfirmedStatus', { status: res.status }) : t('orders.notConfirmed'));
   }
 
   async function toggleVisible(o: OwnOrder): Promise<void> {
@@ -166,7 +165,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
       o.visible = !o.visible;
       orders = [...orders];
     } catch (e) {
-      pushToast(`Couldn't toggle: ${humanError(e)}`, 'error');
+      pushToast(t('orders.toggleFailed', { error: humanError(e) }), 'error');
     } finally {
       markBusy(o.id, false);
     }
@@ -181,7 +180,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     const newPrice = Number(editValue);
     if (!newPrice || newPrice < 1) return;
     if (newPrice > MAX_PLATINUM) {
-      pushToast(`Price ${newPrice}p is above the ${MAX_PLATINUM}p cap.`, 'error');
+      pushToast(t('orders.priceCap', { price: newPrice, cap: MAX_PLATINUM }), 'error');
       return;
     }
     markBusy(o.id, true);
@@ -191,7 +190,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
       orders = [...orders];
       editingId = null;
     } catch (e) {
-      pushToast(`Couldn't update: ${humanError(e)}`, 'error');
+      pushToast(t('orders.updateFailed', { error: humanError(e) }), 'error');
     } finally {
       markBusy(o.id, false);
     }
@@ -207,9 +206,9 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     try {
       await input.transport.deleteOrder(o.id);
       orders = orders.filter((x) => x.id !== o.id);
-      pushToast(`Deleted ${itemName(o)}.`);
+      pushToast(t('orders.deleted', { item: itemName(o) }));
     } catch (e) {
-      pushToast(`Couldn't delete: ${humanError(e)}`, 'error');
+      pushToast(t('orders.deleteFailed', { error: humanError(e) }), 'error');
     } finally {
       markBusy(o.id, false);
     }
@@ -235,12 +234,10 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
       orders = [...orders];
       const ok = confirmed.size;
       pushToast(
-        visible
-          ? `${ok} listing${ok === 1 ? '' : 's'} made visible.`
-          : `${ok} listing${ok === 1 ? '' : 's'} made hidden.`,
+        t(visible ? 'orders.madeVisible' : 'orders.madeHidden', { count: ok }),
       );
     } catch (e) {
-      pushToast(`Couldn't update visibility: ${humanError(e)}`, 'error');
+      pushToast(t('orders.visibilityFailed', { error: humanError(e) }), 'error');
     } finally {
       bulkBusy = false;
     }
@@ -283,13 +280,13 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     markBusy(row.id, true);
     try {
       const total = orderLotPrice(row.suggested, o.per_trade);
-      if (total == null || total > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
+      if (total == null || total > MAX_PLATINUM) throw new Error(t('orders.lotTooHigh'));
       assertOrderOk(await input.transport.updateOrder(row.id, { platinum: total }));
       o.platinum = total;
       orders = [...orders];
-      pushToast(`${row.name} repriced to ${total}p per lot (${row.suggested}p / unit).`);
+      pushToast(t('orders.repricedLot', { item: row.name, total, unit: row.suggested }));
     } catch (e) {
-      pushToast(`Couldn't reprice: ${humanError(e)}`, 'error');
+      pushToast(t('orders.repriceFailed', { error: humanError(e) }), 'error');
     } finally {
       markBusy(row.id, false);
     }
@@ -344,24 +341,24 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     try {
       if (issue.kind === 'overpriced' || issue.kind === 'underbid') {
         const p = orderLotPrice(Math.max(MIN_PLATINUM, issue.suggested), o.per_trade);
-        if (p == null || p > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
+        if (p == null || p > MAX_PLATINUM) throw new Error(t('orders.lotTooHigh'));
         assertOrderOk(await input.transport.updateOrder(issue.id, { platinum: p }));
         o.platinum = p;
-        pushToast(`${issue.name} repriced to ${p}p per lot.`);
+        pushToast(t('orders.repriced', { item: issue.name, total: p }));
       } else if (issue.kind === 'excess-qty') {
         assertOrderOk(await input.transport.updateOrder(issue.id, { quantity: issue.suggested }));
         o.quantity = issue.suggested;
-        pushToast(`${issue.name} quantity set to ${issue.suggested}.`);
+        pushToast(t('orders.qtySet', { item: issue.name, count: issue.suggested }));
       } else if (issue.kind === 'not-owned') {
         healthConfirmId = null;
         await input.transport.deleteOrder(issue.id);
         orders = orders.filter((x) => x.id !== issue.id);
-        pushToast(`Deleted ${issue.name}.`);
+        pushToast(t('orders.deleted', { item: issue.name }));
         return;
       }
       orders = [...orders];
     } catch (e) {
-      pushToast(`Couldn't fix ${issue.name}: ${humanError(e)}`, 'error');
+      pushToast(t('orders.fixFailed', { item: issue.name, error: humanError(e) }), 'error');
     } finally {
       markBusy(issue.id, false);
     }
@@ -440,7 +437,15 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     return orders.find((o) => o.id === id);
   }
   function healthAction(h: HealthIssue): string {
-    return h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice';
+    return t(h.kind === 'not-owned' ? 'orders.action.delete' : h.kind === 'excess-qty' ? 'orders.action.setQty' : 'orders.action.reprice');
+  }
+  function healthWhy(h: HealthIssue): string {
+    switch (h.kind) {
+      case 'overpriced': return t('orders.why.overpriced', { ask: h.suggested, price: h.current });
+      case 'underbid': return t('orders.why.underbid', { bid: h.suggested, price: h.current });
+      case 'not-owned': return t('orders.why.notOwned');
+      case 'excess-qty': return t('orders.why.excess', { listed: h.current, owned: h.suggested });
+    }
   }
   // The queue's destructive fix arms first, matching the table's inline delete.
   // A repricing or quantity fix is reversible, so it stays single-click.
@@ -464,9 +469,8 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     // delta_pct is a fraction of your ask, not of the snapshot price, so the
     // sentence has to name the ask as its basis.
     const pct = Math.round(d.delta_pct * 100);
-    return d.kind === 'overpriced'
-      ? `Matching the last snapshot's clearing price (${d.suggested}p) cuts your ask by ${pct}% - a starting point, not a quote${d.thin ? ' (thin book)' : ''}.`
-      : `The last snapshot's clearing price (${d.suggested}p) is ${pct}% above your ask - you may be leaving plat on the table${d.thin ? ' (thin book)' : ''}.`;
+    const key = d.kind === 'overpriced' ? (d.thin ? 'orders.drift.whyOverThin' : 'orders.drift.whyOver') : (d.thin ? 'orders.drift.whyUnderThin' : 'orders.drift.whyUnder');
+    return t(key, { price: d.suggested, pct });
   }
   return {
     dismissToast,
@@ -488,6 +492,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     armOrFix,
     cancelDelete,
     driftWhy,
+    healthWhy,
     get phase() { return phase; },
     get error() { return error; },
     get orders() { return orders; },

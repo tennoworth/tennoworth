@@ -40,7 +40,9 @@ export type SettingKey =
   | 'display'
   /** Desktop sidebar (JSON: width in px, collapsed to the icon rail). */
   | 'sidebar'
-  | 'relic-crack-anyway';
+  | 'relic-crack-anyway'
+  /** Desktop app language: a code from i18n/languages.ts. Missing means English. */
+  | 'app-language';
 
 
 /** The scalar settings every build persists. */

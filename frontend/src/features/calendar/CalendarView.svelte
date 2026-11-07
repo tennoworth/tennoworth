@@ -11,7 +11,8 @@
   import CalendarBoard from './CalendarBoard.svelte';
   import CalendarMonth from './CalendarMonth.svelte';
   import CalendarLanes from './CalendarLanes.svelte';
-  import { HIDDEN_BY_DEFAULT, KINDS, KIND_LABEL } from './kinds';
+  import { t } from '../../i18n/i18n.svelte';
+  import { HIDDEN_BY_DEFAULT, KINDS, kindLabel } from './kinds';
 
   type View = 'board' | 'month' | 'lanes';
   let { market, owned = null, now, loadAnnouncements, store, surface, heading = 'h2' }: {
@@ -24,11 +25,11 @@
     heading?: 'h2' | 'h3';
   } = $props();
 
-  const VIEWS: Array<[View, string]> = [['board', 'Board'], ['month', 'Month'], ['lanes', 'Lanes']];
+  const VIEWS: View[] = ['board', 'month', 'lanes'];
   function restore(): { view: View; hidden: EventKind[] } {
     try {
       const value = JSON.parse(store?.getSetting('calendar') ?? 'null');
-      const view = VIEWS.some(([v]) => v === value?.view) ? value.view as View : 'board';
+      const view = VIEWS.includes(value?.view as View) ? value.view as View : 'board';
       const hidden = Array.isArray(value?.hidden) ? value.hidden.filter((k: unknown): k is EventKind => KINDS.includes(k as EventKind)) : HIDDEN_BY_DEFAULT;
       return { view, hidden };
     } catch { return { view: 'board', hidden: HIDDEN_BY_DEFAULT }; }
@@ -62,25 +63,25 @@
 
 <section class="calendar" aria-labelledby="calendar-title">
   <div class="view-header">
-    <svelte:element this={heading} id="calendar-title">Calendar</svelte:element>
-    <p class="lede">{surface === 'desktop' ? 'Dates that move prices, from DE and from our notices, and what they touch in your inventory.' : 'Dates that move Warframe prices, from DE and from our notices.'}</p>
+    <svelte:element this={heading} id="calendar-title">{t('cal.title')}</svelte:element>
+    <p class="lede">{t(surface === 'desktop' ? 'cal.ledeDesktop' : 'cal.ledeSite')}</p>
     <div class="vh-end">
-      <div class="ui-segmented" role="group" aria-label="Calendar view" use:roving>
-        {#each VIEWS as [id, label] (id)}<button type="button" aria-pressed={view === id} onclick={() => choose(id)}>{label}</button>{/each}
+      <div class="ui-segmented" role="group" aria-label={t('cal.viewChoice')} use:roving>
+        {#each VIEWS as id (id)}<button type="button" aria-pressed={view === id} onclick={() => choose(id)}>{t(`cal.view.${id}`)}</button>{/each}
       </div>
     </div>
   </div>
 
   <fieldset class="kinds">
-    <legend class="sr-only">Show on the calendar</legend>
+    <legend class="sr-only">{t('cal.show')}</legend>
     {#each KINDS as kind (kind)}
-      <label class="kind" data-kind={kind}><input type="checkbox" checked={!hidden.includes(kind)} onchange={(e) => toggle(kind, e.currentTarget.checked)} /><span class="swatch" aria-hidden="true"></span>{KIND_LABEL[kind]}</label>
+      <label class="kind" data-kind={kind}><input type="checkbox" checked={!hidden.includes(kind)} onchange={(e) => toggle(kind, e.currentTarget.checked)} /><span class="swatch" aria-hidden="true"></span>{kindLabel(kind)}</label>
     {/each}
-    <span class="hint">Dashed = estimated date</span>
+    <span class="hint">{t('cal.dashed')}</span>
   </fieldset>
 
   {#if !market && !feed}
-    <p class="ui-notice" role="status">Loading dates…</p>
+    <p class="ui-notice" role="status">{t('cal.loading')}</p>
   {:else if view === 'board'}
     <CalendarBoard {events} {now} {surface} />
   {:else if view === 'month'}

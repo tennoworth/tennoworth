@@ -282,6 +282,9 @@ export interface EeLogStatus {
    * next steps from the user.
    */
   recording: EeLogRecording;
+  /** The game's language as a warframe.market code, from the head of EE.log;
+   *  null when the log is missing or its language has no reward names. */
+  game_language: string | null;
 }
 
 export type EeLogRecording =

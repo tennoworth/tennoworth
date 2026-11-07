@@ -25,6 +25,9 @@ frontend/
     contracts/               wire shapes, capabilities, errors, state interfaces
     adapters/                Tauri IPC, same-origin loading, persistence
     ui/                      visual primitives only
+    i18n/                    t() and language loading, the English source
+                             (en/<area>.ts merged by en.ts), translation catalogs
+                             (locales/*.po) and the game-term glossary
     dev/                     gates/, preview/ (sample transport, wasm planners),
                              styleguide/, testing/
   admin.html                 separate private dashboard entry (dist-admin)
@@ -254,6 +257,15 @@ bag. Transport helpers belong in adapters, even when several features use them.
 `data-shell` preserves the ownership of extracted shell styles; do not add it
 to feature internals to work around styling boundaries. The
 [design system](design-system.md) specifies tokens and composition patterns.
+
+Desktop text is translated through `frontend/src/i18n/`. `main.ts` loads the
+saved language before it mounts the desktop shell, so `t()` stays synchronous
+and nothing renders in English first; a catalog that fails to load leaves the
+app in English. The relic overlay window has no settings permission and reads
+the language the main window mirrored to local storage. The hosted site does
+not load a language and stays English. `domain/` stays text-free: it returns
+codes and data that views word. [Translating](translating.md) covers catalogs
+and the rules for code.
 
 ## Native responsibilities
 

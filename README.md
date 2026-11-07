@@ -78,8 +78,9 @@ set-completion plays, relic expected value, Riven context, and listing health.
   Baro reminders, relevant events, and daily sell opportunities, with category
   controls and optional desktop popups.
 - Offers an opt-in relic reward overlay. A bounded local capture is OCR'd after
-  a reward event or the default `Ctrl+Shift+O` shortcut, recognizes English reward names,
-  and adds platinum, ducats, owned count, and recognition confidence. It does
+  a reward event or the default `Ctrl+Shift+O` shortcut, recognizes reward names
+  in the game's language (read from `EE.log`, or chosen in Settings; every game
+  language except Thai), and adds platinum, ducats, owned count, and recognition confidence. It does
   not click or choose a reward.
 
 The hosted site exposes the public-data tools and a guided product preview. It
@@ -217,6 +218,8 @@ and crate.
 Start with [CONTRIBUTING.md](CONTRIBUTING.md) for a working local setup,
 contribution tiers, checks, and the pull-request workflow. You can work on the
 hosted site and a populated desktop preview without Warframe or credentials.
+Speak a language Warframe supports? [Translating](docs/translating.md) shows how
+to review the app's text in it, no developer tools needed.
 
 The [architecture guide](docs/architecture.md) explains feature ownership and
 allowed dependencies. UI changes follow the [design system](docs/design-system.md)

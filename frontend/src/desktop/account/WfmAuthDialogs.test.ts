@@ -30,7 +30,7 @@ function mount(keyring: boolean) {
 it.each(['needs_unlock', 'needs_login'])('%s says when the keyring cannot remember this device', async code => {
   const { component } = mount(false);
   await component.open(code);
-  await waitFor(() => expect(document.querySelector('dialog[open] [data-testid="wfm-remember-unavailable"]')?.textContent).toMatch(/keyring isn't available/));
+  await waitFor(() => expect(document.querySelector('dialog[open] [data-testid="wfm-remember-unavailable"]')?.textContent).toMatch(/keyring isn.t available/));
 });
 
 it('says nothing extra when a keyring answers', async () => {

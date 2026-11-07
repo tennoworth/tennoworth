@@ -3,6 +3,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import { baroLocation, humanWindow } from '../../ui/format';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
   import TraderCalendar from '../../features/calendar/TraderCalendar.svelte';
   import { MAX_GOALS, MAX_GOAL_LENGTH, nextRoutinePeriod, type RoutineController, type RoutineCadence, type RoutineTask } from './controller.svelte';
 
@@ -24,26 +25,26 @@
     const arrival = Date.parse(baro.activation);
     const expiry = Date.parse(baro.expiry);
     if (Number.isFinite(arrival) && Number.isFinite(expiry) && now >= arrival && now < expiry) {
-      return { label: 'Baro leaves', duration: expiry - now };
+      return { label: t('routine.baroLeaves'), duration: expiry - now };
     }
-    if (Number.isFinite(arrival) && now < arrival) return { label: 'Baro arrives', duration: arrival - now };
+    if (Number.isFinite(arrival) && now < arrival) return { label: t('routine.baroArrives'), duration: arrival - now };
     return null;
   });
   let completed = $derived(routine.completed);
-  let progress = $derived(`${completed.size} of ${routine.tasks.length} complete`);
+  let progress = $derived(t('routine.progress', { done: completed.size, total: routine.tasks.length }));
 
-  const cadenceLabels: Record<RoutineCadence, string> = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+  const CADENCES: RoutineCadence[] = ['daily', 'weekly', 'monthly'];
 
   function periodLabel(cadence: RoutineCadence): string {
     const id = routine.state.periods[cadence].id;
     if (cadence === 'monthly') {
       const [year, month] = id.split('-').map(Number);
-      return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1)));
+      return new Intl.DateTimeFormat(formatLocale(), { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1)));
     }
     const start = Date.parse(`${id}T00:00:00Z`);
-    if (cadence === 'daily') return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(start) + ' UTC';
+    if (cadence === 'daily') return new Intl.DateTimeFormat(formatLocale(), { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(start) + ' UTC';
     const end = start + 6 * 86_400_000;
-    const format = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    const format = new Intl.DateTimeFormat(formatLocale(), { day: 'numeric', month: 'short', timeZone: 'UTC' });
     return `${format.format(start)}–${format.format(end)} UTC`;
   }
 
@@ -155,34 +156,34 @@
 </script>
 
 <section class="view-header">
-  <h2>Profit routines</h2>
-  <p class="lede">Mark tasks as you complete them. This checklist is manual and local to this installation; TennoWorth does not detect completion from the game.</p>
+  <h2>{t('routine.title')}</h2>
+  <p class="lede">{t('routine.lede')}</p>
 </section>
 
 <section class="wrap tw routine-checklist" aria-labelledby="routine-checklist-title" bind:this={panel}>
   <div class="rail checklist-rail">
-    <h3 id="routine-checklist-title">Routine checklist</h3>
+    <h3 id="routine-checklist-title">{t('routine.checklist')}</h3>
     <span class="exp" aria-live="polite">{progress}</span>
   </div>
   <div class="checklist-body">
-    <div class="ui-segmented cadence" role="group" aria-label="Checklist period" use:roving>
-      {#each Object.entries(cadenceLabels) as [id, label]}
-        <button type="button" aria-pressed={routine.cadence === id} onclick={() => selectCadence(id as RoutineCadence)}>{label}</button>
+    <div class="ui-segmented cadence" role="group" aria-label={t('routine.period')} use:roving>
+      {#each CADENCES as id (id)}
+        <button type="button" aria-pressed={routine.cadence === id} onclick={() => selectCadence(id)}>{t(`routine.cadence.${id}`)}</button>
       {/each}
     </div>
     <div class="period-copy">
       <strong>{periodLabel(routine.cadence)}</strong>
-      <span>{routine.cadence === 'daily' ? 'A personal day ending at 00:00 UTC; individual activities can refresh at other times.' : routine.cadence === 'weekly' ? 'Monday through Sunday. The planner starts a fresh list Monday at 00:00 UTC.' : 'Personal planning by calendar month; this is not a Warframe reset schedule.'}</span>
+      <span>{t(`routine.about.${routine.cadence}`)}</span>
     </div>
 
     {#if routine.cadence === 'monthly'}
       <div class="ui-field monthly-goal">
-        <label for="monthly-routine-goal">Add a monthly goal</label>
+        <label for="monthly-routine-goal">{t('routine.addGoalLabel')}</label>
         <div class="goal-entry">
-          <input id="monthly-routine-goal" class="ui-input" maxlength={MAX_GOAL_LENGTH} bind:value={routine.monthlyGoalDraft} placeholder="e.g. Prepare and list three ranked mods" disabled={routine.goalLimitReached} />
-          <button class="btn ghost" type="button" disabled={!routine.monthlyGoalDraft.trim() || routine.goalLimitReached || routine.saving} onclick={() => void routine.addMonthlyGoal(routine.monthlyGoalDraft)}>Add goal</button>
+          <input id="monthly-routine-goal" class="ui-input" maxlength={MAX_GOAL_LENGTH} bind:value={routine.monthlyGoalDraft} placeholder={t('routine.goalExample')} disabled={routine.goalLimitReached} />
+          <button class="btn ghost" type="button" disabled={!routine.monthlyGoalDraft.trim() || routine.goalLimitReached || routine.saving} onclick={() => void routine.addMonthlyGoal(routine.monthlyGoalDraft)}>{t('routine.addGoal')}</button>
         </div>
-        <span>{routine.goalLimitReached ? `Up to ${MAX_GOALS} goals. Remove one to add another.` : 'Each goal gets its own checkbox. Goals carry forward; their ticks reset each month.'}</span>
+        <span>{routine.goalLimitReached ? t('routine.goalLimit', { max: MAX_GOALS }) : t('routine.goalHelp')}</span>
       </div>
     {/if}
 
@@ -192,9 +193,9 @@
           <li class:done={completed.has(task.id)} class:dragging={draggingId === task.id} class:drop-before={dropBefore === task.id} ondragover={event => dragOverRow(event, task.id)} ondrop={event => void dropOnRow(event, task.id)}>
             {#if editingId === task.id}
               <div class="goal-edit">
-                <input class="ui-input" aria-label="Goal text" maxlength={MAX_GOAL_LENGTH} bind:value={editDraft} />
-                <button class="btn ghost" type="button" disabled={routine.saving || !editDraft.trim()} onclick={() => void saveEdit()}>Save goal</button>
-                <button class="btn ghost" type="button" onclick={() => void cancelEdit()}>Cancel</button>
+                <input class="ui-input" aria-label={t('routine.goalText')} maxlength={MAX_GOAL_LENGTH} bind:value={editDraft} />
+                <button class="btn ghost" type="button" disabled={routine.saving || !editDraft.trim()} onclick={() => void saveEdit()}>{t('routine.saveGoal')}</button>
+                <button class="btn ghost" type="button" onclick={() => void cancelEdit()}>{t('routine.cancel')}</button>
               </div>
             {:else}
               <div class="goal-row">
@@ -209,10 +210,10 @@
                 </div>
                 {#if routine.cadence === 'monthly'}
                   <div class="row-actions">
-                    <button class="btn ghost xs" type="button" data-move-up={task.id} aria-label={`Move ${task.title} up`} disabled={routine.state.monthlyGoals[0]?.id === task.id} onclick={() => void moveGoal(task.id, -1)}>Up</button>
-                    <button class="btn ghost xs" type="button" data-move-down={task.id} aria-label={`Move ${task.title} down`} disabled={routine.state.monthlyGoals.at(-1)?.id === task.id} onclick={() => void moveGoal(task.id, 1)}>Down</button>
-                    <button class="btn ghost xs" type="button" data-edit-goal={task.id} aria-label={`Edit ${task.title}`} onclick={() => startEdit(task)}>Edit</button>
-                    <button class="btn ghost xs" type="button" data-remove-goal={task.id} aria-label={`Remove ${task.title}`} disabled={routine.saving} onclick={() => void removeGoal(task.id)}>Remove</button>
+                    <button class="btn ghost xs" type="button" data-move-up={task.id} aria-label={t('routine.moveUp', { goal: task.title })} disabled={routine.state.monthlyGoals[0]?.id === task.id} onclick={() => void moveGoal(task.id, -1)}>{t('routine.up')}</button>
+                    <button class="btn ghost xs" type="button" data-move-down={task.id} aria-label={t('routine.moveDown', { goal: task.title })} disabled={routine.state.monthlyGoals.at(-1)?.id === task.id} onclick={() => void moveGoal(task.id, 1)}>{t('routine.down')}</button>
+                    <button class="btn ghost xs" type="button" data-edit-goal={task.id} aria-label={t('routine.edit', { goal: task.title })} onclick={() => startEdit(task)}>{t('routine.editShort')}</button>
+                    <button class="btn ghost xs" type="button" data-remove-goal={task.id} aria-label={t('routine.remove', { goal: task.title })} disabled={routine.saving} onclick={() => void removeGoal(task.id)}>{t('routine.removeShort')}</button>
                   </div>
                 {/if}
               </div>
@@ -221,36 +222,36 @@
         {/each}
       </ul>
     {:else}
-      <p class="empty-goal">Add a monthly goal to build this month’s checklist.</p>
+      <p class="empty-goal">{t('routine.emptyGoals')}</p>
     {/if}
 
     {#if routine.saveError}
       <div class="ui-notice save-error" data-tone="bad" role="alert">
         <span>{routine.saveError}</span>
-        <button class="btn ghost" type="button" disabled={routine.saving} onclick={() => void routine.retry()}>{routine.saving ? 'Saving…' : 'Retry saving'}</button>
+        <button class="btn ghost" type="button" disabled={routine.saving} onclick={() => void routine.retry()}>{t(routine.saving ? 'routine.saving' : 'routine.retrySave')}</button>
       </div>
     {:else if routine.saving}
-      <p class="save-status" role="status">Saving progress…</p>
+      <p class="save-status" role="status">{t('routine.savingProgress')}</p>
     {/if}
   </div>
 </section>
 
-<section class="card ui-panel routine routine-timing" aria-label="Routine timing">
+<section class="card ui-panel routine routine-timing" aria-label={t('routine.timing')}>
   <div class="routine-clocks">
     <div class="clock">
-      <span class="clock-label">New daily checklist</span>
+      <span class="clock-label">{t('routine.newDaily')}</span>
       <strong class="clock-val">{humanWindow(nextRoutinePeriod('daily', now) - now)}</strong>
       <span class="clock-sub">00:00 UTC</span>
     </div>
     <div class="clock">
-      <span class="clock-label">New weekly checklist</span>
+      <span class="clock-label">{t('routine.newWeekly')}</span>
       <strong class="clock-val">{humanWindow(nextRoutinePeriod('weekly', now) - now)}</strong>
-      <span class="clock-sub">Mon 00:00 UTC</span>
+      <span class="clock-sub">{t('routine.mondayReset')}</span>
     </div>
     <div class="clock">
-      <span class="clock-label">{baroWindow?.label ?? 'Next Baro visit'}</span>
+      <span class="clock-label">{baroWindow?.label ?? t('routine.nextBaro')}</span>
       <strong class="clock-val">{baroWindow ? humanWindow(baroWindow.duration) : '-'}</strong>
-      <span class="clock-sub">{baro?.location ?? 'schedule unknown'}</span>
+      <span class="clock-sub">{baro?.location ?? t('routine.scheduleUnknown')}</span>
     </div>
   </div>
 </section>
@@ -260,10 +261,10 @@
 </section>
 
 <details class="wrap tw routine-advice">
-  <summary>Endo and selling notes</summary>
+  <summary>{t('routine.notes')}</summary>
   <div class="advice-body">
-    <p>Baro follows the visit schedule above rather than the weekly checklist. Review his stock when he arrives, and plan purchases around your own inventory.</p>
-    <p>For Endo, compare the time and difficulty of Arbitrations, Rathuum, excavation, Sorties, Archon Hunts, and Maroo’s weekly treasure hunt. Account-bound rewards can save Platinum even when they cannot be sold.</p>
+    <p>{t('routine.notes1')}</p>
+    <p>{t('routine.notes2')}</p>
   </div>
 </details>
 

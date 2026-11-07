@@ -6,10 +6,14 @@
   // arithmetic against DE's weekly distribution for the weapon - where the
   // offer sits and what a reroll would cost. Every number carries the
   // limits of the band it came from.
-  import { appraise, rerolledDiscount, type PriceVerdict } from '../../domain/riven-appraise';
+  import { appraise, rerolledDiscount } from '../../domain/riven-appraise';
   import { bandForRiven } from '../../domain/rivens';
   import type { OwnedRiven } from '../../domain/rivens';
   import type { Market } from '../../contracts/data';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import { plat } from '../../ui/format';
+  import Rich from '../../ui/Rich.svelte';
+  import type { AppraisalCaveat } from '../../domain/riven-appraise';
 
   let {
     riven,
@@ -38,26 +42,20 @@
   let entry = $derived(riven.slug ? market?.riven_stats?.[riven.slug] : undefined);
   let discount = $derived(rerolledDiscount(entry?.unrolled, entry?.rolled));
 
-  const PLACEMENT_TEXT: Record<
-    NonNullable<ReturnType<typeof appraise>['placement']>,
-    string
-  > = {
-    'below-observed': 'Under the cheapest sale DE recorded',
-    bottom: 'Below the median',
-    middle: 'Between median and average',
-    upper: 'Above the average',
-    'above-observed': 'Over the dearest sale DE recorded',
-  };
+  function caveatText(code: AppraisalCaveat): string {
+    const d = result.dist;
+    if (code === 'band') return t('offer.caveat.band', { pop: d?.pop ?? 0 });
+    if (code === 'skewed') return t('offer.caveat.skewed', { avg: plat(d?.avg), median: plat(d?.median) });
+    return t(`offer.caveat.${code}`);
+  }
 
-  const VERDICT_TEXT: Record<PriceVerdict, string> = {
-    below: 'below this weapon’s market',
-    fair: 'about right for this weapon',
-    above: 'above this weapon’s market',
-    outlier: 'above anything DE recorded this week',
-  };
+  function rerollKey(locked: boolean, above: boolean) {
+    if (locked) return above ? 'offer.rerollLocked' : 'offer.rerollLockedAtOrBelow';
+    return above ? 'offer.reroll' : 'offer.rerollAtOrBelow';
+  }
 
   function pct(n: number): string {
-    return `${Math.round(n * 100)}%`;
+    return (n).toLocaleString(formatLocale(), { style: 'percent', maximumFractionDigits: 0 });
   }
 
   /** Position along the min–max track, clamped. `span` has a floor of 1 so a
@@ -72,23 +70,23 @@
 
 <div class="offer">
   <label>
-    <span>Offer</span>
+    <span>{t('offer.offer')}</span>
     <input
       type="number"
       inputmode="numeric"
       min="1"
       step="1"
-      placeholder="plat"
+      placeholder={t('offer.plat')}
       bind:value={offerText}
     />
   </label>
   <label class="lock">
     <input type="checkbox" bind:checked={locked} />
-    <span>A trait is locked (rerolls cost double)</span>
+    <span>{t('offer.locked')}</span>
   </label>
 
   {#if result.unavailable}
-    <p class="note">{result.caveats[0]}</p>
+    <p class="note">{caveatText(result.caveats[0])}</p>
   {:else if result.dist}
     <!-- min / median / max, with the offer marked. Positions are clamped so an
          outlier offer sits at the edge instead of overflowing the bar. -->
@@ -100,14 +98,14 @@
       {/if}
     </div>
     <div class="axis">
-      <span>{result.dist.min.toFixed(0)}p</span>
-      <span>median {result.dist.median.toFixed(0)}p</span>
-      <span>{result.dist.max.toFixed(0)}p</span>
+      <span>{plat(result.dist.min)}p</span>
+      <span>{t('offer.median', { price: plat(result.dist.median) })}</span>
+      <span>{plat(result.dist.max)}p</span>
     </div>
 
     {#if offer != null && result.placement && result.verdict}
       <p class="read">
-        <strong>{PLACEMENT_TEXT[result.placement]}</strong> - {VERDICT_TEXT[result.verdict]}.
+        <strong>{t(`offer.place.${result.placement}`)}</strong> - {t(`offer.verdict.${result.verdict}`)}.
       </p>
     {/if}
 
@@ -117,28 +115,25 @@
            percentage, not even a "likely" - can say what a new roll will do.
            The reader draws the inference. -->
       <p class="read">
-        Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva{locked ? ' with the lock' : ''}. This weapon's
-        median trade is <strong>{result.reroll.median.toFixed(0)}p</strong>; your offer is
-        {result.reroll.aboveMedian ? 'above' : 'at or below'} it.
+        <Rich text={t(rerollKey(locked, result.reroll.aboveMedian), { kuva: plat(result.reroll.kuva), median: plat(result.reroll.median) })} />
       </p>
     {/if}
 
     {#if result.skewed}
       <p class="note warnish">
-        A few large sales pull this weapon's average well above its median. Read the median.
+        {t('offer.skewed')}
       </p>
     {/if}
 
     {#if discount != null && discount > 0.02}
       <p class="note">
-        Rerolled rivens on this weapon trade about <strong>{pct(discount)}</strong> below unrolled
-        ones - buyers pay for reroll headroom.
+        <Rich text={t('offer.discount', { pct: pct(discount) })} />
       </p>
     {/if}
 
     <ul class="caveats">
       {#each result.caveats as c (c)}
-        <li>{c}</li>
+        <li>{caveatText(c)}</li>
       {/each}
     </ul>
   {/if}
@@ -203,7 +198,8 @@
     margin: 0;
     color: var(--muted);
   }
-  .read strong {
+  .read strong,
+  .read :global(b) {
     color: var(--fg);
   }
   .warnish {

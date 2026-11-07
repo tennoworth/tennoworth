@@ -20,6 +20,13 @@ export const STALE_DAYS = 7;
 export type CalendarKind = 'baro' | 'vault' | 'deal' | 'event';
 export type CalendarReach = 'scan' | 'none' | 'hits' | 'partial-hits' | 'unknown';
 
+/** The facts a row is worded from; the view words them in the reader's language. */
+export type FeedText =
+  | { kind: 'baro'; where: string | null; stock: number }
+  | { kind: 'vault'; packs: number }
+  | { kind: 'deal'; item: string; discount: number | null; price: number | null }
+  | { kind: 'event'; title: string; rewards: number; credits: number; coverage: 'complete' | 'partial' | 'unknown' };
+
 export interface CalendarItem {
   /** Stable upstream ID where one exists. */
   id?: string;
@@ -28,8 +35,7 @@ export interface CalendarItem {
   at: string;
   /** When it ends (ISO), where there is an end. */
   until?: string;
-  title: string;
-  detail?: string;
+  text: FeedText;
   /** Slugs the user holds that this event affects. Empty when nothing does,
    *  or when we cannot tell - those are different, and `affectsKnown` says
    *  which. */
@@ -150,8 +156,7 @@ function baroItems(
       kind: 'baro',
       at: baro.activation,
       until: baro.expiry,
-      title: `Baro Ki'Teer${baro.location ? ` · ${baro.location}` : ''}`,
-      detail: stock.length ? `${stock.length} items` : 'manifest not published yet',
+      text: { kind: 'baro', where: baro.location || null, stock: stock.length },
       affects,
       // Without an inventory we cannot say what it touches - which is not the
       // same as it touching nothing.
@@ -169,8 +174,7 @@ function vaultItems(
     kind: 'vault' as const,
     at: r.activation,
     until: r.expiry,
-    title: 'Prime Vault rotation',
-    detail: `${r.items.length} pack${r.items.length === 1 ? '' : 's'}`,
+    text: { kind: 'vault' as const, packs: r.items.length },
     affects: vaultAffects(r, market, owned),
     affectsKnown: !!owned && !!market?.calendar?.primes,
   }));
@@ -181,11 +185,7 @@ function dealItems(market: Market | null | undefined): CalendarItem[] {
   return deals.map((d) => ({
     kind: 'deal' as const,
     at: d.expiry,
-    title: `Darvo · ${d.item}`,
-    detail:
-      d.discount && d.sale_price
-        ? `${d.discount}% off - ${d.sale_price}p`
-        : undefined,
+    text: { kind: 'deal' as const, item: d.item, discount: d.discount && d.sale_price ? d.discount : null, price: d.discount && d.sale_price ? d.sale_price : null },
     // Darvo sells for real-money platinum from DE's store; it never touches a
     // player's tradeable holdings, so "affects nothing" here is a fact, not a
     // gap in what we know.
@@ -248,18 +248,12 @@ function eventItems(
       : affects.length > 0
         ? complete ? 'hits' : 'partial-hits'
         : complete ? 'none' : 'unknown';
-    const rewardParts: string[] = [];
-    if (rewardCount > 0) rewardParts.push(`${rewardCount} item reward${rewardCount === 1 ? '' : 's'}`);
-    if (credits > 0) rewardParts.push(`${credits.toLocaleString('en-US')} credits`);
     return {
       id: event.id,
       kind: 'event' as const,
       at: event.starts_at,
       until: event.ends_at,
-      title: event.title,
-      detail: unknown
-        ? 'fixed rewards unknown'
-        : `${rewardParts.join(' · ')}${complete ? '' : ' · partial coverage'}`,
+      text: { kind: 'event' as const, title: event.title, rewards: rewardCount, credits, coverage: unknown ? 'unknown' as const : complete ? 'complete' as const : 'partial' as const },
       affects,
       affectsKnown: reach === 'hits' || reach === 'none',
       reach,

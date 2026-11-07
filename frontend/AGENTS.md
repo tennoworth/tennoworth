@@ -113,6 +113,29 @@ whether Vite leaked its extracted CSS into another entry path.
 
 ---
 
+## Translated text
+
+Desktop UI text goes through `t()` from `src/i18n/`, with its English in
+`src/i18n/en/<area>.ts`; [`../docs/translating.md`](../docs/translating.md)
+owns the message syntax, rich tags and catalog workflow. The invariants:
+
+- Call `t()` at render time (markup, `$derived`, a function), never in a
+  module-level constant - that freezes the English before the language loads.
+  Do not shadow `t` with a local.
+- Dates and numbers use `toLocale*(formatLocale())`. A plain `{x}` given a
+  number is grouped for the locale, so pass years and ids as strings.
+- Tagged messages render through `ui/Rich.svelte`, never `{@html}`; style its
+  elements from the parent with `:global(...)`.
+- `domain/` does not import `i18n`: return codes and data and word them in the
+  view. Never branch on displayed text; branch on a kind or code.
+- After changing English, run `bun scripts/i18n.ts --write` so every catalog
+  follows; `bun run test` fails on a catalog out of step.
+- The desktop loads its language before mount; the relic overlay window reads
+  it from local storage because it has no settings permission. The hosted site
+  stays English. Check layouts with the preview's `&lang=pseudo`.
+
+---
+
 ## Browser storage - when to use which
 
 | Need | Pick |

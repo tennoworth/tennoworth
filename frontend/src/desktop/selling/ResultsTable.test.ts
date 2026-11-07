@@ -30,7 +30,7 @@ import { PRESETS } from '../../domain/presets';
 const ITEM_FLOOR_REM = 20;
 
 function columnBlock(): string {
-  const block = SOURCE.slice(SOURCE.indexOf('const ALL_COLUMNS'));
+  const block = SOURCE.slice(SOURCE.indexOf('const COLUMN_DEFS'));
   return block.slice(0, block.indexOf('];'));
 }
 

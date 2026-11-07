@@ -113,6 +113,16 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
   Add a semantic token centrally when an existing one cannot express the role.
   Layout-specific dimensions are allowed when justified by the content; they
   must not become a second spacing or typography system.
+- Translated text keeps these roles. Japanese, Korean, Chinese and Thai drop
+  letter-spacing and show `<em>` as weight rather than slant (app.css, keyed on
+  `:lang`), because tracking breaks those scripts and their italics are
+  synthetic. The document's `lang` is the chosen language, so English left on a
+  translated page takes that language's casing (Turkish turns "FALLING" into
+  "FALLİNG"): a language ships only once the text it shows is in the catalog,
+  and English data inside an uppercase label carries `lang="en"`. Check a
+  layout change with the
+  desktop preview's `&lang=pseudo` (about 40% longer, accented) and in German,
+  Japanese and Thai.
 
 ## Shared patterns
 
@@ -197,7 +207,8 @@ Above 900px the sidebar's right edge is a separator: drag it to set the width
 to the narrowest and widest, and Enter collapses or expands; Space does not,
 so tabbing past never collapses it. A double-click or the foot's rail button
 toggles it too. The width and the collapsed state persist (`sidebar` setting).
-On the rail each view keeps its icon (`NavIcon`) and its badge; its name is
+On the rail each view keeps its icon (`NavIcon`) and its badge, a count
+under the icon so a long one never covers it; its name is
 the button's accessible name and shows in a tooltip on hover or focus. The
 handle follows the view list in Tab order.
 Below 900px the sidebar foot (project links, feedback and the build label)
@@ -386,10 +397,10 @@ length. Ranked lists are tables: Set picks (a plain Do column, net plat and
 set volume aligned) and Relics (one row per relic, the refinement ladder as
 four cells on one scale with the chosen rung inverted, picked only for a crack
 or refine verdict). Under a Sell intact or Refine decision a quiet text button
-reads "I'll crack this one anyway". It is English on purpose and stays that
-way: the player overrules the advice, the tag reads Cracking anyway, the
-Intact rung is picked, the row and the Expected total count the crack, Why
-keeps the original advice, and the same button turns into "Fine, sell intact"
+reads "I'll crack this one anyway". It speaks in the player's voice on
+purpose, in every language: the player overrules the advice, the tag reads
+Cracking anyway, the Intact rung is picked, the row and the Expected total
+count the crack, Why keeps the original advice, and the same button turns into "Fine, sell intact"
 (or "Fine, refine") so focus never moves. The choice is kept per relic on this
 device. My orders is one listings table: listing health is a
 column and a row state with each fix beside the item, and Live ask and bid are
@@ -734,6 +745,38 @@ the lit edges. The canvas ignores the pointer, is hidden from assistive
 technology and never replaces the focus outline; the animation stops when the
 window is hidden or the field is off screen. Select Field shimmer in the living
 styleguide's Data state control.
+
+### Language picker
+
+The desktop's first launch asks which language TennoWorth should speak, once,
+in a modal dialog (`LanguagePicker.svelte`) over the app. The cursor starts on
+the game's own language, read from the head of EE.log and tagged Your game;
+without one it starts on English. Every offered language is a row in a
+three-column radio grid (two below 40rem), named in its own script with the
+English name under it, and the selected row is the ink inversion with the row
+cursor's square. Moving the cursor switches the whole app behind the scrim to
+that language, so the choice is seen rather than imagined. Enter or Continue
+saves it; Escape does not dismiss it, because the dialog exists to make that
+choice. One choice sets the app language and the relic overlay's reward
+language (following the game when they agree); both stay separately
+changeable in Settings. A failed save says so in place and lets the second
+press go on, and the next launch asks again.
+
+It is an exception to the rules against entrance animation and decorative
+motion, scoped to this one dialog, which appears once: the title rail draws
+across, the body scans in under a 2px line, the title cycles "Language" in
+every language until the player acts, changed text decodes character by
+character, and Continue collapses the dialog like a CRT switching off before
+the page behind decodes once into the chosen language. The decode writes only
+text node values and yields to any update the page makes. Reduced motion shows
+the same dialog and text with none of it.
+
+The decode is also the one motion of a language switch anywhere, so a switch
+reads the same in the picker and in Settings: each change decodes only the
+text it rewrote (item names, numbers and native language names stay still),
+and a newer switch settles the running decode first (`decodeChange` in
+`ui/decode.ts`). Mark a region `data-no-decode` when it animates its own text. Open it in the desktop preview with
+`&sample=first-language` (and `&game=pt` for a detected game language).
 
 ### Landing strip tagline
 

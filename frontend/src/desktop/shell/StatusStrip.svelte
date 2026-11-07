@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
+  const STATE_WORDS = { fresh: 'strip.state.fresh', aging: 'strip.state.aging', stale: 'strip.state.stale', unknown: 'strip.state.unknown' } as const;
+  const stateWord = (state: string) => t(STATE_WORDS[state as keyof typeof STATE_WORDS] ?? 'strip.state.unknown');
 import type { Snippet } from 'svelte';
 import type { InventoryController } from '../inventory/controller.svelte';
 import type { ListingController } from '../selling/controller.svelte';
@@ -156,21 +159,21 @@ import type { PresenceController } from '../presence/presence.svelte';
   <header data-shell class="statusbar" class:shell-strip={inShell} use:headerClearance={inShell} use:fitOneLine={inShell}>
     <div data-shell class="brand">
       <h1 data-shell>TennoWorth</h1>
-      {#if !inShell}<span data-shell class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
+      {#if !inShell}<span data-shell class="sub">{t('strip.tagline')}</span>{/if}
     </div>
     
-      <div data-shell class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
+      <div data-shell class="cell inv" title={unresolvedCount > 0 ? t('strip.unmatched', { count: unresolvedCount, summary: unresolvedSummary }) : undefined}>
         {#if inventory.inventoryName}
-          <span data-shell class="dot {inventory.refreshFailed ? 'stale' : inventoryFreshness}" role="img" aria-label={inventory.refreshFailed ? 'Inventory refresh failed' : `Inventory recorded ${inventoryStaleness ?? 'at an unknown time'}`}></span>
-          <span data-shell class="fit-2">{inventory.source === 'import' ? 'Imported' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Saved scan' : 'Inventory'}</span>
+          <span data-shell class="dot {inventory.refreshFailed ? 'stale' : inventoryFreshness}" role="img" aria-label={inventory.refreshFailed ? t('strip.inventoryFailedLabel') : inventoryStaleness ? t('strip.inventoryRecordedLabel', { age: inventoryStaleness }) : t('strip.inventoryUnknownTime')}></span>
+          <span data-shell class="fit-2">{inventory.source === 'import' ? t('strip.imported') : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? t('strip.savedScan') : t('strip.inventory')}</span>
           <b data-shell class="file fit-1" title={inventory.inventoryName}>{inventory.inventoryName}</b>
           {#if inventoryTimestamp}
             <time data-shell datetime={inventoryTimestamp} title={new Date(inventoryTimestamp).toLocaleString()}><span data-shell class="fit-2">{shortStamp(inventoryTimestamp)} · </span>{inventoryStaleness}</time>
-          {:else}<span data-shell>Timestamp unavailable</span>{/if}
-          {#if inventory.refreshFailed}<span data-shell class="note bad" title="Last refresh failed">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell class="note" title="No tradeable items found; showing saved inventory">No tradeable items found; showing saved inventory</span>{/if}
+          {:else}<span data-shell>{t('strip.timestampUnavailable')}</span>{/if}
+          {#if inventory.refreshFailed}<span data-shell class="note bad" title={t('strip.refreshFailed')}>{t('strip.refreshFailed')}</span>{:else if inventory.noTradeables}<span data-shell class="note" title={t('strip.noTradeables')}>{t('strip.noTradeables')}</span>{/if}
         {:else}
           <span data-shell class="dot" aria-hidden="true"></span>
-          <span data-shell>{inventory.restored ? 'No inventory yet' : 'Loading saved scan…'}</span>
+          <span data-shell>{inventory.restored ? t('strip.noInventory') : t('strip.loadingScan')}</span>
         {/if}
         <div data-shell class="refresh-wrap">
           <!-- Reflects the scan itself, not just the menu: refreshFromGame
@@ -187,34 +190,34 @@ import type { PresenceController } from '../presence/presence.svelte';
             aria-busy={inventory.pullingInventory}
             use:busy={inventory.pullingInventory}
             title={inventory.pullingInventory
-              ? 'Reading the running game’s memory - this can take a few seconds.'
-              : 'Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too.'}
-          >{inventory.pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
+              ? t('strip.refreshingTitle')
+              : t('strip.refreshTitle')}
+          >{inventory.pullingInventory ? t('strip.refreshing') : t('strip.refresh')}</button>
           {#if refreshOpen}
             <div data-shell id="refresh-pop" class="refresh-pop" use:closeOnFocusOut={{ trigger: () => refreshTrigger, close: () => { refreshOpen = false; confirmingClear = false; } }}>
               {#if inventory.inventoryName}<p data-shell class="rp-name">{inventory.inventoryName}</p>{/if}
-              <p data-shell class="rp-lede">Scan the running game - no file needed.</p>
+              <p data-shell class="rp-lede">{t('strip.menuLede')}</p>
               <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} use:busy={inventory.pullingInventory}>
-                {inventory.pullingInventory ? 'Scanning game…' : 'Scan game'}
+                {inventory.pullingInventory ? t('firstRun.scanning') : t('strip.scanGame')}
               </button>
               <div data-shell class="rp-sep" aria-hidden="true"></div>
               {#if inventory.inventoryName}
-                <button data-shell class="rp-item" onclick={() => { closeRefresh(); onexport(); }} title="Download an encrypted snapshot for another device or backup.">Export…</button>
+                <button data-shell class="rp-item" onclick={() => { closeRefresh(); onexport(); }} title={t('strip.exportTitle')}>{t('strip.export')}</button>
               {/if}
-              <button data-shell class="rp-item" onclick={() => { closeRefresh(); onimport(); }} title="Restore an encrypted snapshot exported from another device.">Restore…</button>
+              <button data-shell class="rp-item" onclick={() => { closeRefresh(); onimport(); }} title={t('strip.restoreTitle')}>{t('strip.restore')}</button>
               {#if inventory.inventoryName}
                 {#if confirmingClear}
                   <div data-shell class="rp-confirm" role="group" aria-labelledby="rp-clear-q">
-                    <p data-shell id="rp-clear-q" class="rp-note">Forget the saved scan? Scan again to get it back.</p>
-                    <button data-shell class="rp-item danger" onclick={clearScan}>Clear saved scan</button>
-                    <button data-shell class="rp-item" bind:this={keepScan} onclick={() => { confirmingClear = false; focusLater(() => document.querySelector<HTMLElement>('#refresh-pop .rp-item.danger')); }}>Keep it</button>
+                    <p data-shell id="rp-clear-q" class="rp-note">{t('strip.clearAsk')}</p>
+                    <button data-shell class="rp-item danger" onclick={clearScan}>{t('strip.clearConfirm')}</button>
+                    <button data-shell class="rp-item" bind:this={keepScan} onclick={() => { confirmingClear = false; focusLater(() => document.querySelector<HTMLElement>('#refresh-pop .rp-item.danger')); }}>{t('strip.clearKeep')}</button>
                   </div>
                 {:else}
-                  <button data-shell class="rp-item danger" onclick={() => { confirmingClear = true; focusLater(() => keepScan); }} title="Forget the saved inventory entirely.">Clear…</button>
+                  <button data-shell class="rp-item danger" onclick={() => { confirmingClear = true; focusLater(() => keepScan); }} title={t('strip.clearTitle')}>{t('strip.clear')}</button>
                 {/if}
               {/if}
               {#if unresolvedCount > 0}
-                <p data-shell class="rp-note" title="Breakdown: {unresolvedSummary}.">{unresolvedCount} items couldn't be price-matched (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.</p>
+                <p data-shell class="rp-note" title={t('strip.unmatchedBreakdown', { summary: unresolvedSummary })}>{t('strip.unmatchedNote', { count: unresolvedCount })}</p>
               {/if}
             </div>
           {/if}
@@ -223,13 +226,13 @@ import type { PresenceController } from '../presence/presence.svelte';
     
     <div data-shell class="cell">
       {#if marketFreshness === 'stale'}
-        <span data-shell class="fit-3">Market</span>
-        <span data-shell class="tag stale">Stale · {marketStaleness}</span>
+        <span data-shell class="fit-3">{t('strip.market')}</span>
+        <span data-shell class="tag stale">{t('strip.stale', { age: marketStaleness ?? '-' })}</span>
       {:else}
-        <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-        <span data-shell class="fit-3">Market</span>
+        <span data-shell class="dot {marketFreshness}" role="img" aria-label={t('strip.marketLabel', { state: stateWord(marketFreshness) })}></span>
+        <span data-shell class="fit-3">{t('strip.market')}</span>
         <b data-shell>{marketStaleness ?? '-'}</b>
-        {#if marketFreshness !== 'unknown'}<span data-shell class="fit-1">· {marketFreshness}</span>{/if}
+        {#if marketFreshness !== 'unknown'}<span data-shell class="fit-1">· {stateWord(marketFreshness)}</span>{/if}
       {/if}
     </div>
     <!-- In the workspace, orders to fix and Baro's countdown are sidebar
@@ -238,27 +241,27 @@ import type { PresenceController } from '../presence/presence.svelte';
     {#if !inShell && baroState && baroState.phase !== 'unknown'}
       <div data-shell class="cell baro">
         <span data-shell class="ducat" aria-hidden="true">⌬</span>
-        <span data-shell>{baroState.phase === 'here' ? 'Baro leaves in' : 'Baro arrives in'}</span>
+        <span data-shell>{baroState.phase === 'here' ? t('strip.baroLeaves') : t('strip.baroArrives')}</span>
         <b data-shell>{humanWindow(baroState.windowMs)}</b>
       </div>
     {/if}
     <span data-shell class="grow"></span>
     {#if !inShell}
       <div data-shell class="cell">
-        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('notifications')}>Notifications{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}</button>
+        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('notifications')}>{t('strip.notifications')}{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}</button>
       </div>
       <div data-shell class="cell">
-        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('settings')}><span data-shell aria-hidden="true">⚙</span>Settings</button>
+        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('settings')}><span data-shell aria-hidden="true">⚙</span>{t('strip.settings')}</button>
       </div>
       {#if keyboardTools}<div data-shell class="cell">{@render keyboardTools()}</div>{/if}
       <div data-shell class="cell end more">
-        <button data-shell type="button" class="cellbtn more-trigger" bind:this={moreTrigger} aria-expanded={moreOpen} aria-controls="more-pop" onclick={() => (moreOpen = !moreOpen)}>More ▾</button>
+        <button data-shell type="button" class="cellbtn more-trigger" bind:this={moreTrigger} aria-expanded={moreOpen} aria-controls="more-pop" onclick={() => (moreOpen = !moreOpen)}>{t('strip.more')}</button>
         {#if moreOpen}
           <div data-shell id="more-pop" class="more-pop" use:closeOnFocusOut={{ trigger: () => moreTrigger, close: () => (moreOpen = false) }}>
-            <button data-shell type="button" onclick={() => { moreTrigger?.focus(); moreOpen = false; onupdates(); }}>Check for updates</button>
-            <button data-shell type="button" onclick={() => { moreTrigger?.focus(); moreOpen = false; onfeedback(); }}>Send feedback</button>
+            <button data-shell type="button" onclick={() => { moreTrigger?.focus(); moreOpen = false; onupdates(); }}>{t('strip.checkUpdates')}</button>
+            <button data-shell type="button" onclick={() => { moreTrigger?.focus(); moreOpen = false; onfeedback(); }}>{t('strip.sendFeedback')}</button>
             <hr data-shell />
-            <a data-shell href="#faq" onclick={() => (moreOpen = false)}>FAQ</a>
+            <a data-shell href="#faq" onclick={() => (moreOpen = false)}>{t('strip.faq')}</a>
             {@render projectLinkAnchors()}
           </div>
         {/if}
@@ -274,8 +277,8 @@ import type { PresenceController } from '../presence/presence.svelte';
         <span data-shell class="fit-3">WFM</span>
         {#if listing.wfmStatus && !listing.wfmStatus.unlocked}
           <!-- The state, then the click that moves it on, so the step is visible. -->
-          <span data-shell class="wfm-state">{listing.wfmStatus.logged_in ? 'Locked' : 'Signed out'}</span>
-          <button data-shell type="button" class="wfm-auth" data-testid="wfm-auth-link" onclick={() => onauth(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{listing.wfmStatus.logged_in ? 'Unlock' : 'Sign in'} <span data-shell aria-hidden="true">→</span></button>
+          <span data-shell class="wfm-state">{listing.wfmStatus.logged_in ? t('strip.locked') : t('strip.signedOut')}</span>
+          <button data-shell type="button" class="wfm-auth" data-testid="wfm-auth-link" onclick={() => onauth(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{listing.wfmStatus.logged_in ? t('strip.unlock') : t('strip.signIn')} <span data-shell aria-hidden="true">→</span></button>
         {:else if presence?.status?.signedIn}
           <PresenceMenu {presence} onsettings={onpresencesettings} />
         {:else}

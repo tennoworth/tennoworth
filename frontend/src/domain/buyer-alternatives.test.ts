@@ -41,11 +41,11 @@ describe('quantity-aware buyer alternatives', () => {
     expect(compareBuyers({ ...quote(), error: 'network failure' }, 3, 15, now).error).toBeTruthy();
   });
   it('does not reuse stale, future-dated or unidentified-self quotes', () => {
-    expect(compareBuyers(quote(), 3, 15, now + 60_000).error).toMatch(/stale/);
-    expect(compareBuyers(quote(), 3, 15, now - 1).error).toMatch(/stale/);
+    expect(compareBuyers(quote(), 3, 15, now + 60_000).error).toBe('stale');
+    expect(compareBuyers(quote(), 3, 15, now - 1).error).toBe('stale');
     const loggedOut = quote();
     loggedOut.buyer_book!.own_orders_excluded = false;
-    expect(compareBuyers(loggedOut, 3, 15, now).error).toMatch(/Unlock/);
+    expect(compareBuyers(loggedOut, 3, 15, now).error).toBe('locked');
   });
   it('rejects invalid quantity and excludes duplicate buyer identities', () => {
     expect(compareBuyers(quote(), 1.5, 15, now).error).toBeTruthy();

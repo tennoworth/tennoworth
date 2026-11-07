@@ -35,7 +35,7 @@ it('meters spare ducats against what the worth-buying stock costs', async () => 
   expect(meter.getAttribute('aria-valuetext')).toBe('60 of 750');
   expect(meter.getAttribute('aria-valuemax')).toBe('750');
   expect(screen.getByText(/Your spares cover/).textContent).toContain('Your spares cover 0 of them.');
-  expect(screen.getByText(/We can't see your ducat balance/)).toBeTruthy();
+  expect(screen.getByText(/We can.t see your ducat balance/)).toBeTruthy();
 });
 
 it('keeps plain rounded prices with a p suffix and missing prices without a suffix', async () => {
@@ -74,7 +74,7 @@ it('plans the scrap basket once, after the stock is priced', async () => {
   const ducatPlan = vi.fn().mockResolvedValue({ candidates: [], plan: { picks: [], heldBack: [] } });
   const owned = new Map([['a', { slug: 'a', name: 'A', count: 3 } as OwnedRecord]]);
   render(BaroBoard, { props: { market: null, baro: null, owned }, context: new Map([[DESKTOP_CONTEXT, { ducatPlan, baroValue: value }]]) });
-  await screen.findByText("Pricing Baro's stock…");
+  await screen.findByText('Pricing Baro’s stock…');
   expect(ducatPlan).not.toHaveBeenCalled();
   priced(emptyValue);
   await vi.waitFor(() => expect(ducatPlan).toHaveBeenCalledTimes(1));

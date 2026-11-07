@@ -3,12 +3,14 @@
   import { onMount, onDestroy } from 'svelte';
   import { useDesktopServices } from '../shell/desktop-context';
   import { createListingReview, type ListingReviewInput } from './listing-review.svelte';
-  import { plat, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
+  import { plat, ownedBreakdown, leveledNoteTitle, keptNoteTitle } from '../../ui/format';
   import { orderUnitPrice } from '../../domain/order-prices';
   import { MAX_PLATINUM } from '../../domain/limits';
   import DialogHeader from '../../ui/DialogHeader.svelte';
   import { busy, focusLater, focusView } from '../../ui/keyboard-actions';
-  let { open = $bindable(false), rows, transport, onauthrequired, onclose, onsent, onvisible, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId, sessionEpoch = 0 }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
+  import Rich from '../../ui/Rich.svelte';
+  import { t } from '../../i18n/i18n.svelte';
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose, onsent, onvisible, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel, currentSnapshotId, sessionEpoch = 0 }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
 
   const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get onsent() { return onsent; }, get onvisible() { return onvisible; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
   onMount(() => controller.start());
@@ -82,60 +84,50 @@
 {#if open}
   <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title" use:reviewFocus bind:this={dialogNode}>
     <div class="modal" class:session={controller.hasSession}>
-      <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={controller.close} />
+      <DialogHeader titleId="rm-title" title={t('review.title')} onclose={controller.close} />
 
-      {#if controller.reviewBlockReason && controller.phase === 'review'}<div class="ui-notice" data-tone="warn" role="status">{controller.reviewBlockReason} {#if listingBlockReason && onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{:else if !listingBlockReason}<button class="btn" onclick={controller.close}>Close review</button>{/if}</div>{/if}
+      {#if controller.reviewBlockReason && controller.phase === 'review'}<div class="ui-notice" data-tone="warn" role="status">{controller.reviewBlockReason} {#if listingBlockReason && onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel ?? t('sell.checkListings')}</button>{:else if !listingBlockReason}<button class="btn" onclick={controller.close}>{t('review.closeReview')}</button>{/if}</div>{/if}
       {#if controller.phase === 'review'}
         <p class="lead">
-          {#if controller.hasSession}
-          New listings start <strong>hidden</strong>. Existing listings keep their visibility.
-          Quantities replace current listing totals; rank stays at the verified unranked tier.
-          {:else}
-          Review every row. Default price is the estimated clearing price -
-          the lowest live ask, sanity-clamped against the recent median so a
-          lone troll listing can't set it (floored at 5p). Rank 0 = unranked;
-          set a rank only if you're listing a leveled copy. New listings go up
-          <strong>hidden</strong>. Updates replace the existing quantity and preserve visibility.
-          {/if}
+          <Rich text={t(controller.hasSession ? 'review.leadSession' : 'review.lead')} />
         </p>
 
         {#if controller.hasSession}
           {#if controller.allocationProblem}<p class="ui-notice" data-tone="warn" role="alert">{controller.allocationProblem}</p>{/if}
           <p class="ui-notice" data-tone={controller.canSubmit ? 'good' : 'warn'}>
-            {controller.estimatedTrades ?? 'Invalid quantity / lot'} estimated trades / {controller.plan[0]?.session?.budget} budget · {controller.sessionRemaining ?? 'unknown'} remaining.
-            Quantities must divide evenly by units per trade. Posting does not spend the game allowance.
+            {t('review.tradeBudget', { trades: controller.estimatedTrades ?? t('review.invalidLot'), budget: controller.plan[0]?.session?.budget ?? '', remaining: controller.sessionRemaining ?? t('review.unknown') })}
           </p>
           {#if controller.sessionProblem}<p class="ui-notice" data-tone="warn">{controller.sessionProblem}</p>{/if}
           {#if controller.plan.some(r => r.include && r.quantity > r.sellable)}
-            <p class="ui-notice" data-tone="warn">A selected quantity exceeds the confirmed sellable count. Your edits are retained; reduce the quantity or scan again.</p>
+            <p class="ui-notice" data-tone="warn">{t('review.overSellable')}</p>
           {/if}
           {#if controller.networkError}<p class="ui-notice" data-tone="warn" role="alert">{controller.networkError}</p>{/if}
           <button class="btn ghost" onclick={() => controller.refreshReviewOrders(false)} use:busy={controller.ordersBusy}>
-            {controller.ordersBusy ? 'Checking existing orders…' : 'Refresh existing orders'}
+            {t(controller.ordersBusy ? 'review.checkingOrders' : 'review.refreshOrders')}
           </button>
         {/if}
 
         <div class="bulkrow">
-          <button class="btn ghost" onclick={() => { edited = true; controller.setAll(true); }}>Select all</button>
-          <button class="btn ghost" onclick={() => { edited = true; controller.setAll(false); }}>Deselect all</button>
+          <button class="btn ghost" onclick={() => { edited = true; controller.setAll(true); }}>{t('review.selectAll')}</button>
+          <button class="btn ghost" onclick={() => { edited = true; controller.setAll(false); }}>{t('review.deselectAll')}</button>
           <span class="spacer"></span>
           <button
             class="btn ghost live-btn"
             onclick={controller.checkLivePrices}
             disabled={controller.selectedCount === 0}
             use:busy={controller.liveTop.phase === 'running'}
-            title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
+            title={t('review.liveTitle')}
           >
             {#if controller.liveTop.phase === 'running'}
-              Checking live prices… {controller.liveTop.progress.done}/{controller.liveTop.progress.total}
+              {t('review.checkingLive', { done: controller.liveTop.progress.done, total: controller.liveTop.progress.total })}
             {:else if controller.liveTop.phase === 'done'}
-              Re-check live prices
+              {t('review.recheckLive')}
             {:else}
-              Check live prices
+              {t('review.checkLive')}
             {/if}
           </button>
           {#if controller.liveTop.phase === 'done' && controller.liveTop.quotes.size > 0}
-            <button class="btn ghost" onclick={controller.useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
+            <button class="btn ghost" onclick={controller.useLiveAll} title={t('review.matchAsksTitle')}>{t('review.matchAsks')}</button>
           {/if}
           {#if controller.liveTop.phase === 'error' && controller.liveTop.error}
             <span class="live-err">{controller.liveTop.error}</span>
@@ -146,29 +138,29 @@
           <table>
             <thead>
               <tr>
-                <th><span class="visually-hidden">Include</span></th>
-                <th>Item</th>
-                <th>Qty</th>
-                {#if controller.hasSession}<th>Units / trade</th><th>Existing → proposed</th>{/if}
-                <th>Owned</th>
-                <th>Price (p)</th>
-                <th>Avg</th>
-                <th title="Live lowest online ask / highest online bid for this exact rank or refinement (after “Check live prices”). Click a value to use it.">Live ask / bid</th>
-                <th title="Mod/arcane rank of the copies you're listing. 0 = unranked (dupe stacks). Ignored for items WFM doesn't rank.">Rank</th>
-                <th>Subtotal</th>
+                <th><span class="visually-hidden">{t('review.include')}</span></th>
+                <th>{t('review.col.item')}</th>
+                <th>{t('review.col.qty')}</th>
+                {#if controller.hasSession}<th>{t('review.col.unitsPerTrade')}</th><th>{t('review.col.change')}</th>{/if}
+                <th>{t('review.col.owned')}</th>
+                <th>{t('review.col.price')}</th>
+                <th>{t('review.col.avg')}</th>
+                <th title={t('review.col.liveTitle')}>{t('review.col.live')}</th>
+                <th title={t('review.col.rankTitle')}>{t('review.col.rank')}</th>
+                <th>{t('review.col.subtotal')}</th>
               </tr>
             </thead>
             <tbody>
               {#each controller.plan as row, i (row.key)}
-                {@const t = controller.liveFor(row)}
+                {@const live = controller.liveFor(row)}
                 {@const v = controller.liveVerdict(row)}
                 <tr class:dim={!row.include}>
-                  <td><input type="checkbox" aria-label={`Include ${row.name}`} bind:checked={controller.plan[i].include} /></td>
+                  <td><input type="checkbox" aria-label={t('review.includeItem', { item: row.name })} bind:checked={controller.plan[i].include} /></td>
                   <td>{row.name}</td>
                   <td>
                     <input
                       type="number"
-                      aria-label={`Quantity for ${row.name}`}
+                      aria-label={t('review.quantityFor', { item: row.name })}
                       min="1"
                       max={row.sellable}
                       bind:value={controller.plan[i].quantity}
@@ -176,65 +168,65 @@
                     />
                   </td>
                   {#if controller.hasSession}
-                    <td><input type="number" aria-label={`Units per trade for ${row.name}`} min="1" max={row.bulk ? 6 : 1}
+                    <td><input type="number" aria-label={t('review.unitsFor', { item: row.name })} min="1" max={row.bulk ? 6 : 1}
                       step="1" bind:value={controller.plan[i].per_trade} disabled={!row.include} /></td>
                     <td>
                       {#if row.reviewed_order?.state === 'existing'}
                         {@const prior = row.reviewed_order}
-                        <span>Update {prior.visible ? 'visible' : 'hidden'} order</span><br />
-                        <span>Qty {prior.quantity} → {row.quantity} · unit price {Number((orderUnitPrice(prior.platinum, prior.per_trade) ?? 0).toFixed(2))}p → {row.platinum}p</span><br />
-                        <span>Lot total {prior.platinum}p → {row.platinum * row.per_trade}p</span><br />
-                        <span>Units / trade {prior.per_trade ?? 1} → {row.per_trade} · stays {prior.visible ? 'visible' : 'hidden'}</span>
+                        <span>{t(prior.visible ? 'review.updateVisible' : 'review.updateHidden')}</span><br />
+                        <span>{t('review.qtyChange', { from: prior.quantity, to: row.quantity, fromPrice: Number((orderUnitPrice(prior.platinum, prior.per_trade) ?? 0).toFixed(2)), toPrice: row.platinum })}</span><br />
+                        <span>{t('review.lotChange', { from: prior.platinum, to: row.platinum * row.per_trade })}</span><br />
+                        <span>{t(prior.visible ? 'review.unitsChangeVisible' : 'review.unitsChangeHidden', { from: prior.per_trade ?? 1, to: row.per_trade })}</span>
                       {:else if row.reviewed_order?.state === 'new'}
-                        New hidden listing · {row.quantity} × {row.platinum}p · {row.per_trade} units / trade · {row.platinum * row.per_trade}p per lot
-                      {:else}Existing order state not confirmed{/if}
+                        {t('review.newListing', { quantity: row.quantity, price: row.platinum, units: row.per_trade, lot: row.platinum * row.per_trade })}
+                      {:else}{t('review.notConfirmed')}{/if}
                     </td>
                   {/if}
                   <td class="muted">
                     {#if row.sellable < row.owned}
                       {@const bd = ownedBreakdown(row.owned, row.sellable, row.leveled)}
-                      {row.owned} owned{#if bd.leveledPart > 0}{' · '}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.keptPart > 0}{' · '}<span class="kept-note" title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if}
+                      {t('review.owned', { count: row.owned })}{#if bd.leveledPart > 0}{' · '}<span class="leveled-note" title={leveledNoteTitle()}>{t('table.leveled', { count: bd.leveledPart })}</span>{/if}{#if bd.keptPart > 0}{' · '}<span class="kept-note" title={keptNoteTitle(bd.keptPart)}>{t('table.kept', { count: bd.keptPart })}</span>{/if}
                     {:else}
-                      {row.owned} owned
+                      {t('review.owned', { count: row.owned })}
                     {/if}
                   </td>
                   <td>
                     <input
                       type="number"
                       class="price"
-                      aria-label={`Price for ${row.name}, platinum`}
+                      aria-label={t('review.priceFor', { item: row.name })}
                       min="5"
                       max={MAX_PLATINUM}
                       bind:value={controller.plan[i].platinum}
                       disabled={!row.include}
                       class:off={row.include && controller.priceOff(row)}
                       aria-invalid={row.include && controller.priceOff(row) ? 'true' : undefined}
-                      title={row.include && controller.priceOff(row) ? `More than 30% off the 48h average (${row.avg.toFixed(0)}p) - double-check before sending` : undefined}
+                      title={row.include && controller.priceOff(row) ? t('review.priceOff', { avg: row.avg.toFixed(0) }) : undefined}
                     />
                   </td>
                   <td class="muted">{plat(row.avg)}</td>
                   <td class="live-cell" class:above={v === 'above'} class:belowbid={v === 'below-bid'}>
-                    {#if !t}
+                    {#if !live}
                       <span class="muted">·</span>
-                    {:else if t.error}
-                      <span class="muted" title={t.error}>n/a</span>
+                    {:else if live.error}
+                      <span class="muted" title={live.error}>{t('review.na')}</span>
                     {:else}
-                      {#if t.low_sell != null}
+                      {#if live.low_sell != null}
                         <button class="linkish" onclick={() => controller.useLive(i)} disabled={!row.include}
-                          title={`Online asks: ${t.sells.join(', ')}p - click to price at ${t.low_sell}p`}>{t.low_sell}p</button>
-                      {:else}<span class="muted" title="No online sellers right now">no ask</span>{/if}
+                          title={t('review.onlineAsks', { asks: live.sells.join(', '), price: live.low_sell })}>{live.low_sell}p</button>
+                      {:else}<span class="muted" title={t('review.noSellers')}>{t('review.noAsk')}</span>{/if}
                       <span class="muted"> / </span>
-                      {#if t.top_buy != null}
-                        <span title={`Online bids: ${t.buys.join(', ')}p`}>{t.top_buy}p<span class="visually-hidden"> top bid; online bids {t.buys.join(', ')}p</span></span>
-                      {:else}<span class="muted" title="No online buyers right now">no bid</span>{/if}
-                      {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask - it won't be the first to sell.">▲<span class="visually-hidden"> Your price is above the lowest online ask.</span></span>{/if}
-                      {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price - you'd be leaving plat on the table.">▼<span class="visually-hidden"> A live buyer bids more than your price.</span></span>{/if}
+                      {#if live.top_buy != null}
+                        <span title={t('review.onlineBids', { bids: live.buys.join(', ') })}>{live.top_buy}p<span class="visually-hidden">{t('review.topBidSr', { bids: live.buys.join(', ') })}</span></span>
+                      {:else}<span class="muted" title={t('review.noBuyers')}>{t('review.noBid')}</span>{/if}
+                      {#if v === 'above'}<span class="verdict" title={t('review.aboveAsk')}>▲<span class="visually-hidden">{t('review.aboveAskSr')}</span></span>{/if}
+                      {#if v === 'below-bid'}<span class="verdict" title={t('review.belowBid')}>▼<span class="visually-hidden">{t('review.belowBidSr')}</span></span>{/if}
                     {/if}
                   </td>
                   <td>
                     <input
                       type="number"
-                      aria-label={`Rank for ${row.name}`}
+                      aria-label={t('review.rankFor', { item: row.name })}
                       min="0"
                       max="10"
                       class="rank"
@@ -252,50 +244,45 @@
         {#if controller.marketAccess.message}<p class="ui-notice" data-tone="warn" role="status">{controller.marketAccess.message}</p>{/if}
         {#if confirmDiscard}
           <div class="ui-notice discard" data-tone="warn" role="alertdialog" aria-labelledby="rm-discard">
-            <span id="rm-discard">Discard your changes to this review?</span>
-            <button class="btn keep" onclick={keepEditing}>Keep editing</button>
-            <button class="btn" onclick={controller.close}>Discard</button>
+            <span id="rm-discard">{t('review.discardAsk')}</span>
+            <button class="btn keep" onclick={keepEditing}>{t('review.keepEditing')}</button>
+            <button class="btn" onclick={controller.close}>{t('review.discard')}</button>
           </div>
         {/if}
         <footer>
           <div class="totals">
-            <span><strong>{controller.selectedCount}</strong> items</span>
-            <span><strong>{plat(controller.totalPlat)}</strong> plat total</span>
+            <span><Rich text={t('review.items', { count: controller.selectedCount })} /></span>
+            <span><Rich text={t('review.platTotal', { total: plat(controller.totalPlat) })} /></span>
             {#if controller.selectedCount > 50}
-              <span class="warn">Batch cap is 50 - deselect some.</span>
+              <span class="warn">{t('review.batchCap')}</span>
             {/if}
           </div>
           <div class="actions">
-            <button class="btn ghost" onclick={controller.close}>Cancel</button>
+            <button class="btn ghost" onclick={controller.close}>{t('review.cancel')}</button>
             <button class="btn primary" onclick={controller.send} disabled={!controller.canSubmit || controller.validatingSend || controller.marketAccess.mutationsBlocked}>
-              Send {controller.selectedCount} listings
+              {t('review.send', { count: controller.selectedCount })}
             </button>
           </div>
         </footer>
       {:else if controller.phase === 'sending'}
         <p class="lead">
-          Checking current orders and posting your listings. Other market activity can add waiting time.
+          {t('review.sendingLead')}
         </p>
-<div class="spinner">{controller.cancellationRequested ? 'Finishing the current request; unsent listings will stay saved.' : controller.marketAccess.message ?? 'Sending…'}</div>
+<div class="spinner">{controller.cancellationRequested ? t('review.finishing') : controller.marketAccess.message ?? t('review.sending')}</div>
         {#if controller.networkError}<p class="ui-notice" data-tone="bad">{controller.networkError}</p>{/if}
-        <button class="btn stop-sending" onclick={controller.stopSending} use:busy={controller.cancellationRequested}>Stop after current request</button>
+        <button class="btn stop-sending" onclick={controller.stopSending} use:busy={controller.cancellationRequested}>{t('review.stop')}</button>
       {:else if controller.phase === 'results'}
         {#if controller.durabilityError}
           <p class="ui-notice" data-tone="bad" role="alert">{controller.durabilityError}</p>
         {/if}
         <p class="lead outcome" tabindex="-1">
-          {controller.durabilityError ? 'Batch results need attention.' : controller.pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{controller.okCount} created</span>{#if controller.updatedCount > 0}{' · '}<span class="ok">{controller.updatedCount} updated</span>{/if}{#if controller.errCount > 0}{' · '}<span class="bad">{controller.errCount} failed</span>{/if}{#if controller.pendingCount > 0}{' · '}<span class="warn">{controller.pendingCount} saved for resume</span>{/if}.
-          {#if controller.visibilityDone}
-            Listings are <strong>visible</strong> - buyers can see them now.
-          {:else}
-            New listings start <strong>hidden</strong> - no buyers can see them
-            yet. Flip them visible after you've reviewed the prices.
-          {/if}
-          Updated orders keep their existing visibility and price history.
+          {t(controller.durabilityError ? 'review.needsAttention' : controller.pendingCount > 0 ? 'review.interrupted' : 'review.done')} <span class="ok">{t('review.created', { count: controller.okCount })}</span>{#if controller.updatedCount > 0}{' · '}<span class="ok">{t('review.updated', { count: controller.updatedCount })}</span>{/if}{#if controller.errCount > 0}{' · '}<span class="bad">{t('review.failed', { count: controller.errCount })}</span>{/if}{#if controller.pendingCount > 0}{' · '}<span class="warn">{t('review.savedForResume', { count: controller.pendingCount })}</span>{/if}.
+          <Rich text={t(controller.visibilityDone ? 'review.nowVisible' : 'review.startHidden')} />
+          {t('review.updatedKeep')}
         </p>
         <div class="scroll" use:fitTable>
           <table>
-            <thead><tr><th></th><th>Item</th><th>Detail</th></tr></thead>
+            <thead><tr><th></th><th>{t('review.col.item')}</th><th>{t('review.col.detail')}</th></tr></thead>
             <tbody>
               {#each controller.serverResults as r, i (i)}
                 <tr>
@@ -314,7 +301,7 @@
         </div>
         {#if controller.visibilityResults.length > 0}
           <p class="lead">
-            Visibility toggled. <span class="ok">{controller.visibleOkCount} now visible</span>{#if controller.visibleErrCount > 0}{' · '}<span class="bad">{controller.visibleErrCount} failed</span>{/if}.
+            {t('review.visibilityToggled')} <span class="ok">{t('review.visibleCount', { count: controller.visibleOkCount })}</span>{#if controller.visibleErrCount > 0}{' · '}<span class="bad">{t('review.failed', { count: controller.visibleErrCount })}</span>{/if}.
           </p>
         {/if}
 
@@ -323,10 +310,10 @@
           <div class="actions">
             {#if controller.okCount > 0 && !controller.visibilityDone}
               <button class="btn primary" onclick={controller.makeAllVisible} use:busy={controller.visibilityBusy}>
-                {controller.visibilityBusy ? 'Making visible…' : `Make ${controller.okCount} visible`}
+                {controller.visibilityBusy ? t('review.makingVisible') : t('review.makeVisible', { count: controller.okCount })}
               </button>
             {/if}
-            <button class={controller.visibilityDone ? 'btn primary' : 'btn ghost'} onclick={controller.close}>Done</button>
+            <button class={controller.visibilityDone ? 'btn primary' : 'btn ghost'} onclick={controller.close}>{t('review.doneButton')}</button>
           </div>
         </footer>
       {:else if controller.phase === 'error'}
@@ -334,8 +321,8 @@
         <footer>
           <div></div>
           <div class="actions">
-            <button class="btn ghost" onclick={controller.close}>Cancel</button>
-            <button class="btn primary" onclick={() => (controller.phase = 'review')}>Back to review</button>
+            <button class="btn ghost" onclick={controller.close}>{t('review.cancel')}</button>
+            <button class="btn primary" onclick={() => (controller.phase = 'review')}>{t('review.backToReview')}</button>
           </div>
         </footer>
       {/if}
@@ -380,7 +367,7 @@
   .outcome:focus { outline: none; }
   .discard { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
   .discard > span { flex: 1 1 14rem; }
-  .lead strong { color: var(--fg); }
+  .lead :global(b) { color: var(--fg); }
   .bulkrow {
     display: flex;
     gap: 8px;
@@ -478,7 +465,7 @@
     font-size: var(--text-control);
     color: var(--muted);
   }
-  .totals strong { color: var(--fg); font-weight: 600; }
+  .totals :global(b) { color: var(--fg); font-weight: 600; }
   .totals .warn { color: var(--warn); }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   td.ok { color: var(--good); font-weight: 600; }

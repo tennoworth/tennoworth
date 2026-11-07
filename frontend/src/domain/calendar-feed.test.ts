@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCalendar, STALE_DAYS, vaultAffects } from './calendar-feed';
+import { buildCalendar, STALE_DAYS, vaultAffects, type CalendarItem } from './calendar-feed';
+
+const titleOf = (item: CalendarItem) => (item.text.kind === 'event' ? item.text.title : null);
 import staleDays from '../../../tests/fixtures/stale-days.json';
 import type { Market, OwnedRecord, VaultRotation } from '../contracts/data';
 
@@ -222,7 +224,7 @@ describe('buildCalendar', () => {
 
   it('uses explicit event dates and asks for a scan when inventory is absent', () => {
     const events = buildCalendar(EVENT_MARKET, null, NOW);
-    expect(events.map((item) => [item.title, item.at, item.until, item.reach])).toEqual([
+    expect(events.map((item) => [titleOf(item), item.at, item.until, item.reach])).toEqual([
       ['Community Goal', '2026-08-24T00:00:00Z', '2026-08-30T00:00:00Z', 'scan'],
       ['Milestone Goal', '2026-08-25T00:00:00Z', '2026-08-31T00:00:00Z', 'scan'],
     ]);
@@ -230,9 +232,9 @@ describe('buildCalendar', () => {
 
   it('carries the stable id and counts credits as a fixed reward', () => {
     const event = buildCalendar(EVENT_MARKET, owned([]), NOW)
-      .find((item) => item.title === 'Milestone Goal')!;
+      .find((item) => titleOf(item) === 'Milestone Goal')!;
     expect(event.id).toBe('partial');
-    expect(event.detail).toContain('50,000 credits');
+    expect(event.text).toMatchObject({ credits: 50_000, coverage: 'partial' });
   });
 
   it('keeps unsupported dated rows visible with unknown reach', () => {
@@ -245,16 +247,16 @@ describe('buildCalendar', () => {
     const row = buildCalendar(market, owned([]), NOW).find((item) => item.id === 'unknown')!;
     expect(row.reach).toBe('unknown');
     expect(row.affectsKnown).toBe(false);
-    expect(row.detail).toBe('fixed rewards unknown');
+    expect(row.text).toMatchObject({ coverage: 'unknown' });
   });
 
   it('never turns partial coverage into false reassurance', () => {
     const miss = buildCalendar(EVENT_MARKET, owned(['something_else']), NOW);
-    expect(miss.find((item) => item.title === 'Community Goal')?.reach).toBe('none');
-    expect(miss.find((item) => item.title === 'Milestone Goal')?.reach).toBe('unknown');
+    expect(miss.find((item) => titleOf(item) === 'Community Goal')?.reach).toBe('none');
+    expect(miss.find((item) => titleOf(item) === 'Milestone Goal')?.reach).toBe('unknown');
 
     const hit = buildCalendar(EVENT_MARKET, owned(['revenant_prime_set']), NOW)
-      .find((item) => item.title === 'Milestone Goal')!;
+      .find((item) => titleOf(item) === 'Milestone Goal')!;
     expect(hit.reach).toBe('partial-hits');
     expect(hit.affectsKnown).toBe(false);
   });
@@ -275,9 +277,9 @@ describe('buildCalendar', () => {
       data_fetched_at: '2026-08-01T00:00:00Z',
     };
     const rows = buildCalendar(market, owned([]), NOW);
-    expect(rows.find((item) => item.title === 'Community Goal')?.stale).toBe(false);
-    expect(rows.find((item) => item.title === 'Event Reward')?.stale).toBe(true);
-    expect(rows.find((item) => item.title === 'Event Reward')?.dataAgeDays).toBe(21);
+    expect(rows.find((item) => titleOf(item) === 'Community Goal')?.stale).toBe(false);
+    expect(rows.find((item) => titleOf(item) === 'Event Reward')?.stale).toBe(true);
+    expect(rows.find((item) => titleOf(item) === 'Event Reward')?.dataAgeDays).toBe(21);
   });
 
   // The producer stamps both fields with the *attempt* when a read failed and
@@ -302,7 +304,7 @@ describe('buildCalendar', () => {
       data_fetched_at: '2026-08-22T00:00:00Z',
     };
     const rows = buildCalendar(market, owned([]), NOW);
-    const event = rows.find((item) => item.title === 'Event Reward');
+    const event = rows.find((item) => titleOf(item) === 'Event Reward');
     expect(event?.stale, 'a failed read is not fresh evidence').toBe(true);
     // And its age is unknown rather than zero.
     expect(event?.dataAgeDays).toBeUndefined();
@@ -326,7 +328,7 @@ describe('buildCalendar', () => {
         attempted_at: '2026-08-22T00:00:00Z',
         data_fetched_at: '2026-08-22T00:00:00Z',
       };
-      const event = buildCalendar(market, owned([]), NOW).find((item) => item.title === 'Event Reward');
+      const event = buildCalendar(market, owned([]), NOW).find((item) => titleOf(item) === 'Event Reward');
       expect(event?.stale, disposition).toBe(true);
       expect(event?.dataAgeDays, disposition).toBeUndefined();
     }
@@ -346,7 +348,7 @@ describe('buildCalendar', () => {
         attempted_at: '2026-08-22T00:00:00Z',
         data_fetched_at: new Date(NOW - daysAgo * 86_400_000).toISOString(),
       };
-      return buildCalendar(market, owned([]), NOW).find((i) => i.title === 'Event Reward')?.stale;
+      return buildCalendar(market, owned([]), NOW).find((i) => titleOf(i) === 'Event Reward')?.stale;
     };
     expect(at(staleDays.stale_days - 1)).toBe(false);
     expect(at(staleDays.stale_days)).toBe(true);
@@ -364,11 +366,11 @@ describe('buildCalendar', () => {
       attempted_at: '2026-08-22T00:00:00Z',
       data_fetched_at: '2026-08-22T00:00:00Z',
     };
-    expect(buildCalendar(fresh, owned([]), NOW).find((i) => i.title === 'Event Reward')?.stale).toBe(false);
+    expect(buildCalendar(fresh, owned([]), NOW).find((i) => titleOf(i) === 'Event Reward')?.stale).toBe(false);
 
     const old = structuredClone(fresh) as Market;
     old.surface_provenance!['world.events']!.data_fetched_at = '2026-08-01T00:00:00Z';
-    const aged = buildCalendar(old, owned([]), NOW).find((i) => i.title === 'Event Reward');
+    const aged = buildCalendar(old, owned([]), NOW).find((i) => titleOf(i) === 'Event Reward');
     expect(aged?.stale).toBe(true);
     expect(aged?.dataAgeDays).toBe(21);
   });

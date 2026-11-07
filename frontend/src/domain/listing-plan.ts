@@ -15,8 +15,6 @@ export interface InterruptedBatch {
   pending: number;
   uncertain: number;
   done: number;
-  /** The line under the heading. Always non-empty for a non-null result. */
-  detail: string;
   /**
    * Whether Resume may be offered. False when the only work left is an
    * unresolved outcome, because resuming would re-send a request whose fate is
@@ -37,17 +35,10 @@ export function interruptedBatch(plan: PendingPlan | null | undefined): Interrup
   const done = items.filter((i) => i.status === 'ok').length;
   if (pending === 0 && uncertain === 0) return null;
 
-  const parts: string[] = [];
-  if (pending > 0) parts.push(`${pending} pending`);
-  if (uncertain > 0) {
-    parts.push(`${uncertain} with an unknown outcome`);
-  }
-  if (done > 0) parts.push(`${done} already done`);
   return {
     pending,
     uncertain,
     done,
-    detail: `· ${parts.join(', ')}`,
     resumable: pending > 0,
   };
 }

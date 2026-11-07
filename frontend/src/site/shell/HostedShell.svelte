@@ -1,4 +1,5 @@
 <script lang="ts">
+import { t } from '../../i18n/i18n.svelte';
 import Introduction from '../pages/Introduction.svelte';
 import Links from '../pages/Links.svelte';
 import KeyboardNavigation from '../../ui/KeyboardNavigation.svelte';
@@ -150,9 +151,9 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
   <Links />
   <footer data-shell class="sitefoot">
     <KeyboardNavigation {store} />
-    <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us. Item images from the Warframe Wiki, © Digital Extremes.</span>
-    {#if market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
-    <a data-shell href="#trust">Trust &amp; safety</a>
+    <span data-shell class="grow">{t('shell.footer')}</span>
+    {#if market?.updated_at}<span data-shell title={t('shell.snapshotTitle')}>{t('shell.snapshot', { time: snapshotStamp })}</span>{/if}
+    <a data-shell href="#trust">{t('shell.trust')}</a>
     <a data-shell href={reportUrl} target="_blank" rel="noopener noreferrer">Report a problem</a>
     <a data-shell href={improvementUrl} target="_blank" rel="noopener noreferrer">Suggest an improvement</a>
     <span data-shell class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>

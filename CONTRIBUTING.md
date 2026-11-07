@@ -165,6 +165,13 @@ visible/hidden state, WFM lock state, inventory size, CPU and private-memory tre
 exercise unlocked idle, scanning and an open review. Real-account and Windows/Linux
 runtime measurements remain separate from the mock and browser checks.
 
+## Translations
+
+Translatable English lives in `frontend/src/i18n/en/<area>.ts`, and each
+language's catalog in `frontend/src/i18n/locales/`. Reviewing a language needs no toolchain:
+[docs/translating.md](docs/translating.md) explains how, and how a developer
+adds or changes a message.
+
 ## Publishing market announcements
 
 The bundled feed bootstraps readers and initial publisher state. Once a host

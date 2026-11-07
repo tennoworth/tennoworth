@@ -17,6 +17,8 @@
   const { ducatPlan, baroValue } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';
   import { plat } from '../../ui/format';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import Rich from '../../ui/Rich.svelte';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import Glyph from '../../ui/Glyph.svelte';
   import Meter from '../../ui/Meter.svelte';
@@ -74,7 +76,7 @@
     if (valueResult.phase === 'loading') return () => { active = false; };
     if (inventory) ducatPlan(inventory, snapshot, target, 15, available).then((result) => {
       if (active) { candidates = result.candidates; scrapPlan = target > 0 ? result.plan : null; scrapLoading = false; }
-    }).catch(() => { if (active) { scrapError = 'Scrap planning unavailable. Try reopening the Baro board.'; scrapLoading = false; } });
+    }).catch(() => { if (active) { scrapError = t('baro.scrapUnavailable'); scrapLoading = false; } });
     return () => { active = false; };
   });
   let scrapPotential = $derived(candidates.reduce((sum, c) => sum + c.totalDucats, 0));
@@ -91,45 +93,35 @@
   );
   let hiddenCount = $derived(rows.length - shown.length);
 
-  const VERDICT_LABEL: Record<BaroVerdict, string> = {
-    flip: 'buy · flip',
-    hold: 'buy · hold',
-    thin: 'thin market',
-    skip: 'poor value',
-    unpriced: 'not tradeable',
-  };
-
-  const VERDICT_HINT: Record<BaroVerdict, string> = {
-    flip: 'Priced above its own 90-day baseline, with enough trades to sell into.',
-    hold: "At or below baseline - his arrival is why. The profit is in holding for the recovery.",
-    thin: 'Too few trades for the price to mean much. Treat it as a guess.',
-    skip: 'The plat it returns does not justify the ducats.',
-    unpriced: 'Cosmetic or bundle - it has no market listing, so there is no price to show.',
-  };
+  const verdictLabel = (verdict: BaroVerdict) => t(`baro.verdict.${verdict}`);
+  const verdictHint = (verdict: BaroVerdict) => t(`baro.hint.${verdict}`);
+  const count = (n: number) => n.toLocaleString(formatLocale());
 
   function ratio(n: number | null): string {
-    return n == null ? '-' : n.toFixed(2);
+    return n == null ? '-' : n.toLocaleString(formatLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function credits(n: number | null | undefined): string {
     if (!n) return '-';
-    return n >= 999_500 ?`${Number((n / 1_000_000).toFixed(1))}M` : `${Math.round(n / 1000)}k`;
+    return n >= 999_500
+      ? t('baro.millions', { n: Number((n / 1_000_000).toFixed(1)).toLocaleString(formatLocale()) })
+      : t('baro.thousands', { n: count(Math.round(n / 1000)) });
   }
 </script>
 
 <section class="wrap tw board">
-  <div class="rail"><h3>What he is selling</h3></div>
+  <div class="rail"><h3>{t('baro.selling')}</h3></div>
   <div class="board-body">
-  {#if valueResult.phase === 'loading'}<p role="status">Pricing Baro's stock…</p>{/if}
-  {#if valueResult.phase === 'error'}<p class="ui-notice" data-tone="bad" role="alert">Stock pricing unavailable. Try reopening the Baro board.</p>{/if}
-  {#if unavailableItems}<p class="ui-notice" data-tone="warn">Scrap quantities unavailable for {unavailableItems} {unavailableItems === 1 ? 'item' : 'items'}. {quantitiesUnavailable ? 'Recheck protection to calculate scrap potential.' : 'Scrap totals include only items with known quantities.'}</p>{/if}
-  {#if scrapLoading}<p role="status">Calculating scrap plan…</p>{/if}
+  {#if valueResult.phase === 'loading'}<p role="status">{t('baro.pricing')}</p>{/if}
+  {#if valueResult.phase === 'error'}<p class="ui-notice" data-tone="bad" role="alert">{t('baro.pricingUnavailable')}</p>{/if}
+  {#if unavailableItems}<p class="ui-notice" data-tone="warn">{t('baro.quantitiesUnknown', { count: unavailableItems })} {t(quantitiesUnavailable ? 'baro.recheck' : 'baro.knownOnly')}</p>{/if}
+  {#if scrapLoading}<p role="status">{t('baro.calculating')}</p>{/if}
   {#if scrapError}<p class="ui-notice" data-tone="bad" role="alert">{scrapError}</p>{/if}
   {#if valueResult.phase === 'done'}
   <header class="board-head">
     <p class="sub">
-      {rows.length} {rows.length === 1 ? 'item' : 'items'} · ranked by plat returned per ducat spent.
+      {t('baro.ranked', { count: rows.length })}
       {#if !current}
-        <span class="stale">Stock is from a previous visit - treat it as a preview.</span>
+        <span class="stale">{t('baro.stale')}</span>
       {/if}
     </p>
   </header>
@@ -140,22 +132,20 @@
     {#if scrapKnown}
       <div class="budget">
         <Meter
-          label={unavailableItems ? 'Ducats from known spares' : 'Ducats from your spares'}
+          label={t(unavailableItems ? 'baro.knownSpares' : 'baro.yourSpares')}
           value={scrapPotential}
           max={basket.needed}
-          text={`${scrapPotential.toLocaleString()} of ${basket.needed.toLocaleString()}`}
+          text={t('baro.of', { have: count(scrapPotential), need: count(basket.needed) })}
         />
       </div>
     {/if}
     <p class="gap">
-      <strong>{basket.needed.toLocaleString()}</strong> ducats buys the <strong>{basket.count}</strong>
-      worth-buying {basket.count === 1 ? 'item' : 'items'}, about <strong>{plat(basket.resale)}p</strong> resale at 90-day medians.
-      {#if scrapKnown}Your spares cover <strong>{basket.coveredByScrapping}</strong> of {basket.count === 1 ? 'it' : 'them'}.{/if}
+      <Rich text={t('baro.basket', { count: basket.count, needed: count(basket.needed), resale: plat(basket.resale) })} />
+      {#if scrapKnown}<Rich text={t('baro.covered', { count: basket.count, covered: basket.coveredByScrapping })} />{/if}
     </p>
     {#if owned}
       <p class="sub">
-        We can't see your ducat balance - it's account state, not an item - so this is what
-        your spares are worth, not what you can afford today.
+        {t('baro.noBalance')}
       </p>
     {/if}
   {/if}
@@ -165,13 +155,13 @@
     <table>
       <thead>
         <tr>
-          <th scope="col">Item</th>
-          <th scope="col" class="num">Ducats</th>
-          <th scope="col" class="num">Credits</th>
-          <th scope="col" class="num">Now</th>
-          <th scope="col" class="num">90d</th>
-          <th scope="col" class="num">p/ducat</th>
-          <th scope="col">Verdict</th>
+          <th scope="col">{t('baro.col.item')}</th>
+          <th scope="col" class="num">{t('baro.col.ducats')}</th>
+          <th scope="col" class="num">{t('baro.col.credits')}</th>
+          <th scope="col" class="num">{t('baro.col.now')}</th>
+          <th scope="col" class="num">{t('baro.col.baseline')}</th>
+          <th scope="col" class="num">{t('baro.col.perDucat')}</th>
+          <th scope="col">{t('baro.col.verdict')}</th>
         </tr>
       </thead>
       <tbody>
@@ -183,19 +173,19 @@
                 {row.item}
               </span>
             </th>
-            <td class="num ducat">{row.ducats?.toLocaleString() ?? '-'}</td>
+            <td class="num ducat">{row.ducats == null ? '-' : count(row.ducats)}</td>
             <td class="num muted">{credits(row.credits)}</td>
             <td class="num">{row.price == null ? '-' : `${plat(row.price, { useGrouping: false })}p`}</td>
             <td class="num muted">{row.baseline == null ? '-' : `${plat(row.baseline, { useGrouping: false })}p`}</td>
             <td class="num">{ratio(row.platPerDucat)}</td>
             <td>
-              <span class="tag {row.verdict}" title={VERDICT_HINT[row.verdict]}>
-                {VERDICT_LABEL[row.verdict]}<span class="visually-hidden">: {VERDICT_HINT[row.verdict]}</span>
+              <span class="tag {row.verdict}" title={verdictHint(row.verdict)}>
+                {verdictLabel(row.verdict)}<span class="visually-hidden">: {verdictHint(row.verdict)}</span>
               </span>
             </td>
           </tr>
         {/each}
-        {#if shown.length === 0 && valueResult.phase === 'done'}<tr><td colspan="7" class="empty">No items in the current value filter. Use the button below to include poor-value or untradeable stock.</td></tr>{/if}
+        {#if shown.length === 0 && valueResult.phase === 'done'}<tr><td colspan="7" class="empty">{t('baro.emptyFilter')}</td></tr>{/if}
       </tbody>
     </table>
   </div>
@@ -203,10 +193,9 @@
 
   {#if scrapPlan && scrapPlan.picks.length}
     <details class="scrap">
-      <summary>what to scrap for {basket.needed.toLocaleString()} ducats</summary>
+      <summary>{t('baro.scrapFor', { ducats: count(basket.needed) })}</summary>
       <p class="sub">
-        Ranked by ducats gained per plat given up - scrapping a 65-ducat part
-        worth 18p to save a 45-ducat part worth 3p is the trade to avoid.
+        {t('baro.scrapHelp')}
       </p>
       <ul class="picks">
         {#each scrapPlan.picks as pick (pick.slug)}
@@ -214,24 +203,22 @@
             <span class="pick-n">{pick.spare}×</span>
             <span class="pick-name">{pick.name}</span>
             <span class="pick-d">{pick.totalDucats}d</span>
-            <span class="pick-p">{pick.totalPlat > 0 ? `${Math.round(pick.totalPlat)}p given up` : 'unsold anyway'}</span>
+            <span class="pick-p">{pick.totalPlat > 0 ? t('baro.givenUp', { price: plat(pick.totalPlat) }) : t('baro.unsold')}</span>
           </li>
         {/each}
       </ul>
       <p class="sub">
-        <strong>{scrapPlan.ducats.toLocaleString()}</strong> ducats for
-        <strong>{Math.round(scrapPlan.platGivenUp)}p</strong> of market value.
+        <Rich text={t('baro.planTotal', { ducats: count(scrapPlan.ducats), price: plat(scrapPlan.platGivenUp) })} />
         {#if scrapPlan.short > 0}
-          <span class="short">Still {scrapPlan.short.toLocaleString()} short.</span>
+          <span class="short">{t('baro.short', { ducats: count(scrapPlan.short) })}</span>
         {/if}
       </p>
       {#if scrapPlan.heldBack.length}
         <p class="sub">
-          Held back as worth more sold than scrapped:
-          {scrapPlan.heldBack
+          {t('baro.heldBack', { items: scrapPlan.heldBack
             .slice(0, 4)
-            .map((h) => `${h.name} (${h.ducats}d / ${Math.round(h.plat)}p)`)
-            .join(', ')}.
+            .map((h) => `${h.name} (${h.ducats}d / ${plat(h.plat)}p)`)
+            .join(', ') })}
         </p>
       {/if}
     </details>
@@ -239,7 +226,7 @@
 
   {#if hiddenCount > 0 || showAll}
     <button type="button" class="more" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>
-      {showAll ? 'Hide poor-value and untradeable lines' : `Show ${hiddenCount} more (poor value or not tradeable)`}
+      {showAll ? t('baro.hide') : t('baro.showMore', { count: hiddenCount })}
     </button>
   {/if}
   </div>
@@ -257,7 +244,8 @@
     font-size: 0.9rem;
     color: var(--muted);
   }
-  .gap strong {
+  .gap :global(b),
+  .sub :global(b) {
     color: var(--fg);
   }
   .budget {

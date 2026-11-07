@@ -4,6 +4,8 @@ import type { Market, OwnedRecord } from '../../contracts/data';
 import type { InventoryController } from '../inventory/controller.svelte';
 import { baroPhase } from '../../domain/baro-board';
 import { humanWindow } from '../../ui/format';
+import { formatLocale, t } from '../../i18n/i18n.svelte';
+import Rich from '../../ui/Rich.svelte';
 import BaroBoard from './BaroBoard.svelte';
 import TraderCalendar from '../../features/calendar/TraderCalendar.svelte';
   let { inventory, baroSurfaceAge, keepSection, guidanceUnavailable, voidTrader, ducatStats, baroState, guidanceOwned, guidanceAvailability, unknownSlugs, onducats }: {
@@ -23,17 +25,17 @@ import TraderCalendar from '../../features/calendar/TraderCalendar.svelte';
 </script>
 
       <section data-shell class="view-header">
-        <h2 data-shell>Baro Ki'Teer</h2>
+        <h2 data-shell>{t('baro.title')}</h2>
         <p data-shell class="lede">
           {#if baroState?.phase === 'here'}
-            Here at {voidTrader?.location} - leaves in {humanWindow(baroState.windowMs)}.
+            {t('baro.here', { location: voidTrader?.location ?? '', time: humanWindow(baroState.windowMs) })}
           {:else if baroState?.phase === 'incoming'}
-            Arrives in {humanWindow(baroState.windowMs)} at {voidTrader?.location}.
+            {t('baro.incoming', { location: voidTrader?.location ?? '', time: humanWindow(baroState.windowMs) })}
           {:else}
-            Next visit at {voidTrader?.location}.
+            {t('baro.next', { location: voidTrader?.location ?? '' })}
           {/if}
           {#if baroSurfaceAge}
-            <span data-shell class="warn">· ⚠ schedule data {baroSurfaceAge} - may be a rotation behind</span>
+            <span data-shell class="warn">· {t('baro.scheduleAge', { age: baroSurfaceAge })}</span>
           {/if}
         </p>
       </section>
@@ -45,23 +47,16 @@ import TraderCalendar from '../../features/calendar/TraderCalendar.svelte';
             <div data-shell class="baro-body">
               <p data-shell class="baro-detail">
                 {#if ducatStats}
-                You hold <strong data-shell>{ducatStats.total.toLocaleString()}<span data-shell class="unit">d</span></strong>
-                across <strong data-shell>{ducatStats.count.toLocaleString()}</strong>
-                ducat-earning {ducatStats.count === 1 ? 'item' : 'items'}.
-                {#if baroState?.phase === 'here'}
-                  Spend them on Baro's offerings - open the <strong data-shell>Ducats</strong>
-                  preset to see what's worth dumping.
+                <Rich text={t('baro.youHold', { count: ducatStats.count, ducats: ducatStats.total.toLocaleString(formatLocale()) })} />
+                <Rich text={t(baroState?.phase === 'here' ? 'baro.spend' : 'baro.earmark')} />
                 {:else}
-                  Earmark these for Baro using the <strong data-shell>Ducats</strong> preset.
-                {/if}
-                {:else}
-                  Ducat yield is unavailable while inventory valuation is pending or failed. Reopen Baro to retry.
+                  {t('baro.yieldUnavailable')}
                 {/if}
               </p>
             </div>
           </div>
           <div data-shell class="row gap-sm">
-            <button data-shell onclick={onducats}>Open Ducats preset →</button>
+            <button data-shell onclick={onducats}>{t('baro.openPreset')}</button>
           </div>
         </div>
       </section>

@@ -30,7 +30,6 @@ describe('interruptedBatch', () => {
       pending: 1,
       uncertain: 0,
       done: 1,
-      detail: '· 1 pending, 1 already done',
       resumable: true,
     });
   });
@@ -44,14 +43,13 @@ describe('interruptedBatch', () => {
       pending: 0,
       uncertain: 2,
       done: 1,
-      detail: '· 2 with an unknown outcome, 1 already done',
       resumable: false,
     });
   });
 
   it('reports both kinds when a batch holds both', () => {
     const batch = interruptedBatch(plan(['pending', 'uncertain_mutation']));
-    expect(batch?.detail).toBe('· 1 pending, 1 with an unknown outcome');
+    expect(batch).toMatchObject({ pending: 1, uncertain: 1 });
     expect(batch?.resumable).toBe(true);
   });
 

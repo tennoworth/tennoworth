@@ -13,6 +13,7 @@
   // exactly the players who most need the answer.
   import type { BuildPath, BuildPlan, BuildPathKind, SetPart } from '../../contracts/generated/domain';
   import { humanBuildTime } from '../../ui/format';
+  import { t } from '../../i18n/i18n.svelte';
   import { useDesktopServices } from '../shell/desktop-context';
   const { buildPlan } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';
@@ -43,26 +44,15 @@
     best = null;
     planError = '';
     request.then((result) => { if (active) { plan = result.plan; best = result.cheapest; } })
-      .catch(() => { if (active) planError = 'Build comparison unavailable. Try reopening this set.'; });
+      .catch(() => { if (active) planError = t('build.unavailable'); });
     return () => { active = false; };
   });
 
-  const LABEL: Record<BuildPathKind, string> = {
-    'buy-set': 'Buy the set',
-    'buy-parts-build': 'Buy missing parts, build',
-    'buy-parts-rush': 'Buy missing parts, rush',
-    'sell-spares': 'Sell your spares instead',
-  };
-
-  const OUTCOME: Record<BuildPathKind, string> = {
-    'buy-set': 'assembled, ready now',
-    'buy-parts-build': 'assembled, after the foundry',
-    'buy-parts-rush': 'assembled, ready now',
-    'sell-spares': 'plat, and no frame',
-  };
+  const label = (kind: BuildPathKind) => t(`build.path.${kind}`);
+  const outcome = (kind: BuildPathKind) => t(`build.end.${kind}`);
 
   function credits(n: number): string {
-    return n > 0 ? `${Math.round(n / 1000)}k cr` : '-';
+    return n > 0 ? t('build.credits', { count: Math.round(n / 1000) }) : '-';
   }
 </script>
 
@@ -70,18 +60,18 @@
   {#if planError}
     <p class="ui-notice" data-tone="bad" role="alert">{planError}</p>
   {:else if !plan}
-    <p role="status">Calculating build comparison…</p>
+    <p role="status">{t('build.calculating')}</p>
   {:else}
   <header>
     <h4><Glyph name={glyphFor('set')} /> {setName}</h4>
     <p class="sub">
       {#if plan.have.length}
-        You hold {plan.have.map((h) => h.name).join(', ')}.
+        {t('build.youHold', { parts: plan.have.map((h) => h.name).join(', ') })}
       {/if}
       {#if plan.missing.length}
-        Missing {plan.missing.length} of {parts.length}.
+        {t('build.missing', { missing: plan.missing.length, total: parts.length })}
       {:else}
-        You hold every part.
+        {t('build.holdAll')}
       {/if}
     </p>
   </header>
@@ -90,25 +80,25 @@
     <table>
       <thead>
         <tr>
-          <th scope="col">Path</th>
-          <th scope="col" class="num">Plat</th>
-          <th scope="col" class="num">Credits</th>
-          <th scope="col" class="num">Wait</th>
-          <th scope="col">You end with</th>
-          <th scope="col" class="num">vs set</th>
+          <th scope="col">{t('build.col.path')}</th>
+          <th scope="col" class="num">{t('build.col.plat')}</th>
+          <th scope="col" class="num">{t('build.col.credits')}</th>
+          <th scope="col" class="num">{t('build.col.wait')}</th>
+          <th scope="col">{t('build.col.end')}</th>
+          <th scope="col" class="num">{t('build.col.vsSet')}</th>
         </tr>
       </thead>
       <tbody>
         {#each plan.paths as path (path.kind)}
           <tr class:best={best?.kind === path.kind}>
-            <th scope="row">{LABEL[path.kind]}</th>
+            <th scope="row">{label(path.kind)}</th>
             <td class="num">
               <!-- An unknown total renders as unknown. Printing the partial sum
                    with a warning underneath still asserts a number the data
                    cannot support, which is the failure this panel exists to
                    avoid. -->
               {#if !path.platKnown && path.kind !== 'sell-spares'}
-                <span class="unknown" title="A part has no market price.">-</span>
+                <span class="unknown" title={t('build.noPrice')}>-</span>
               {:else if path.plat < 0}
                 {path.platKnown ? '' : '≥ '}+{Math.round(-path.plat)}p
               {:else}
@@ -117,7 +107,7 @@
             </td>
             <td class="num muted">{path.recipesKnown ? credits(path.credits) : '?'}</td>
             <td class="num muted">{path.recipesKnown ? humanBuildTime(path.seconds) : '?'}</td>
-            <td class="muted">{OUTCOME[path.kind]}</td>
+            <td class="muted">{outcome(path.kind)}</td>
             <td class="num">
               {#if path.kind === 'sell-spares' || plan.setPrice == null || !path.platKnown}
                 -
@@ -137,27 +127,19 @@
 
   {#if plan.incomplete}
     <p class="warn">
-      No recommendation: {plan.missing
-        .filter((m) => m.price == null)
-        .map((m) => m.name)
-        .join(', ')} has no market price, so any comparison would be a guess.
+      {t('build.noRecommendation', { parts: plan.missing.filter((m) => m.price == null).map((m) => m.name).join(', ') })}
     </p>
   {/if}
 
   {#if !plan.paths.find((p) => p.kind === 'buy-parts-build')?.recipesKnown}
     <p class="note">
-      No recipe data for this set in the current snapshot, so credits and foundry
-      time are unknown rather than zero.
+      {t('build.noRecipe')}
     </p>
   {/if}
 
   {#if plan.paths.find((p) => p.kind === 'buy-parts-build')?.unverified.length}
     <p class="note">
-      Building also needs
-      {plan.paths
-        .find((p) => p.kind === 'buy-parts-build')!
-        .unverified.map((i) => `${i.count}× ${i.name}`)
-        .join(', ')} - resources the scan can't see, so they aren't costed above.
+      {t('build.alsoNeeds', { resources: plan.paths.find((p) => p.kind === 'buy-parts-build')!.unverified.map((i) => `${i.count}× ${i.name}`).join(', ') })}
     </p>
   {/if}
   {/if}

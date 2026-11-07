@@ -661,6 +661,130 @@ fn settings_validation_clamps_scale_and_refuses_empty_shortcuts() {
 }
 
 #[test]
+fn the_reward_name_language_is_auto_by_default_and_validated() {
+    let stored: OverlaySettings = serde_json::from_str(
+        r#"{"enabled":true,"autoDetect":true,"shortcut":"Ctrl+Shift+O","scale":1.0,"livePrices":true,"showOwned":true}"#,
+    )
+    .unwrap();
+    assert_eq!(stored.ocr_language, "auto");
+    for code in ["auto", "en", "fr", "zh-hant"] {
+        let settings = OverlaySettings {
+            ocr_language: code.into(),
+            ..OverlaySettings::default()
+        };
+        assert!(validate_settings(settings).is_ok(), "{code}");
+    }
+    let settings = OverlaySettings {
+        ocr_language: "th".into(),
+        ..OverlaySettings::default()
+    };
+    assert!(validate_settings(settings).is_err());
+}
+
+fn french_catalog() -> Vec<OverlayCatalogItem> {
+    let mut items = catalog();
+    items.extend([
+        OverlayCatalogItem {
+            name: "Volt Prime - Neuroptiques (Schéma)".into(),
+            slug: Some("volt_prime_neuroptics_blueprint".into()),
+        },
+        OverlayCatalogItem {
+            name: "Volt Prime Neuroptics Blueprint".into(),
+            slug: Some("volt_prime_neuroptics_blueprint".into()),
+        },
+        OverlayCatalogItem {
+            name: "Forma".into(),
+            slug: None,
+        },
+    ]);
+    items
+}
+
+#[test]
+fn a_localized_reward_title_matches_its_item_despite_a_lost_accent() {
+    let got = match_ocr_lines("Volt Prime - Neuroptiques\n(Schema)", &french_catalog());
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(
+        got[0].item.slug.as_deref(),
+        Some("volt_prime_neuroptics_blueprint")
+    );
+    assert!(got[0].confidence >= 0.9, "{}", got[0].confidence);
+}
+
+#[test]
+fn a_forma_title_in_a_latin_script_language_is_the_forma_blueprint() {
+    let got = match_ocr_lines("Forma (Schéma)", &french_catalog());
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].item.name, "Forma");
+    assert_eq!(got[0].confidence, 1.0);
+}
+
+#[test]
+fn the_forma_blueprint_is_found_in_every_script_the_game_writes_it_in() {
+    let with = |name: &str| {
+        let mut items = catalog();
+        items.push(OverlayCatalogItem {
+            name: name.into(),
+            slug: None,
+        });
+        items
+    };
+    for (read, name) in [
+        ("Форма (Чертёж)", "Форма"),
+        ("Чертёж: Форма", "Форма"),
+        ("포르마 설계도", "포르마"),
+        ("フ ォ ー マ 設 計 図", "フォーマ設計図"),
+        ("Forma 蓝 图", "Forma 蓝图"),
+        ("Forma藍圖", "Forma 藍圖"),
+    ] {
+        let got = match_ocr_lines(read, &with(name));
+        assert_eq!(got.len(), 1, "{read}: {got:?}");
+        assert_eq!(got[0].item.name, name, "{read}");
+        assert!(got[0].confidence >= 0.9, "{read}: {}", got[0].confidence);
+    }
+}
+
+#[test]
+fn spaces_tesseract_puts_between_cjk_characters_are_dropped() {
+    assert_eq!(normalize("伏 特 Prime 头 部 蓝 图"), "伏特 prime 头部蓝图");
+    assert_eq!(normalize("ヴォルト プライム"), "ヴォルトプライム");
+    // Korean writes spaces between words, so they stay.
+    assert_eq!(normalize("볼트 프라임"), "볼트 프라임");
+    assert_eq!(normalize("Нейрооптика (Чертёж)"), "нейрооптика чертёж");
+    assert_eq!(normalize("Forma蓝图"), "forma 蓝图");
+    assert_eq!(normalize("伏特Prime头部"), "伏特 prime 头部");
+    let catalog = vec![OverlayCatalogItem {
+        name: "伏特 Prime 头部神经光元蓝图".into(),
+        slug: Some("volt_prime_neuroptics_blueprint".into()),
+    }];
+    let got = match_ocr_lines("伏 特 Prime 头 部 神 经 光 元 蓝 图", &catalog);
+    assert_eq!(got.len(), 1);
+    assert_eq!(got[0].confidence, 1.0);
+}
+
+#[test]
+fn english_and_localized_reads_of_one_reward_vote_as_one_item() {
+    let mut consensus = RecognitionConsensus::default();
+    let layout = expected_reward_layout(&corpus_frame(), 1);
+    for title in [
+        "Volt Prime - Neuroptiques (Schéma)",
+        "Volt Prime Neuroptics Blueprint",
+    ] {
+        let found = match_ocr_lines(title, &french_catalog()).remove(0);
+        consensus.observe(LayoutRead {
+            layout: layout.clone(),
+            matches: vec![(0, found)],
+        });
+    }
+    let read = consensus.resolve(1, true).expect("one complete read");
+    assert_eq!(read.matches.len(), 1);
+    assert_eq!(
+        read.matches[0].1.item.slug.as_deref(),
+        Some("volt_prime_neuroptics_blueprint")
+    );
+}
+
+#[test]
 fn diagnostics_retention_keeps_the_newest_ten_runs() {
     let root = std::env::temp_dir().join(format!(
         "tennoworth-overlay-retention-{}-{}",
@@ -987,7 +1111,7 @@ fn real_three_reward_capture_survives_common_display_shapes() {
         "pinned eng.traineddata is missing from {}",
         tessdata.display()
     );
-    let (ocr, ready) = OcrWorker::start(Ok(tessdata));
+    let (ocr, ready) = OcrWorker::start(Ok(tessdata), "eng");
     ready.unwrap();
     for (label, image) in variants {
         let frame = CapturedFrame {

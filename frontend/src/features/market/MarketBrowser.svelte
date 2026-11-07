@@ -4,6 +4,8 @@
   import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import { buildMetaDrift } from '../../domain/meta-drift';
   import { baroLocation, humanWindow, plat, wfmItemUrl } from '../../ui/format';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import Rich from '../../ui/Rich.svelte';
   import { onMount, onDestroy, type Snippet } from 'svelte';
   import type { Market } from '../../contracts/data';
   import {
@@ -112,13 +114,13 @@
   let hasMeta = $derived(!!buildMetaDrift(market));
   let contextTab = $state<'meta' | 'dispo'>('meta');
   let contextTabs = $derived([
-    ...(hasMeta ? [{ id: 'meta' as const, label: 'Meta drift', count: null }] : []),
-    ...(dispoChanges.length ? [{ id: 'dispo' as const, label: 'Riven dispositions', count: dispoChanges.length }] : []),
+    ...(hasMeta ? [{ id: 'meta' as const, label: t('market.metaDrift'), count: null }] : []),
+    ...(dispoChanges.length ? [{ id: 'dispo' as const, label: t('market.dispositions'), count: dispoChanges.length }] : []),
   ]);
-  let shownTab = $derived(contextTabs.some((t) => t.id === contextTab) ? contextTab : contextTabs[0]?.id);
+  let shownTab = $derived(contextTabs.some((tab) => tab.id === contextTab) ? contextTab : contextTabs[0]?.id);
   // Arrow keys, Home and End move between the tabs, as in the feature rail.
   function onContextKey(event: KeyboardEvent): void {
-    const ids = contextTabs.map((t) => t.id);
+    const ids = contextTabs.map((tab) => tab.id);
     const at = ids.indexOf(shownTab ?? ids[0]);
     const next = event.key === 'ArrowRight' ? (at + 1) % ids.length : event.key === 'ArrowLeft' ? (at - 1 + ids.length) % ids.length : event.key === 'Home' ? 0 : event.key === 'End' ? ids.length - 1 : -1;
     if (next < 0) return;
@@ -132,8 +134,8 @@
     return `${d > 0 ? '+' : ''}${d.toFixed(2)}`;
   }
   function seenDate(iso: string): string {
-    const t = Date.parse(iso);
-    return Number.isFinite(t) ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    const at = Date.parse(iso);
+    return Number.isFinite(at) ? new Date(at).toLocaleDateString(formatLocale(), { month: 'short', day: 'numeric' }) : '';
   }
 
   // Baro schedule + (since 2026-08-10) the last captured stock. market.json
@@ -182,12 +184,12 @@
     const arr = Date.parse(baro.activation);
     const exp = Date.parse(baro.expiry);
     if (Number.isFinite(exp) && now < exp && Number.isFinite(arr) && now >= arr) {
-      return { phase: 'here' as const, label: 'leaves in', windowMs: exp - now };
+      return { phase: 'here' as const, label: t('market.leavesIn'), windowMs: exp - now };
     }
     if (Number.isFinite(arr) && now < arr) {
-      return { phase: 'incoming' as const, label: 'arrives in', windowMs: arr - now };
+      return { phase: 'incoming' as const, label: t('market.arrivesIn'), windowMs: arr - now };
     }
-    return { phase: 'unknown' as const, label: 'next visit', windowMs: null };
+    return { phase: 'unknown' as const, label: t('market.nextVisit'), windowMs: null };
   });
 
   function ratioText(r: number): string {
@@ -199,9 +201,9 @@
 {#snippet itemCell(r: BrowseRow)}
   <a href={handoff && pilotItems.includes(r.slug) ? itemPath(r.slug) : wfmItemUrl(r.slug)} target={handoff && pilotItems.includes(r.slug) ? undefined : "_blank"} rel="noopener noreferrer" title={r.name}>{r.name}</a>
   {#if r.vault === 'vaulted'}
-    <span class="tag vaulted" title="Vaulted - no longer dropping, supply is capped">vaulted</span>
+    <span class="tag vaulted" title={t('market.vaultedHelp')}>{t('market.vaulted')}</span>
   {:else if r.vault === 'vaulting-soon'}
-    <span class="tag soon" title="Vaulting soon - supply about to be capped">soon</span>
+    <span class="tag soon" title={t('market.soonHelp')}>{t('market.soon')}</span>
   {/if}
 {/snippet}
 
@@ -211,21 +213,21 @@
     {@const y = yearFor(r.slug)}
     {#if y && y.stats.deltaPct != null && Math.abs(y.stats.deltaPct) >= 1}
       {#if y.stats.deltaPct > 0}
-        <span class="up" title="Latest daily median {y.stats.deltaPct.toFixed(0)}% above where it was a year ago ({y.stats.baseline}p → {y.stats.latest}p; year low {y.stats.low}p, high {y.stats.high}p)">▲{y.stats.deltaPct.toFixed(0)}% 1y</span>
+        <span class="up" title={t('market.yearUp', { pct: y.stats.deltaPct.toFixed(0), from: y.stats.baseline, to: y.stats.latest, low: y.stats.low, high: y.stats.high })}>▲{y.stats.deltaPct.toFixed(0)}% {t('market.oneYear')}</span>
       {:else}
-        <span class="down" title="Latest daily median {Math.abs(y.stats.deltaPct).toFixed(0)}% below where it was a year ago ({y.stats.baseline}p → {y.stats.latest}p; year low {y.stats.low}p, high {y.stats.high}p)">▼{Math.abs(y.stats.deltaPct).toFixed(0)}% 1y</span>
+        <span class="down" title={t('market.yearDown', { pct: Math.abs(y.stats.deltaPct).toFixed(0), from: y.stats.baseline, to: y.stats.latest, low: y.stats.low, high: y.stats.high })}>▼{Math.abs(y.stats.deltaPct).toFixed(0)}% {t('market.oneYear')}</span>
       {/if}
     {:else}
       <span class="flat">·</span>
     {/if}
   {:else if r.deltaPct != null && Math.abs(r.deltaPct) >= 1}
     {#if r.deltaPct > 0}
-      <span class="up" title="Latest median {r.deltaPct.toFixed(0)}% above the 90-day median">▲{r.deltaPct.toFixed(0)}%</span>
+      <span class="up" title={t('market.medianUp', { pct: r.deltaPct.toFixed(0) })}>▲{r.deltaPct.toFixed(0)}%</span>
     {:else}
-      <span class="down" title="Latest median {Math.abs(r.deltaPct).toFixed(0)}% below the 90-day median">▼{Math.abs(r.deltaPct).toFixed(0)}%</span>
+      <span class="down" title={t('market.medianDown', { pct: Math.abs(r.deltaPct).toFixed(0) })}>▼{Math.abs(r.deltaPct).toFixed(0)}%</span>
     {/if}
   {:else}
-    <span class="flat" title="Within ±1% of the 90-day median">·</span>
+    <span class="flat" title={t('market.flat')}>·</span>
   {/if}
 {/snippet}
 
@@ -236,14 +238,14 @@
     {#if y}
       {#if hasSparkline(y.spark)}
         <Sparkline class="spark year" series={y.spark} width={w} height={h}
-          title="Weekly medians over the last year: low {y.stats.low}p, high {y.stats.high}p, {y.stats.tradedDays} traded days" />
+          title={t('market.yearSpark', { low: y.stats.low, high: y.stats.high, days: y.stats.tradedDays })} />
       {/if}
     {:else}
-      <span class="thin-hist" title="Fewer than 20 traded days in the last year">thin history</span>
+      <span class="thin-hist" title={t('market.thinHelp')}>{t('market.thin')}</span>
     {/if}
   {:else if hasSparkline(r.medians_7d)}
     <Sparkline series={r.medians_7d} width={w} height={h} baseline={r.median90} trend={r.deltaPct}
-      title="7-day medians: {r.medians_7d.join(', ')}{r.median90 != null ? ` · 90-day median ${r.median90}` : ''}" />
+      title={r.median90 != null ? t('market.sparkMedian', { values: r.medians_7d.join(', '), median: r.median90 }) : t('market.spark', { values: r.medians_7d.join(', ') })} />
   {:else}
     <span class="faint">-</span>
   {/if}
@@ -268,12 +270,12 @@
         {#if ducats}<col style="width:4rem" />{/if}
       </colgroup>
       <thead><tr>
-        <th class="l">Item</th>
-        <th class:sorted={sortedKey === 'avg'} title="Average of recent WFM sales">Avg</th>
-        <th class:sorted={sortedKey === 'delta'} title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
-        <th data-drop="1" title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
-        <th data-drop="3" title="Trades completed in the last 48 hours">Vol 48h</th>
-        {#if ducats}<th data-drop="2" title="Ducat value at Baro Ki’Teer">Ducats</th>{/if}
+        <th class="l">{t('market.col.item')}</th>
+        <th class:sorted={sortedKey === 'avg'} title={t('market.col.avgHelp')}>{t('market.col.avg')}</th>
+        <th class:sorted={sortedKey === 'delta'} title={t('market.col.deltaHelp')}>{t(yearMode ? 'market.col.delta1y' : 'market.col.delta')}</th>
+        <th data-drop="1" title={t(yearMode ? 'market.col.trendYear' : 'market.col.trendWeek')}>{t('market.col.trend')}</th>
+        <th data-drop="3" title={t('market.col.volHelp')}>{t('market.col.vol')}</th>
+        {#if ducats}<th data-drop="2" title={t('market.col.ducatsHelp')}>{t('market.col.ducats')}</th>{/if}
       </tr></thead>
       <tbody>
         {#each rows as r (r.slug)}
@@ -282,7 +284,7 @@
             <td class="price">{@render price(r.avg)}</td>
             <td>{@render deltaCell(r)}</td>
             <td>{@render trendCell(r, 56, 16)}</td>
-            <td>{r.vol.toLocaleString()}</td>
+            <td>{r.vol.toLocaleString(formatLocale())}</td>
             {#if ducats}<td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>{/if}
           </tr>
         {/each}
@@ -298,18 +300,18 @@
 
   <!-- 1. LOOK SOMETHING UP - the first control on the page. Idle = the bar
        alone; typing renders the results table under it. -->
-  <section class="wrap tw lookup" aria-label="Item lookup">
+  <section class="wrap tw lookup" aria-label={t('market.lookup')}>
     <div class="bar">
       <span class="shimmer-field grow" use:shimmer={{ mode: searchShimmer, sparks: true }}>
         <input
           class="input"
           type="text"
-          placeholder="Search any item - try “primed”, “mag”, “ash prime set”…"
+          placeholder={t('market.searchHint')}
           bind:value={query}
           oninput={scheduleQueryUrl}
           use:searchShortcut
           id="item-search"
-          aria-label="Search items"
+          aria-label={t('market.search')}
           onfocus={() => (searchFocused = true)}
           onblur={() => {
             searchFocused = false;
@@ -317,22 +319,22 @@
           }}
         />
       </span>
-      <span class="exp">any tradeable item · price, 48h volume, 7-day trend · {#if keyboard.enabled}<kbd>{keyboard.search}</kbd> to focus{/if}</span>
+      <span class="exp">{t('market.searchAbout')} · {#if keyboard.enabled}<Rich text={t('market.toFocus', { key: keyboard.search })} />{/if}</span>
       {#if loadHistory}
         <button class="btn xs ghost year-toggle" class:on={showYear} onclick={toggleYear} aria-pressed={showYear}
-          title="Show each item's last year of daily prices (relics.run archive) instead of the last 7 days">
-          {histState === 'loading' ? 'Loading 1 year…' : '1 year'}
+          title={t('market.yearHelp')}>
+          {t(histState === 'loading' ? 'market.loadingYear' : 'market.year')}
         </button>
-        {#if showYear && histState === 'unavailable'}<span class="exp note">· history unavailable right now</span>{/if}
-        {#if showYear && histState === 'ready' && history?.through}<span class="exp note">· through {history.through}</span>{/if}
+        {#if showYear && histState === 'unavailable'}<span class="exp note">{t('market.historyUnavailable')}</span>{/if}
+        {#if showYear && histState === 'ready' && history?.through}<span class="exp note">{t('market.through', { date: history.through })}</span>{/if}
       {/if}
     </div>
     {#if freshness === 'stale'}
-      <div class="line stale-note" data-tone="warn">⚠ This snapshot was updated {staleness ?? 'at an unknown time'} - prices below may lag the live book.</div>
+      <div class="line stale-note" data-tone="warn">{t('market.stale', { age: staleness ?? t('market.unknownTime') })}</div>
     {/if}
     {#if query.trim()}
       {#if results.length}
-        <div class="scroll" use:fitTable use:tableNavigation={'Search results table'}>
+        <div class="scroll" use:fitTable use:tableNavigation={t('market.searchTable')}>
         <table class="tw fixed results">
           <colgroup>
             <col />
@@ -349,18 +351,18 @@
             <col style="width:7rem" />
           </colgroup>
           <thead><tr>
-            <th class="l">Item · {results.length} {results.length === 1 ? 'match' : 'matches'}</th>
-            <th title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
-            <th data-drop="1" title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
-            <th data-drop="2" title="Average of recent WFM sales - list below it to sell faster">Avg</th>
-            <th title="Lowest current online sell listing">Low ask</th>
-            <th data-drop="2" title="Highest current online buy offer">Top buy</th>
-            <th data-drop="3" title="Trades completed in the last 48 hours">Vol 48h</th>
-            <th data-drop="1" title="Live buyers ÷ live sellers - > 1 means buyers outnumber sellers">Demand</th>
-            <th data-drop="2" title="Ducat value at Baro Ki’Teer">Ducats</th>
-            <th data-drop="1" class="ghost g1" title="How many you own - filled by the desktop scan">Own</th>
-            <th data-drop="1" class="ghost" title="Priority from price, likely sell-through, and bounded DE usage - filled by the desktop scan">Priority</th>
-            <th data-drop="1" class="ghost" title="Sellable copies × the 48 h average trade price - filled by the desktop scan">Stack value</th>
+            <th class="l">{t('market.matches', { count: results.length })}</th>
+            <th title={t('market.col.deltaHelp')}>{t(yearMode ? 'market.col.delta1y' : 'market.col.delta')}</th>
+            <th data-drop="1" title={t(yearMode ? 'market.col.trendYear' : 'market.col.trendWeek')}>{t('market.col.trend')}</th>
+            <th data-drop="2" title={t('market.col.avgSell')}>{t('market.col.avg')}</th>
+            <th title={t('market.col.lowAskHelp')}>{t('market.col.lowAsk')}</th>
+            <th data-drop="2" title={t('market.col.topBuyHelp')}>{t('market.col.topBuy')}</th>
+            <th data-drop="3" title={t('market.col.volHelp')}>{t('market.col.vol')}</th>
+            <th data-drop="1" title={t('market.col.demandHelp')}>{t('market.col.demand')}</th>
+            <th data-drop="2" title={t('market.col.ducatsHelp')}>{t('market.col.ducats')}</th>
+            <th data-drop="1" class="ghost g1" title={t('market.col.ownHelp')}>{t('market.col.own')}</th>
+            <th data-drop="1" class="ghost" title={t('market.col.priorityHelp')}>{t('market.col.priority')}</th>
+            <th data-drop="1" class="ghost" title={t('market.col.stackHelp')}>{t('market.col.stack')}</th>
           </tr></thead>
           <tbody>
             {#each results as r (r.slug)}
@@ -371,7 +373,7 @@
                 <td class="price">{@render price(r.avg)}</td>
                 <td>{plat(r.lowSell)}</td>
                 <td>{plat(r.topBuy)}</td>
-                <td>{r.vol.toLocaleString()}</td>
+                <td>{r.vol.toLocaleString(formatLocale())}</td>
                 <td>{ratioText(r.ratio)}</td>
                 <td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>
                 <td class="ghost g1">·</td>
@@ -384,15 +386,15 @@
         </div>
         <div class="line">
           {#if handoff}
-            <span class="exp">Own · Priority · Stack value fill in when the <a href="#desktop">desktop app</a> scans your inventory - free, Windows + Linux, no login.</span>
+            <span class="exp">{t('market.handoffBefore')}<a href="#desktop">{t('market.desktopApp')}</a>{t('market.handoffAfter')}</span>
             <span class="grow"></span>
-            <a href="#desktop">↓ see the completed row</a>
+            <a href="#desktop">{t('market.seeCompleted')}</a>
           {:else}
-            <span class="exp">Own · Priority · Stack value fill in once you scan your inventory (Refresh ▾ → Scan game).</span>
+            <span class="exp">{t('market.fillOnScan')}</span>
           {/if}
         </div>
       {:else}
-        <div class="line"><span class="exp">No priceable items match “{query.trim()}”.</span></div>
+        <div class="line"><span class="exp">{t('market.noMatch', { query: query.trim() })}</span></div>
       {/if}
     {/if}
   </section>
@@ -402,17 +404,17 @@
     <div class="wrap tw movers">
       <!-- Twin rails: each list is titled, so neither depends on the other's heading. -->
       <div class="rail">
-        <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">▲ Rising</h3>
-        <span class="exp">vs 90-day median · vol ≥ 20</span>
+        <h3 title={t('market.moversHelp')}>{t('market.rising')}</h3>
+        <span class="exp">{t('market.moversAbout')}</span>
       </div>
-      {@render miniTable(movers.risers, 'delta', false, 'No risers.', 'Rising prices table')}
+      {@render miniTable(movers.risers, 'delta', false, t('market.noRisers'), t('market.risingTable'))}
     </div>
     <div class="wrap tw movers">
       <div class="rail">
-        <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">▼ Falling</h3>
-        <span class="exp">vs 90-day median · vol ≥ 20</span>
+        <h3 title={t('market.moversHelp')}>{t('market.falling')}</h3>
+        <span class="exp">{t('market.moversAbout')}</span>
       </div>
-      {@render miniTable(movers.fallers, 'delta', false, 'No fallers.', 'Falling prices table')}
+      {@render miniTable(movers.fallers, 'delta', false, t('market.noFallers'), t('market.fallingTable'))}
     </div>
   </section>
 
@@ -420,40 +422,40 @@
   <section class="two-one">
     <div class="wrap tw vaulted">
       <div class="rail">
-        <h3>Vaulted &amp; valuable</h3>
-        <span class="exp">no longer drop, so supply is capped</span>
+        <h3>{t('market.vaultedTitle')}</h3>
+        <span class="exp">{t('market.vaultedAbout')}</span>
       </div>
-      {@render miniTable(vaulted, 'avg', true, 'No vault data in this snapshot.', 'Vaulted items table')}
-      <div class="line"><span class="exp">High-value vaulted items tend to hold or climb.</span></div>
+      {@render miniTable(vaulted, 'avg', true, t('market.noVault'), t('market.vaultedTable'))}
+      <div class="line"><span class="exp">{t('market.vaultedNote')}</span></div>
     </div>
     {#if baro && baroState}
       <div class="wrap tw baro">
         <div class="rail">
           <span class="glyph" aria-hidden="true">⌬</span>
-          <h3>Baro Ki'Teer</h3>
+          <h3>{t('baro.title')}</h3>
           <span class="exp">{baro.location}</span>
         </div>
         <div class="body">
           <div class="clock"><small>{baroState.label}</small>{humanWindow(baroState.windowMs)}</div>
           <p>
             {#if baroState.phase === 'here'}
-              At {baro.location} now.
+              {t('market.baroAt', { location: baro.location })}
             {:else if baroState.phase === 'incoming'}
-              Arrives at {baro.location}.
+              {t('market.baroArrives', { location: baro.location })}
             {:else}
-              Next visit at {baro.location}.
+              {t('market.baroNext', { location: baro.location })}
             {/if}
-            Schedule only - bring your own ducats. His mods dip ~50% on arrival day; the money is in holding for the recovery.
+            {t('market.baroAdvice')}
           </p>
         </div>
         {#if baroStock.length}
-          <div class="scroll" use:fitTable use:tableNavigation={'Baro stock table'}>
+          <div class="scroll" use:fitTable use:tableNavigation={t('market.baroTable')}>
           <table class="tw fixed baro-stock">
             <colgroup><col /><col style="width:4rem" /><col style="width:4.5rem" /></colgroup>
             <thead><tr>
-              <th class="l">{baroStockIsPast ? "Last visit's stock" : 'Stock'}</th>
-              <th title="Ducat price at Baro">Ducats</th>
-              <th title="Average of recent WFM sales">Avg now</th>
+              <th class="l">{t(baroStockIsPast ? 'market.lastStock' : 'market.stock')}</th>
+              <th title={t('market.ducatPrice')}>{t('market.col.ducats')}</th>
+              <th title={t('market.col.avgHelp')}>{t('market.avgNow')}</th>
             </tr></thead>
             <tbody>
               {#each baroStockAll ? baroStock : baroStock.slice(0, BARO_PREVIEW) as s (s.name)}
@@ -468,8 +470,8 @@
           </div>
         {/if}
         <div class="line">
-          {#if baroStock.length > BARO_PREVIEW}<button type="button" class="btn xs" aria-expanded={baroStockAll} onclick={() => (baroStockAll = !baroStockAll)}>{baroStockAll ? `Show top ${BARO_PREVIEW}` : `All ${baroStock.length} items`}</button>{/if}
-          {#if handoff}<a href="#desktop">Ducat math for what you own →</a>{/if}
+          {#if baroStock.length > BARO_PREVIEW}<button type="button" class="btn xs" aria-expanded={baroStockAll} onclick={() => (baroStockAll = !baroStockAll)}>{baroStockAll ? t('market.showTop', { count: BARO_PREVIEW }) : t('market.allItems', { count: baroStock.length })}</button>{/if}
+          {#if handoff}<a href="#desktop">{t('market.ducatMath')}</a>{/if}
         </div>
       </div>
     {/if}
@@ -484,10 +486,10 @@
   <!-- 5. MARKET CONTEXT: the slower signals behind prices, as two tabs of one
        panel rather than two long stacked tables. Each shows its top ten. -->
   {#if hasMeta || dispoChanges.length}
-    <section class="context" aria-label="Market context">
-      <div class="ui-segmented context-tabs" role="tablist" aria-label="Market context" tabindex="-1" onkeydown={onContextKey}>
-        {#each contextTabs as t (t.id)}
-          <button type="button" role="tab" id="ctx-tab-{t.id}" aria-controls="ctx-panel-{t.id}" aria-selected={shownTab === t.id} tabindex={shownTab === t.id ? 0 : -1} onclick={() => (contextTab = t.id)}>{t.label}{#if t.count != null} <span class="n">{t.count}</span>{/if}</button>
+    <section class="context" aria-label={t('market.context')}>
+      <div class="ui-segmented context-tabs" role="tablist" aria-label={t('market.context')} tabindex="-1" onkeydown={onContextKey}>
+        {#each contextTabs as tab (tab.id)}
+          <button type="button" role="tab" id="ctx-tab-{tab.id}" aria-controls="ctx-panel-{tab.id}" aria-selected={shownTab === tab.id} tabindex={shownTab === tab.id ? 0 : -1} onclick={() => (contextTab = tab.id)}>{tab.label}{#if tab.count != null} <span class="n">{tab.count}</span>{/if}</button>
         {/each}
       </div>
       {#if shownTab === 'meta'}
@@ -496,23 +498,23 @@
         <div role="tabpanel" id="ctx-panel-dispo" aria-labelledby="ctx-tab-dispo">
         <section class="wrap tw dispo" data-testid="dispo-changes">
           <div class="rail">
-            <h3>Riven disposition changes</h3>
-            <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
+            <h3>{t('market.dispoTitle')}</h3>
+            <span class="exp">{t('market.dispoAbout')}</span>
           </div>
-      <div class="scroll" use:fitTable use:tableNavigation={'Riven dispositions table'}>
+      <div class="scroll" use:fitTable use:tableNavigation={t('market.dispoTable')}>
       <table class="tw fixed dispo-table">
         <colgroup><col /><col style="width:8rem" /><col style="width:4rem" /><col style="width:5rem" /></colgroup>
         <thead><tr>
-          <th class="l">Weapon</th>
-          <th title="Disposition before → after">Disposition</th>
+          <th class="l">{t('market.col.weapon')}</th>
+          <th title={t('market.col.dispositionHelp')}>{t('market.col.disposition')}</th>
           <th>Δ</th>
-          <th title="When our scrape first saw the new value">Seen</th>
+          <th title={t('market.col.seenHelp')}>{t('market.col.seen')}</th>
         </tr></thead>
         <tbody>
           {#each dispoAll ? dispoChanges : dispoChanges.slice(0, CONTEXT_PREVIEW) as c (c.slug + c.seen_at)}
             <tr>
               <td class="l">{c.name}</td>
-              <td class:up={c.to > c.from} class:down={c.to < c.from} title={`Disposition ${c.from.toFixed(2)} → ${c.to.toFixed(2)}`}>{c.from.toFixed(2)} → <strong>{c.to.toFixed(2)}</strong></td>
+              <td class:up={c.to > c.from} class:down={c.to < c.from} title={t('market.dispoMove', { from: c.from.toFixed(2), to: c.to.toFixed(2) })}>{c.from.toFixed(2)} → <strong>{c.to.toFixed(2)}</strong></td>
               <td class:up={c.to > c.from} class:down={c.to < c.from}>{dispoDelta(c.from, c.to)}</td>
               <td>{seenDate(c.seen_at)}</td>
             </tr>
@@ -521,7 +523,7 @@
       </table>
       </div>
           {#if dispoChanges.length > CONTEXT_PREVIEW}
-            <div class="line"><span class="exp">{dispoAll ? `All ${dispoChanges.length}` : `Top ${CONTEXT_PREVIEW} of ${dispoChanges.length}`}</span><span class="grow"></span><button type="button" class="btn xs" aria-expanded={dispoAll} onclick={() => (dispoAll = !dispoAll)}>{dispoAll ? `Show top ${CONTEXT_PREVIEW}` : `Show all ${dispoChanges.length}`}</button></div>
+            <div class="line"><span class="exp">{dispoAll ? t('market.all', { count: dispoChanges.length }) : t('market.topOf', { shown: CONTEXT_PREVIEW, total: dispoChanges.length })}</span><span class="grow"></span><button type="button" class="btn xs" aria-expanded={dispoAll} onclick={() => (dispoAll = !dispoAll)}>{dispoAll ? t('market.showTop', { count: CONTEXT_PREVIEW }) : t('market.showAll', { count: dispoChanges.length })}</button></div>
           {/if}
         </section>
         </div>
@@ -538,7 +540,7 @@
     .two, .two-one { grid-template-columns: 1fr; }
   }
 
-  .lookup .bar .exp kbd {
+  .lookup .bar .exp :global(kbd) {
     font-family: var(--font-mono);
     font-size: var(--text-caption);
     border: 1px solid var(--border);

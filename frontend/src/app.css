@@ -304,6 +304,13 @@ input[type="checkbox"]:checked:disabled { background: var(--muted); border-color
 h1, h2, h3, h4, th, .nav-label, .clock-label,
 .summary .cell .k, .dis-label, .bar .lbl { font-family: var(--font-ui); }
 
+/* Scripts without capitals or word spacing. Tracking spreads Japanese and
+   Chinese apart and pulls Thai tone marks off their letters, so it is off in
+   those languages whatever a label's own rule sets; a slanted CJK glyph is a
+   synthetic oblique, so emphasis is weight there instead. */
+:is(:lang(ja), :lang(ko), :lang(zh), :lang(th)) { letter-spacing: normal !important; }
+:is(:lang(ja), :lang(ko), :lang(zh), :lang(th)) em { font-style: normal; font-weight: 600; }
+
 /* Encrypted-dialog chrome. Global, not per-component, because the same
  dialog.cryptobox shell renders from two components - ExportImportDialogs in
  every build, WfmAuthDialogs only under {#if isDesktop} - and Svelte scoping

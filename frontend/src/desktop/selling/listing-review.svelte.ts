@@ -44,6 +44,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import type { OwnOrder } from '../../contracts/generated/desktop';
 
 import type { DesktopServices } from '../../contracts/services';
+import { t } from '../../i18n/i18n.svelte';
   export interface ListingReviewInput {
     open: boolean;
     rows: InputRow[];
@@ -77,7 +78,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
   function start() { return marketAccess.start(); }
   let plan = $state<PlanRow[]>([]);
   let reviewBlockReason = $derived(input.listingBlockReason ?? (input.currentSnapshotId !== undefined && plan.some(row => row.inventory_snapshot_id !== input.currentSnapshotId)
-    ? 'Inventory changed. Close review and prepare a new batch; your current edits remain here until you close.' : null));
+    ? t('listing.inventoryChanged') : null));
   type Phase = 'review' | 'sending' | 'results' | 'error';
   let phase = $state<Phase>('review');
   let validatingSend = $state(false);
@@ -201,7 +202,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
         row.bulk = state.bulk_slugs.includes(row.slug);
       }
       sessionProblem = context && state.allowance.snapshot_id === context.snapshot_id && state.allowance.utc_day === context.utc_day
-        ? null : 'The inventory or allowance day changed. Close review and prepare a new batch.';
+        ? null : t('listing.dayChanged');
       await tick();
       return sessionProblem == null;
     } catch (e) { if (input.open && epoch === reviewEpoch) sessionProblem = humanError(e); return false; }
@@ -222,7 +223,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
         const prior = matches[0];
         if (prior && (typeof prior.id !== 'string' || typeof prior.visible !== 'boolean' || !Number.isSafeInteger(prior.platinum) || !Number.isSafeInteger(prior.quantity)
           || (prior.per_trade != null && (!Number.isSafeInteger(prior.per_trade) || prior.per_trade < 1 || prior.per_trade > MAX_PER_TRADE)))) {
-          throw new Error(`Existing order details are incomplete for ${row.name}.`);
+          throw new Error(t('listing.orderIncomplete', { item: row.name }));
         }
         const next: ReviewedOrder = prior ? { state: 'existing', id: prior.id, platinum: prior.platinum,
           quantity: prior.quantity, per_trade: prior.per_trade, visible: prior.visible as boolean } : { state: 'new' };
@@ -231,7 +232,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
       }
       ordersReady = true;
       if (confirm && changed) {
-        networkError = 'Existing orders changed. Review the updated before/after details, then confirm again. Your edits were kept.';
+        networkError = t('listing.ordersChanged');
         return false;
       }
       return true;
@@ -301,7 +302,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
       }
     }
     return [...used].some(([slug, count]) => !Number.isSafeInteger(count) || count > (limits.get(slug) ?? 0))
-      ? 'These edited quantities reuse components or exceed their available copies. Reduce a set or part quantity.' : null;
+      ? t('listing.componentsOver') : null;
   });
   let canSubmit = $derived(!reviewBlockReason &&
     !allocationProblem && selectedCount > 0 && selectedCount <= MAX_PLAN_ITEMS && plan.every(
@@ -331,7 +332,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
     validatingSend = true;
     try { if (hasSession && !await refreshReviewOrders(true)) return; } finally { validatingSend = false; }
     await tick();
-    if (!canSubmit) { networkError = 'Review quantities, units per trade, prices, and the remaining allowance before submitting.'; return; }
+    if (!canSubmit) { networkError = t('listing.reviewFirst'); return; }
     phase = 'sending';
     cancellationRequested = false;
     networkError = null;

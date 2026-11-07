@@ -4,7 +4,9 @@
   import { eventEnd, type CalendarEvent, type EventKind } from '../../domain/calendar-events';
   import EventDetail from './EventDetail.svelte';
   import { DAY, dayStart, utcDay, weekStart } from './time';
-  import { KIND_LABEL } from './kinds';
+  import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import { kindLabel } from './kinds';
+  import { wordsOf } from './wording';
 
   let { events, now, kinds, surface }: { events: CalendarEvent[]; now: number; kinds: EventKind[]; surface: 'desktop' | 'hosted' } = $props();
   const DAYS = 56;
@@ -16,7 +18,7 @@
   const months = $derived.by(() => {
     const spans: Array<{ label: string; first: number; span: number }> = [];
     days.forEach((d, i) => {
-      const label = new Date(d).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' });
+      const label = new Date(d).toLocaleDateString(formatLocale() ?? 'en-GB', { month: 'long', timeZone: 'UTC' });
       if (spans.at(-1)?.label === label) spans.at(-1)!.span++;
       else spans.push({ label, first: i, span: 1 });
     });
@@ -30,7 +32,7 @@
   const nowOffset = $derived((now - start) / DAY);
 </script>
 
-<section class="lanes-panel" aria-label="Next eight weeks by kind">
+<section class="lanes-panel" aria-label={t('cal.lanes')}>
   <div class="scroll">
     <div class="lanes" style:--days={DAYS} style:grid-template-rows="auto auto repeat({kinds.length}, auto)">
       <span class="corner" style:grid-row="1 / 3"></span>
@@ -40,7 +42,7 @@
         <span class="dn" class:weekend={wd === 0 || wd === 6} class:today={d === dayStart(now)} style:grid-column={i + 2} aria-hidden="true">{new Date(d).getUTCDate()}</span>
       {/each}
       {#each kinds as kind, r (kind)}
-        <span class="lab" data-kind={kind} style:grid-row={r + 3}><i></i>{KIND_LABEL[kind]}</span>
+        <span class="lab" data-kind={kind} style:grid-row={r + 3}><i></i>{kindLabel(kind)}</span>
         {#each days as d, i (d)}
           {@const wd = new Date(d).getUTCDay()}
           <span class="col" class:week-edge={wd === 1} class:weekend={wd === 0 || wd === 6} style:grid-row={r + 3} style:grid-column={i + 2}></span>
@@ -49,8 +51,8 @@
           {@const c = columns(event)}
           <button type="button" class={event.to === null ? 'pin' : 'run'} class:estimate={event.estimate} data-kind={event.kind}
             style:grid-row={r + 3} style:grid-column="{c.first + 2} / {c.last + 3}" aria-pressed={selected === event.id}
-            aria-label="{event.title}, {utcDay(event.from)}" title={event.title} onclick={() => { selected = selected === event.id ? null : event.id; }}>
-            {#if event.to !== null}{c.continued ? '◂ ' : ''}{event.short}{/if}
+            aria-label="{wordsOf(event).title}, {utcDay(event.from)}" title={wordsOf(event).title} onclick={() => { selected = selected === event.id ? null : event.id; }}>
+            {#if event.to !== null}{c.continued ? '◂ ' : ''}{wordsOf(event).short}{/if}
           </button>
         {/each}
       {/each}
@@ -59,10 +61,10 @@
   </div>
   <div class="chosen" aria-live="polite">
     {#if chosen}
-      <strong>{chosen.title}{#if chosen.estimate}<span class="tag">est.</span>{/if}</strong>
+      <strong>{wordsOf(chosen).title}{#if chosen.estimate}<span class="tag">{t('cal.est')}</span>{/if}</strong>
       <EventDetail event={chosen} {surface} />
     {:else}
-      <p class="hint">Choose a bar or a diamond for its dates and source. The ink line is now.</p>
+      <p class="hint">{t('cal.chooseBar')}</p>
     {/if}
   </div>
 </section>

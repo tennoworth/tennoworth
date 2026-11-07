@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../../i18n/i18n.svelte';
   import { useDesktopServices } from '../shell/desktop-context';
   const { listenForTauriEvent, currentOverlayResult } = useDesktopServices();
   import { onMount } from 'svelte';
@@ -38,7 +39,7 @@
     slot.livePlatinum ?? slot.cachedPlatinum;
 </script>
 
-<svelte:head><title>TennoWorth relic overlay</title></svelte:head>
+<svelte:head><title>{t('overlay.title')}</title></svelte:head>
 
 <div class="overlay" aria-live="polite">
   {#if result}
@@ -53,17 +54,17 @@
         style:--reward-scale={result.scale}
       >
         <div class="inner" style:transform={`scale(${result.scale})`}>
-          {#if slot.bestPlatinum}<span class="best-flag">BEST PLAT</span>{/if}
-          {#if slot.bestDucats && !slot.bestPlatinum}<span class="ducat-flag">BEST DUCATS</span>{/if}
+          {#if slot.bestPlatinum}<span class="best-flag">{t('overlay.bestPlat')}</span>{/if}
+          {#if slot.bestDucats && !slot.bestPlatinum}<span class="ducat-flag">{t('overlay.bestDucats')}</span>{/if}
           <strong class="name">{slot.name ?? slot.rawText}</strong>
           <div class="facts">
             <b class="plat">{price(slot) == null ? '-' : `${price(slot)}p`}</b>
             <span>{slot.ducats == null ? '-d' : `${slot.ducats}d`}</span>
-            <span>{slot.owned == null ? 'own -' : `own ${slot.owned}`}</span>
-            <span class="source">{slot.livePlatinum == null ? 'cached' : 'live'}</span>
+            <span>{slot.owned == null ? t('overlay.ownUnknown') : t('overlay.own', { count: slot.owned })}</span>
+            <span class="source">{t(slot.livePlatinum == null ? 'overlay.cached' : 'overlay.live')}</span>
           </div>
           {#if slot.confidence < RELIC_RECOMMENDATION_CONFIDENCE}
-            <span class="confidence">check name · {Math.round(slot.confidence * 100)}%</span>
+            <span class="confidence">{t('overlay.check', { pct: Math.round(slot.confidence * 100) })}</span>
           {/if}
         </div>
       </article>

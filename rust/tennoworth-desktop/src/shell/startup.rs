@@ -230,6 +230,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 overlay::OverlayState::new(&app.handle().clone(), &app.state::<Db>());
             app.manage(overlay_state);
             overlay::register_configured_shortcut(&app.handle().clone());
+            overlay::prepare_configured_language(&app.handle().clone());
             let in_game = crate::services::notifications::InGameDelivery::default();
             let notice_app = app.handle().clone();
             in_game.install(move |request| overlay::notice::deliver(&notice_app, request));

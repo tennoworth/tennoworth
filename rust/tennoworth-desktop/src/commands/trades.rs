@@ -110,6 +110,10 @@ pub struct EeLogStatus {
     /// reports is usually a database that refused a write, and a health flag
     /// stored there would answer with the health of the thing that just failed.
     pub recording: crate::services::game_log::recording::RecordingState,
+    /// The game's language as a warframe.market code, read from the head of
+    /// its log; null when the log is missing or names a language the reward
+    /// overlay cannot read.
+    pub game_language: Option<&'static str>,
 }
 
 #[tauri::command]
@@ -124,5 +128,10 @@ pub fn eelog_status(db: State<'_, Db>, ee: State<'_, EeLogState>) -> EeLogStatus
         path: ee.path.as_ref().map(|p| p.display().to_string()),
         auto_close,
         recording: ee.recording.state(),
+        game_language: ee
+            .path
+            .clone()
+            .or_else(crate::services::game_log::eelog::locate_log)
+            .and_then(|log| crate::overlay::language::game_language(&log)),
     }
 }

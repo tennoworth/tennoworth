@@ -433,7 +433,13 @@ export interface OverlaySettings {
   livePrices: boolean;
   showOwned: boolean;
   diagnostics: boolean;
+  /** `auto` follows the game's EE.log; otherwise a warframe.market language code. */
+  ocrLanguage: OverlayLanguage;
 }
+
+/** The reward-name languages the native overlay can read (`overlay/language.rs`). */
+export const OVERLAY_LANGUAGES = ['en', 'de', 'es', 'fr', 'it', 'ja', 'ko', 'pl', 'pt', 'ru', 'tr', 'uk', 'zh-hans', 'zh-hant'] as const;
+export type OverlayLanguage = 'auto' | (typeof OVERLAY_LANGUAGES)[number];
 
 export interface OverlayStageTimings {
   captureMs: number;
@@ -460,6 +466,10 @@ export interface OverlayStatus {
   presentationBackend: 'wayland-layer-shell' | 'tauri-window';
   placement: 'anchored' | 'side-panel';
   ocrReady: boolean;
+  /** The language reward names are being read in. */
+  ocrLanguage: string;
+  /** Why that is not the chosen language yet (model preparing, unsupported, failed). */
+  ocrLanguageNote?: string;
   lastRun?: OverlayLastRun;
   message?: string;
 }

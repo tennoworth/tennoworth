@@ -1,0 +1,44 @@
+name: Translation review
+description: Correct or confirm TennoWorth's text in your language.
+labels: [translation]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping. The guide, including how to edit the files directly, is in [docs/translating.md](https://github.com/tennoworth/tennoworth/blob/develop/docs/translating.md).
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - Deutsch (de)
+        - Español (es)
+        - Français (fr)
+        - Italiano (it)
+        - Português, Brazil (pt)
+        - Português, Portugal (pt-pt)
+        - Polski (pl)
+        - Русский (ru)
+        - Українська (uk)
+        - Türkçe (tr)
+        - 日本語 (ja)
+        - 한국어 (ko)
+        - 简体中文 (zh-hans)
+        - 繁體中文 (zh-hant)
+        - ไทย (th)
+    validations:
+      required: true
+  - type: textarea
+    id: corrections
+    attributes:
+      label: Corrections
+      description: The key or English text, what the app says now, and what it should say. "All good" for a section you checked is useful too.
+      placeholder: |
+        firstRun.scan - "Scanner l’Inventaire" should be "Analyser l’Inventaire"
+    validations:
+      required: true
+  - type: textarea
+    id: glossary
+    attributes:
+      label: Game terms
+      description: Optional. Words from the glossary that your game writes differently.

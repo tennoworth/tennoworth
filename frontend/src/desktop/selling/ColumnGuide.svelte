@@ -6,6 +6,8 @@
   // One shared explanation of the visible columns. It replaced a 14px "?" per
   // header that floated over the neighbouring column and could not share a
   // header with a real sort button.
+  import { t } from '../../i18n/i18n.svelte';
+
   let { entries }: { entries: GuideEntry[] } = $props();
 
   let dialog: HTMLDialogElement;
@@ -30,12 +32,12 @@
   }
 </script>
 
-<button type="button" class="btn" aria-haspopup="dialog" onclick={open}>Column guide</button>
+<button type="button" class="btn" aria-haspopup="dialog" onclick={open}>{t('table.guide')}</button>
 <dialog bind:this={dialog} class="cryptobox column-guide" aria-labelledby="column-guide-title" onkeydown={containFocus} onclose={restoreFocus}>
   <form method="dialog">
     <header>
-      <h3 id="column-guide-title">Column guide</h3>
-      <button class="btn">Close</button>
+      <h3 id="column-guide-title">{t('table.guide')}</h3>
+      <button class="btn">{t('table.guideClose')}</button>
     </header>
     <dl>
       {#each entries as entry (entry.key)}
@@ -45,9 +47,9 @@
             {entry.text}
             {#if entry.unit || entry.dir}
               <span class="meta">
-                {#if entry.unit}<span class="meta-key">unit</span> {entry.unit}{/if}
+                {#if entry.unit}<span class="meta-key">{t('table.guideUnit')}</span> {entry.unit}{/if}
                 {#if entry.unit && entry.dir} · {/if}
-                {#if entry.dir}<span class="meta-key">direction</span> {entry.dir}{/if}
+                {#if entry.dir}<span class="meta-key">{t('table.guideDirection')}</span> {entry.dir}{/if}
               </span>
             {/if}
           </dd>

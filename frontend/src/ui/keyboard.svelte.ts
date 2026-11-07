@@ -1,3 +1,4 @@
+import { t } from '../i18n/i18n.svelte';
 import type { SettingsStore } from '../contracts/state-store';
 
 type CharacterAction = 'search' | 'help';
@@ -134,11 +135,11 @@ export function matchesCharacter(event: KeyboardEvent, action: CharacterAction):
 let tableId = 0;
 export function tableNavigation(node: HTMLElement, label: string) {
   const id = `keyboard-table-end-${++tableId}`;
-  node.tabIndex = 0; node.setAttribute('role', 'region'); node.setAttribute('aria-label', `${label}; scroll for all columns`);
+  node.tabIndex = 0; node.setAttribute('role', 'region'); node.setAttribute('aria-label', t('ui.tableRegion', { table: label }));
   const skip = document.createElement('a');
-  skip.className = 'skip-navigation'; skip.href = `#${id}`; skip.textContent = `Skip ${label.toLocaleLowerCase()}`;
+  skip.className = 'skip-navigation'; skip.href = `#${id}`; skip.textContent = t('ui.skipTable', { table: label.toLocaleLowerCase() });
   const end = document.createElement('span');
-  end.id = id; end.tabIndex = -1; end.setAttribute('role', 'note'); end.setAttribute('aria-label', `End of ${label.toLocaleLowerCase()}`);
+  end.id = id; end.tabIndex = -1; end.setAttribute('role', 'note'); end.setAttribute('aria-label', t('ui.endOfTable', { table: label.toLocaleLowerCase() }));
   skip.onclick = event => { event.preventDefault(); end.focus(); };
   node.before(skip); node.after(end);
   return { destroy() { skip.remove(); end.remove(); } };

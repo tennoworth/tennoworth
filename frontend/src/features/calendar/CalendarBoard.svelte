@@ -2,8 +2,10 @@
   // What's next and how long until it, then tear-off tiles by week. The view
   // for a glance between missions.
   import { eventEnd, eventKey, type CalendarEvent } from '../../domain/calendar-events';
+  import { t } from '../../i18n/i18n.svelte';
   import EventDetail from './EventDetail.svelte';
-  import { DAY, countdown, utcDay, utcTime, weekStart } from './time';
+  import { DAY, countdown, utcDay, utcPart, utcTime, weekStart } from './time';
+  import { wordsOf } from './wording';
 
   let { events, now, surface }: { events: CalendarEvent[]; now: number; surface: 'desktop' | 'hosted' } = $props();
   let open = $state<string | null>(null);
@@ -14,7 +16,7 @@
   const nextAt = $derived(next ? eventKey(next, now) : 0);
   const columns = $derived.by(() => {
     const thisWeek = weekStart(now) + 7 * DAY;
-    const bounds: Array<[string, number, number]> = [['This week', now, thisWeek], ['Next week', thisWeek, thisWeek + 7 * DAY], ['Later', thisWeek + 7 * DAY, Infinity]];
+    const bounds: Array<[string, number, number]> = [[t('cal.thisWeek'), now, thisWeek], [t('cal.nextWeek'), thisWeek, thisWeek + 7 * DAY], [t('cal.later'), thisWeek + 7 * DAY, Infinity]];
     return bounds.map(([name, from, to]) => ({
       name,
       events: events.filter(e => eventEnd(e) >= now && eventKey(e, now) >= from && eventKey(e, now) < to).sort((a, b) => eventKey(a, now) - eventKey(b, now)),
@@ -23,15 +25,15 @@
 </script>
 
 <div class="board">
-  <section class="ui-panel next" aria-label="Next up">
-    <header><h3>Next up</h3>{#if next}<span>{next.from <= now ? 'Ends' : 'Starts'} {utcDay(nextAt)}, {utcTime(nextAt)} UTC</span>{/if}</header>
+  <section class="ui-panel next" aria-label={t('cal.nextUp')}>
+    <header><h3>{t('cal.nextUp')}</h3>{#if next}<span>{t(next.from <= now ? 'cal.ends' : 'cal.starts', { day: utcDay(nextAt), time: utcTime(nextAt) })}</span>{/if}</header>
     {#if next}
       <div class="next-body" data-kind={next.kind}>
-        <strong class="count"><span class="cap">{next.from <= now ? 'Ends in' : 'In'}</span>{countdown(nextAt - now)}</strong>
-        <div class="next-what"><strong>{next.title}</strong><span>{next.detail}</span></div>
+        <strong class="count"><span class="cap">{t(next.from <= now ? 'cal.endsIn' : 'cal.in')}</span>{countdown(nextAt - now)}</strong>
+        <div class="next-what"><strong>{wordsOf(next).title}</strong><span>{wordsOf(next).detail}</span></div>
       </div>
     {:else}
-      <p class="hint">Nothing confirmed is coming up in the market data yet.</p>
+      <p class="hint">{t('cal.nothingConfirmed')}</p>
     {/if}
   </section>
 
@@ -39,17 +41,17 @@
     {#each columns as column (column.name)}
       <section class="column" aria-label={column.name}>
         <h3 class="col-h">{column.name} <span>{column.events.length}</span></h3>
-        {#if !column.events.length}<p class="hint">Nothing scheduled.</p>{/if}
+        {#if !column.events.length}<p class="hint">{t('cal.nothing')}</p>{/if}
         {#each column.events as event (event.id)}
           {@const ongoing = event.from <= now}
           {@const date = eventKey(event, now)}
           <div class="tile" data-kind={event.kind} class:estimate={event.estimate}>
             <button type="button" class="tile-head" aria-expanded={open === event.id} onclick={() => { open = open === event.id ? null : event.id; }}>
-              <span class="date" aria-hidden="true"><span class="m">{ongoing ? 'until' : utcDay(date).split(' ')[2]}</span><b>{new Date(date).getUTCDate()}</b><span class="m">{utcDay(date).split(' ')[0]}</span></span>
+              <span class="date" aria-hidden="true"><span class="m">{ongoing ? t('cal.until') : utcPart(date, 'month')}</span><b>{new Date(date).getUTCDate()}</b><span class="m">{utcPart(date, 'weekday')}</span></span>
               <span class="what">
-                <strong>{event.title}{#if event.estimate}<span class="tag">est.</span>{/if}</strong>
-                <span class="meta">{ongoing ? `on now · ends ${utcDay(date)} ${utcTime(date)} UTC` : `${utcDay(date)}, ${utcTime(date)} UTC`}</span>
-                {#if surface === 'desktop' && event.affects?.length}<span class="held">You hold {event.affects.length} affected item{event.affects.length === 1 ? '' : 's'}</span>{/if}
+                <strong>{wordsOf(event).title}{#if event.estimate}<span class="tag">{t('cal.est')}</span>{/if}</strong>
+                <span class="meta">{t(ongoing ? 'cal.onNow' : 'cal.at', { day: utcDay(date), time: utcTime(date) })}</span>
+                {#if surface === 'desktop' && event.affects?.length}<span class="held">{t('cal.youHold', { count: event.affects.length })}</span>{/if}
               </span>
             </button>
             {#if open === event.id}<div class="tile-body"><EventDetail {event} {surface} /></div>{/if}

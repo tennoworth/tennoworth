@@ -10,6 +10,7 @@
  * The inputs are computed by the shell from its controllers; nothing here reads
  * state, so the rules can be pinned directly.
  */
+import { t } from '../../i18n/i18n.svelte';
 
 /** The protection view of the items this app can list. */
 export interface ProtectedView {
@@ -57,35 +58,40 @@ export function unknownSlugs(view: ProtectedView): Set<string> {
  */
 export function listingBlockReason(inputs: EligibilityInputs): string | null {
   if (!inputs.hasSnapshot) {
-    return 'Scan the game to verify this inventory before listing. Imported backups provide estimates only.';
+    return t('listing.block.noScan');
   }
   if (inputs.pullingInventory) {
-    return 'A scan is in progress. Your review edits are kept.';
+    return t('listing.block.scanning');
   }
   if (!inputs.allocationMatches || !inputs.hasProtection) {
-    return 'Inventory protection is unavailable. Recheck quantities before listing.';
+    return t('listing.block.noProtection');
   }
   if (inputs.protectionSnapshotId !== inputs.nativeSnapshotId) {
-    return 'The displayed inventory does not match the latest game scan. Scan again before listing.';
+    return t('listing.block.staleScan');
   }
   if (inputs.protectionError || unknownSlugs(inputs).size) {
-    return 'Protection quantities are unavailable for some items. Recheck before listing.';
+    return t('listing.block.someUnknown');
   }
   if (!inputs.wfmUnlocked) {
-    return 'Connect WFM to check current listings before posting.';
+    return t('listing.block.connect');
   }
   if (inputs.supportedSlugs.some(slug => inputs.availableQuantities[slug] == null)) {
-    return 'Current WFM listings could not be checked. Recheck before posting.';
+    return t('listing.block.unchecked');
   }
   return null;
 }
 
-/** What the listing button offers, which is also how the user clears the gate. */
+/** What the listing button does, which is also how the user clears the gate. */
+export type ListingAction = 'scan' | 'recheck' | 'listings';
+export function listingAction(inputs: EligibilityInputs): ListingAction {
+  if (!inputs.hasSnapshot) return 'scan';
+  if (!inputs.allocationMatches || !inputs.hasProtection) return 'recheck';
+  if (inputs.protectionSnapshotId !== inputs.nativeSnapshotId) return 'scan';
+  return inputs.protectionError || unknownSlugs(inputs).size ? 'recheck' : 'listings';
+}
+
+const ACTION_LABEL = { scan: 'listing.action.scan', recheck: 'listing.action.recheck', listings: 'sell.checkListings' } as const;
+
 export function listingActionLabel(inputs: EligibilityInputs): string {
-  if (!inputs.hasSnapshot) return 'Scan game';
-  if (!inputs.allocationMatches || !inputs.hasProtection) return 'Recheck protection';
-  if (inputs.protectionSnapshotId !== inputs.nativeSnapshotId) return 'Scan game';
-  return inputs.protectionError || unknownSlugs(inputs).size
-    ? 'Recheck protection'
-    : 'Check WFM listings';
+  return t(ACTION_LABEL[listingAction(inputs)]);
 }

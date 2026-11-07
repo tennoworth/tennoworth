@@ -15,17 +15,17 @@ const rotation = { from: '2026-10-01T18:00:00.000Z', to: '2026-10-29T18:00:00.00
 describe('calendarEvents', () => {
   it('marks Baro projections as estimates and keeps the confirmed visit', () => {
     const events = calendarEvents(market({ baro: { activation: '2026-10-16T13:00:00Z', expiry: '2026-10-18T13:00:00Z', location: 'Pluto Relay' } }), null, NOW);
-    expect(events.map(e => [e.short, e.estimate, new Date(e.from).toISOString()])).toEqual([
-      ['Baro · Pluto Relay', false, '2026-10-16T13:00:00.000Z'],
-      ['Baro (est.)', true, '2026-10-30T13:00:00.000Z'],
-      ['Baro (est.)', true, '2026-11-13T13:00:00.000Z'],
+    expect(events.map(e => [e.text, e.estimate, new Date(e.from).toISOString()])).toEqual([
+      [{ kind: 'baro', where: 'Pluto Relay' }, false, '2026-10-16T13:00:00.000Z'],
+      [{ kind: 'baro-estimate' }, true, '2026-10-30T13:00:00.000Z'],
+      [{ kind: 'baro-estimate' }, true, '2026-11-13T13:00:00.000Z'],
     ]);
   });
 
   it('lists a rotation once even when it is both current and in the history', () => {
     const events = calendarEvents(market({ calendar: { resurgence: [rotation], resurgence_current: rotation } }), null, NOW);
     expect(events).toHaveLength(1);
-    expect(events[0].title).toBe('Prime Resurgence: Protea Prime and Ivara Prime');
+    expect(events[0].text).toEqual({ kind: 'resurgence', names: ['Protea Prime', 'Ivara Prime'] });
     // Under way, so it is filed under the date it ends.
     expect(new Date(eventKey(events[0], NOW)).toISOString()).toBe('2026-10-29T18:00:00.000Z');
   });
@@ -47,7 +47,7 @@ describe('calendarEvents', () => {
       yareli_prime_set: { name: 'Yareli Prime', vaulted: false, est_vault_date: '2027-02-21' },
       acceltra_prime_set: { name: 'Acceltra Prime', vaulted: true, est_vault_date: '2026-11-01', vault_date: '2026-11-01' },
     } } }), null, NOW);
-    expect(events.map(e => [e.title, e.estimate, e.to])).toEqual([['Cedo Prime and Lavos Prime may be vaulted', true, null]]);
+    expect(events.map(e => [e.text, e.estimate, e.to])).toEqual([[{ kind: 'vault', names: ['Cedo Prime', 'Lavos Prime'] }, true, null]]);
   });
 
   it('includes curated notices with their source, and drops long-finished events', () => {
@@ -68,7 +68,7 @@ describe('calendarEvents', () => {
     const goal = (id: string, title: string, rewards: string[]) => ({ id, source: 'goal' as const, title, starts_at: '2026-10-07T16:00:00Z', ends_at: '2026-10-21T16:00:00Z', completeness: 'complete' as const,
       groups: [{ kind: 'final' as const, rewards: rewards.map(name => ({ unique: `/Lotus/${name}`, name, quantity: 1 })) }] });
     const events = calendarEvents(market({ event_rewards: { goals: { a: goal('a', 'Heat Fissure', ['Kuva', 'Ayatan Sculpture', 'Riven Mod', 'Forma']), b: goal('b', '', ['Kuva']) } } }), null, NOW);
-    expect(events.map(e => [e.kind, e.title, e.detail])).toEqual([['event', 'Heat Fissure', 'In-game event. Rewards include Kuva, Ayatan Sculpture and Riven Mod and more.']]);
+    expect(events.map(e => [e.kind, e.text])).toEqual([['event', { kind: 'event', title: 'Heat Fissure', rewards: ['Kuva', 'Ayatan Sculpture', 'Riven Mod', 'Forma'] }]]);
   });
 
   it('shows curated official dates with their source, as moments when they have no end', () => {
@@ -82,13 +82,15 @@ describe('calendarEvents', () => {
       ['official-devstream-200', 'official', true, 'official', 'https://forums.warframe.com/topic/devstream-200/'],
       ['official-update-41', 'official', false, 'official', 'https://www.warframe.com/news/update-41'],
     ]);
-    expect(events[0].detail).toMatch(/^DE presents what is coming next/);
-    expect(events[1].detail).toBe('Patch notes follow at release.');
+    expect(events.map(e => e.text)).toEqual([
+      { kind: 'official', title: 'Devstream 200', note: null, type: 'devstream' },
+      { kind: 'official', title: 'Update 41', note: 'Patch notes follow at release.', type: 'update' },
+    ]);
   });
 
   it('turns a live Darvo deal into a one-day event', () => {
     const [deal] = calendarEvents(market({ de: { deals: [{ item: 'Tenno Sword Shield', expiry: '2026-10-13T15:00:00Z', discount: 90, sale_price: 15 }] } }), null, NOW);
-    expect(deal.title).toBe('Darvo: Tenno Sword Shield (90% off, 15p)');
+    expect(deal.text).toEqual({ kind: 'deal', item: 'Tenno Sword Shield', discount: 90, price: 15 });
     expect(deal.to! - deal.from).toBe(86_400_000);
   });
 });

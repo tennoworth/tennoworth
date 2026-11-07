@@ -343,9 +343,11 @@
   .shell[data-sidebar="rail"] .nav-item[data-shell] { position: relative; justify-content: center; padding: var(--s1) 0; }
   .shell[data-sidebar="rail"] .nav-item .label[data-shell],
   .shell[data-sidebar="rail"] .sfoot .label[data-shell] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  /* A count rides the icon's corner; "here" and the countdown shrink to a mark. */
+  /* A count sits under its icon: on the icon's corner a three-digit count
+     ran over the icon's strokes. "Here" and the countdown shrink to a mark. */
+  .shell[data-sidebar="rail"] .nav-item[data-shell]:has(.badge:not(.when, .here)) { flex-direction: column; gap: 1px; }
   .shell[data-sidebar="rail"] .nav-item .badge[data-shell] {
-    position: absolute; top: 1px; right: 4px; padding: 0 2px; line-height: 1.2; font-size: 0.6875rem;
+    padding: 0 2px; line-height: 1.1; font-size: 0.6875rem; font-variant-numeric: tabular-nums;
   }
   .shell[data-sidebar="rail"] .nav-item .badge.when[data-shell] { display: none; }
   .shell[data-sidebar="rail"] .nav-item .badge.here[data-shell] { font-size: 0; width: 7px; height: 7px; padding: 0; top: 6px; right: 10px; background: var(--ducat); }
@@ -806,6 +808,7 @@
   .set-liq.cold[data-shell]   { color: var(--bad); }
   .reco-detail[data-shell] { font-size: var(--text-control); margin: 0; line-height: 1.5; }
   .reco-detail strong[data-shell] { color: var(--fg); font-weight: 600; }
+  .reco-detail b { color: var(--fg); font-weight: 600; }
   .good-text[data-shell] { color: var(--good); }
   .bad-text[data-shell] { color: var(--bad); }
 
@@ -956,6 +959,8 @@
   .faq details > p + p[data-shell] { margin-top: 8px; }
   .faq details > p code[data-shell],
   .faq details > p strong[data-shell] { color: var(--fg); }
+  /* Translated answers render their emphasis through Rich, without the shell marker. */
+  .faq details > p[data-shell] :is(b, code) { color: var(--fg); }
 
   .trust[data-shell] { scroll-margin-top: 16px; }
   .trust-lede[data-shell] {

@@ -1,5 +1,6 @@
 <script lang="ts">
-  let { text, label = 'Copy', name = `Copy command: ${text}` }: { text: string; label?: string; name?: string } = $props();
+  import { t } from '../i18n/i18n.svelte';
+  let { text, label, name }: { text: string; label?: string; name?: string } = $props();
 
   let copied = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -24,8 +25,8 @@
   }
 </script>
 
-<button class="copybtn" class:copied onclick={copy} aria-label={name}>
-  {copied ? 'Copied ✓' : label}
+<button class="copybtn" class:copied onclick={copy} aria-label={name ?? t('ui.copyCommand', { command: text })}>
+  {copied ? t('ui.copied') : label ?? t('ui.copy')}
 </button>
 
 <style>

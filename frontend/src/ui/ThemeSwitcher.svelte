@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../i18n/i18n.svelte';
+  import type { MessageKey } from '../i18n/en';
   // Light / Dark / System - the app's only theme control. (The four-look
   // picker went away in 2026-08: YoRHa is THE theme, so the choice is a mode.)
   // Reads and writes through the ThemeController from src/lib/theme.ts, which
@@ -18,7 +20,7 @@
     /** Accessible name for the group; distinguishes the two mounts. */
     label?: string;
   }
-  let { theme, compact = false, label = 'Colour mode' }: Props = $props();
+  let { theme, compact = false, label }: Props = $props();
 
   // Snapshot on init is intended: `theme` is a plain controller (not
   // reactive), and this component is the only writer while it is mounted.
@@ -34,10 +36,10 @@
     return () => mq.removeEventListener('change', onChange);
   });
 
-  const MODES: { id: ModePref; label: string }[] = [
-    { id: 'light', label: 'Light' },
-    { id: 'dark', label: 'Dark' },
-    { id: 'system', label: 'System' },
+  const MODES: { id: ModePref; label: MessageKey }[] = [
+    { id: 'light', label: 'ui.theme.light' },
+    { id: 'dark', label: 'ui.theme.dark' },
+    { id: 'system', label: 'ui.theme.system' },
   ];
 
   function pickMode(id: ModePref) {
@@ -47,7 +49,7 @@
 </script>
 
 <div class="theme-switcher" class:compact>
-  <div class="ui-segmented" class:xs={compact} role="radiogroup" aria-label={label}>
+  <div class="ui-segmented" class:xs={compact} role="radiogroup" aria-label={label ?? t('ui.colourMode')}>
     {#each MODES as m (m.id)}
       <button
         type="button"
@@ -63,7 +65,7 @@
           (event.currentTarget.parentElement?.querySelectorAll('button')[index] as HTMLButtonElement | undefined)?.focus();
         }}
         onclick={() => pickMode(m.id)}
-      >{m.label}</button>
+      >{t(m.label)}</button>
     {/each}
   </div>
   {#if !compact && modePref === 'system'}

@@ -1,6 +1,7 @@
 // Presentation helpers shared across the views. Everything here was written
 // out two or more times before it moved; this file is not a home for
 // one-line wrappers around a builtin.
+import { formatLocale, t } from '../i18n/i18n.svelte';
 
 /** Canonical warframe.market item page. Built by hand at four call sites,
  *  which is three chances to typo a URL nothing type-checks. */
@@ -30,9 +31,9 @@ export function humanWindow(ms: number | null | undefined): string {
   const d = Math.floor(totalMin / (60 * 24));
   const h = Math.floor((totalMin / 60) % 24);
   const m = totalMin % 60;
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  if (d > 0) return t('format.daysHours', { d, h });
+  if (h > 0) return t('format.hoursMinutes', { h, m });
+  return t('format.minutes', { m });
 }
 
 /** A local date and time as "Oct 28, 12:17 PM", with the year only when it is
@@ -43,7 +44,7 @@ export function shortStamp(at: Date | number | string, now: Date = new Date()): 
   const d = at instanceof Date ? at : new Date(at);
   if (Number.isNaN(d.getTime())) return '-';
   const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString(formatLocale(), { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), hour: '2-digit', minute: '2-digit' });
 }
 
 /** Platinum, rounded and thousands-separated by default; callers add units.
@@ -62,10 +63,11 @@ export function plat(
 }
 // toLocaleString with options builds a formatter per call; the market browser
 // formats thousands of prices on load.
-const platFormats = new Map<boolean, Intl.NumberFormat>();
+const platFormats = new Map<string, Intl.NumberFormat>();
 function platFormat(grouping: boolean): Intl.NumberFormat {
-  let format = platFormats.get(grouping);
-  if (!format) platFormats.set(grouping, format = new Intl.NumberFormat(undefined, { useGrouping: grouping }));
+  const key = `${formatLocale() ?? ''}|${grouping}`;
+  let format = platFormats.get(key);
+  if (!format) platFormats.set(key, format = new Intl.NumberFormat(formatLocale(), { useGrouping: grouping }));
   return format;
 }
 
@@ -88,22 +90,23 @@ export function ownedBreakdown(
   return { heldBack, leveledPart, keptPart: heldBack - leveledPart };
 }
 
-export const LEVELED_NOTE_TITLE =
-  "Leveled gear can't be traded in-game - only unranked copies can be sold.";
+export function leveledNoteTitle(): string {
+  return t('format.leveledNote');
+}
 
 export function keptNoteTitle(keptPart: number): string {
-  return `${keptPart} cop${keptPart === 1 ? 'y' : 'ies'} held back by the Keep copies reserve - not counted as sellable.`;
+  return t('format.keptNote', { count: keptPart });
 }
 
 
 /** "3d 12h" - foundry time in the units the game shows. */
 export function humanBuildTime(seconds: number): string {
-  if (seconds <= 0) return 'instant';
+  if (seconds <= 0) return t('format.instant');
   const hours = Math.round(seconds / 3600);
   const days = Math.floor(hours / 24);
   const rem = hours % 24;
-  if (days > 0) return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
-  return `${hours}h`;
+  if (days > 0) return rem > 0 ? t('format.daysHours', { d: days, h: rem }) : t('format.days', { d: days });
+  return t('format.hours', { h: hours });
 }
 
 /** Relative age that already reads as a time phrase ("3 d ago", "just now"),
@@ -115,10 +118,10 @@ export function ago(ts: string | number | null | undefined, now: number): string
   // Clamp at 0 - a cron runner with skewed clock can produce
   // `updated_at` in the future, which used to render "-120 min ago".
   const minutes = Math.max(0, Math.round((now - timestamp) / 60000));
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
-  return `${Math.round(minutes / 1440)} d ago`;
+  if (minutes < 1) return t('format.justNow');
+  if (minutes < 60) return t('format.minutesAgo', { n: minutes });
+  if (minutes < 60 * 24) return t('format.hoursAgo', { n: Math.round(minutes / 60) });
+  return t('format.daysAgo', { n: Math.round(minutes / 1440) });
 }
 
 // A healthy two-hour scrape is under three hours old; a five-hour-old book
@@ -138,7 +141,7 @@ export function marketFreshness(
 export function notificationDate(seconds: number, now: number) {
   const date = new Date(seconds * 1000);
   if (!Number.isFinite(date.getTime())) {
-    return { key: 'unknown', label: 'Unknown date', date: '', shortDate: '', time: 'Unknown time', iso: undefined };
+    return { key: 'unknown', label: t('format.unknownDate'), date: '', shortDate: '', time: t('format.unknownTime'), iso: undefined };
   }
   const key = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   const today = new Date(now);
@@ -147,10 +150,10 @@ export function notificationDate(seconds: number, now: number) {
   yesterday.setDate(yesterday.getDate() - 1);
   return {
     key: key(date),
-    label: key(date) === key(today) ? 'Today' : key(date) === key(yesterday) ? 'Yesterday' : date.toLocaleDateString(undefined, { weekday: 'long' }),
-    date: date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
-    shortDate: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-    time: date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
+    label: key(date) === key(today) ? t('format.today') : key(date) === key(yesterday) ? t('format.yesterday') : date.toLocaleDateString(formatLocale(), { weekday: 'long' }),
+    date: date.toLocaleDateString(formatLocale(), { year: 'numeric', month: 'long', day: 'numeric' }),
+    shortDate: date.toLocaleDateString(formatLocale(), { month: 'short', day: 'numeric' }),
+    time: date.toLocaleTimeString(formatLocale(), { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
     iso: date.toISOString(),
   };
 }

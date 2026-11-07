@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import type { UpdateNotesServices, UpdateNotesStatus } from '../../contracts/update';
+  import { t } from '../../i18n/i18n.svelte';
   let { services, ready = false, blocked = false, onautomatic }: {
     services: UpdateNotesServices; ready?: boolean; blocked?: boolean;
     /** Whether this launch's automatic notes are waiting, absent, or dismissed. */
@@ -22,9 +23,9 @@
   const ordinary = $derived(data?.changes.filter(change => change.kind !== 'action') ?? []);
   const visible = $derived(expanded ? ordinary : ordinary.slice(0, 6));
   const groups = $derived([
-    { name: 'Action needed', kind: 'action', changes: data?.changes.filter(change => change.kind === 'action') ?? [] },
-    { name: 'New & improved', kind: 'improved', changes: visible.filter(change => change.kind === 'improved') },
-    { name: 'Fixes', kind: 'fixed', changes: visible.filter(change => change.kind === 'fixed') },
+    { name: t('notes.action'), kind: 'action', changes: data?.changes.filter(change => change.kind === 'action') ?? [] },
+    { name: t('notes.improved'), kind: 'improved', changes: visible.filter(change => change.kind === 'improved') },
+    { name: t('notes.fixed'), kind: 'fixed', changes: visible.filter(change => change.kind === 'fixed') },
   ]);
   function unobstructed(manualRequest = false) {
     if (document.visibilityState !== 'visible' || (!manualRequest && !document.hasFocus())) return false;
@@ -58,7 +59,7 @@
       const value = await services.updateNotes();
       if (epoch !== loadEpoch || disposed) return;
       data = value; requested = true; await present();
-    } catch { if (epoch === loadEpoch && !disposed) error = 'Release notes could not be loaded. You can try again from Settings.'; }
+    } catch { if (epoch === loadEpoch && !disposed) error = t('notes.loadFailed'); }
   }
   async function saveAcknowledgement() {
     if (!data) return;
@@ -109,22 +110,22 @@
 
 {#if error || saveError}
   <div class="notes-feedback">
-    {#if error}<div class="ui-notice" role="status">{error} <button class="btn xs" onclick={open}>Retry</button></div>{/if}
-    {#if saveError}<div class="ui-notice" data-tone="warn" role="status">Could not remember that you read these notes. They may appear after restarting. <button class="btn xs" onclick={saveAcknowledgement}>Retry saving</button></div>{/if}
-    <button class="btn xs" onclick={() => { error = ''; saveError = false; }}>Dismiss notice</button>
+    {#if error}<div class="ui-notice" role="status">{error} <button class="btn xs" onclick={open}>{t('notes.retry')}</button></div>{/if}
+    {#if saveError}<div class="ui-notice" data-tone="warn" role="status">{t('notes.saveFailed')} <button class="btn xs" onclick={saveAcknowledgement}>{t('notes.retrySave')}</button></div>{/if}
+    <button class="btn xs" onclick={() => { error = ''; saveError = false; }}>{t('notes.dismiss')}</button>
   </div>
 {/if}
 <dialog bind:this={dialog} class="cryptobox update-notes" onkeydown={containFocus} aria-labelledby="update-notes-title" aria-describedby="update-notes-intro" oncancel={event => { event.preventDefault(); dismiss(); }}>
   {#if data}
     <header class="notes-header">
-      <div class="status-row"><span class="status-label" class:installed={!manual && !data.earlier_version_unknown}>{!manual && !data.earlier_version_unknown ? '✓ Update installed' : 'Installed version'}</span><button class="btn ghost close-notes" aria-label="Close what’s new" onclick={dismiss}>×</button></div>
-      <h2 id="update-notes-title" bind:this={title} tabindex="-1">What’s new</h2>
-      <p id="update-notes-intro">{data.previous_version ? 'Here’s what changed since you last updated.' : 'Here’s what changed in this version.'} {#if data.releases.length > 1}Changes from all {data.releases.length} releases are brought together below.{/if}</p>
-      <div class="version-strip"><span class="versions">{data.previous_version ? `v${data.previous_version} → v${data.current_version}` : `v${data.current_version}`}</span><span>{data.releases.length} {data.releases.length === 1 ? 'release' : 'releases'} included</span></div>
+      <div class="status-row"><span class="status-label" class:installed={!manual && !data.earlier_version_unknown}>{t(!manual && !data.earlier_version_unknown ? 'notes.installed' : 'notes.installedVersion')}</span><button class="btn ghost close-notes" aria-label={t('notes.close')} onclick={dismiss}>×</button></div>
+      <h2 id="update-notes-title" bind:this={title} tabindex="-1">{t('notes.title')}</h2>
+      <p id="update-notes-intro">{t(data.previous_version ? 'notes.sinceLast' : 'notes.thisVersion')} {#if data.releases.length > 1}{t('notes.combined', { count: data.releases.length })}{/if}</p>
+      <div class="version-strip"><span class="versions">{data.previous_version ? `v${data.previous_version} → v${data.current_version}` : `v${data.current_version}`}</span><span>{t('notes.releases', { count: data.releases.length })}</span></div>
     </header>
     <div class="notes-content">
-      {#if data.earlier_version_unknown}<p class="ui-notice">Your earlier app version wasn’t recorded. These notes cover the installed release.</p>{/if}
-      {#if data.partial_history}<p class="ui-notice" data-tone="warn">Some earlier release notes aren’t bundled with this version. <a href="https://github.com/tennoworth/tennoworth/releases" target="_blank" rel="noopener noreferrer">Read the full release history</a>.</p>{/if}
+      {#if data.earlier_version_unknown}<p class="ui-notice">{t('notes.unknownEarlier')}</p>{/if}
+      {#if data.partial_history}<p class="ui-notice" data-tone="warn">{t('notes.partial')} <a href="https://github.com/tennoworth/tennoworth/releases" target="_blank" rel="noopener noreferrer">{t('notes.history')}</a>.</p>{/if}
       {#each groups as group}
         {#if group.changes.length}
           <section class="change-group" class:action-needed={group.kind === 'action'}>
@@ -135,13 +136,13 @@
           </section>
         {/if}
       {/each}
-      {#if !data.changes.length}<p>No changes specific to your platform are listed for this release.</p>{/if}
-      {#if ordinary.length > 6}<button class="btn ghost show-all" onclick={() => expanded = !expanded}>{expanded ? 'Show highlights' : `Show all changes (${data.changes.length})`}</button>{/if}
-      <details class="history"><summary>See changes by version ({data.releases.length})</summary>
-        {#each data.releases as release (release.version)}<section class="release"><h3>v{release.version} <time datetime={release.date}>{release.date}</time></h3>{#if release.changes.length}<ul>{#each release.changes as change}<li><strong>{change.title}.</strong> {change.body}</li>{/each}</ul>{:else}<p>No changes specific to your platform.</p>{/if}</section>{/each}
+      {#if !data.changes.length}<p>{t('notes.noChanges')}</p>{/if}
+      {#if ordinary.length > 6}<button class="btn ghost show-all" onclick={() => expanded = !expanded}>{expanded ? t('notes.highlights') : t('notes.showAll', { count: data.changes.length })}</button>{/if}
+      <details class="history"><summary>{t('notes.byVersion', { count: data.releases.length })}</summary>
+        {#each data.releases as release (release.version)}<section class="release"><h3>v{release.version} <time datetime={release.date}>{release.date}</time></h3>{#if release.changes.length}<ul>{#each release.changes as change}<li><strong>{change.title}.</strong> {change.body}</li>{/each}</ul>{:else}<p>{t('notes.noPlatformChanges')}</p>{/if}</section>{/each}
       </details>
     </div>
-    <footer class="notes-footer"><p>You can read this again in<br><strong>Settings → Updates → What’s new.</strong></p><button class="btn primary" onclick={dismiss}>Got it</button></footer>
+    <footer class="notes-footer"><p>{t('notes.readAgain')}<br><strong>{t('notes.path')}</strong></p><button class="btn primary" onclick={dismiss}>{t('notes.gotIt')}</button></footer>
   {/if}
 </dialog>
 
