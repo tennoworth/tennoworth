@@ -9,6 +9,8 @@ import { pseudoLocalize } from './pseudo';
 
 export type AppLanguage = LanguageCode | 'pseudo';
 
+export const SIDE_WINDOW_LANGUAGE = 'tennoworth.app-language';
+
 const catalogs = import.meta.glob<string>('./locales/*.po', { query: '?raw', import: 'default' });
 
 class I18n {
@@ -32,6 +34,9 @@ class I18n {
     this.parsed.clear();
     this.messages = messages;
     this.language = language;
+    // The reward overlay and in-game notice windows may not read settings, so
+    // they read the language from here. Same origin, so the storage is shared.
+    try { localStorage.setItem(SIDE_WINDOW_LANGUAGE, language); } catch { /* storage blocked: those windows stay English */ }
   }
 
   t = (key: MessageKey, args: MessageArgs = {}): string => {

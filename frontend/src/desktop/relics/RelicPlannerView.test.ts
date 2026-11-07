@@ -42,7 +42,7 @@ describe('RelicPlannerView', () => {
     // A plain crack verdict has nothing to overrule.
     expect(screen.getAllByRole('button', { name: /anyway/ })).toHaveLength(1);
 
-    const overrule = screen.getByRole('button', { name: "I'll crack Meso O2 Relic anyway" });
+    const overrule = screen.getByRole('button', { name: /^I.ll crack Meso O2 Relic anyway$/ });
     overrule.focus();
     await fireEvent.click(overrule);
     // The same button now offers the way back, and keeps focus.

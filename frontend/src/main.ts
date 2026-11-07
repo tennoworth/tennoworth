@@ -44,7 +44,10 @@ const app = styleguideSurface && !overlaySurface && !noticeSurface
   : noticeSurface
   ? Promise.all([import('./desktop/notice/GameNoticeCard.svelte'), import('./adapters/services')]).then(([{ default: GameNoticeCard }, { createDesktopServices }]) => mount(GameNoticeCard, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
   : overlaySurface
-  ? Promise.all([import('./desktop/relics/RelicOverlay.svelte'), import('./adapters/services')]).then(([{ default: RelicOverlay }, { createDesktopServices }]) => mount(RelicOverlay, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
+  ? Promise.all([import('./desktop/relics/RelicOverlay.svelte'), import('./adapters/services'), import('./i18n/startup')]).then(async ([{ default: RelicOverlay }, { createDesktopServices }, { startSideWindowLanguage }]) => {
+      await startSideWindowLanguage();
+      return mount(RelicOverlay, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) });
+    })
   : store.hydrate().then(() => {
     // public/theme-boot.js already stamped the browser's stored theme before
     // first paint; this re-applies from the store (the desktop build keeps

@@ -8261,3 +8261,339 @@ msgstr ""
 msgctxt "offer.caveat.skewed"
 msgid "A few large sales pull the average ({avg}p) well above the median ({median}p) - read the median."
 msgstr ""
+
+#. Relic decision.
+#. Max 14 characters.
+msgctxt "relic.verdict.sell-intact"
+msgid "Sell intact"
+msgstr ""
+
+#. Relic decision.
+#. Max 14 characters.
+msgctxt "relic.verdict.refine"
+msgid "Refine"
+msgstr ""
+
+#. Relic decision.
+#. Max 14 characters.
+msgctxt "relic.verdict.crack"
+msgid "Crack intact"
+msgstr ""
+
+#. Relic decision: not enough data.
+#. Max 14 characters.
+msgctxt "relic.verdict.review"
+msgid "Review"
+msgstr ""
+
+#. Decision reason; rung is a refinement level.
+msgctxt "relic.why.refine"
+msgid "Refine to {rung}: {gain}p more for {traces} traces ({perTrace}p per trace)."
+msgstr ""
+
+#. Decision reason.
+msgctxt "relic.why.crack"
+msgid "Refining doesn’t clear {threshold}p per trace here."
+msgstr ""
+
+#. Decision reason.
+msgctxt "relic.why.sell-intact"
+msgid "The relic clears more intact than its contents."
+msgstr ""
+
+#. Decision reason. EV = expected value.
+msgctxt "relic.why.thin"
+msgid "None of its rewards are trading - treat the EV as a guess."
+msgstr ""
+
+#. Decision reason.
+msgctxt "relic.why.none"
+msgid "Not enough price data to judge."
+msgstr ""
+
+#. Refinement level, as in game; column header.
+#. Max 11 characters.
+msgctxt "relic.rung.intact"
+msgid "Intact"
+msgstr ""
+
+#. Refinement level, as in game; column header.
+#. Max 11 characters.
+msgctxt "relic.rung.exceptional"
+msgid "Exceptional"
+msgstr ""
+
+#. Refinement level, as in game; column header.
+#. Max 11 characters.
+msgctxt "relic.rung.flawless"
+msgid "Flawless"
+msgstr ""
+
+#. Refinement level, as in game; column header.
+#. Max 11 characters.
+msgctxt "relic.rung.radiant"
+msgid "Radiant"
+msgstr ""
+
+#. View heading and summary label.
+msgctxt "relic.title"
+msgid "Relics"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "relic.loading"
+msgid "Expected values are being calculated from your inventory and the current snapshot."
+msgstr ""
+
+#. Line under the heading.
+msgctxt "relic.failed"
+msgid "Expected values are unavailable until the calculation succeeds."
+msgstr ""
+
+#. Line under the heading.
+msgctxt "relic.lede"
+msgid "Ranked by expected plat per solo crack; the ladder shows what refining would add."
+msgstr ""
+
+#. Warning; age reads like "3d 4h".
+msgctxt "relic.dropAge"
+msgid "⚠ drop-table data {age}"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "relic.summary"
+msgid "Relics summary"
+msgstr ""
+
+#. Summary label and column header.
+#. Max 10 characters.
+msgctxt "relic.expected"
+msgid "Expected"
+msgstr ""
+
+#. Tooltip.
+msgctxt "relic.expectedHelp"
+msgid "Following each relic’s decision, or your own call where you chose to crack anyway: selling intact where that clears more, cracking the rest. Refining gains are not included; any single crack varies."
+msgstr ""
+
+#. Status.
+msgctxt "relic.calculating"
+msgid "Calculating relic values…"
+msgstr ""
+
+#. Error.
+msgctxt "relic.unavailable"
+msgid "Relic recommendations unavailable: {error}"
+msgstr ""
+
+#. Button.
+msgctxt "relic.retry"
+msgid "Retry calculations"
+msgstr ""
+
+#. Section heading.
+msgctxt "relic.decisions"
+msgid "Relic decisions"
+msgstr ""
+
+#. Count.
+msgctxt "relic.topOf"
+msgid "Top {shown} of {total}"
+msgstr ""
+
+#. Count.
+msgctxt "relic.count"
+msgid "{count, plural, one {# relic} other {# relics}}"
+msgstr ""
+
+#. After the count.
+msgctxt "relic.perCrack"
+msgid "expected platinum per solo crack"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "relic.col.relic"
+msgid "Relic"
+msgstr ""
+
+#. Column header: copies owned.
+#. Max 6 characters.
+msgctxt "relic.col.own"
+msgid "Own"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "relic.col.decision"
+msgid "Decision"
+msgstr ""
+
+#. Column header: price sold intact.
+#. Max 10 characters.
+msgctxt "relic.col.orSell"
+msgid "Or sell"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "relic.col.why"
+msgid "Why"
+msgstr ""
+
+#. Decision tag.
+#. Max 16 characters.
+msgctxt "relic.cracking"
+msgid "Cracking anyway"
+msgstr ""
+
+#. Screen reader name of the button.
+msgctxt "relic.follow"
+msgid "Follow the advice for {relic}: {verdict}"
+msgstr ""
+
+#. Screen reader name of the button.
+msgctxt "relic.crackName"
+msgid "I’ll crack {relic} anyway"
+msgstr ""
+
+#. Button: go back to the advice; verdict is lower case.
+msgctxt "relic.fine"
+msgid "Fine, {verdict}"
+msgstr ""
+
+#. Button.
+msgctxt "relic.crackAnyway"
+msgid "I’ll crack this one anyway"
+msgstr ""
+
+#. Tooltip.
+msgctxt "relic.rungHelp"
+msgid "{rung}: {ev}p expected, solo"
+msgstr ""
+
+#. Tooltip.
+msgctxt "relic.rungTraces"
+msgid "{rung}: {ev}p expected, solo · {traces} traces · {perTrace}p per trace"
+msgstr ""
+
+#. Tooltip.
+msgctxt "relic.sellAll"
+msgid "Selling all {count} intact at {price}p each."
+msgstr ""
+
+#. Tooltip.
+msgctxt "relic.crackAll"
+msgid "Expected value of cracking every one you own; any single crack varies."
+msgstr ""
+
+#. Tooltip.
+msgctxt "relic.orSellHelp"
+msgid "What this relic clears at sold intact on WFM, no cracking. When this beats the crack EV, selling wins."
+msgstr ""
+
+#. Unit after a price: platinum each.
+#. Max 5 characters.
+msgctxt "relic.each"
+msgid "p ea"
+msgstr ""
+
+#. Reason after the player overruled the advice.
+msgctxt "relic.yourCall"
+msgid "Your call: cracked intact instead. The advice was: {advice}"
+msgstr ""
+
+#. Rewards with recent trades.
+msgctxt "relic.moving"
+msgid "{moving}/{total} rewards moving."
+msgstr ""
+
+#. Disclosure.
+msgctxt "relic.topDrops"
+msgid "Top drops"
+msgstr ""
+
+#. Rarity initial: Common.
+#. Max 1 characters.
+msgctxt "relic.rarity.common"
+msgid "C"
+msgstr ""
+
+#. Rarity initial: Uncommon.
+#. Max 1 characters.
+msgctxt "relic.rarity.uncommon"
+msgid "U"
+msgstr ""
+
+#. Rarity initial: Rare.
+#. Max 1 characters.
+msgctxt "relic.rarity.rare"
+msgid "R"
+msgstr ""
+
+#. Button.
+msgctxt "relic.showFewer"
+msgid "Show fewer"
+msgstr ""
+
+#. Button.
+msgctxt "relic.showMore"
+msgid "Show {count} more"
+msgstr ""
+
+#. Empty state.
+msgctxt "relic.empty"
+msgid "No relics in your inventory."
+msgstr ""
+
+#. Empty state.
+msgctxt "relic.emptyHelp"
+msgid "Once you pick up relics, this planner ranks them by expected plat per crack."
+msgstr ""
+
+#. Window title.
+msgctxt "overlay.title"
+msgid "TennoWorth relic overlay"
+msgstr ""
+
+#. Flag on a reward card. Upper case if your script has it.
+#. Max 10 characters.
+msgctxt "overlay.bestPlat"
+msgid "BEST PLAT"
+msgstr ""
+
+#. Flag on a reward card.
+#. Max 12 characters.
+msgctxt "overlay.bestDucats"
+msgid "BEST DUCATS"
+msgstr ""
+
+#. Copies owned.
+#. Max 8 characters.
+msgctxt "overlay.own"
+msgid "own {count}"
+msgstr ""
+
+#. Copies owned unknown.
+#. Max 8 characters.
+msgctxt "overlay.ownUnknown"
+msgid "own -"
+msgstr ""
+
+#. Price source.
+#. Max 7 characters.
+msgctxt "overlay.cached"
+msgid "cached"
+msgstr ""
+
+#. Price source.
+#. Max 7 characters.
+msgctxt "overlay.live"
+msgid "live"
+msgstr ""
+
+#. Low recognition confidence.
+#. Max 18 characters.
+msgctxt "overlay.check"
+msgid "check name · {pct}%"
+msgstr ""
