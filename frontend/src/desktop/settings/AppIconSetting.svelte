@@ -62,6 +62,8 @@
   .option.selected input[type="radio"] { border-color: var(--on-ink); }
   .option.selected input[type="radio"]:checked::before { background: var(--on-ink); }
   .option.selected input[type="radio"]:focus-visible { outline-color: var(--on-ink); }
+  /* WebKitGTK draws no ring on these restyled radios, so the card shows it. */
+  .option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
   img { flex: 0 0 auto; width: 4.5rem; height: 2.25rem; border: 1px solid var(--hairline); }
   .text { display: flex; flex: 1 1 8rem; flex-direction: column; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
   .name { font: 600 var(--text-control)/var(--leading-control) var(--font-ui); }

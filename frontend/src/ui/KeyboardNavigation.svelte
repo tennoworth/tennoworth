@@ -179,7 +179,9 @@
       <label class="enable-shortcuts"><input type="checkbox" bind:checked={keyboard.enabled} onchange={() => save()} /> Enable single-character shortcuts</label>
       <button class="btn" onclick={reset}>Reset shortcut choices</button>
       {#if recording}<p role="status">Type the character to use{recording === 'navigation' ? `; ${keyboard.modifier} is added automatically` : ''}. Escape cancels; Tab moves on.</p>{/if}
-      {#if error}<div class="ui-notice" data-tone="warn" role="alert">{error} {#if saveFailed}<button class="btn" onclick={save}>Retry saving</button>{/if}</div>{/if}
+      <!-- The live region stays mounted so a conflict typed while recording is
+           announced; a region inserted with its text is often missed. -->
+      <div role="alert">{#if error}<div class="ui-notice" data-tone="warn">{error} {#if saveFailed}<button class="btn" onclick={save}>Retry saving</button>{/if}</div>{/if}</div>
     {/if}
   </div>
 </dialog>

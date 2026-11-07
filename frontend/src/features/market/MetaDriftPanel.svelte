@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { roving } from '../../ui/keyboard-actions';
   import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
   import Select from '../../ui/Select.svelte';
@@ -42,7 +43,7 @@
     {#if model.categoryChanges}<span class="muted"> {model.categoryChanges} category {model.categoryChanges === 1 ? 'change was' : 'changes were'} incomparable and excluded.</span>{/if}
   </div>
   <div class="controls">
-    <div class="ui-field"><span>Movement</span><div class="ui-segmented" role="group" aria-label="Movement">
+    <div class="ui-field"><span>Movement</span><div class="ui-segmented" role="group" aria-label="Movement" use:roving>
       <button type="button" aria-pressed={tab === 'gains'} onclick={() => tab = 'gains'}>Gains</button>
       <button type="button" aria-pressed={tab === 'losses'} onclick={() => tab = 'losses'}>Losses</button>
       <button type="button" aria-pressed={tab === 'only'} onclick={() => tab = 'only'}>Only in year data</button>

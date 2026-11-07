@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { roving } from '../../ui/keyboard-actions';
   import { fitNote, fitStep, fitTable, hidesAt, MAX_DROP_RANK, paneWidth as watchPaneWidth } from '../../ui/table-fit';
   import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import DemandCell from './DemandCell.svelte';
@@ -751,7 +752,7 @@
       </div>
     {/if}
     {#if display}
-      <div class="ui-segmented density-seg" role="group" aria-label="Item lists">
+      <div class="ui-segmented density-seg" role="group" aria-label="Item lists" use:roving>
         <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')} title="Item pictures: Warframe Wiki · © Digital Extremes">Visual</button>
         <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>Compact</button>
       </div>
@@ -832,7 +833,7 @@
           disabled={currentPage >= maxPage}
         >Next ›</button>
         <span class="pager-spacer"></span>
-        <div class="ui-segmented pagesize-seg" role="group" aria-label="Rows per page">
+        <div class="ui-segmented pagesize-seg" role="group" aria-label="Rows per page" use:roving>
           {#each [20, 40, 60, 80, 100] as n}
             <button
               type="button"

@@ -232,8 +232,10 @@ import { DesktopCmdError } from '../../contracts/errors';
     </p>
     <label>
       Confirm passphrase
-      <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12" />
-      <span class="muted">Forgot it? No problem - just log in again and set a new one. Your WFM account is never locked out.</span>
+      <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12"
+        aria-describedby="wfm-confirm-hint{wfmAuthError ? ' wfm-login-error' : ''}"
+        aria-invalid={wfmAuthError === "Passphrases don't match." ? 'true' : undefined} />
+      <span class="muted" id="wfm-confirm-hint">Forgot it? No problem - just log in again and set a new one. Your WFM account is never locked out.</span>
     </label>
     <label class="remember">
       <input type="checkbox" bind:checked={wfmRemember} />
@@ -255,7 +257,7 @@ import { DesktopCmdError } from '../../contracts/errors';
       </p>
     {/if}
     {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">
+      <div class="err" id="wfm-login-error" role="alert" data-testid="wfm-auth-error">
         {wfmAuthError}
         {#if wfmAuthReportable && onreport}
           <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>Report a bug</button> if this keeps happening.</p>
@@ -291,6 +293,8 @@ import { DesktopCmdError } from '../../contracts/errors';
         type="password"
         autocomplete="current-password"
         data-testid="wfm-unlock-pass"
+        aria-describedby={wfmAuthError ? 'wfm-unlock-error' : undefined}
+        aria-invalid={wfmAuthError ? 'true' : undefined}
         bind:value={wfmUnlockPassphrase}
         required
         bind:this={wfmUnlockPassInput}
@@ -309,7 +313,7 @@ import { DesktopCmdError } from '../../contracts/errors';
       </p>
     {/if}
     {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">
+      <div class="err" id="wfm-unlock-error" role="alert" data-testid="wfm-auth-error">
         {wfmAuthError}
         {#if wfmAuthReportable && onreport}
           <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>Report a bug</button> if this keeps happening.</p>

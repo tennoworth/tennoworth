@@ -1,7 +1,7 @@
 <script lang="ts">
   import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
-  import { busy as waiting, focusLater } from '../../ui/keyboard-actions';
+  import { busy as waiting, focusLater, roving } from '../../ui/keyboard-actions';
   import { onDestroy, untrack, type Snippet } from 'svelte';
   import type { ActivityLog } from '../shell/activity.svelte';
   import { useDesktopServices } from '../shell/desktop-context';
@@ -133,7 +133,7 @@
     <div class="line bad">Live check failed: {controller.liveTop.error}</div>
   {/if}
   <div class="bar order-filters">
-    <span class="ui-segmented" role="group" aria-label="Show">
+    <span class="ui-segmented" role="group" aria-label="Show" use:roving>
       <button type="button" aria-pressed={controller.show === 'all'} onclick={() => (controller.show = 'all')}>All <span class="n">{controller.counts.all}</span></button>
       <button type="button" aria-pressed={controller.show === 'sell'} onclick={() => (controller.show = 'sell')}>Sell <span class="n">{controller.counts.sell}</span></button>
       <button type="button" aria-pressed={controller.show === 'buy'} onclick={() => (controller.show = 'buy')}>Buy <span class="n">{controller.counts.buy}</span></button>
