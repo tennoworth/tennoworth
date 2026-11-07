@@ -7,20 +7,48 @@
   import { orderUnitPrice } from '../../domain/order-prices';
   import { MAX_PLATINUM } from '../../domain/limits';
   import DialogHeader from '../../ui/DialogHeader.svelte';
+  import { busy, focusLater, focusView } from '../../ui/keyboard-actions';
   let { open = $bindable(false), rows, transport, onauthrequired, onclose, onsent, onvisible, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId, sessionEpoch = 0 }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
 
   const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get onsent() { return onsent; }, get onvisible() { return onvisible; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
   onMount(() => controller.start());
+  // Escape after editing asks first: many people press it to leave one field,
+  // and it used to throw every price and quantity away.
+  let edited = $state(false);
+  let confirmDiscard = $state(false);
+  let dialogNode = $state<HTMLElement>();
+  $effect(() => { if (!open) { edited = false; confirmDiscard = false; } });
+  function escape() {
+    if (controller.phase === 'review' && edited && !confirmDiscard) {
+      confirmDiscard = true;
+      focusLater(() => dialogNode?.querySelector<HTMLElement>('.discard .keep'));
+      return;
+    }
+    if (confirmDiscard) { keepEditing(); return; }
+    controller.close();
+  }
+  function keepEditing() { confirmDiscard = false; focusLater(() => dialogNode?.querySelector<HTMLElement>('input.price:not(:disabled)')); }
+  // Each phase replaces the controls; focus moves to what the phase is about,
+  // so the outcome of a send is read out and the next Tab is in the dialog.
+  let shownPhase = '';
+  $effect(() => {
+    const phase = controller.phase;
+    if (!open || phase === shownPhase) return;
+    shownPhase = phase;
+    if (phase === 'sending') focusLater(() => dialogNode?.querySelector<HTMLElement>('.stop-sending'));
+    else if (phase === 'results' || phase === 'error') focusLater(() => dialogNode?.querySelector<HTMLElement>('.outcome'));
+  });
   onDestroy(() => controller.dispose());
   function reviewFocus(node: HTMLElement) {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let mounted = true;
     const controls = () => [...node.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]')]
       .filter(el => !el.matches(':disabled, [tabindex="-1"]') && el.getClientRects().length > 0);
-    queueMicrotask(() => { if (mounted) controls()[0]?.focus(); });
+    // Prices are what a review is for, so it opens on the first one.
+    queueMicrotask(() => { if (mounted) (node.querySelector<HTMLElement>('input.price:not(:disabled)') ?? controls()[0])?.focus(); });
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); controller.close(); }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); escape(); }
       if (event.key !== 'Tab') return;
       const available = controls();
       const first = available[0];
@@ -37,13 +65,22 @@
       document.removeEventListener('keydown', onKey);
       // An authentication dialog may have taken focus during the review handoff.
       if (previous?.isConnected && (node.contains(document.activeElement) || document.activeElement === document.body)) previous.focus();
+      // A pick's List button becomes its receipt once listed; focus goes to
+      // that row's receipt (Make visible, My orders) instead of the page.
+      else if (previous?.dataset.pick && (node.contains(document.activeElement) || document.activeElement === document.body)) {
+        const key = previous.dataset.pick;
+        requestAnimationFrame(() => {
+          const receipt = [...document.querySelectorAll<HTMLElement>('[data-pick]')].find((el) => el.dataset.pick === key);
+          if (receipt) receipt.focus(); else focusView();
+        });
+      }
     } };
   }
 
 </script>
 
 {#if open}
-  <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title" use:reviewFocus>
+  <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title" use:reviewFocus bind:this={dialogNode}>
     <div class="modal" class:session={controller.hasSession}>
       <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={controller.close} />
 
@@ -73,19 +110,20 @@
             <p class="ui-notice" data-tone="warn">A selected quantity exceeds the confirmed sellable count. Your edits are retained; reduce the quantity or scan again.</p>
           {/if}
           {#if controller.networkError}<p class="ui-notice" data-tone="warn" role="alert">{controller.networkError}</p>{/if}
-          <button class="btn ghost" onclick={() => controller.refreshReviewOrders(false)} disabled={controller.ordersBusy}>
+          <button class="btn ghost" onclick={() => controller.refreshReviewOrders(false)} use:busy={controller.ordersBusy}>
             {controller.ordersBusy ? 'Checking existing orders…' : 'Refresh existing orders'}
           </button>
         {/if}
 
         <div class="bulkrow">
-          <button class="btn ghost" onclick={() => controller.setAll(true)}>Select all</button>
-          <button class="btn ghost" onclick={() => controller.setAll(false)}>Deselect all</button>
+          <button class="btn ghost" onclick={() => { edited = true; controller.setAll(true); }}>Select all</button>
+          <button class="btn ghost" onclick={() => { edited = true; controller.setAll(false); }}>Deselect all</button>
           <span class="spacer"></span>
           <button
             class="btn ghost live-btn"
             onclick={controller.checkLivePrices}
-            disabled={controller.liveTop.phase === 'running' || controller.selectedCount === 0}
+            disabled={controller.selectedCount === 0}
+            use:busy={controller.liveTop.phase === 'running'}
             title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
           >
             {#if controller.liveTop.phase === 'running'}
@@ -104,11 +142,11 @@
           {/if}
         </div>
 
-        <div class="scroll" use:fitTable>
+        <div class="scroll" use:fitTable oninput={() => (edited = true)} onchange={() => (edited = true)}>
           <table>
             <thead>
               <tr>
-                <th></th>
+                <th><span class="visually-hidden">Include</span></th>
                 <th>Item</th>
                 <th>Qty</th>
                 {#if controller.hasSession}<th>Units / trade</th><th>Existing → proposed</th>{/if}
@@ -125,11 +163,12 @@
                 {@const t = controller.liveFor(row)}
                 {@const v = controller.liveVerdict(row)}
                 <tr class:dim={!row.include}>
-                  <td><input type="checkbox" bind:checked={controller.plan[i].include} /></td>
+                  <td><input type="checkbox" aria-label={`Include ${row.name}`} bind:checked={controller.plan[i].include} /></td>
                   <td>{row.name}</td>
                   <td>
                     <input
                       type="number"
+                      aria-label={`Quantity for ${row.name}`}
                       min="1"
                       max={row.sellable}
                       bind:value={controller.plan[i].quantity}
@@ -162,11 +201,14 @@
                   <td>
                     <input
                       type="number"
+                      class="price"
+                      aria-label={`Price for ${row.name}, platinum`}
                       min="5"
                       max={MAX_PLATINUM}
                       bind:value={controller.plan[i].platinum}
                       disabled={!row.include}
                       class:off={row.include && controller.priceOff(row)}
+                      aria-invalid={row.include && controller.priceOff(row) ? 'true' : undefined}
                       title={row.include && controller.priceOff(row) ? `More than 30% off the 48h average (${row.avg.toFixed(0)}p) - double-check before sending` : undefined}
                     />
                   </td>
@@ -183,15 +225,16 @@
                       {:else}<span class="muted" title="No online sellers right now">no ask</span>{/if}
                       <span class="muted"> / </span>
                       {#if t.top_buy != null}
-                        <span title={`Online bids: ${t.buys.join(', ')}p`}>{t.top_buy}p</span>
+                        <span title={`Online bids: ${t.buys.join(', ')}p`}>{t.top_buy}p<span class="visually-hidden"> top bid; online bids {t.buys.join(', ')}p</span></span>
                       {:else}<span class="muted" title="No online buyers right now">no bid</span>{/if}
-                      {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask - it won't be the first to sell.">▲</span>{/if}
-                      {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price - you'd be leaving plat on the table.">▼</span>{/if}
+                      {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask - it won't be the first to sell.">▲<span class="visually-hidden"> Your price is above the lowest online ask.</span></span>{/if}
+                      {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price - you'd be leaving plat on the table.">▼<span class="visually-hidden"> A live buyer bids more than your price.</span></span>{/if}
                     {/if}
                   </td>
                   <td>
                     <input
                       type="number"
+                      aria-label={`Rank for ${row.name}`}
                       min="0"
                       max="10"
                       class="rank"
@@ -207,6 +250,13 @@
         </div>
 
         {#if controller.marketAccess.message}<p class="ui-notice" data-tone="warn" role="status">{controller.marketAccess.message}</p>{/if}
+        {#if confirmDiscard}
+          <div class="ui-notice discard" data-tone="warn" role="alertdialog" aria-labelledby="rm-discard">
+            <span id="rm-discard">Discard your changes to this review?</span>
+            <button class="btn keep" onclick={keepEditing}>Keep editing</button>
+            <button class="btn" onclick={controller.close}>Discard</button>
+          </div>
+        {/if}
         <footer>
           <div class="totals">
             <span><strong>{controller.selectedCount}</strong> items</span>
@@ -228,12 +278,12 @@
         </p>
 <div class="spinner">{controller.cancellationRequested ? 'Finishing the current request; unsent listings will stay saved.' : controller.marketAccess.message ?? 'Sending…'}</div>
         {#if controller.networkError}<p class="ui-notice" data-tone="bad">{controller.networkError}</p>{/if}
-        <button class="btn" onclick={controller.stopSending} disabled={controller.cancellationRequested}>Stop after current request</button>
+        <button class="btn stop-sending" onclick={controller.stopSending} use:busy={controller.cancellationRequested}>Stop after current request</button>
       {:else if controller.phase === 'results'}
         {#if controller.durabilityError}
           <p class="ui-notice" data-tone="bad" role="alert">{controller.durabilityError}</p>
         {/if}
-        <p class="lead">
+        <p class="lead outcome" tabindex="-1">
           {controller.durabilityError ? 'Batch results need attention.' : controller.pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{controller.okCount} created</span>{#if controller.updatedCount > 0}{' · '}<span class="ok">{controller.updatedCount} updated</span>{/if}{#if controller.errCount > 0}{' · '}<span class="bad">{controller.errCount} failed</span>{/if}{#if controller.pendingCount > 0}{' · '}<span class="warn">{controller.pendingCount} saved for resume</span>{/if}.
           {#if controller.visibilityDone}
             Listings are <strong>visible</strong> - buyers can see them now.
@@ -272,7 +322,7 @@
           <div></div>
           <div class="actions">
             {#if controller.okCount > 0 && !controller.visibilityDone}
-              <button class="btn primary" onclick={controller.makeAllVisible} disabled={controller.visibilityBusy}>
+              <button class="btn primary" onclick={controller.makeAllVisible} use:busy={controller.visibilityBusy}>
                 {controller.visibilityBusy ? 'Making visible…' : `Make ${controller.okCount} visible`}
               </button>
             {/if}
@@ -280,7 +330,7 @@
           </div>
         </footer>
       {:else if controller.phase === 'error'}
-        <p class="lead bad">{controller.networkError}</p>
+        <p class="lead bad outcome" tabindex="-1" role="alert">{controller.networkError}</p>
         <footer>
           <div></div>
           <div class="actions">
@@ -327,6 +377,9 @@
     max-width: 80ch;
   }
   .lead.bad { color: var(--bad); }
+  .outcome:focus { outline: none; }
+  .discard { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+  .discard > span { flex: 1 1 14rem; }
   .lead strong { color: var(--fg); }
   .bulkrow {
     display: flex;

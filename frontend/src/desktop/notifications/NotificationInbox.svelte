@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { busy as pending, focusLater } from '../../ui/keyboard-actions';
   import { useDesktopServices } from '../shell/desktop-context';
   const { desktopNotifications, desktopReadNotifications, desktopClearNotifications, listenForTauriEvent } = useDesktopServices();
   import { onMount } from 'svelte';
@@ -52,6 +53,7 @@
     try { await fn(); await load(); } catch (e) { error = humanError(e); }
     finally { busy = false; }
   }
+  function cancelClear() { confirmClear = false; focusLater(() => document.querySelector<HTMLElement>('.clear-history')); }
   async function open(entry: NotificationEntry) {
     await action(() => desktopReadNotifications(entry.id));
     onopen(entry.target);
@@ -64,19 +66,21 @@
 <section class="ui-panel ui-stack inbox" aria-label="Notification history" aria-busy={loading || busy}>
   <div class="ui-toolbar inbox-controls">
     <div class="ui-toolbar"><button class="btn" onclick={onsettings}>Notification settings</button>
-    <button class="btn" disabled={busy || !entries.some(n => !n.read)} onclick={() => action(() => desktopReadNotifications())}>Mark all read</button>
-    <button class="btn" disabled={busy || !entries.length} onclick={() => confirmClear = true}>Clear history</button></div>
+    <button class="btn" disabled={!entries.some(n => !n.read)} use:pending={busy} onclick={() => action(() => desktopReadNotifications())}>Mark all read</button>
+    <button class="btn clear-history" disabled={!entries.length} use:pending={busy} onclick={() => { confirmClear = true; focusLater(() => document.querySelector<HTMLElement>('.clear-confirm .keep')); }}>Clear history</button></div>
     <label><input type="checkbox" bind:checked={unreadOnly} onchange={() => (page = 0)} /> Unread only</label>
     <span class="history-count">{unread} unread · {entries.length} {entries.length === 1 ? 'notification' : 'notifications'}</span>
   </div>
   {#if confirmClear}
-    <div class="ui-notice ui-toolbar" data-tone="warn">
-      <span>Clear notification history? Your trade ledger and reminders are kept.</span>
-      <button class="btn bad" disabled={busy} onclick={() => action(async () => { await desktopClearNotifications(); confirmClear = false; })}>Clear notifications</button>
-      <button class="btn" disabled={busy} onclick={() => confirmClear = false}>Cancel</button>
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions (Escape backs out of the confirmation.) -->
+    <div class="ui-notice ui-toolbar clear-confirm" data-tone="warn" role="group" aria-labelledby="clear-question"
+      onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelClear(); } }}>
+      <span id="clear-question">Clear notification history? Your trade ledger and reminders are kept.</span>
+      <button class="btn bad" use:pending={busy} onclick={() => action(async () => { await desktopClearNotifications(); confirmClear = false; focusLater(() => document.querySelector<HTMLElement>('.inbox-controls .btn')); })}>Clear notifications</button>
+      <button class="btn keep" use:pending={busy} onclick={cancelClear}>Cancel</button>
     </div>
   {/if}
-  {#if error}<div class="ui-notice" data-tone="bad" role="alert">{error} <button class="btn xs" disabled={busy} onclick={load}>Retry</button></div>{/if}
+  {#if error}<div class="ui-notice" data-tone="bad" role="alert">{error} <button class="btn xs" use:pending={busy} onclick={load}>Retry</button></div>{/if}
   {#if loading}<p role="status">Loading notifications…</p>
   {:else if !visible.length && !error}<p>{unreadOnly ? 'You’re all caught up.' : 'No notifications yet. Trades, price watches, and timely reminders will appear here.'}</p>
   {:else}

@@ -38,6 +38,8 @@ export type SettingKey =
   | 'keyboard'
   /** How item lists draw: 'visual' (item art, roomier rows) or 'compact'. */
   | 'display'
+  /** Desktop sidebar (JSON: width in px, collapsed to the icon rail). */
+  | 'sidebar'
   | 'relic-crack-anyway';
 
 

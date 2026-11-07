@@ -29,7 +29,11 @@ for (const theme of ['light', 'dark'] as const) {
       await dialog.locator('.scroll').evaluate(el => { el.scrollLeft = el.scrollWidth; });
       await page.screenshot({ path: info.outputPath(`review-${theme}-${width}.png`) });
     }
+    // Escape after an edit asks first and keeps the edit until Discard.
     await page.keyboard.press('Escape');
+    await expect(dialog.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+    await expect(price).toHaveValue('99');
+    await dialog.getByRole('button', { name: 'Discard', exact: true }).click();
     await expect(dialog).not.toBeVisible();
     for (const [width, height] of [[1440, 900], [768, 600], [320, 480]]) {
       await page.setViewportSize({ width, height });

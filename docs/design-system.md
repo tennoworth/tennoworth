@@ -163,9 +163,12 @@ Refresh menu repeats the scan name. The last step stops wrapping and lets the
 status note and the activity message end in an ellipsis, with the full text in
 the tree; when even that would clip (enlarged text), the strip wraps instead.
 This is the one intentional exception to strips growing vertically.
-The desktop window's minimum width is 960px, where the strip's fullest state
-still fits; the narrow stacked strip remains for the hosted preview and
-small browser windows. A cell never shrinks below its content and paints over
+The desktop window's minimum width is 1200px: the widest view, Sell, fits
+beside the full sidebar from 1360px and beside the icon rail from 1200px,
+and every other view fits beside the full sidebar at 1200px. The workspace
+never scrolls sideways; a table that still cannot fit scrolls inside its own
+box. The strip's fullest state fits from 960px, and the narrow stacked strip
+remains for the hosted preview and small browser windows. A cell never shrinks below its content and paints over
 its neighbour. Orders to
 fix and Baro's countdown are sidebar badges beside the views they open; the
 strip keeps them only on the first-run landing, which has no sidebar. The
@@ -188,6 +191,15 @@ details stay available. Its expanded listing review scrolls as a whole in short 
 while keeping a usable table region; before/after order details must not collapse
 the editable rows. The keyboard boundary also handles focus moving to the document
 when a focused refresh button temporarily disables itself.
+Above 900px the sidebar's right edge is a separator: drag it to set the width
+(176-320px), or drag it under 128px to collapse it to the icon rail
+(`--sidebar-rail`). With the keyboard, ← and → resize it, Home and End jump
+to the narrowest and widest, and Enter collapses or expands; Space does not,
+so tabbing past never collapses it. A double-click or the foot's rail button
+toggles it too. The width and the collapsed state persist (`sidebar` setting).
+On the rail each view keeps its icon (`NavIcon`) and its badge; its name is
+the button's accessible name and shows in a tooltip on hover or focus. The
+handle follows the view list in Tab order.
 Below 900px the sidebar foot (project links, feedback and the build label)
 follows the workspace instead of preceding it, and at phone width the brand
 heading is visually hidden, so a short window reaches its first decision.
@@ -222,10 +234,12 @@ starts with Skip to current view. Long market tables offer a focus-only Skip
 link and a named, keyboard-scrollable region. These links appear above chrome
 only while focused, using the standard panel, border and focus tokens.
 
-Keyboard shortcuts opens a native dialog from the hosted footer or desktop
-sidebar footer, alongside the project utilities (also available in the header
-before the first scan). The workspace uses one quiet, unboxed help row;
-shortcut utilities never precede or push down the view navigation. Select
+Keyboard shortcuts opens a native dialog from the hosted footer. On the
+desktop the key legend under the view (Key legend) carries Search, Go to and
+Shortcuts as buttons, so the sidebar foot shows the Keyboard shortcuts row
+only below 900px, where the legend is hidden, and on the first-run screen
+in the header. Shortcut utilities never precede or push down the view
+navigation. Select
 Keyboard navigation in the living reference’s Data state control. Search defaults to `/`, help to
 `?`: these match the typed character on the active layout, including Shift and
 AltGr, rather than assuming US punctuation positions. Each can be recorded
@@ -239,18 +253,49 @@ Desktop help includes Go to a view; Ctrl+K opens the same picker directly.
 The shortcut uses Ctrl (Command on Apple browsers) and the locally labelled
 KeyK position when a layout map is available, or the letter K otherwise. Its character can also be recorded in help when automatic
 labels are unavailable or a different binding is preferred. The picker lists the currently available sidebar views;
-arrow keys choose, Enter opens and Escape restores focus. F6 / Shift+F6 cycle
-between the status strip, sidebar and workspace. Keyboard activation of a view
-focuses its heading without resetting retained search, drafts or scroll.
+arrow keys choose, Enter opens and Escape restores focus. It opens on the
+current view and also lists the Settings sections by name and by what they
+hold (theme, popups, overlay), so a setting is two keys away. F6 / Shift+F6
+cycle between the status strip, the sidebar's views (landing on the current
+one), the sidebar foot, a price-watch hit while one shows, and the workspace.
+Keyboard activation of a view, or of any button that switches views (My
+orders →, a banner's link), focuses the new view's heading without resetting
+retained search, drafts or scroll; when the view kept its scroll and the
+heading is out of sight, the first control in sight takes focus instead.
 Keyboard-opened disclosure menus focus their first usable choice; Escape keeps
 the owning menu's existing close-and-return behavior.
 
-Shortcuts leave text fields, selects, editable content, composition, open dialogs
-and expanded popovers alone. They are confined to the focused main window;
+Shortcuts leave text fields, selects, editable content, composition and modal
+dialogs alone; checkboxes, radios and drawn selects do not block them. A
+popover or non-modal dialog blocks them only while it holds focus, and closes
+when focus leaves it and its trigger (`closeOnFocusOut`). Escape in a search
+field empties it first; a second Escape belongs to whatever owns the field. They are confined to the focused main window;
 they never register game-global keys or bypass listing review. Help and the
 picker scroll as whole dialogs in short windows, contain focus and restore it
 when dismissed. Character choices remain reachable by visible controls even
 when single-character shortcuts are disabled.
+
+Focus is never dropped to the page. Shared behaviours in
+[keyboard-actions.ts](../frontend/src/ui/keyboard-actions.ts) keep it in place:
+
+- A control whose own action is running uses `use:busy` (aria-disabled,
+  activation swallowed, text fields read-only) instead of `disabled`, which
+  moves focus to the document in WebView2. `disabled` stays for states that
+  last, such as a paused list after a failed refresh.
+- An action that removes the control it was pressed on moves focus to its
+  replacement (Hide → Undo, Edit → the price field, Remove → the next row's
+  Remove) or to the view, never nowhere (`focusLater`, `focusView`).
+- A row of choice buttons is one Tab stop (`use:roving`): arrows and
+  Home/End move focus without pressing, Enter or Space chooses. Radios that
+  change something outside the app, such as the warframe.market status, move
+  the same way and send only on Enter, Space or a click.
+- A destructive one-key action asks inline first, with focus on the safe
+  choice and Escape backing out: Clear saved scan, Clear history, Remove a
+  watch, Delete an order. Escape in an edited listing review asks before
+  discarding the edits.
+- A text suggestion list is a combobox: the field keeps focus, arrows move
+  `aria-activedescendant`, Enter picks, Escape closes the list.
+- A date grid is one Tab stop moved with the arrows (Calendar).
 
 ## Continuity and waiting
 
@@ -426,7 +471,7 @@ aligned. The hosted site has no setting and draws no pictures.
 
 ### Fitting tables
 
-Every table fits the pane it sits in, from the 960px desktop minimum and from
+Every table fits the pane it sits in, from 960px on the desktop and from
 320px on the hosted site, in the same steps. `use:fitTable`
 ([table-fit.ts](../frontend/src/ui/table-fit.ts)) on the table's `.scroll` box
 measures and sets `data-fit`; shared rules in `app.css` do the rest.
@@ -468,9 +513,11 @@ ink pair on hover, matching the selected state.
 The desktop workspace ends in one sticky line listing the keys that work on
 the view on screen: the search key where the view has a search field, the view
 picker, F6 and help. It reads the user's own bindings and omits character keys
-when they are disabled. It is decorative to assistive technology (Keyboard
-shortcuts is the accessible reference), reserves scroll padding so focus is
-never hidden under it, and is hidden below 900px wide or 480px tall.
+when they are disabled. Search, Go to and Shortcuts are buttons that do what
+their keys do, for anyone who cannot or would rather not press the keys; F6
+stays text. The line is a labelled footer, reserves scroll padding so focus is
+never hidden under it, and is hidden below 900px wide or 420px tall, where the
+sidebar foot's Keyboard shortcuts row takes over.
 
 Dense tables scroll often, so in `table.tw` the dotted row rule is a
 1px-on/1px-off background tile on each cell instead of a dotted border; it

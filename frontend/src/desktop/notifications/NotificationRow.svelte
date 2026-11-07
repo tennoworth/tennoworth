@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { busy as pending, focusLater } from '../../ui/keyboard-actions';
   import type { NotificationEntry } from '../../contracts/desktop';
   import { notificationDate, plat, baroLocation } from '../../ui/format';
   import { announcementSource } from '../../domain/announcements';
@@ -68,8 +69,13 @@
   {#if entry.delivery === 'failed'}<p class="ui-notice" data-tone="warn">Desktop popup could not be delivered. This notification is saved here.</p>{/if}
   {#if entry.delivery === 'pending'}<p class="evidence">Desktop delivery was not confirmed. This notification is saved here.</p>{/if}
   <div class="ui-toolbar entry-actions">
-    <button class="btn" disabled={busy} onclick={onopen}>{targets[entry.target]}</button>
-    {#if !entry.read}<button class="btn ghost" disabled={busy} onclick={onread}>Mark read</button>{/if}
+    <button class="btn" use:pending={busy} onclick={onopen}>{targets[entry.target]}</button>
+    {#if !entry.read}<button class="btn ghost" use:pending={busy} onclick={() => {
+      // The button goes once the entry is read; its row's open action keeps focus.
+      const row = document.activeElement?.closest('li');
+      onread();
+      focusLater(() => row?.querySelector<HTMLElement>('.btn'));
+    }}>Mark read</button>{/if}
   </div>
 </article>
 

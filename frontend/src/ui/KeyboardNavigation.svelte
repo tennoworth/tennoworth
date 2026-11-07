@@ -1,36 +1,34 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import type { SettingsStore } from '../contracts/state-store';
   import DialogHeader from './DialogHeader.svelte';
-  import { characterKey, keyboard, matchesCharacter, readKeyboardPreferences, saveKeyboardPreferences, shortcutBlocked, visible, watchKeyboardLayout } from './keyboard.svelte';
+  import { focusView } from './keyboard-actions';
+  import { characterKey, keyboard, keyboardRequest, type KeyboardDestination, matchesCharacter, readKeyboardPreferences, saveKeyboardPreferences, shortcutBlocked, visible, watchKeyboardLayout } from './keyboard.svelte';
 
-  let { desktop = false, compact = false, store }: { desktop?: boolean; compact?: boolean; store?: SettingsStore } = $props();
+  let { desktop = false, compact = false, store, extra = [] }: { desktop?: boolean; compact?: boolean; store?: SettingsStore; extra?: KeyboardDestination[] } = $props();
   let dialog: HTMLDialogElement;
   let mode = $state<'help' | 'navigate'>('help');
   let query = $state('');
   let recording = $state<'search' | 'help' | 'navigation' | null>(null);
   let error = $state('');
   let saveFailed = $state(false);
-  let destinations = $state<{ label: string; element: HTMLButtonElement }[]>([]);
+  let destinations = $state<{ label: string; keywords: string; element?: HTMLButtonElement; run?: () => void }[]>([]);
   let selected = $state(0);
   let previous: HTMLElement | null = null;
   let filterInput = $state<HTMLInputElement>();
-  const matches = $derived(destinations.filter(item => item.label.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
+  const matches = $derived(destinations.filter(item => `${item.label} ${item.keywords}`.toLocaleLowerCase().includes(query.toLocaleLowerCase())));
 
-  function focusView() {
-    const main = document.querySelector<HTMLElement>('main.workspace, main.landing');
-    if (!main) return;
-    const heading = [...main.querySelectorAll<HTMLElement>('h2')].find(visible);
-    const target = heading ?? main;
-    target.tabIndex = -1;
-    target.focus({ preventScroll: true });
-  }
   async function open(next: 'help' | 'navigate') {
     if ([...document.querySelectorAll('dialog[open], [aria-modal="true"]')].some(visible)) return;
     previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     mode = next; query = ''; selected = 0; recording = null; error = '';
-    destinations = [...document.querySelectorAll<HTMLButtonElement>('.sidebar .nav-item')].filter(visible)
-      .map(element => ({ label: element.querySelector('span')?.textContent?.trim() ?? element.textContent?.trim() ?? '', element }));
+    const views = [...document.querySelectorAll<HTMLButtonElement>('.sidebar .nav-item')].filter(visible);
+    destinations = [
+      ...views.map(element => ({ label: (element.querySelector('.label') ?? element.querySelector('span'))?.textContent?.trim() ?? element.textContent?.trim() ?? '', keywords: '', element })),
+      ...extra.map(item => ({ label: item.label, keywords: item.keywords ?? '', run: item.run })),
+    ];
+    // Start on the view on screen, so arrows browse from where the user is.
+    selected = Math.max(0, views.findIndex(element => element.getAttribute('aria-current') === 'page'));
     await tick(); dialog.showModal();
     if (next === 'navigate') filterInput?.focus();
   }
@@ -48,7 +46,9 @@
   async function go(index: number) {
     const destination = matches[index];
     if (!destination) return;
-    previous = null; close(); destination.element.click();
+    previous = null; close();
+    if (destination.run) { destination.run(); return; }
+    destination.element?.click();
     await tick(); focusView();
   }
   async function save() {
@@ -86,23 +86,37 @@
     }
   }
   function cycleRegion(backwards: boolean) {
-    const regions = ['.statusbar', '.sidebar nav', 'main.workspace, main.landing'].map(selector => document.querySelector<HTMLElement>(selector)).filter((element): element is HTMLElement => !!element && visible(element));
+    // Notices (a fresh price-watch hit) sit above the view's heading, and the
+    // sidebar foot follows the view in source; both are their own stops.
+    // The sidebar foot follows the views it sits under, so the view still
+    // hands F6 straight back to the status strip.
+    const regions = ['.statusbar', '.sidebar nav', '.sfoot', '[data-region="notices"]', 'main.workspace, main.landing'].map(selector => document.querySelector<HTMLElement>(selector)).filter((element): element is HTMLElement => !!element && visible(element));
     const current = regions.findIndex(region => region.contains(document.activeElement));
     const next = regions[current < 0 ? backwards ? regions.length - 1 : 0 : (current + (backwards ? -1 : 1) + regions.length) % regions.length];
     if (!next) return;
     if (next.tagName === 'MAIN') focusView();
     else {
-      const control = [...next.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')].find(visible);
+      const control = next.querySelector<HTMLElement>('[aria-current="page"]') ?? [...next.querySelectorAll<HTMLElement>('button:not(:disabled), a[href]')].find(visible);
       if (control) control.focus();
       else { next.tabIndex = -1; next.focus(); }
     }
   }
+  // The key legend's buttons ask through shared state; only requests made
+  // after this instance mounted count.
+  let seenRequest = keyboardRequest.count;
+  $effect(() => {
+    const count = keyboardRequest.count;
+    if (count === untrack(() => seenRequest)) return;
+    seenRequest = count;
+    void open(keyboardRequest.mode === 'navigate' && desktop ? 'navigate' : 'help');
+  });
   onMount(() => {
     readKeyboardPreferences(store);
     const stop = watchKeyboardLayout();
     const handler = (event: KeyboardEvent) => {
-      if (shortcutBlocked(event)) return;
-      if (matchesCharacter(event, 'help')) { event.preventDefault(); void open('help'); }
+      const chord = event.key === 'F6' || event.ctrlKey || event.metaKey;
+      if (shortcutBlocked(event, chord)) return;
+      if (!chord && matchesCharacter(event, 'help')) { event.preventDefault(); void open('help'); }
       else if (desktop && event.key === 'F6' && !event.altKey && !event.ctrlKey && !event.metaKey) { event.preventDefault(); cycleRegion(event.shiftKey); }
       else if (desktop && !event.altKey && (keyboard.navigation !== null || !event.shiftKey) && !event.getModifierState('AltGraph') && (keyboard.modifier === 'Command' ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) && (keyboard.navigation !== null ? event.key.toLocaleLowerCase() === keyboard.navigation.toLocaleLowerCase() : keyboard.layoutAvailable ? event.code === 'KeyK' : event.key.toLowerCase() === 'k')) {
         event.preventDefault(); void open('navigate');
@@ -111,11 +125,15 @@
     const navigation = async (event: MouseEvent) => {
       if (event.detail !== 0 || !(event.target instanceof HTMLElement)) return;
       const target = event.target;
-      const view = target.closest('.sidebar .nav-item');
+      // Any button that changes the view (Review My Orders, the Ducats preset,
+      // a banner's link) lands on the new view's heading, as the sidebar does.
+      const shownView = () => document.querySelector('.sidebar [aria-current="page"]');
+      const before = shownView();
+      const view = target.closest('.sidebar .nav-item, [data-opens-view]');
       const disclosure = target.closest<HTMLElement>('[aria-expanded][aria-controls]');
       const anchor = target.closest<HTMLAnchorElement>('a[href^="#"]');
       await tick();
-      if (view) focusView();
+      if (view || shownView() !== before) focusView();
       else if (disclosure?.getAttribute('aria-expanded') === 'true') {
         const popover = document.getElementById(disclosure.getAttribute('aria-controls') ?? '');
         const controls = [...popover?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]') ?? []].filter(visible);
@@ -154,6 +172,8 @@
       {#if desktop}
         <div class="shortcut-row"><span>Find a view</span><kbd>{keyboard.modifier}+{keyboard.navigation ?? keyboard.commandKey}</kbd><button class="btn" onclick={() => { recording = 'navigation'; error = ''; saveFailed = false; }}>{recording === 'navigation' ? 'Type a character…' : 'Change view key'}</button></div>
         <div class="shortcut-row"><span>Next / previous region</span><span><kbd>F6</kbd> / <kbd>Shift+F6</kbd></span></div>
+        <div class="shortcut-row"><span>Resize the sidebar, from its edge after the views</span><span><kbd>←</kbd> / <kbd>→</kbd></span></div>
+        <div class="shortcut-row"><span>Collapse or expand the sidebar, from its edge</span><kbd>Enter</kbd></div>
       {/if}
       <div class="shortcut-row"><span>Next / previous control</span><span><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></span></div>
       <div class="shortcut-row"><span>Close a dialog or menu</span><kbd>Escape</kbd></div>
@@ -161,7 +181,9 @@
       <label class="enable-shortcuts"><input type="checkbox" bind:checked={keyboard.enabled} onchange={() => save()} /> Enable single-character shortcuts</label>
       <button class="btn" onclick={reset}>Reset shortcut choices</button>
       {#if recording}<p role="status">Type the character to use{recording === 'navigation' ? `; ${keyboard.modifier} is added automatically` : ''}. Escape cancels; Tab moves on.</p>{/if}
-      {#if error}<div class="ui-notice" data-tone="warn" role="alert">{error} {#if saveFailed}<button class="btn" onclick={save}>Retry saving</button>{/if}</div>{/if}
+      <!-- The live region stays mounted so a conflict typed while recording is
+           announced; a region inserted with its text is often missed. -->
+      <div role="alert">{#if error}<div class="ui-notice" data-tone="warn">{error} {#if saveFailed}<button class="btn" onclick={save}>Retry saving</button>{/if}</div>{/if}</div>
     {/if}
   </div>
 </dialog>

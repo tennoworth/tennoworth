@@ -99,6 +99,7 @@
   --bar: 2.5rem;      /* 40 bar that holds controls (control rows, pager) */
   --strip: 2.5rem;    /* 40 shell-level status strip */
   --sidebar: 13.5rem; /* 216 */
+  --sidebar-rail: 3.5rem; /* 56: an icon, its active edge and a count */
 }
 /* Root type scale: 16 → 17 (≥1900) → 18 (≥2500). Everything rem-based grows
    ~6% per step, so a 1920 desk gets a wider Item column, not more columns. */
@@ -248,7 +249,13 @@ button {
   cursor: pointer;
 }
 button:hover:not(:disabled) { background: var(--hover); }
+/* Text for assistive technology only: names and explanations that sighted
+   users get from layout or a hover title. */
+.visually-hidden { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Busy: the control's own action is running (ui/keyboard-actions.ts `busy`). It
+   keeps focus, so it looks unavailable without being disabled. */
+button[aria-disabled="true"] { opacity: 0.5; cursor: progress; }
 input[type="text"], input[type="number"] {
   font: inherit;
   color: var(--fg);
@@ -290,6 +297,7 @@ input[type="checkbox"]:checked::before {
 }
 input[type="radio"]:checked::before { content: ""; width: 0.5em; height: 0.5em; background: var(--ink-bar); }
 input:is([type="checkbox"], [type="radio"]):disabled { border-style: dotted; cursor: not-allowed; }
+input:is([type="checkbox"], [type="radio"])[aria-disabled="true"] { border-style: dotted; cursor: progress; }
 input[type="checkbox"]:checked:disabled { background: var(--muted); border-color: var(--muted); }
 /* Headings and tracked labels take the look's UI face. Baseline points
    --font-ui at the body stack, so this is a no-op there. */
@@ -688,6 +696,7 @@ table.tw tr.busy td { color: var(--muted); }
 .btn.link { background: transparent; border-color: transparent; color: var(--accent); padding: 0 var(--s1); }
 .btn.link:hover:not(:disabled) { text-decoration: underline; background: transparent; color: var(--accent); }
 .btn:disabled { opacity: 1; color: var(--muted); background: var(--panel-2); border-style: dotted; cursor: not-allowed; }
+.btn[aria-disabled="true"] { opacity: 1; color: var(--muted); background: var(--panel-2); border-style: dotted; cursor: progress; }
 
 /* Opt-in patterns keep migration independent of feature-specific selectors. */
 .ui-stack { display: flex; flex-direction: column; gap: var(--stack); min-width: 0; }
@@ -767,6 +776,7 @@ table.tw tr.busy td { color: var(--muted); }
 .ui-select:hover:not(:disabled), .ui-select[aria-expanded="true"] { border-color: var(--fg); }
 .ui-select:focus-visible { outline-offset: -1px; }
 .ui-select:disabled { color: var(--muted); border-style: dotted; cursor: not-allowed; }
+.ui-select[aria-disabled="true"] { color: var(--muted); border-style: dotted; cursor: progress; }
 .ui-select-value { display: inline-grid; flex: 1 1 auto; min-width: 0; }
 .ui-select-value > * { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-select-sizer { visibility: hidden; }
@@ -886,13 +896,6 @@ html[data-look="yorha"] .nav-item.active .badge.unread { color: var(--ink-bar); 
 html[data-look="yorha"] .nav-item.active .badge.warn { color: var(--on-ink); border-color: var(--on-ink); }
 html[data-look="yorha"] .nav-item.active .badge.here { color: var(--on-ink); border-color: var(--on-ink); }
 html[data-look="yorha"] .nav-item { border-left-width: 2px; }
-/* A filled 6px square marks the active nav item only; the slot is kept (and
-   left empty) on the others so labels stay aligned. */
-html[data-look="yorha"] .nav-item > span:first-child::before {
-  content: ""; display: inline-block; width: 6px; height: 6px;
-  border: 1px solid transparent; margin-right: 9px; vertical-align: 1px;
-}
-html[data-look="yorha"] .nav-item.active > span:first-child::before { background: currentColor; border-color: currentColor; }
 html[data-look="yorha"] .list-cta,
 html[data-look="yorha"] .rp-primary,
 html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
@@ -902,7 +905,7 @@ html[data-look="yorha"] .btn.primary:hover:not(:disabled) { background: var(--fg
 /* The look's ink fill outranks the base .btn:disabled rule, so a disabled
    primary kept its fill and read as clickable. One rule restores the shared
    disabled treatment for every primary kind. */
-html[data-look="yorha"] :is(.list-cta, .rp-primary, .btn.primary):disabled { opacity: 1; color: var(--muted); background: var(--panel-2); border-color: var(--border); border-style: dotted; cursor: not-allowed; }
+html[data-look="yorha"] :is(.list-cta, .rp-primary, .btn.primary):is(:disabled, [aria-disabled="true"]) { opacity: 1; color: var(--muted); background: var(--panel-2); border-color: var(--border); border-style: dotted; cursor: not-allowed; }
 /* Title rails: every panel, card, FAQ and dialog heading bar takes the
    --rail-* surface. The 2px --rail-edge rule is an inset shadow so the rail
    height does not change between modes. */
@@ -1065,6 +1068,11 @@ html[data-look="yorha"][data-mode="dark"] .item-art img { filter: grayscale(1) s
   background: var(--bg); border-top: 1px solid var(--border);
   font: 500 var(--text-caption)/1.4 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
 }
+.key-legend > button {
+  display: inline-flex; align-items: center; padding: 0; border: 0; background: transparent; color: inherit;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
+}
+.key-legend > button:hover { color: var(--fg); background: transparent; text-decoration: underline dotted; }
 .key-legend kbd {
   margin-right: 0.5em; padding: 0.1em 0.4em;
   font: 600 var(--text-caption)/1.2 var(--font-mono); letter-spacing: 0; text-transform: none;
@@ -1073,4 +1081,6 @@ html[data-look="yorha"][data-mode="dark"] .item-art img { filter: grayscale(1) s
 main.workspace:has(> .key-legend) { scroll-padding-bottom: 3rem; }
 /* Settings and FAQ cap their children at a reading width; the legend is chrome. */
 main.reading-view > .key-legend.key-legend { width: auto; max-width: none; }
-@media (max-width: 900px), (max-height: 480px) { .key-legend { display: none; } }
+/* The desktop window's minimum height is 480px, where the legend still fits;
+   below 900px wide the sidebar foot's Keyboard shortcuts takes its place. */
+@media (max-width: 900px), (max-height: 420px) { .key-legend { display: none; } }

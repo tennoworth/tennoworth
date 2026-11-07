@@ -10,14 +10,18 @@ import { WATCH_OFFER_EVENT } from '../../contracts/events';
 import { WATCH_OFFER_FRESH_SECS, type WatchOffer } from '../../contracts/desktop';
 
 const nowSecs = () => Math.floor(Date.now() / 1000);
+// One sighting per test. Rust returns the same seen_at on every read; a mock
+// that re-stamped it could cross a second between load and recheck, and the
+// banner rightly drops a recheck for a different offer.
+let seenAt = 0;
 const offer = (over: Partial<WatchOffer> = {}): WatchOffer => ({
   watch_id: 1, slug: 'ash_prime_set', name: 'Ash Prime Set', side: 'sell', threshold: 120, price: 110, rank: null, subtype: null,
   player: 'Seller', whisper: '/w Seller Hi! I want to buy: "Ash Prime Set" for 110 platinum. (warframe.market) - TennoWorth',
-  seen_at: nowSecs() - 90, rechecked_at: null, still_listed: null, ...over,
+  seen_at: seenAt, rechecked_at: null, still_listed: null, ...over,
 });
 
 let focused = true;
-beforeEach(() => { focused = true; vi.spyOn(document, 'hasFocus').mockImplementation(() => focused); });
+beforeEach(() => { seenAt = nowSecs() - 90; focused = true; vi.spyOn(document, 'hasFocus').mockImplementation(() => focused); });
 afterEach(() => { cleanup(); removeTauri(); vi.restoreAllMocks(); });
 
 function runtime(current: () => WatchOffer | null, recheck: () => WatchOffer | null = () => ({ ...current()!, rechecked_at: nowSecs(), still_listed: true })) {

@@ -27,6 +27,7 @@
     type SpliceOption,
   } from '../../domain/rivens';
   import { describeComps } from '../../domain/riven-appraise';
+  import { busy, roving } from '../../ui/keyboard-actions';
   import type { Market, RivenAttribute } from '../../contracts/data';
 
   interface Props {
@@ -271,7 +272,9 @@
                 <button
                   class="btn ghost"
                   onclick={() => showComps(row)}
-                  disabled={!r.slug || compsBusy !== null}
+                  disabled={!r.slug}
+                  use:busy={compsBusy !== null}
+                  aria-expanded={r.slug ? openRow === row.key : undefined}
                   title={r.slug ? 'Fetch the cheapest live buyouts for this riven (WFM caps at 10/min).' : 'Unknown weapon - no comps.'}
                 >
                   {query != null && compsBusy === query.key ? 'Fetching…' : openRow === row.key ? 'Hide comps' : 'Comps'}
@@ -354,7 +357,7 @@
               <tr class="comps-row">
                 <td colspan="7">
                   <div class="comps-bar">
-                    <span class="ui-segmented xs" role="group" aria-label="Compare with">
+                    <span class="ui-segmented xs" role="group" aria-label="Compare with" use:roving>
                       <button type="button" aria-pressed={scopeOf(row) === 'matched'} disabled={!row.filter || compsBusy !== null} onclick={() => setScope(row, 'matched')}>Same positive stats</button>
                       <button type="button" aria-pressed={scopeOf(row) === 'weapon'} disabled={compsBusy !== null} onclick={() => setScope(row, 'weapon')}>All on weapon</button>
                     </span>

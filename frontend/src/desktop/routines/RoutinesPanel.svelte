@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { roving } from '../../ui/keyboard-actions';
   import { onMount, tick, untrack } from 'svelte';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import { baroLocation, humanWindow } from '../../ui/format';
@@ -164,7 +165,7 @@
     <span class="exp" aria-live="polite">{progress}</span>
   </div>
   <div class="checklist-body">
-    <div class="ui-segmented cadence" role="group" aria-label="Checklist period">
+    <div class="ui-segmented cadence" role="group" aria-label="Checklist period" use:roving>
       {#each Object.entries(cadenceLabels) as [id, label]}
         <button type="button" aria-pressed={routine.cadence === id} onclick={() => selectCadence(id as RoutineCadence)}>{label}</button>
       {/each}

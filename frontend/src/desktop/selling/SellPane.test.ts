@@ -134,7 +134,7 @@ it('keeps filter edits while native values load and disables stale listing actio
   const openListingFlow = vi.fn();
   const view = renderPane({ calculationPending: true, openListingFlow });
   const stage = screen.getByRole('button', { name: 'List on WFM' }) as HTMLButtonElement;
-  expect(stage.disabled).toBe(true);
+  expect(stage.getAttribute('aria-disabled')).toBe('true');
   expect(screen.getByRole('status').textContent).toContain('Calculating sale values');
   expect(screen.getByRole('group', { name: 'Sell summary' }).textContent).not.toContain('100p');
   await fireEvent.click(stage);
@@ -147,7 +147,7 @@ it('keeps filter edits while native values load and disables stale listing actio
   expect(screen.getByRole('button', { name: 'Hide Accelerated Blast for this session' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'prime 1' })).toBe(chip);
   expect(chip.getAttribute('aria-pressed')).toBe('true');
-  expect(stage.disabled).toBe(false);
+  expect(stage.getAttribute('aria-disabled')).toBeNull();
 });
 
 it('shows native failure as unavailable values with a retry action', async () => {

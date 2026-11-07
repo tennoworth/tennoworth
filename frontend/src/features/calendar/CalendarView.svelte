@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { roving } from '../../ui/keyboard-actions';
   // The dated things that move Warframe prices, in three views of one list:
   // Board for "what's next", Month for the familiar grid, Lanes for overlaps.
   import { onMount, untrack } from 'svelte';
@@ -64,7 +65,7 @@
     <svelte:element this={heading} id="calendar-title">Calendar</svelte:element>
     <p class="lede">{surface === 'desktop' ? 'Dates that move prices, from DE and from our notices, and what they touch in your inventory.' : 'Dates that move Warframe prices, from DE and from our notices.'}</p>
     <div class="vh-end">
-      <div class="ui-segmented" role="group" aria-label="Calendar view">
+      <div class="ui-segmented" role="group" aria-label="Calendar view" use:roving>
         {#each VIEWS as [id, label] (id)}<button type="button" aria-pressed={view === id} onclick={() => choose(id)}>{label}</button>{/each}
       </div>
     </div>

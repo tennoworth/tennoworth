@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fitTable } from '../../ui/table-fit';
   import { searchShortcut } from '../../ui/keyboard.svelte';
+  import { busy as waiting, focusLater, roving } from '../../ui/keyboard-actions';
   import { onDestroy, untrack, type Snippet } from 'svelte';
   import type { ActivityLog } from '../shell/activity.svelte';
   import { useDesktopServices } from '../shell/desktop-context';
@@ -44,6 +45,31 @@
   function focusIf(node: HTMLElement, should: boolean): void {
     if (should) node.focus();
   }
+  // Editing, confirming and deleting replace the buttons in a row; focus
+  // follows to the replacement so the keyboard user keeps their place.
+  const rowButton = (id: string, cls: string) => () =>
+    [...document.querySelectorAll<HTMLElement>(`.orders-table .${cls}[data-order]`)].find((el) => el.dataset.order === id);
+  function editPrice(o: Parameters<typeof controller.startEdit>[0]) {
+    controller.startEdit(o);
+    focusLater(() => {
+      const input = rowButton(o.id, 'price-input')() as HTMLInputElement | undefined;
+      input?.select();
+      return input;
+    });
+  }
+  function cancelEdit(id: string) { controller.editingId = null; focusLater(rowButton(id, 'edit')); }
+  async function saveEdit(o: Parameters<typeof controller.saveEdit>[0]) {
+    await controller.saveEdit(o);
+    if (controller.editingId !== o.id) focusLater(rowButton(o.id, 'edit'));
+  }
+  function cancelRemove(id: string) { controller.confirmId = null; focusLater(rowButton(id, 'delete')); }
+  async function confirmRemove(o: Parameters<typeof controller.removeOne>[0], index: number) {
+    await controller.removeOne(o);
+    focusLater(() => {
+      const rows = [...document.querySelectorAll<HTMLElement>('.orders-table .delete[data-order]')];
+      return rowButton(o.id, 'delete')() ?? rows[Math.min(index, rows.length - 1)] ?? document.querySelector<HTMLElement>('.order-search');
+    });
+  }
 </script>
 
 <!-- One table for every listing. Health used to be a second panel that
@@ -63,7 +89,8 @@
     <button
       class="btn primary"
       onclick={controller.checkLive}
-      disabled={controller.liveTop.phase === 'running' || controller.phase !== 'done' || controller.orders.length === 0}
+      disabled={controller.phase !== 'done' || controller.orders.length === 0}
+      use:waiting={controller.liveTop.phase === 'running'}
       title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement - your own order excluded - and flag what's worth fixing."
     >
       {#if controller.liveTop.phase === 'running'}Checking… {controller.liveTop.progress.done}/{controller.liveTop.progress.total}
@@ -89,7 +116,7 @@
     </span>
     <span class="grow"></span>
     {#if controller.healthSummary.overpriced + controller.healthSummary.underbid > 1}
-      <button class="btn" onclick={controller.fixAllPrices} disabled={controller.fixAllBusy || unconfirmed} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
+      <button class="btn" onclick={controller.fixAllPrices} disabled={unconfirmed} use:waiting={controller.fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
     {/if}
   </div>
   {#if controller.health.length > 0}
@@ -106,7 +133,7 @@
     <div class="line bad">Live check failed: {controller.liveTop.error}</div>
   {/if}
   <div class="bar order-filters">
-    <span class="ui-segmented" role="group" aria-label="Show">
+    <span class="ui-segmented" role="group" aria-label="Show" use:roving>
       <button type="button" aria-pressed={controller.show === 'all'} onclick={() => (controller.show = 'all')}>All <span class="n">{controller.counts.all}</span></button>
       <button type="button" aria-pressed={controller.show === 'sell'} onclick={() => (controller.show = 'sell')}>Sell <span class="n">{controller.counts.sell}</span></button>
       <button type="button" aria-pressed={controller.show === 'buy'} onclick={() => (controller.show = 'buy')}>Buy <span class="n">{controller.counts.buy}</span></button>
@@ -126,7 +153,7 @@
       disabled={controller.bulkBusy || unconfirmed || controller.orders.every((o) => o.visible == null || !o.visible)}
       title="Hide every listing from buyers"
     >All hidden</button>
-    <button class="btn" onclick={controller.loadOrders} disabled={controller.phase === 'loading'}>Refresh</button>
+    <button class="btn" onclick={controller.loadOrders} use:waiting={controller.phase === 'loading'}>Refresh</button>
   </div>
 
   {#if controller.phase === 'error'}
@@ -141,7 +168,7 @@
       <!-- Sized by content: numbers and buttons take what they need, Item and
            Health share the rest, so the table fits the panel instead of
            scrolling its last column out of view. -->
-      <table class="tw">
+      <table class="tw orders-table">
         <thead>
           <tr>
             <th class="l">Item</th>
@@ -157,7 +184,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each controller.shown as o (o.id)}
+          {#each controller.shown as o, index (o.id)}
             {@const busy = controller.busyIds.has(o.id)}
             {@const t = controller.liveTop.quotes.size > 0 ? controller.liveForOrder(o) : null}
             {@const issues = controller.queue.filter((q) => q.id === o.id)}
@@ -167,13 +194,13 @@
                 {#each issues as q (q.key)}
                   {#if q.kind === 'health'}
                     {#if q.h.kind === 'not-owned' && controller.healthConfirmId === q.id}
-                      <button class="btn xs bad" use:focusIf={true} onclick={() => controller.applyFix(q.h)} disabled={busy || unconfirmed} title="Confirm delete">Confirm</button>
+                      <button class="btn xs bad" use:focusIf={true} onclick={() => controller.applyFix(q.h)} disabled={unconfirmed} use:waiting={busy} title="Confirm delete">Confirm</button>
                       <button class="btn xs x" onclick={() => controller.cancelDelete(q.id)} title="Cancel" aria-label="Cancel delete">×</button>
                     {:else}
-                      <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={controller.restoreFocusTo === q.id} onclick={() => controller.armOrFix(q.h)} disabled={busy || unconfirmed} title={q.h.why}>{controller.healthAction(q.h)}</button>
+                      <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={controller.restoreFocusTo === q.id} onclick={() => controller.armOrFix(q.h)} disabled={unconfirmed} use:waiting={busy} title={q.h.why}>{controller.healthAction(q.h)}</button>
                     {/if}
                   {:else}
-                    <button class="btn xs" onclick={() => controller.reprice(q.d)} disabled={busy || unconfirmed} title="Update this listing to {q.d.suggested}p per unit on warframe.market">Reprice</button>
+                    <button class="btn xs" onclick={() => controller.reprice(q.d)} disabled={unconfirmed} use:waiting={busy} title="Update this listing to {q.d.suggested}p per unit on warframe.market">Reprice</button>
                   {/if}
                 {/each}
               </td>
@@ -181,13 +208,19 @@
               <td>{o.quantity ?? '?'}</td>
               <td class="price">
                 {#if controller.editingId === o.id}
-                  <input type="number" bind:value={controller.editValue} min="1" max={MAX_PLATINUM} aria-label="New price for {controller.itemName(o)}" />
-                  <button class="btn xs" onclick={() => controller.saveEdit(o)} disabled={busy || unconfirmed}>save</button>
-                  <button class="btn xs x" onclick={() => (controller.editingId = null)} title="Cancel" aria-label="Cancel price edit">×</button>
+                  <input type="number" class="price-input" data-order={o.id} bind:value={controller.editValue} min="1" max={MAX_PLATINUM} aria-label="New price for {controller.itemName(o)}"
+                    use:waiting={busy}
+                    onkeydown={(event) => {
+                      if (event.isComposing) return;
+                      if (event.key === 'Enter') { event.preventDefault(); if (!busy && !unconfirmed) void saveEdit(o); }
+                      else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelEdit(o.id); }
+                    }} />
+                  <button class="btn xs" onclick={() => saveEdit(o)} disabled={unconfirmed} use:waiting={busy} aria-label="Save price for {controller.itemName(o)}">save</button>
+                  <button class="btn xs x" onclick={() => cancelEdit(o.id)} title="Cancel" aria-label="Cancel price edit">×</button>
                 {:else}
                   <span class="fg">{o.platinum}<span class="unit">p</span></span>
                   {#if (o.per_trade ?? 1) > 1}<span class="unit"> / {o.per_trade} units</span>{/if}
-                  <button class="btn xs ghost edit" onclick={() => controller.startEdit(o)} disabled={busy || unconfirmed} title="Edit price" aria-label="Edit price for {controller.itemName(o)}">✎</button>
+                  <button class="btn xs ghost edit" data-order={o.id} onclick={() => editPrice(o)} disabled={unconfirmed} use:waiting={busy} title="Edit price" aria-label="Edit price for {controller.itemName(o)}">✎</button>
                 {/if}
               </td>
               <td>{#if t && !t.error && t.low_sell != null}{Number(t.low_sell.toFixed(2))}<span class="unit">p</span>{:else}<span class="muted">-</span>{/if}</td>
@@ -220,17 +253,21 @@
                 <button
                   class="visbtn {o.visible ? 'on' : 'off'}"
                   onclick={() => controller.toggleVisible(o)}
-                  disabled={busy || unconfirmed || o.visible == null}
+                  disabled={unconfirmed || o.visible == null}
+                  use:waiting={busy}
                   title={o.visible == null ? 'Visibility unavailable; refresh orders' : o.visible ? 'Click to make hidden' : 'Click to make visible'}
                   aria-label={o.visible == null ? `?: visibility of ${controller.itemName(o)} unavailable` : o.visible ? `ON: ${controller.itemName(o)} is visible to buyers` : `OFF: ${controller.itemName(o)} is hidden from buyers`}
                 ><span class="vis" class:off={!o.visible}>{o.visible == null ? '?' : o.visible ? 'ON' : 'OFF'}</span></button>
               </td>
               <td class="act">
                 {#if controller.confirmId === o.id}
-                  <button class="btn xs bad" onclick={() => controller.removeOne(o)} disabled={busy || unconfirmed} title="Confirm delete">Confirm</button>
-                  <button class="btn xs x" onclick={() => (controller.confirmId = null)} title="Cancel" aria-label="Cancel delete">×</button>
+                  <!-- svelte-ignore a11y_no_static_element_interactions (Escape backs out of the confirmation.) -->
+                  <span class="confirm-pair" onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancelRemove(o.id); } }}>
+                    <button class="btn xs bad" use:focusIf={true} onclick={() => confirmRemove(o, index)} disabled={unconfirmed} use:waiting={busy} title="Confirm delete" aria-label="Confirm delete {controller.itemName(o)}">Confirm</button>
+                    <button class="btn xs x" onclick={() => cancelRemove(o.id)} title="Cancel" aria-label="Cancel delete">×</button>
+                  </span>
                 {:else}
-                  <button class="btn xs x" onclick={() => controller.removeOne(o)} disabled={busy || unconfirmed} title="Delete" aria-label="Delete {controller.itemName(o)}">✕</button>
+                  <button class="btn xs x delete" data-order={o.id} onclick={() => controller.removeOne(o)} disabled={unconfirmed} use:waiting={busy} title="Delete" aria-label="Delete {controller.itemName(o)}">✕</button>
                 {/if}
               </td>
             </tr>
@@ -243,7 +280,7 @@
     {/if}
     {#if controller.liveTop.quotes.size === 0 && controller.drifted.length > 0}
       <div class="line">
-        <span class="exp">Health compares against the last market snapshot (updated {marketStaleness ?? 'at an unknown time'}) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={controller.checkLive} disabled={controller.liveTop.phase === 'running'}>check live</button> for exact figures.</span>
+        <span class="exp">Health compares against the last market snapshot (updated {marketStaleness ?? 'at an unknown time'}) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={controller.checkLive} use:waiting={controller.liveTop.phase === 'running'}>check live</button> for exact figures.</span>
       </div>
     {/if}
   {/if}

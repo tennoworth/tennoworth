@@ -38,9 +38,19 @@ it('leaves text entry, handled events and visible dialogs alone', () => {
   }
   const handled = new KeyboardEvent('keydown', { cancelable: true }); handled.preventDefault();
   expect(shortcutBlocked(handled)).toBe(true);
-  document.body.innerHTML = '<div role="dialog"></div>';
+  document.body.innerHTML = '<div role="dialog" aria-modal="true"></div>';
   vi.spyOn(document.body.firstElementChild!, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
   expect(shortcutBlocked(new KeyboardEvent('keydown'))).toBe(true);
+});
+
+it('lets shortcuts through an open popover only when focus has left it', () => {
+  document.body.innerHTML = '<button>outside</button><div role="dialog"><button>inside</button></div>';
+  const [outside, inside] = [...document.querySelectorAll('button')];
+  vi.spyOn(document.querySelector('[role=dialog]')!, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+  inside.focus();
+  expect(shortcutBlocked(new KeyboardEvent('keydown'))).toBe(true);
+  outside.focus();
+  expect(shortcutBlocked(new KeyboardEvent('keydown'))).toBe(false);
 });
 
 describe('optional local layout discovery', () => {
