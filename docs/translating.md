@@ -5,9 +5,10 @@ language starts as an **unreviewed draft**; players who speak it turn the
 drafts into text that reads naturally. You do not need to be a developer, and
 reviewing a few lines helps.
 
-The app does not offer a language choice yet. When it does, a language appears
-there only once a native speaker has reviewed its main screens; until then its
-drafts stay hidden.
+The app does not offer a language choice yet. When it does, it will offer
+every language whose item names warframe.market provides, drafts included, and
+fix wording as players report it. Thai waits until its item names are
+available; its drafts can be reviewed in the meantime.
 
 ## What to review
 
