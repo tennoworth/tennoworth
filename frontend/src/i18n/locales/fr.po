@@ -62,7 +62,7 @@ msgstr "Les prix de warframe.market, classés selon ce qui se vend vraiment"
 #, fuzzy
 msgctxt "strip.noInventory"
 msgid "No inventory yet"
-msgstr "Pas encore d’Inventaire"
+msgstr "Aucun inventaire"
 
 #. Status bar, inventory cell while the saved scan loads.
 #. Max 22 characters.
@@ -103,7 +103,7 @@ msgstr "Heure inconnue"
 #, fuzzy
 msgctxt "strip.refreshFailed"
 msgid "Last refresh failed"
-msgstr "Échec de l’actualisation"
+msgstr "Mise à jour échouée"
 
 #. Status bar button that opens the scan menu. Keep the ▾.
 #. Max 14 characters.

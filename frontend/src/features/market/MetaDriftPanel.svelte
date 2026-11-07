@@ -65,7 +65,7 @@
       <table class="tw fixed">
         <!-- Δ share sits beside the name: it is the point of the table, and a
              narrow window must reach it without scrolling. -->
-        <colgroup><col /><col style="width:6rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
+        <colgroup><col /><col style="width:6rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:8rem" /><col style="width:6rem" /><col style="width:6rem" /></colgroup>
         <thead><tr><th class="l">{t('drift.col.name')}</th><th>{t('drift.col.delta')}</th><th data-drop="3">{model.priorYear}</th><th>{model.currentYear}</th><th class="l" data-drop="1">{t('drift.category')}</th><th data-drop="2">{t('market.col.lowAsk')}</th><th data-drop="1">{t('market.col.vol')}</th></tr></thead>
         <tbody>
           {#each trim(driftRows) as row (row.slug)}
@@ -99,7 +99,7 @@
   <div class="only-card">
     <h4>{title}</h4>
     <div class="scroll" use:fitTable><table class="tw fixed">
-      <colgroup><col /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
+      <colgroup><col /><col style="width:8rem" /><col style="width:5rem" /><col style="width:6rem" /><col style="width:6rem" /></colgroup>
       <thead><tr><th class="l">{t('drift.col.name')}</th><th class="l" data-drop="2">{t('drift.category')}</th><th>{t('drift.col.share')}</th><th>{t('market.col.lowAsk')}</th><th data-drop="1">{t('market.col.vol')}</th></tr></thead>
       <tbody>{#each trim(rows) as row (row.slug)}<tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{share(row.share)}</td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>{:else}<tr><td colspan="5" class="empty">{t('drift.noItems')}</td></tr>{/each}</tbody>
     </table></div>

@@ -62,14 +62,14 @@ msgstr "Preços do warframe.market, ordenados pelo que realmente vende"
 #, fuzzy
 msgctxt "strip.noInventory"
 msgid "No inventory yet"
-msgstr "Nenhum inventário ainda"
+msgstr "Sem inventário"
 
 #. Status bar, inventory cell while the saved scan loads.
 #. Max 22 characters.
 #, fuzzy
 msgctxt "strip.loadingScan"
 msgid "Loading saved scan…"
-msgstr "Carregando escaneamento…"
+msgstr "Carregando scan…"
 
 #. Status bar, inventory cell: the inventory came from an imported file.
 #. Max 14 characters.

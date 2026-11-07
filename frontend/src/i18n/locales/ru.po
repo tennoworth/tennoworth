@@ -83,7 +83,7 @@ msgstr "Импорт"
 #, fuzzy
 msgctxt "strip.savedScan"
 msgid "Saved scan"
-msgstr "Сохранённый скан"
+msgstr "Скан сохранён"
 
 #. Status bar, inventory cell label.
 #. Max 14 characters.
@@ -352,7 +352,7 @@ msgstr "Вопросы"
 #, fuzzy
 msgctxt "strip.locked"
 msgid "Locked"
-msgstr "Заблокировано"
+msgstr "Закрыто"
 
 #. Status bar, warframe.market account cell.
 #. Max 12 characters.
@@ -366,7 +366,7 @@ msgstr "Вы не вошли"
 #, fuzzy
 msgctxt "strip.unlock"
 msgid "Unlock"
-msgstr "Разблокировать"
+msgstr "Открыть"
 
 #. Status bar button: sign in to warframe.market.
 #. Max 12 characters.

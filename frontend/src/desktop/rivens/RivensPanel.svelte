@@ -240,8 +240,8 @@
           <col style="width:9rem" />
           <col style="width:12rem" />
           <col />
-          <col style="width:3.5rem" />
-          <col style="width:3.5rem" />
+          <col style="width:4.5rem" />
+          <col style="width:4.5rem" />
           <col style="width:7rem" />
           <col style="width:13rem" />
         </colgroup>

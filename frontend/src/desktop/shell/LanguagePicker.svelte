@@ -188,7 +188,9 @@
   .sub { margin: 0 0 var(--s3); color: var(--muted); font: var(--text-body)/var(--leading-body) var(--font-body); }
 
   .grid { position: relative; overflow: hidden; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px var(--rule) var(--hairline); outline: none; }
-  @media (max-width: 40rem) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 40rem) {
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
   .mark {
     position: absolute; left: 0; top: 0; background: var(--ink-bar); pointer-events: none; opacity: 0;
     transition: transform 0.17s cubic-bezier(0.2, 0.7, 0.2, 1), width 0.17s, height 0.17s;
@@ -207,11 +209,13 @@
   .grid button:focus-visible { outline: 2px solid var(--fg); outline-offset: -4px; }
   .grid button.on { color: var(--on-ink); }
   .grid button.on:focus-visible { outline-color: var(--on-ink); }
-  .native { font: 600 var(--text-section)/1.2 var(--font-body); overflow-wrap: anywhere; }
+  .native { font: 600 var(--text-section)/1.2 var(--font-body); overflow-wrap: break-word; }
   .english { grid-column: 1; font: var(--text-caption)/1.3 var(--font-ui); color: var(--muted); }
   .on .english { color: var(--on-ink-muted); }
   .game { grid-row: 1; grid-column: 2; font: 600 var(--text-caption)/1 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
   .on .game { color: var(--on-ink-muted); }
+  /* Two narrow columns leave no room beside the name: the caption goes under it. */
+  @media (max-width: 40rem) { .game { grid-row: auto; grid-column: 1 / -1; margin-top: var(--s1); } }
 
   .foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s4); padding: var(--s3) var(--inset) var(--inset); }
   .hint { color: var(--muted); font: var(--text-caption) var(--font-ui); }

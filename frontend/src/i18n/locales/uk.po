@@ -359,7 +359,7 @@ msgstr "Заблоковано"
 #, fuzzy
 msgctxt "strip.signedOut"
 msgid "Signed out"
-msgstr "Ви не увійшли"
+msgstr "Не ввійшли"
 
 #. Status bar button.
 #. Max 12 characters.

@@ -83,7 +83,7 @@ msgstr "Importiert"
 #, fuzzy
 msgctxt "strip.savedScan"
 msgid "Saved scan"
-msgstr "Gespeicherter Scan"
+msgstr "Letzter Scan"
 
 #. Status bar, inventory cell label.
 #. Max 14 characters.
@@ -103,7 +103,7 @@ msgstr "Zeitpunkt unbekannt"
 #, fuzzy
 msgctxt "strip.refreshFailed"
 msgid "Last refresh failed"
-msgstr "Aktualisierung fehlgeschlagen"
+msgstr "Abruf fehlgeschlagen"
 
 #. Status bar button that opens the scan menu. Keep the ▾.
 #. Max 14 characters.

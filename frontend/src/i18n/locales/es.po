@@ -83,7 +83,7 @@ msgstr "Importado"
 #, fuzzy
 msgctxt "strip.savedScan"
 msgid "Saved scan"
-msgstr "Escaneo guardado"
+msgstr "Scan guardado"
 
 #. Status bar, inventory cell label.
 #. Max 14 characters.
@@ -373,7 +373,7 @@ msgstr "Desbloquear"
 #, fuzzy
 msgctxt "strip.signIn"
 msgid "Sign in"
-msgstr "Iniciar sesión"
+msgstr "Entrar"
 
 #. An age under a minute. Reads after a word like "updated", "Market", "recorded".
 #. Max 12 characters.
