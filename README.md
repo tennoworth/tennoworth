@@ -78,8 +78,9 @@ set-completion plays, relic expected value, Riven context, and listing health.
   Baro reminders, relevant events, and daily sell opportunities, with category
   controls and optional desktop popups.
 - Offers an opt-in relic reward overlay. A bounded local capture is OCR'd after
-  a reward event or the default `Ctrl+Shift+O` shortcut, recognizes English reward names,
-  and adds platinum, ducats, owned count, and recognition confidence. It does
+  a reward event or the default `Ctrl+Shift+O` shortcut, recognizes reward names
+  in the game's language (read from `EE.log`, or chosen in Settings; every game
+  language except Thai), and adds platinum, ducats, owned count, and recognition confidence. It does
   not click or choose a reward.
 
 The hosted site exposes the public-data tools and a guided product preview. It

@@ -8,6 +8,7 @@ mod paths;
 mod publish;
 pub mod reconcile;
 pub mod render;
+mod reward_names;
 mod rivens;
 mod usage;
 mod world;
@@ -816,6 +817,16 @@ pub fn build(
         goals: r_world_goals.data,
         events: r_world_events.data,
     };
+    // After `ensure_wfm_complete`: these requests are optional and carried, so
+    // a failure among them must never hold back the snapshot.
+    eprintln!("Refreshing localized reward names...");
+    snapshot.reward_names = reward_names::refresh(
+        http.as_ref(),
+        &prior,
+        &snapshot.relic_rewards,
+        catalog_fresh,
+        now,
+    );
 
     // market.json is written LAST - it's the generation anchor the browser app
     // joins everything through (items[slug], catalog, path_to_info, baro), while

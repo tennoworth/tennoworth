@@ -16,7 +16,7 @@
   import type { DesktopWfmStatus, DesktopCapabilities } from '../../contracts/desktop';
   import { AUTO_SCAN_CADENCE_CHOICES, type AutoScanSettings, type AutoScanStatus } from '../../contracts/desktop';
   import type { AutoScanController } from '../inventory/auto-scan.svelte';
-  import type { OverlaySettings, OverlayStatus } from '../../contracts/data';
+  import { OVERLAY_LANGUAGES, type OverlayLanguage, type OverlaySettings, type OverlayStatus } from '../../contracts/data';
   import { LATEST_RELEASE_URL, type UpdateController } from '../updates/update-controller.svelte';
   import { humanError } from '../../contracts/errors';
 
@@ -143,6 +143,19 @@
     const settings = autoScan?.settings;
     if (!settings) return 'Loading…';
     return settings.enabled ? `On · every ${settings.cadenceMinutes} min` : 'Off';
+  }
+
+  const LANGUAGE_NAMES: Record<(typeof OVERLAY_LANGUAGES)[number], string> = {
+    en: 'English', de: 'German', es: 'Spanish', fr: 'French', it: 'Italian', ja: 'Japanese', ko: 'Korean',
+    pl: 'Polish', pt: 'Portuguese', ru: 'Russian', tr: 'Turkish', uk: 'Ukrainian',
+    'zh-hans': 'Chinese (Simplified)', 'zh-hant': 'Chinese (Traditional)',
+  };
+  const languageChoices: { value: OverlayLanguage; label: string }[] = [
+    { value: 'auto', label: 'Same as the game' },
+    ...OVERLAY_LANGUAGES.map((code) => ({ value: code, label: LANGUAGE_NAMES[code] })),
+  ];
+  function languageName(code: string): string {
+    return LANGUAGE_NAMES[code as keyof typeof LANGUAGE_NAMES] ?? code;
   }
 
   function overlaySummary(): string {
@@ -323,6 +336,14 @@
             <label class="ui-setting-check"><input id="overlay-auto" type="checkbox" checked={overlay.autoDetect} disabled={!overlay.enabled || savingOverlay} onchange={(event) => saveOverlay({ ...overlay!, autoDetect: event.currentTarget.checked })}><span>Enabled</span></label>
           </div>
           <div class="ui-setting-row"><div class="ui-setting-copy"><label for="overlay-shortcut">Retry shortcut</label><p>Still available when the game delays that line.</p></div><div class="ui-setting-control"><input id="overlay-shortcut" class="ui-input shortcut" value={overlay.shortcut} disabled={!overlay.enabled || savingOverlay} onblur={(event) => saveOverlay({ ...overlay!, shortcut: event.currentTarget.value })}></div></div>
+          <div class="ui-setting-row">
+            <div class="ui-setting-copy">
+              <label id="overlay-language-label" for="overlay-language">Reward name language</label>
+              <p>Same as the game follows the language EE.log reports. A language other than English downloads its 1–5 MB text model once.</p>
+              {#if overlay.enabled && overlayStatus}<p>{overlayStatus.ocrLanguageNote ?? `Reading ${languageName(overlayStatus.ocrLanguage)} names.`}</p>{/if}
+            </div>
+            <div class="ui-setting-control"><Select id="overlay-language" labelledby="overlay-language-label" value={overlay.ocrLanguage} options={languageChoices} disabled={!overlay.enabled || savingOverlay} onchange={(choice) => saveOverlay({ ...overlay!, ocrLanguage: choice })} /></div>
+          </div>
         </div>
         <div class="ui-section-group">
           <h4>Reward cards</h4>

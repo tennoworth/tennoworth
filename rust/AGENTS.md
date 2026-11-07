@@ -46,7 +46,8 @@ These bind every crate here, including callers:
   value; the frontend's pre-flight copy is gated by `tests/fixtures/limits.json`.
 - **Nullable auxiliary market maps are not a broken snapshot.** Desktop cache
   loading (`tennoworth-desktop/src/services/market/sellables/`) treats explicit
-  `null` for optional `catalog`, `path_to_info`, `usage` and `set_to_parts` as
+  `null` for optional `catalog`, `path_to_info`, `usage`, `set_to_parts`,
+  `relic_rewards` and `reward_names` as
   empty while keeping `items` strict; otherwise one optional surface discards
   current rows and silently falls back to the bundled snapshot. Keep a
   load-level test with a current-only item. Every runtime reader (cache write,

@@ -6,6 +6,7 @@
 //! remain in memory and only normalized recognition results cross into the
 //! overlay webview.
 
+mod language;
 mod lifecycle;
 pub(crate) mod notice;
 mod presentation;
@@ -25,8 +26,9 @@ use recognition::{
 };
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{LazyLock, Mutex, RwLock};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -70,6 +72,13 @@ pub struct OverlaySettings {
     pub show_owned: bool,
     #[serde(default)]
     pub diagnostics: bool,
+    /// `auto` (follow the game's log) or a warframe.market language code.
+    #[serde(default = "auto_language")]
+    pub ocr_language: String,
+}
+
+fn auto_language() -> String {
+    language::AUTO.into()
 }
 
 impl Default for OverlaySettings {
@@ -82,6 +91,7 @@ impl Default for OverlaySettings {
             live_prices: true,
             show_owned: true,
             diagnostics: false,
+            ocr_language: auto_language(),
         }
     }
 }
@@ -118,6 +128,11 @@ pub struct OverlayStatus {
     pub presentation_backend: String,
     pub placement: String,
     pub ocr_ready: bool,
+    /// The language reward names are read in (a warframe.market code).
+    pub ocr_language: String,
+    /// Why recognition is not (yet) in the chosen language, when it is not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_language_note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_run: Option<OverlayLastRun>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -132,6 +147,8 @@ impl Default for OverlayStatus {
             presentation_backend: "tauri-window".into(),
             placement: "anchored".into(),
             ocr_ready: false,
+            ocr_language: language::ENGLISH.code.into(),
+            ocr_language_note: None,
             last_run: None,
             message: None,
         }
@@ -182,6 +199,11 @@ pub struct OverlayState {
     last_reward_marker: Mutex<Option<String>>,
     current_result: Mutex<Option<RelicOverlayResult>>,
     ocr: OcrWorker,
+    /// The worker for a non-English game, once its model is in place.
+    localized_ocr: Mutex<Option<(&'static str, Arc<OcrWorker>)>>,
+    preparing_language: AtomicBool,
+    /// Downloaded non-English models; `None` when app data is unavailable.
+    models_dir: Option<PathBuf>,
     diagnostics_root: PathBuf,
 }
 
@@ -206,7 +228,12 @@ impl OverlayState {
                         "ocr_unavailable: bundled tessdata/eng.traineddata is missing".into()
                     })
             });
-        let (ocr, ocr_result) = OcrWorker::start(tessdata);
+        let (ocr, ocr_result) = OcrWorker::start(tessdata, language::ENGLISH.tesseract);
+        let models_dir = app
+            .path()
+            .app_data_dir()
+            .ok()
+            .map(|dir| dir.join("tessdata"));
         let status = OverlayStatus {
             state: if settings.enabled && ocr_result.is_ok() {
                 "watching".into()
@@ -228,6 +255,9 @@ impl OverlayState {
             last_reward_marker: Mutex::new(None),
             current_result: Mutex::new(None),
             ocr,
+            localized_ocr: Mutex::new(None),
+            preparing_language: AtomicBool::new(false),
+            models_dir,
             diagnostics_root,
         }
     }
@@ -268,6 +298,11 @@ fn validate_settings(mut settings: OverlaySettings) -> Result<OverlaySettings, S
     settings.shortcut = settings.shortcut.trim().to_string();
     if settings.shortcut.is_empty() || settings.shortcut.len() > 80 {
         return Err("choose a valid overlay shortcut".into());
+    }
+    if settings.ocr_language != language::AUTO
+        && language::by_code(&settings.ocr_language).is_none()
+    {
+        return Err("choose a supported reward-name language".into());
     }
     Ok(settings)
 }
@@ -313,6 +348,7 @@ pub fn update_overlay_settings(
         return Err(error.to_string());
     }
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
+    prepare_configured_language(&app);
     let ocr_ready = state
         .status
         .lock()
@@ -569,6 +605,142 @@ pub fn register_configured_shortcut(app: &AppHandle) {
     }
 }
 
+/// The language the overlay should read in: the setting, else the game's log.
+fn wanted_language(app: &AppHandle) -> language::Resolved {
+    let setting = app
+        .state::<OverlayState>()
+        .settings
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .ocr_language
+        .clone();
+    let detected = if setting == language::AUTO {
+        app.try_state::<crate::services::game_log::state::EeLogState>()
+            .and_then(|state| state.path.clone())
+            .or_else(crate::services::game_log::eelog::locate_log)
+            .and_then(|log| language::detect(&log))
+    } else {
+        None
+    };
+    language::resolve(&setting, detected.as_deref())
+}
+
+fn set_language_status(state: &OverlayState, code: &str, note: Option<String>) {
+    let mut status = state.status.lock().unwrap_or_else(|e| e.into_inner());
+    status.ocr_language = code.into();
+    status.ocr_language_note = note;
+}
+
+/// Get the configured language's model ready before the next reward screen,
+/// so the first scan in a new language does not fall back to English.
+pub fn prepare_configured_language(app: &AppHandle) {
+    let Some(state) = app.try_state::<OverlayState>() else {
+        return;
+    };
+    if !state
+        .settings
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .enabled
+    {
+        return;
+    }
+    let _ = ocr_for_scan(app);
+}
+
+/// The language this scan reads and its worker (`None` = the English one). A
+/// language whose model is not ready starts preparing in the background, and
+/// the scan reads English meanwhile rather than waiting on a download.
+fn ocr_for_scan(app: &AppHandle) -> (language::OcrLanguage, Option<Arc<OcrWorker>>) {
+    let state = app.state::<OverlayState>();
+    let target = match wanted_language(app) {
+        language::Resolved::Supported(target) => target,
+        language::Resolved::Unsupported(code) => {
+            set_language_status(
+                &state,
+                language::ENGLISH.code,
+                Some(format!(
+                    "The game language ({code}) has no reward names to match; reading English names."
+                )),
+            );
+            return (language::ENGLISH, None);
+        }
+    };
+    if target == language::ENGLISH {
+        set_language_status(&state, target.code, None);
+        return (target, None);
+    }
+    let ready = state
+        .localized_ocr
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .filter(|(code, _)| *code == target.code)
+        .map(|(_, worker)| Arc::clone(worker));
+    if let Some(worker) = ready {
+        set_language_status(&state, target.code, None);
+        return (target, Some(worker));
+    }
+    if !state.preparing_language.swap(true, Ordering::AcqRel) {
+        set_language_status(
+            &state,
+            language::ENGLISH.code,
+            Some(format!(
+                "Preparing the {} reward-name model; until then names are read in English.",
+                target.code
+            )),
+        );
+        let app = app.clone();
+        let spawned = std::thread::Builder::new()
+            .name("ocr-language".into())
+            .spawn(move || prepare_language(&app, target));
+        if spawned.is_err() {
+            state.preparing_language.store(false, Ordering::Release);
+        }
+    }
+    (language::ENGLISH, None)
+}
+
+fn prepare_language(app: &AppHandle, target: language::OcrLanguage) {
+    let state = app.state::<OverlayState>();
+    let prepared = (|| {
+        let spec = crate::vision::ocr_models::model(target.tesseract)
+            .ok_or_else(|| format!("no pinned model for {}", target.tesseract))?;
+        let dir = state
+            .models_dir
+            .as_deref()
+            .ok_or("the app-data directory is unavailable")?;
+        let dir = crate::vision::ocr_models::ensure_model(
+            dir,
+            spec,
+            crate::vision::ocr_models::download,
+        )?;
+        let (worker, ready) = OcrWorker::start(Ok(dir), target.tesseract);
+        ready.map(|()| worker)
+    })();
+    match prepared {
+        Ok(worker) => {
+            *state
+                .localized_ocr
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some((target.code, Arc::new(worker)));
+            set_language_status(&state, target.code, None);
+        }
+        Err(error) => {
+            eprintln!("tennoworth: {} OCR model unavailable: {error}", target.code);
+            set_language_status(
+                &state,
+                language::ENGLISH.code,
+                Some(format!(
+                    "The {} reward-name model is unavailable ({error}); reading English names.",
+                    target.code
+                )),
+            );
+        }
+    }
+    state.preparing_language.store(false, Ordering::Release);
+}
+
 pub fn handle_log_line(app: &AppHandle, line: &str) {
     let Some(state) = app.try_state::<OverlayState>() else {
         return;
@@ -578,6 +750,11 @@ pub fn handle_log_line(app: &AppHandle, line: &str) {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
+    // The game names its language as it starts, well before a reward screen.
+    if settings.enabled && line.contains("Using language: _") {
+        prepare_configured_language(app);
+        return;
+    }
     if settings.enabled && line.contains(REWARD_CLOSE_MARKER) {
         state.expected_slots.store(0, Ordering::Release);
         hide_overlay(app);
@@ -777,7 +954,9 @@ fn capture_and_recognize(
     let cache = app.state::<MarketCache>();
     let db = app.state::<Db>();
     let market = MarketData::load(&cache);
-    let catalog = market.overlay_catalog();
+    let (reading, localized_ocr) = ocr_for_scan(app);
+    let ocr: &OcrWorker = localized_ocr.as_deref().unwrap_or(&state.ocr);
+    let catalog = market.overlay_catalog(Some(reading.code));
     let scan_id = format!("{}-{source}-{}", std::process::id(), unix_millis());
     let settings = state
         .settings
@@ -813,6 +992,7 @@ fn capture_and_recognize(
             "platform": std::env::consts::OS,
             "architecture": std::env::consts::ARCH,
             "captureBackend": capture_backend_name(),
+            "ocrLanguage": reading.code,
         });
         if let Ok(json) = serde_json::to_vec_pretty(&context) {
             let _ = std::fs::write(dir.join("context.json"), json);
@@ -834,7 +1014,7 @@ fn capture_and_recognize(
                 write_scan_frame_debug(run_dir.as_deref(), attempt, &frame);
                 let debug_dir = diagnostics_attempt_dir(run_dir.as_deref(), attempt);
                 match read_centered_reward_layout(
-                    &state.ocr,
+                    ocr,
                     &frame,
                     &catalog,
                     debug_dir.as_deref(),
@@ -850,7 +1030,7 @@ fn capture_and_recognize(
                     && consensus.resolve(current_expected, true).is_none()
                 {
                     match read_expected_layout(
-                        &state.ocr,
+                        ocr,
                         &frame,
                         &catalog,
                         current_expected,
@@ -869,7 +1049,7 @@ fn capture_and_recognize(
                 let current_expected = state.expected_slots.load(Ordering::Acquire);
                 if consensus.resolve(current_expected, true).is_none() && attempt == 2 {
                     match read_dynamic_layout(
-                        &state.ocr,
+                        ocr,
                         &frame,
                         &catalog,
                         &state.expected_slots,

@@ -162,6 +162,10 @@ pub struct Snapshot {
     pub surface_key_fetched_at: HashMap<String, crate::pipeline::reconcile::KeyStamps>,
     #[serde(default, skip_serializing_if = "EventRewardsSurface::is_empty")]
     pub event_rewards: EventRewardsSurface,
+    /// `{language: {fetched_at, names: {slug: name}}}` for relic rewards, read
+    /// by the desktop's reward-screen OCR - see `pipeline::reward_names`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub reward_names: crate::pipeline::reward_names::RewardNames,
     /// Digital Extremes provenance + the worldState-only surfaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub de: Option<DeSurface>,
@@ -295,6 +299,7 @@ pub fn assemble_snapshot(
         surface_provenance: HashMap::new(),
         surface_key_fetched_at: HashMap::new(),
         event_rewards: EventRewardsSurface::default(),
+        reward_names: Default::default(),
     }
 }
 

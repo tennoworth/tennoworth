@@ -23,7 +23,12 @@ pub(crate) struct OcrWorker {
 }
 
 impl OcrWorker {
-    pub(crate) fn start(tessdata: Result<PathBuf, String>) -> (Self, Result<(), String>) {
+    /// Start a worker for one Tesseract language (`eng`, `fra`, ...) whose
+    /// `<language>.traineddata` is in the `tessdata` directory.
+    pub(crate) fn start(
+        tessdata: Result<PathBuf, String>,
+        language: &'static str,
+    ) -> (Self, Result<(), String>) {
         let (tx, rx) = mpsc::channel::<OcrRequest>();
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
         let _ = std::thread::Builder::new()
@@ -37,9 +42,9 @@ impl OcrWorker {
                     // path. Tesseract's C API cannot open the `\\?\` form.
                     #[cfg(target_os = "windows")]
                     let data = data.strip_prefix(r"\\?\").unwrap_or(data);
-                    leptess::LepTess::new(Some(data), "eng").map_err(|e| {
+                    leptess::LepTess::new(Some(data), language).map_err(|e| {
                         format!(
-                            "ocr_unavailable: starting Tesseract with bundled eng.traineddata: {e}"
+                            "ocr_unavailable: starting Tesseract with {language}.traineddata: {e}"
                         )
                     })
                 });

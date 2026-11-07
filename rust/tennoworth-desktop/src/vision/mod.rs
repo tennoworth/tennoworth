@@ -8,3 +8,4 @@ pub(crate) mod capture;
 pub(crate) mod focus;
 pub(crate) mod frame;
 pub(crate) mod ocr;
+pub(crate) mod ocr_models;

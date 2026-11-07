@@ -169,6 +169,12 @@ struct RelicRewardEntry {
     reward_slug: String,
 }
 
+#[derive(Deserialize, Default)]
+struct LocalizedRewardNames {
+    #[serde(default, deserialize_with = "null_default")]
+    names: HashMap<String, String>,
+}
+
 fn null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
@@ -198,6 +204,10 @@ pub struct MarketData {
     set_to_parts: HashMap<String, SetEntry>,
     #[serde(default, deserialize_with = "null_default")]
     relic_rewards: HashMap<String, Vec<RelicRewardEntry>>,
+    /// WFM language → localized relic-reward names, for reward-screen OCR in
+    /// a non-English game. Optional like the maps above.
+    #[serde(default, deserialize_with = "null_default")]
+    reward_names: HashMap<String, LocalizedRewardNames>,
     #[serde(skip)]
     usage_parent_by_part: HashMap<String, Option<String>>,
 }
