@@ -5494,3 +5494,704 @@ msgstr ""
 msgctxt "backup.decrypt"
 msgid "Decrypt"
 msgstr ""
+
+#. Toast start.
+msgctxt "ledger.soldFor"
+msgid "Sold for {price}p"
+msgstr ""
+
+#. Toast start.
+msgctxt "ledger.boughtFor"
+msgid "Bought for {price}p"
+msgstr ""
+
+#. Toast start.
+msgctxt "ledger.tradeDone"
+msgid "Trade completed"
+msgstr ""
+
+#. Toast end. Keep the leading " · ".
+msgctxt "ledger.listingsUpdated"
+msgid "{count, plural, one { · # listing updated} other { · # listings updated}}"
+msgstr ""
+
+#. Toast; partner is the other player's name.
+msgctxt "ledger.tradeToast"
+msgid "{head}: {items} - {partner}{adjusted}"
+msgstr ""
+
+#. Toast.
+msgctxt "ledger.saveFailed"
+msgid "Couldn't save: {error}"
+msgstr ""
+
+#. Chart tooltip.
+msgctxt "ledger.weekTitle"
+msgid "{count, plural, one {Week of {date}: {plat}p from # sale} other {Week of {date}: {plat}p from # sales}}"
+msgstr ""
+
+#. Chart tooltip for the running week.
+msgctxt "ledger.weekTitlePartial"
+msgid "{count, plural, one {Week of {date} (so far): {plat}p from # sale} other {Week of {date} (so far): {plat}p from # sales}}"
+msgstr ""
+
+#. After a date for the running week. Keep the leading space.
+msgctxt "ledger.soFar"
+msgid " (so far)"
+msgstr ""
+
+#. Trade type.
+#. Max 8 characters.
+msgctxt "ledger.kind.sale"
+msgid "Sold"
+msgstr ""
+
+#. Trade type.
+#. Max 8 characters.
+msgctxt "ledger.kind.purchase"
+msgid "Bought"
+msgstr ""
+
+#. Trade type: items for items.
+#. Max 8 characters.
+msgctxt "ledger.kind.trade"
+msgid "Traded"
+msgstr ""
+
+#. View heading.
+msgctxt "ledger.title"
+msgid "Ledger"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "ledger.lede"
+msgid "Every trade the game confirmed, read from its own log — realised plat, not estimates."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "ledger.summary"
+msgid "Ledger summary"
+msgstr ""
+
+#. Tooltip and history count.
+msgctxt "ledger.soldBought"
+msgid "{sold} sold · {bought} bought"
+msgstr ""
+
+#. Total label.
+#. Max 14 characters.
+msgctxt "ledger.netAllTime"
+msgid "Net, all time"
+msgstr ""
+
+#. Total label.
+#. Max 14 characters.
+msgctxt "ledger.last7"
+msgid "Last 7 days"
+msgstr ""
+
+#. Tooltip.
+msgctxt "ledger.inOutTitle"
+msgid "Sales / purchases"
+msgstr ""
+
+#. Total label.
+#. Max 14 characters.
+msgctxt "ledger.inOut"
+msgid "Plat in / out"
+msgstr ""
+
+#. Button.
+msgctxt "ledger.refresh"
+msgid "Refresh"
+msgstr ""
+
+#. Warning. Keep the <code> parts exactly.
+msgctxt "ledger.noLog"
+msgid "<b>Game log not found</b> - trade detection is off. TennoWorth looks in <code>%LOCALAPPDATA%\\Warframe\\EE.log</code> (Windows) and every Steam library's <code>compatdata/230410/…/Warframe/EE.log</code> (Linux). Run Warframe once, then restart TennoWorth; for an unusual install set <code>TENNOWORTH_EELOG=/path/to/EE.log</code> before launching."
+msgstr ""
+
+#. Warning.
+msgctxt "ledger.pausedSave"
+msgid "<b>Trade recording paused</b> - a completed trade could not be saved, so it is being retried and everything behind it waits. Trades completed now are not in the history below yet, and listings are not being adjusted. Remaining-trade counts may be behind."
+msgstr ""
+
+#. Warning; reason is technical.
+msgctxt "ledger.pausedRead"
+msgid "<b>Trade recording paused</b> - {reason}. Trades completed now may not be recorded, and listings are not being adjusted."
+msgstr ""
+
+#. Hint.
+msgctxt "ledger.restartHint"
+msgid "Restarting TennoWorth usually restores the log read."
+msgstr ""
+
+#. Screen reader name.
+msgctxt "ledger.automation"
+msgid "Listing automation"
+msgstr ""
+
+#. Checkbox.
+msgctxt "ledger.autoClose"
+msgid "After a sale, reduce or remove the matching warframe.market listing"
+msgstr ""
+
+#. Note.
+msgctxt "ledger.autoCloseNote"
+msgid "Only ever lowers a quantity by what you sold; never touches price or visibility."
+msgstr ""
+
+#. Panel heading.
+msgctxt "ledger.byWeek"
+msgid "Realised plat by week"
+msgstr ""
+
+#. Beside the heading.
+msgctxt "ledger.thisWeek"
+msgid "this week · sales only"
+msgstr ""
+
+#. Beside the heading.
+msgctxt "ledger.lastWeeks"
+msgid "last {count} weeks · sales only"
+msgstr ""
+
+#. Screen reader description of the chart.
+msgctxt "ledger.chartLabel"
+msgid "Plat from sales in each of the last {count} weeks. Exact values are in the table view below."
+msgstr ""
+
+#. Chart axis.
+msgctxt "ledger.thisWeekSoFar"
+msgid "this week so far"
+msgstr ""
+
+#. Chart caption.
+msgctxt "ledger.medianNote"
+msgid "Dotted line: the median finished week, {plat}p."
+msgstr ""
+
+#. Disclosure.
+msgctxt "ledger.showTable"
+msgid "Show as table"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "ledger.col.week"
+msgid "Week of"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "ledger.col.realised"
+msgid "Realised"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "ledger.col.sales"
+msgid "Sales"
+msgstr ""
+
+#. Panel heading.
+msgctxt "ledger.topSellers"
+msgid "Top sellers"
+msgstr ""
+
+#. Beside the heading.
+msgctxt "ledger.topSellersNote"
+msgid "realised plat · multi-item sales split by quantity"
+msgstr ""
+
+#. Last bar of the chart.
+msgctxt "ledger.other"
+msgid "{count, plural, one {Other · # item} other {Other · # items}}"
+msgstr ""
+
+#. Empty chart.
+msgctxt "ledger.noSales"
+msgid "No sales recorded yet."
+msgstr ""
+
+#. Panel heading.
+msgctxt "ledger.history"
+msgid "Trade history"
+msgstr ""
+
+#. Beside the heading.
+msgctxt "ledger.confirmed"
+msgid "{count, plural, one {# confirmed trade} other {# confirmed trades}}"
+msgstr ""
+
+#. Disclosure.
+msgctxt "ledger.outcomes"
+msgid "Listing outcomes"
+msgstr ""
+
+#. Note.
+msgctxt "ledger.outcomesNote"
+msgid "From listings TennoWorth sent on this device in the last {days} days, and the sales the game logged while TennoWorth was running. Sales are matched by item name, so a rank or refinement is not told apart."
+msgstr ""
+
+#. Group count.
+msgctxt "ledger.listings"
+msgid "{count, plural, one {# listing} other {# listings}}"
+msgstr ""
+
+#. Fact label: typical time to the first sale.
+msgctxt "ledger.firstSale"
+msgid "First sale"
+msgstr ""
+
+#. Fact label.
+msgctxt "ledger.priceVsListed"
+msgid "Price vs listed"
+msgstr ""
+
+#. Checkbox.
+msgctxt "ledger.keepRecord"
+msgid "Keep a record of listings sent from TennoWorth"
+msgstr ""
+
+#. Note.
+msgctxt "ledger.keepRecordNote"
+msgid "Stays on this device. Turning it off deletes the record."
+msgstr ""
+
+#. Error.
+msgctxt "ledger.loadFailed"
+msgid "Couldn't load the ledger: {error}"
+msgstr ""
+
+#. Empty state.
+msgctxt "ledger.empty"
+msgid "No trades recorded yet. Complete a trade in-game with TennoWorth running and it appears here."
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "ledger.col.when"
+msgid "When"
+msgstr ""
+
+#. Column header.
+#. Max 8 characters.
+msgctxt "ledger.col.trade"
+msgid "Trade"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "ledger.col.items"
+msgid "Items"
+msgstr ""
+
+#. Column header: the other player.
+#. Max 10 characters.
+msgctxt "ledger.col.with"
+msgid "With"
+msgstr ""
+
+#. Column header.
+#. Max 6 characters.
+msgctxt "ledger.col.plat"
+msgid "Plat"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "ledger.col.listing"
+msgid "Listing"
+msgstr ""
+
+#. Tooltip.
+msgctxt "ledger.listingUpdatedTitle"
+msgid "A warframe.market listing was reduced or removed after this sale"
+msgstr ""
+
+#. Table cell.
+#. Max 16 characters.
+msgctxt "ledger.listingUpdated"
+msgid "listing updated"
+msgstr ""
+
+#. Screen reader name of the pager.
+msgctxt "ledger.pages"
+msgid "Trade history pages"
+msgstr ""
+
+#. Time to first sale.
+#. Max 10 characters.
+msgctxt "ledger.waitUnderHour"
+msgid "under 1 h"
+msgstr ""
+
+#. Time to first sale in hours.
+#. Max 10 characters.
+msgctxt "ledger.waitHours"
+msgid "{n} h"
+msgstr ""
+
+#. Time to first sale in days.
+#. Max 10 characters.
+msgctxt "ledger.waitDays"
+msgid "{n} d"
+msgstr ""
+
+#. Meter text, e.g. "2 of 5".
+msgctxt "ledger.xOfY"
+msgid "{x} of {y}"
+msgstr ""
+
+#. Meter text: no listing is old enough to judge.
+msgctxt "ledger.tooRecent"
+msgid "too recent"
+msgstr ""
+
+#. Group of listings sent from Trade Session.
+msgctxt "ledger.group.session"
+msgid "Trade Session"
+msgstr ""
+
+#. Group of listings.
+msgctxt "ledger.group.other"
+msgid "Other listings"
+msgstr ""
+
+#. Meter label.
+msgctxt "ledger.copiesSold"
+msgid "Copies sold"
+msgstr ""
+
+#. Meter label.
+msgctxt "ledger.soldInDay"
+msgid "Sold in a day"
+msgstr ""
+
+#. Meter label.
+msgctxt "ledger.soldInWeek"
+msgid "Sold in a week"
+msgstr ""
+
+#. Tooltip.
+msgctxt "ledger.noUnitPrice"
+msgid "No sold copy had a single unit price"
+msgstr ""
+
+#. Tooltip.
+msgctxt "ledger.realisedOver"
+msgid "{count, plural, one {Realised over listed price on # copy sold for plat alone} other {Realised over listed price on # copies sold for plat alone}}"
+msgstr ""
+
+#. Headline: the record is off.
+msgctxt "ledger.headline.off"
+msgid "off"
+msgstr ""
+
+#. Headline.
+msgctxt "ledger.headline.none"
+msgid "none in the last {days} days"
+msgstr ""
+
+#. Headline.
+msgctxt "ledger.headline.judged"
+msgid "{count, plural, one {# listing in {days} days · {sold} of {judged} sold within a week} other {# listings in {days} days · {sold} of {judged} sold within a week}}"
+msgstr ""
+
+#. Headline.
+msgctxt "ledger.headline.recent"
+msgid "{count, plural, one {# listing in {days} days · too recent to judge} other {# listings in {days} days · too recent to judge}}"
+msgstr ""
+
+#. Toast; sign is ≤ or ≥.
+msgctxt "watches.watching"
+msgid "Watching {item}: {sign} {price}p."
+msgstr ""
+
+#. Toast.
+msgctxt "watches.stopped"
+msgid "Stopped watching {item}."
+msgstr ""
+
+#. Toast.
+msgctxt "watches.satisfied"
+msgid "{count, plural, one {# watch satisfied right now.} other {# watches satisfied right now.}}"
+msgstr ""
+
+#. Toast.
+msgctxt "watches.noneSatisfied"
+msgid "No watch is satisfied right now."
+msgstr ""
+
+#. Toast.
+msgctxt "watches.noData"
+msgid "{item}: no live data"
+msgstr ""
+
+#. Toast.
+msgctxt "watches.listedAt"
+msgid "{item} is listed at {price}p (you wanted ≤ {threshold}p)"
+msgstr ""
+
+#. Toast.
+msgctxt "watches.bidAt"
+msgid "Someone bids {price}p for {item} (you wanted ≥ {threshold}p)"
+msgstr ""
+
+#. Last seen cell.
+msgctxt "watches.notChecked"
+msgid "not checked yet"
+msgstr ""
+
+#. Status cell.
+#. Max 10 characters.
+msgctxt "watches.status.satisfied"
+msgid "satisfied"
+msgstr ""
+
+#. Status cell.
+#. Max 10 characters.
+msgctxt "watches.status.waiting"
+msgid "waiting"
+msgstr ""
+
+#. View heading.
+msgctxt "watches.title"
+msgid "Price watches"
+msgstr ""
+
+#. Line under the heading.
+msgctxt "watches.lede"
+msgid "Get a desktop notification when an item reaches your target price."
+msgstr ""
+
+#. Tooltip.
+msgctxt "watches.checkTitle"
+msgid "Run a check right now (the app also checks every 10 minutes in the background and notifies you)."
+msgstr ""
+
+#. Button while busy.
+msgctxt "watches.checking"
+msgid "Checking…"
+msgstr ""
+
+#. Button.
+msgctxt "watches.checkNow"
+msgid "Check now"
+msgstr ""
+
+#. Panel heading.
+msgctxt "watches.add"
+msgid "Add a watch"
+msgstr ""
+
+#. Field label.
+msgctxt "watches.item"
+msgid "Item to watch"
+msgstr ""
+
+#. Placeholder. Item names may stay in English.
+msgctxt "watches.itemPlaceholder"
+msgid "Item to watch - try “primed flow”, “ash prime set”…"
+msgstr ""
+
+#. Screen reader name of ×.
+msgctxt "watches.clearItem"
+msgid "Clear item"
+msgstr ""
+
+#. Screen reader name of the suggestions.
+msgctxt "watches.matching"
+msgid "Matching items"
+msgstr ""
+
+#. Field label.
+msgctxt "watches.notifyWhen"
+msgid "Notify when"
+msgstr ""
+
+#. Option.
+msgctxt "watches.askBelow"
+msgid "Lowest ask is ≤"
+msgstr ""
+
+#. Option.
+msgctxt "watches.bidAbove"
+msgid "Highest bid is ≥"
+msgstr ""
+
+#. Field label.
+msgctxt "watches.target"
+msgid "Target price (p)"
+msgstr ""
+
+#. Button.
+msgctxt "watches.addButton"
+msgid "Add watch"
+msgstr ""
+
+#. Warning.
+msgctxt "watches.limit"
+msgid "You have {count} watches, the most the app keeps. Remove one to add another."
+msgstr ""
+
+#. Note.
+msgctxt "watches.foot"
+msgid "New listings alert within seconds. Existing orders, excluding your own, are rechecked every 10 minutes, or hourly while the live feed is connected. At most one notification per watch every 6 hours."
+msgstr ""
+
+#. Panel heading.
+msgctxt "watches.yours"
+msgid "Your watches"
+msgstr ""
+
+#. Beside the heading.
+msgctxt "watches.count"
+msgid "{count} of {max}"
+msgstr ""
+
+#. Error.
+msgctxt "watches.loadFailed"
+msgid "Couldn't load watches: {error}"
+msgstr ""
+
+#. Empty state.
+msgctxt "watches.none"
+msgid "No watches yet. Pick an item above."
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "watches.col.item"
+msgid "Item"
+msgstr ""
+
+#. Column header.
+#. Max 12 characters.
+msgctxt "watches.col.condition"
+msgid "Condition"
+msgstr ""
+
+#. Column header.
+#. Max 14 characters.
+msgctxt "watches.col.lastSeen"
+msgid "Last seen"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "watches.col.status"
+msgid "Status"
+msgstr ""
+
+#. Column header.
+#. Max 10 characters.
+msgctxt "watches.col.action"
+msgid "Action"
+msgstr ""
+
+#. Condition cell.
+#. Max 6 characters.
+msgctxt "watches.askAtMost"
+msgid "ask ≤"
+msgstr ""
+
+#. Condition cell.
+#. Max 6 characters.
+msgctxt "watches.bidAtLeast"
+msgid "bid ≥"
+msgstr ""
+
+#. Tooltip.
+msgctxt "watches.noOrders"
+msgid "No online orders on that side right now"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "watches.confirmRemove"
+msgid "Confirm removing {item}"
+msgstr ""
+
+#. Button.
+#. Max 10 characters.
+msgctxt "watches.remove"
+msgid "Remove"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "watches.keepWatching"
+msgid "Keep watching {item}"
+msgstr ""
+
+#. Button.
+#. Max 10 characters.
+msgctxt "watches.keep"
+msgid "Keep"
+msgstr ""
+
+#. Screen reader name.
+msgctxt "watches.removeItem"
+msgid "Remove {item}"
+msgstr ""
+
+#. Button.
+#. Max 10 characters.
+msgctxt "watches.removeAsk"
+msgid "Remove…"
+msgstr ""
+
+#. Banner heading; age is like "just now".
+msgctxt "offer.hit"
+msgid "Price watch hit {age}."
+msgstr ""
+
+#. Banner.
+msgctxt "offer.sells"
+msgid "{player} sells {item} at {price}p (you wanted ≤ {threshold}p)."
+msgstr ""
+
+#. Banner.
+msgctxt "offer.buys"
+msgid "{player} buys {item} at {price}p (you wanted ≥ {threshold}p)."
+msgstr ""
+
+#. Banner status.
+msgctxt "offer.checking"
+msgid "Checking it is still listed…"
+msgstr ""
+
+#. Banner status.
+msgctxt "offer.stillListed"
+msgid "Still listed when you opened TennoWorth."
+msgstr ""
+
+#. Banner status.
+msgctxt "offer.gone"
+msgid "No longer listed at your price. The player may have sold or changed it."
+msgstr ""
+
+#. Banner status.
+msgctxt "offer.recheckFailed"
+msgid "Could not recheck: {error}"
+msgstr ""
+
+#. Button after copying. A whisper is an in-game private message.
+msgctxt "offer.copied"
+msgid "Whisper copied"
+msgstr ""
+
+#. Button.
+msgctxt "offer.copy"
+msgid "Copy whisper"
+msgstr ""
+
+#. Button.
+msgctxt "offer.watches"
+msgid "Watches"
+msgstr ""
+
+#. Screen reader name of ×.
+msgctxt "offer.dismiss"
+msgid "Dismiss price watch hit"
+msgstr ""

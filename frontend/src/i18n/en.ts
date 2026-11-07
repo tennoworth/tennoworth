@@ -19,6 +19,8 @@ import { SHELL } from './en/shell';
 import { UI } from './en/ui';
 import { ORDERS } from './en/orders';
 import { BACKUP } from './en/backup';
+import { LEDGER } from './en/ledger';
+import { WATCHES } from './en/watches';
 
 export const EN = {
   ...FIRST_RUN,
@@ -36,6 +38,8 @@ export const EN = {
   ...UI,
   ...ORDERS,
   ...BACKUP,
+  ...LEDGER,
+  ...WATCHES,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

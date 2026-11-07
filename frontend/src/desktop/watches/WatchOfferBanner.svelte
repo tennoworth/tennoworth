@@ -8,6 +8,7 @@
   import { WATCH_OFFER_FRESH_SECS, type WatchOffer } from '../../contracts/desktop';
   import { WATCH_OFFER_EVENT } from '../../contracts/events';
   import { humanError } from '../../contracts/errors';
+  import { t } from '../../i18n/i18n.svelte';
 
   let { onwatches }: { onwatches?: () => void } = $props();
   const { desktopLatestWatchOffer, desktopDismissWatchOffer, desktopCopyWatchWhisper, desktopRecheckWatchOffer, listenForTauriEvent } = useDesktopServices();
@@ -26,7 +27,7 @@
   const age = $derived.by(() => {
     if (!fresh) return '';
     const minutes = Math.floor((now / 1000 - fresh.seen_at) / 60);
-    return minutes < 1 ? 'just now' : `${minutes} min ago`;
+    return minutes < 1 ? t('format.justNow') : t('format.minutesAgo', { n: minutes });
   });
 
   async function load() {
@@ -81,20 +82,19 @@
 {#if fresh}
   <div class="card ui-panel warn-banner general-banner watch-offer" role="status" data-testid="watch-offer" data-region="notices">
     <div class="gb-body">
-      <strong>Price watch hit {age}.</strong>
-      {fresh.player} {fresh.side === 'sell' ? 'sells' : 'buys'} {fresh.name} at {fresh.price}p
-      (you wanted {fresh.side === 'sell' ? '≤' : '≥'} {fresh.threshold}p).
+      <strong>{t('offer.hit', { age })}</strong>
+      {t(fresh.side === 'sell' ? 'offer.sells' : 'offer.buys', { player: fresh.player, item: fresh.name, price: fresh.price, threshold: fresh.threshold })}
       <code class="whisper">{fresh.whisper}</code>
-      {#if checking}<p class="state">Checking it is still listed…</p>
-      {:else if fresh.still_listed === true}<p class="state">Still listed when you opened TennoWorth.</p>
-      {:else if fresh.still_listed === false}<p class="state" data-tone="warn">No longer listed at your price. The player may have sold or changed it.</p>
-      {:else if recheckError}<p class="state">Could not recheck: {recheckError}</p>{/if}
+      {#if checking}<p class="state">{t('offer.checking')}</p>
+      {:else if fresh.still_listed === true}<p class="state">{t('offer.stillListed')}</p>
+      {:else if fresh.still_listed === false}<p class="state" data-tone="warn">{t('offer.gone')}</p>
+      {:else if recheckError}<p class="state">{t('offer.recheckFailed', { error: recheckError })}</p>{/if}
       {#if copyError}<p class="state" role="alert">{copyError}</p>{/if}
     </div>
     <div class="gb-actions">
-      <button class="btn primary" onclick={copy}>{copied ? 'Whisper copied' : 'Copy whisper'}</button>
-      {#if onwatches}<button class="btn" onclick={onwatches}>Watches</button>{/if}
-      <button class="gb-dismiss" aria-label="Dismiss price watch hit" onclick={() => { dismiss(); requestAnimationFrame(focusView); }}>×</button>
+      <button class="btn primary" onclick={copy}>{t(copied ? 'offer.copied' : 'offer.copy')}</button>
+      {#if onwatches}<button class="btn" onclick={onwatches}>{t('offer.watches')}</button>{/if}
+      <button class="gb-dismiss" aria-label={t('offer.dismiss')} onclick={() => { dismiss(); requestAnimationFrame(focusView); }}>×</button>
     </div>
   </div>
 {/if}
