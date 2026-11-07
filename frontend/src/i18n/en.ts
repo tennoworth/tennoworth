@@ -30,6 +30,7 @@ import { RELICS } from './en/relics';
 import { ROUTINES } from './en/routines';
 import { BARO } from './en/baro';
 import { PRESENCE } from './en/presence';
+import { UPDATES } from './en/updates';
 
 export const EN = {
   ...FIRST_RUN,
@@ -58,6 +59,7 @@ export const EN = {
   ...ROUTINES,
   ...BARO,
   ...PRESENCE,
+  ...UPDATES,
 } satisfies Record<string, Source>;
 
 export type MessageKey = keyof typeof EN;

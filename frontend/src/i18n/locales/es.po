@@ -9501,3 +9501,193 @@ msgstr ""
 msgctxt "presence.privacy"
 msgid "Reads Warframe’s EE.log only to tell when you log in and quit. Nothing is sent to the game and no input is injected. When TennoWorth quits or you sign out, a status it was keeping up is set to Invisible."
 msgstr ""
+
+#. Banner. Keep <b>.
+msgctxt "update.installed"
+msgid "<b>Update installed.</b> TennoWorth v{version} takes over the next time the app starts."
+msgstr ""
+
+#. Banner.
+msgctxt "update.installing"
+msgid "<b>Installing update…</b> Keep TennoWorth open until installation finishes."
+msgstr ""
+
+#. Banner.
+msgctxt "update.checking"
+msgid "<b>Checking for updates…</b>"
+msgstr ""
+
+#. Banner.
+msgctxt "update.available"
+msgid "<b>Update available:</b> TennoWorth v{version} (you have v{current}). Nothing downloads until you install."
+msgstr ""
+
+#. Banner.
+msgctxt "update.none"
+msgid "No update was offered · v{current}. If you’re offline, reconnect and check again."
+msgstr ""
+
+#. Banner.
+msgctxt "update.failed"
+msgid "Couldn’t check for updates. Check your connection and try again."
+msgstr ""
+
+#. Button.
+msgctxt "update.checkAgain"
+msgid "Check again"
+msgstr ""
+
+#. Screen reader name of the close button.
+msgctxt "update.dismiss"
+msgid "Dismiss update notice"
+msgstr ""
+
+#. Error.
+msgctxt "notes.loadFailed"
+msgid "Release notes could not be loaded. You can try again from Settings."
+msgstr ""
+
+#. Group heading.
+msgctxt "notes.action"
+msgid "Action needed"
+msgstr ""
+
+#. Group heading.
+msgctxt "notes.improved"
+msgid "New & improved"
+msgstr ""
+
+#. Group heading.
+msgctxt "notes.fixed"
+msgid "Fixes"
+msgstr ""
+
+#. Button.
+msgctxt "notes.retry"
+msgid "Retry"
+msgstr ""
+
+#. Warning.
+msgctxt "notes.saveFailed"
+msgid "Could not remember that you read these notes. They may appear after restarting."
+msgstr ""
+
+#. Button.
+msgctxt "notes.retrySave"
+msgid "Retry saving"
+msgstr ""
+
+#. Button.
+msgctxt "notes.dismiss"
+msgid "Dismiss notice"
+msgstr ""
+
+#. Status label.
+msgctxt "notes.installed"
+msgid "✓ Update installed"
+msgstr ""
+
+#. Status label.
+msgctxt "notes.installedVersion"
+msgid "Installed version"
+msgstr ""
+
+#. Screen reader name of the close button.
+msgctxt "notes.close"
+msgid "Close what’s new"
+msgstr ""
+
+#. Dialog heading; same as the Settings button.
+msgctxt "notes.title"
+msgid "What’s new"
+msgstr ""
+
+#. Intro.
+msgctxt "notes.sinceLast"
+msgid "Here’s what changed since you last updated."
+msgstr ""
+
+#. Intro.
+msgctxt "notes.thisVersion"
+msgid "Here’s what changed in this version."
+msgstr ""
+
+#. Intro, more than one release.
+msgctxt "notes.combined"
+msgid "Changes from all {count} releases are brought together below."
+msgstr ""
+
+#. Count.
+msgctxt "notes.releases"
+msgid "{count, plural, one {# release included} other {# releases included}}"
+msgstr ""
+
+#. Note.
+msgctxt "notes.unknownEarlier"
+msgid "Your earlier app version wasn’t recorded. These notes cover the installed release."
+msgstr ""
+
+#. Warning, before a link.
+msgctxt "notes.partial"
+msgid "Some earlier release notes aren’t bundled with this version."
+msgstr ""
+
+#. Link.
+msgctxt "notes.history"
+msgid "Read the full release history"
+msgstr ""
+
+#. Empty state.
+msgctxt "notes.noChanges"
+msgid "No changes specific to your platform are listed for this release."
+msgstr ""
+
+#. Button.
+msgctxt "notes.highlights"
+msgid "Show highlights"
+msgstr ""
+
+#. Button.
+msgctxt "notes.showAll"
+msgid "Show all changes ({count})"
+msgstr ""
+
+#. Disclosure.
+msgctxt "notes.byVersion"
+msgid "See changes by version ({count})"
+msgstr ""
+
+#. Empty state.
+msgctxt "notes.noPlatformChanges"
+msgid "No changes specific to your platform."
+msgstr ""
+
+#. Footer, before the Settings path on its own line.
+msgctxt "notes.readAgain"
+msgid "You can read this again in"
+msgstr ""
+
+#. Footer: where to find the notes. Use the translated names.
+msgctxt "notes.path"
+msgid "Settings → Updates → What’s new."
+msgstr ""
+
+#. Button.
+msgctxt "notes.gotIt"
+msgid "Got it"
+msgstr ""
+
+#. Prompt title.
+msgctxt "support.title"
+msgid "Support TennoWorth"
+msgstr ""
+
+#. Prompt.
+msgctxt "support.body"
+msgid "TennoWorth is free and has no ads. If it has helped you sell, you can support its development on Ko-fi. Ignoring this changes nothing: every feature stays free."
+msgstr ""
+
+#. Button.
+msgctxt "support.kofi"
+msgid "Support on Ko-fi"
+msgstr ""
