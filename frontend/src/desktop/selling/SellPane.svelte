@@ -18,6 +18,7 @@
   import { TAG_GROUPS, tagGroup, topTags, type TagGroup } from '../../domain/tag-groups';
   import { tagLabel, tagMatches } from './tag-labels';
   import Rich from '../../ui/Rich.svelte';
+  import { shimmer } from '../../ui/shimmer';
   import { formatLocale, t } from '../../i18n/i18n.svelte';
   import type { MessageKey } from '../../i18n/en';
   interface Props {
@@ -168,6 +169,9 @@
   };
   let tagsOpen = $state(false);
   let tagQuery = $state('');
+  // Opening the list moves focus into its box; one light pass shows where.
+  let narrowFocused = $state(false);
+  let narrowPulse = $state(0);
   let topTagSet = $derived(new Set(topTags(availableTags)));
   // While the list is open nothing moves under the pointer: a tag picked there
   // stays where it is, and joins the line once the list closes.
@@ -572,7 +576,7 @@
       {/each}
       {#if moreTags.length > 0}
         <button type="button" class="tags-more" aria-expanded={tagsOpen} aria-controls="all-tags"
-          onclick={() => { setTagsOpen(!tagsOpen); if (tagsOpen) focusLater(() => document.querySelector<HTMLElement>('#tags-narrow')); }}>
+          onclick={() => { setTagsOpen(!tagsOpen); if (tagsOpen) narrowPulse += 1; if (tagsOpen) focusLater(() => document.querySelector<HTMLElement>('#tags-narrow')); }}>
           {tagsOpen ? t('sell.tagsFewer') : t('sell.tagsMore', { count: moreTags.length })}
         </button>
       {/if}
@@ -588,8 +592,10 @@
         <!-- Clear and the OR note keep their space here, so picking a tag never
              pushes the list down. -->
         <div class="tags-narrow-row">
-          <input id="tags-narrow" class="tags-narrow" type="search" placeholder={t('sell.tagsNarrow')} aria-label={t('sell.tagsNarrowLabel')} bind:value={tagQuery}
-            onkeydown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setTagsOpen(false); focusLater(() => document.querySelector<HTMLElement>('.tagchips > button.tags-more')); } }} />
+          <span class="shimmer-field" use:shimmer={{ mode: narrowFocused ? 'live' : 'off', pulse: narrowPulse }}>
+            <input id="tags-narrow" class="tags-narrow" type="text" placeholder={t('sell.tagsNarrow')} aria-label={t('sell.tagsNarrowLabel')} bind:value={tagQuery} onfocus={() => (narrowFocused = true)} onblur={() => (narrowFocused = false)}
+              onkeydown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setTagsOpen(false); focusLater(() => document.querySelector<HTMLElement>('.tagchips > button.tags-more')); } }} />
+          </span>
           <span class="tag-or-note" class:reserved={activeTags.size < 2} aria-hidden={activeTags.size < 2}>{t('sell.tagsOr')}</span>
           <span class="tags-clear-slot" class:reserved={activeTags.size === 0} inert={activeTags.size === 0}>{@render clearTags()}</span>
         </div>
@@ -949,7 +955,7 @@
     border-top: 1px var(--rule) var(--hairline);
   }
   .tags-narrow-row { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); }
-  .tags-narrow { width: 16rem; max-width: 100%; }
+  .tags-narrow { height: var(--ctl); width: 16rem; max-width: 100%; padding: 0 var(--s3); font-size: var(--text-control); }
   .tag-or-note.reserved, .tags-clear-slot.reserved { visibility: hidden; }
   /* Each group is its own bounded box; the small ones share a row. */
   .tagset {

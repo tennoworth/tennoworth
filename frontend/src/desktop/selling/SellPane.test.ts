@@ -80,7 +80,7 @@ describe('SellPane', () => {
     expect(screen.getByRole('group', { name: 'Relic era' })).toBeTruthy();
     const names = screen.getByRole('group', { name: 'Mods for a Warframe, weapon or companion' });
     expect(names.textContent).toContain('Jat Kittag');
-    const narrow = screen.getByRole('searchbox', { name: 'Narrow tags' });
+    const narrow = screen.getByRole('textbox', { name: 'Narrow tags' });
     await fireEvent.input(narrow, { target: { value: 'jat k' } });
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Rarity' })).toBeNull());
     expect(screen.getByRole('button', { name: 'Jat Kittag 2' })).toBeTruthy();
@@ -93,7 +93,7 @@ describe('SellPane', () => {
     await fireEvent.input(narrow, { target: { value: 'oberon' } });
     await waitFor(() => expect(screen.getByText('No tag matches “oberon”.')).toBeTruthy());
     await fireEvent.keyDown(narrow, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('searchbox', { name: 'Narrow tags' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Narrow tags' })).toBeNull());
     expect(onLine()).toEqual(['mod', 'melee', 'Jat Kittag']);
   });
 

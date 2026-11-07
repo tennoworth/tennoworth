@@ -727,8 +727,8 @@ repository's shared parity-fixture approach rather than copying constants.
 `use:shimmer` in [shimmer.ts](../frontend/src/ui/shimmer.ts) draws a moving
 light, 4px scanlines and lit edge rules in `--ink-bar` over a `.shimmer-field`
 wrapper, adapted from the YoRHa terminal input shader. It is an exception to
-the rule against glows and decorative gradients, scoped to the two fields that
-start a task, and it shows their state:
+the rule against glows and decorative gradients, scoped to the fields that start a
+task, and it shows their state:
 
 - **Market lookup** (hosted site and desktop): a quiet idle sweep at rest marks
   where to start. While focused and empty it runs in full, with sparks in `--fg`
@@ -738,10 +738,13 @@ start a task, and it shows their state:
   <kbd>/</kbd> moves focus there so the jump is visible on a long table, and the
   full sweep while focused. A click gives no pass, and the filter never shows
   sparks.
+- **Sell tag list box**: nothing at rest, so it never competes with the name
+  filter's idle sweep. Opening the list with `+ N more` moves focus into it
+  with one light pass, and it runs the full sweep while focused, without sparks.
 
 The idle sweep runs at about half strength with dimmer edges, so the field
-reads as calm beside data. Never add it to a second field on the same screen,
-or to secrets, prices, quantities or writing fields. Reduced motion shows only
+reads as calm beside data. Never let two fields on one screen sweep at rest,
+and never add it to secrets, prices, quantities or writing fields. Reduced motion shows only
 the lit edges. The canvas ignores the pointer, is hidden from assistive
 technology and never replaces the focus outline; the animation stops when the
 window is hidden or the field is off screen. Select Field shimmer in the living
