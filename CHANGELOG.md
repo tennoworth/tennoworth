@@ -54,6 +54,24 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.9.102 - 2026-11-08
+
+# 🌍 TennoWorth Desktop 0.9.102
+
+TennoWorth Desktop 0.9.102 is ready.
+
+This release is for French players. A French player told us nobody says "au Coffre" for vaulted Primes, so the French version now uses the word players use in game chat: Vaulted.
+
+## Changelog (1)
+
+### Languages
+
+- **"Vaulted" in French** The French badges, filters, tooltips and calendar entries said "au Coffre". They now say Vaulted, the word French players use, with "Vault imminent" for parts about to be vaulted. <!-- app-note {"id":"fr-vaulted","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.9.101 - 2026-11-07
 
 # 🏷️ TennoWorth Desktop 0.9.101

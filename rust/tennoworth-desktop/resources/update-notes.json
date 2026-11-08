@@ -1,5 +1,5 @@
 {
-  "version": "0.9.101",
+  "version": "0.9.102",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1982,6 +1982,23 @@
           "kind": "fixed",
           "title": "Filters stay where you click",
           "body": "Switching tags or filters used to move the tag line, because the Top picks above it changed height. The line you are using now stays put, and a tag picked from the list stays in place until the list closes.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.9.102",
+      "date": "2026-11-08",
+      "changes": [
+        {
+          "id": "fr-vaulted",
+          "kind": "fixed",
+          "title": "\"Vaulted\" in French",
+          "body": "The French badges, filters, tooltips and calendar entries said \"au Coffre\". They now say Vaulted, the word French players use, with \"Vault imminent\" for parts about to be vaulted.",
           "platforms": [
             "windows",
             "linux"
