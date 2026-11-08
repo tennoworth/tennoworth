@@ -1408,13 +1408,13 @@ msgstr "Retour à Par défaut"
 #, fuzzy
 msgctxt "sell.emptyVaultTitle"
 msgid "You own no vaulted or vaulting-soon prime parts."
-msgstr "Vous ne possédez aucune pièce Prime au Coffre ou bientôt au Coffre."
+msgstr "Vous ne possédez aucune pièce Prime Vaulted ou bientôt Vaulted."
 
 #. Empty state.
 #, fuzzy
 msgctxt "sell.emptyVaultBody"
 msgid "The Vaulted preset only shows parts past (or near) their vault cliff."
-msgstr "Le préréglage Coffre n’affiche que les pièces qui ont passé (ou approchent) leur mise au Coffre."
+msgstr "Le préréglage Vaulted n’affiche que les pièces déjà Vaulted (ou sur le point de l’être)."
 
 #. Empty state heading.
 #, fuzzy
@@ -1450,7 +1450,7 @@ msgstr "Rien de ce que vous possédez n’a de conseil lié au calendrier."
 #, fuzzy
 msgctxt "sell.emptyAdviceBody"
 msgid "Hold / Sell covers primes with release and vault dates - parts, blueprints, and sets. Relics, mods, and non-prime gear have no calendar to time against."
-msgstr "Garder / Vendre couvre les Primes avec des dates de sortie et de mise au Coffre - pièces, Schémas et sets. Les reliques, les mods et l’équipement non Prime n’ont pas de calendrier sur lequel se caler."
+msgstr "Garder / Vendre couvre les Primes avec des dates de sortie et de Vault - pièces, Schémas et sets. Les reliques, les mods et l’équipement non Prime n’ont pas de calendrier sur lequel se caler."
 
 #. Empty state heading.
 #, fuzzy
@@ -1624,20 +1624,20 @@ msgstr "Garder/Vend."
 #, fuzzy
 msgctxt "sell.preset.holdsell.hint"
 msgid "calendar-timed advice for your primes - release decay, Resurgence floods, post-vault ramps; hover a chip for the numbers"
-msgstr "conseils calés sur le calendrier pour vos Primes - baisse après sortie, afflux de Résurgence, hausse après le Coffre ; survolez un badge pour les chiffres"
+msgstr "conseils calés sur le calendrier pour vos Primes - baisse après sortie, afflux de Résurgence, hausse après le Vault ; survolez un badge pour les chiffres"
 
 #. Preset button.
 #. Max 12 characters.
 #, fuzzy
 msgctxt "sell.preset.vault"
 msgid "Vaulted"
-msgstr "Coffre"
+msgstr "Vaulted"
 
 #. Preset explanation.
 #, fuzzy
 msgctxt "sell.preset.vault.hint"
 msgid "vaulted + vaulting-soon prime parts (prices usually climb once relics stop dropping)"
-msgstr "pièces Prime au Coffre ou bientôt au Coffre (les prix montent souvent quand les reliques ne tombent plus)"
+msgstr "pièces Prime Vaulted ou bientôt Vaulted (les prix montent souvent quand les reliques ne tombent plus)"
 
 #. Column header, shown in capitals. The item name.
 #. Max 12 characters.
@@ -1924,7 +1924,7 @@ msgstr "▲ = prix qui monte vers un pic (vendez maintenant) ; ▼ = en baisse"
 #, fuzzy
 msgctxt "table.help.advice"
 msgid "Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only - nothing is automated."
-msgstr "Conseil garder-ou-vendre tiré du calendrier Prime (baisse après sortie, réapparitions en Résurgence, hausse après le Coffre) et d’un an d’historique de prix. Survolez un badge pour les chiffres exacts. Simple conseil - rien n’est automatisé."
+msgstr "Conseil garder-ou-vendre tiré du calendrier Prime (baisse après sortie, réapparitions en Résurgence, hausse après le Vault) et d’un an d’historique de prix. Survolez un badge pour les chiffres exacts. Simple conseil - rien n’est automatisé."
 
 #. Column guide: how to read Advice.
 #, fuzzy
@@ -2024,7 +2024,7 @@ msgstr "S’échange à peine (moins de 3 ventes en 48 h) - la publication fonct
 #, fuzzy
 msgctxt "table.pill.vaulted"
 msgid "vaulted"
-msgstr "au Coffre"
+msgstr "Vaulted"
 
 #. Tooltip of the vaulted filter chip.
 #, fuzzy
@@ -2037,7 +2037,7 @@ msgstr "Pièce Prime qu’on ne peut plus obtenir en jeu - l’offre ne fait que
 #, fuzzy
 msgctxt "table.pill.vaulting-soon"
 msgid "vaulting soon"
-msgstr "bientôt Coffre"
+msgstr "Vault imminent"
 
 #. Tooltip of the vaulting soon filter chip.
 #, fuzzy
@@ -2074,13 +2074,13 @@ msgstr "{what}. Cliquez pour n’afficher que ces lignes."
 #, fuzzy
 msgctxt "table.badge.vaulted"
 msgid "Prime is currently vaulted. Listings often command a premium."
-msgstr "Ce Prime est actuellement au Coffre. Les annonces se vendent souvent plus cher."
+msgstr "Ce Prime est actuellement Vaulted. Les annonces se vendent souvent plus cher."
 
 #. Tooltip of the vaulting soon badge.
 #, fuzzy
 msgctxt "table.badge.vaultingSoon"
 msgid "Estimated to vault within ~60 days. Prices usually climb once its relics stop dropping."
-msgstr "Mise au Coffre estimée d’ici ~60 jours. Les prix montent en général quand ses reliques ne tombent plus."
+msgstr "Vault estimé d’ici ~60 jours. Les prix montent en général quand ses reliques ne tombent plus."
 
 #. Badge on a relic row: the relic planner is the better place for it.
 #. Max 16 characters.
@@ -3820,7 +3820,7 @@ msgstr "{count} sets Prime comparés à votre Inventaire, classés par gain net 
 #, fuzzy
 msgctxt "sets.dataAge"
 msgid "· ⚠ set/vault data {age}"
-msgstr "· ⚠ données sets/Coffre {age}"
+msgstr "· ⚠ données sets/Vault {age}"
 
 #. Screen reader name of the totals.
 #, fuzzy
@@ -11628,20 +11628,20 @@ msgstr "prochaine"
 #, fuzzy
 msgctxt "market.vaultedHelp"
 msgid "Vaulted - no longer dropping, supply is capped"
-msgstr "Au Coffre - ne tombe plus, l’offre est plafonnée"
+msgstr "Vaulted - ne tombe plus, l’offre est plafonnée"
 
 #. Tag.
 #. Max 8 characters.
 #, fuzzy
 msgctxt "market.vaulted"
 msgid "vaulted"
-msgstr "Coffre"
+msgstr "Vaulted"
 
 #. Tooltip.
 #, fuzzy
 msgctxt "market.soonHelp"
 msgid "Vaulting soon - supply about to be capped"
-msgstr "Bientôt au Coffre - l’offre va être plafonnée"
+msgstr "Bientôt Vaulted - l’offre va être plafonnée"
 
 #. Tag: vaulting soon.
 #. Max 8 characters.
@@ -12060,7 +12060,7 @@ msgstr "Tableau des prix en baisse"
 #, fuzzy
 msgctxt "market.vaultedTitle"
 msgid "Vaulted & valuable"
-msgstr "Au Coffre et précieux"
+msgstr "Vaulted et précieux"
 
 #. Section note.
 #, fuzzy
@@ -12072,19 +12072,19 @@ msgstr "ne tombent plus, l’offre est donc plafonnée"
 #, fuzzy
 msgctxt "market.noVault"
 msgid "No vault data in this snapshot."
-msgstr "Aucune donnée de Coffre dans cet instantané."
+msgstr "Aucune donnée de Vault dans cet instantané."
 
 #. Screen reader name.
 #, fuzzy
 msgctxt "market.vaultedTable"
 msgid "Vaulted items table"
-msgstr "Tableau des objets au Coffre"
+msgstr "Tableau des objets Vaulted"
 
 #. Note.
 #, fuzzy
 msgctxt "market.vaultedNote"
 msgid "High-value vaulted items tend to hold or climb."
-msgstr "Les objets au Coffre de grande valeur ont tendance à se maintenir ou à monter."
+msgstr "Les objets Vaulted de grande valeur ont tendance à se maintenir ou à monter."
 
 #. Baro.
 #, fuzzy
@@ -12865,13 +12865,13 @@ msgstr "Varzia vend les reliques {names}. L’afflux d’offre maintient en gén
 #, fuzzy
 msgctxt "cal.vault.title"
 msgid "{names} may be vaulted"
-msgstr "{names} pourrait passer au Coffre"
+msgstr "{names} pourrait devenir Vaulted"
 
 #. Short label.
 #, fuzzy
 msgctxt "cal.vault.short"
 msgid "Vaulting (est.) · {names}"
-msgstr "Coffre (est.) · {names}"
+msgstr "Vault (est.) · {names}"
 
 #. Event description.
 #, fuzzy
@@ -13002,7 +13002,7 @@ msgstr "Résurgence Prime"
 #, fuzzy
 msgctxt "cal.kind.vault"
 msgid "Vaulting"
-msgstr "Mise au Coffre"
+msgstr "Vault"
 
 #. Event kind.
 #. Max 20 characters.

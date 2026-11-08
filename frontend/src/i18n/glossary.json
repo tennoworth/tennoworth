@@ -82,8 +82,8 @@
       "de": "Set", "es": "conjunto", "fr": "Set", "it": "Set", "ja": "セット", "ko": "세트", "pl": "zestaw", "pt": "conjunto", "pt-pt": "conjunto", "ru": "набор", "th": "เซ็ต", "tr": "Set", "uk": "набір", "zh-hans": "套装", "zh-hant": "套裝"
     },
     {
-      "en": "Vaulted", "note": "Removed from the drop tables (the Prime Vault).", "source": "verify",
-      "de": "im Tresor", "es": "en la Bóveda", "fr": "au Coffre", "it": "nel Caveau", "ja": "Vault入り", "ko": "볼트됨", "pl": "w Skarbcu", "pt": "no Cofre", "pt-pt": "no Cofre", "ru": "в Хранилище", "th": "Vaulted", "tr": "Kasada", "uk": "у Сховищі", "zh-hans": "已入库", "zh-hant": "已入庫"
+      "en": "Vaulted", "note": "Removed from the drop tables (the Prime Vault). French players use the English word.", "source": "verify",
+      "de": "im Tresor", "es": "en la Bóveda", "fr": "Vaulted", "it": "nel Caveau", "ja": "Vault入り", "ko": "볼트됨", "pl": "w Skarbcu", "pt": "no Cofre", "pt-pt": "no Cofre", "ru": "в Хранилище", "th": "Vaulted", "tr": "Kasada", "uk": "у Сховищі", "zh-hans": "已入库", "zh-hant": "已入庫"
     },
     {
       "en": "Baro Ki'Teer", "note": "The Void Trader. Name only; check how the game spells it.", "source": "verify",
