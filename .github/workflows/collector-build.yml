@@ -106,16 +106,6 @@ jobs:
 
   build:
     needs: changes
-    # Serialize publishers of this rolling release, and only them. The box pulls
-    # whichever asset is newest by timestamp, so two concurrent builds of this
-    # binary could let the older tree win. This sits on the job rather than the
-    # workflow so a run that classifies as "nothing to publish" never holds or
-    # evicts a slot - a skipped job never enters the queue, and a queued one is
-    # replaced by the next arrival. `cancel-in-progress` stays false so an
-    # in-flight publication is not interrupted; a later run may not repeat it.
-    concurrency:
-      group: build-${{ inputs.crate }}
-      cancel-in-progress: false
     # `!cancelled()` is load-bearing, not decoration: a job whose `needs`
     # dependency was skipped is itself skipped unless its condition includes a
     # status function, so a manual publish - which skips classification by
@@ -133,10 +123,8 @@ jobs:
     # ubuntu-22.04 for its glibc 2.35 - same rationale as release-desktop.yml's
     # linux-binary job (backward- but no forward-compat).
     runs-on: ubuntu-22.04
-    # The box installs this binary as root only when it carries the collector
-    # key's signature. The key is a secret of this main-only environment, so a
-    # token that can edit release assets cannot produce one.
-    environment: collector-release
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: rust
@@ -158,6 +146,51 @@ jobs:
           sha256sum "$CRATE" > "$CRATE.sha256"
           cat "$CRATE.sha256"
 
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.crate }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Signing runs apart from the build: the build stays on 22.04 for its glibc,
+  # where minisign is not packaged, and the key never reaches a job that
+  # compiles anything.
+  publish:
+    needs: build
+    # Serialize publishers of this rolling release, and only them. The box pulls
+    # whichever asset is newest by timestamp, so two concurrent publications of
+    # this binary could let the older tree win. This sits on the job rather than the
+    # workflow so a run that classifies as "nothing to publish" never holds or
+    # evicts a slot - a skipped job never enters the queue, and a queued one is
+    # replaced by the next arrival. `cancel-in-progress` stays false so an
+    # in-flight publication is not interrupted; a later run may not repeat it.
+    concurrency:
+      group: build-${{ inputs.crate }}
+      cancel-in-progress: false
+    runs-on: ubuntu-26.04
+    # The box installs this binary as root only when it carries the collector
+    # key's signature. The key is a secret of this main-only environment, so a
+    # token that can edit release assets cannot produce one.
+    environment: collector-release
+    env:
+      CRATE: ${{ inputs.crate }}
+    steps:
+      # The rolling-release action lives in this repository.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.crate }}
+          path: dist
+
+      - name: Verify checksum
+        working-directory: dist
+        run: sha256sum -c "$CRATE.sha256"
+
       # deploy/bin/pull-collector.sh requires the trusted comment to start with
       # "tennoworth-collector <binary> ", so a signature for one collector cannot
       # install as the other.
@@ -170,7 +203,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq minisign
           key="$RUNNER_TEMP/collector-signing.key"
           (umask 077 && printf '%s\n' "$COLLECTOR_SIGNING_KEY" > "$key")
-          minisign -S -s "$key" -m "../dist/$CRATE" -x "../dist/$CRATE.minisig" \
+          minisign -S -s "$key" -m "dist/$CRATE" -x "dist/$CRATE.minisig" \
             -t "tennoworth-collector $CRATE $GITHUB_SHA" </dev/null
           rm -f "$key"
 

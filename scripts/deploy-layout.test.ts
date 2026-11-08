@@ -990,6 +990,17 @@ describe.each(collectors)('$name collector signature', ({ name, binary }) => {
     expect(ci).toContain('dist/${{ inputs.crate }}.minisig');
     expect(pull).toContain('"tennoworth-collector $binary "*)');
   });
+
+  test('CI signs on a runner that packages minisign, away from the build', () => {
+    // The build stays on 22.04 for its glibc, which has no minisign package;
+    // signing there failed every collector publication.
+    const jobs = (Bun.YAML.parse(readFileSync(new URL('../.github/workflows/collector-build.yml', import.meta.url), 'utf8')) as any).jobs;
+    const signers = Object.values(jobs).filter((job: any) => job.steps?.some((step: any) => /apt-get install[^\n]*minisign/.test(step.run ?? '')));
+    expect(signers).toHaveLength(1);
+    expect((signers[0] as any)['runs-on']).not.toBe('ubuntu-22.04');
+    expect(jobs.build['runs-on']).toBe('ubuntu-22.04');
+    expect(jobs.build.environment, 'the build never holds the signing key').toBeUndefined();
+  });
 });
 
 // ---- run-scrape.sh: a run that publishes nothing must not republish --------
