@@ -1,5 +1,5 @@
 {
-  "version": "0.9.102",
+  "version": "0.10.100",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2001,6 +2001,54 @@
           "body": "The French badges, filters, tooltips and calendar entries said \"au Coffre\". They now say Vaulted, the word French players use, with \"Vault imminent\" for parts about to be vaulted.",
           "platforms": [
             "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.100",
+      "date": "2026-11-09",
+      "changes": [
+        {
+          "id": "relic-two-line-titles",
+          "kind": "fixed",
+          "title": "Two-line reward names are recognized",
+          "body": "A reward whose name wraps onto two lines, like \"Wisp Prime - Châssis (Schéma)\", showed \"Reward not recognized\" when it was drawn over bright item art. The overlay now reads only the text lines of each title, at a larger size, and recognizes it in every game language.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "relic-wait-for-names",
+          "kind": "improved",
+          "title": "Rewards appear sooner and more reliably",
+          "body": "When a relic opens, the game logs the rewards before it draws their names. The overlay now waits for the names instead of spending its attempts on the loading screen, so it shows all four rewards on its first look.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "linux-tesseract-5",
+          "kind": "improved",
+          "title": "Newer text recognition",
+          "body": "The Linux app now uses Tesseract 5, which reads reward names over bright item art that the previous version could not.",
+          "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "linux-glibc-2-39",
+          "kind": "action",
+          "title": "Linux needs glibc 2.39 or newer",
+          "body": "This version needs Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or a later release. Settings → Updates shows the glibc version your system has. On older systems, keep 0.9.102, which is still available on the releases page.",
+          "platforms": [
             "linux"
           ],
           "supersedes": []
