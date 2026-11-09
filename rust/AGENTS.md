@@ -72,8 +72,10 @@ These bind every crate here, including callers:
   is authoritative, `rust/Cargo.lock` is derived, and both must equal the
   `desktop-v*` tag; commit the lock with the bump (`cargo fetch --locked`
   gates it in audit.yml and release-desktop.yml).
-- **Build on the oldest glibc you support.** CI builds on `ubuntu-22.04`
-  (glibc 2.35) deliberately; a newer runner silently drops older distributions.
+- **Build on the oldest glibc you support.** CI builds on `ubuntu-24.04`
+  (glibc 2.39) deliberately; a newer runner silently drops older distributions,
+  and an older one ships Tesseract 4, which misreads reward titles over bright
+  item art.
 
 ## Gotchas
 

@@ -395,13 +395,15 @@ jobs:
 
   # Linux. Publishes NOTHING - every output leaves as a workflow artifact.
   #
-  # ubuntu-22.04 is load-bearing, not incidental: glibc is backward- but not
+  # ubuntu-24.04 is load-bearing, not incidental: glibc is backward- but not
   # forward-compatible, so the build host's glibc becomes the floor for every
-  # user. 22.04's 2.35 runs everywhere current; a binary built on a rolling
-  # distro would demand a glibc most users don't have yet.
+  # user. 24.04's 2.39 runs on every current stable distribution (Debian 13,
+  # Ubuntu 24.04, Fedora 43); 26.04's 2.43 would not start on any of those.
+  # It is not older either: 22.04 ships Tesseract 4.1.1, which cannot read a
+  # two-line reward title drawn over bright item art (#466).
   build-linux:
     needs: preflight
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -417,7 +419,7 @@ jobs:
         run: echo "version=${ImageVersion:?Runner image version is required}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-rust
         with:
-          shared-key: linux-ubuntu-22.04-release-${{ steps.runner-image.outputs.version }}
+          shared-key: linux-ubuntu-24.04-release-${{ steps.runner-image.outputs.version }}
 
       # Identical list to audit.yml's - without these the *-sys crates fail at
       # pkg-config before anything builds.
@@ -454,7 +456,7 @@ jobs:
             --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       # Fails the release rather than shipping a binary that won't start on a
-      # user's machine. 2.35 is what ubuntu-22.04 provides; anything higher
+      # user's machine. 2.39 is what ubuntu-24.04 provides; anything higher
       # means the toolchain pulled in a newer symbol and the portability
       # guarantee above is silently gone.
       - name: Verify glibc floor
@@ -463,8 +465,8 @@ jobs:
           bin=rust/target/release/tennoworth-desktop
           max=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
           echo "highest glibc symbol required: $max"
-          if [ "$(printf '%s\n2.35\n' "$max" | sort -V | tail -1)" != "2.35" ]; then
-            echo "::error title=glibc floor too high::Binary needs glibc $max but the build host should cap it at 2.35. It would fail to start on older distros."
+          if [ "$(printf '%s\n2.39\n' "$max" | sort -V | tail -1)" != "2.39" ]; then
+            echo "::error title=glibc floor too high::Binary needs glibc $max but the build host should cap it at 2.39. It would fail to start on older distros."
             exit 1
           fi
           ldd "$bin" | grep -E 'webkit2gtk|libgtk-3' || true
@@ -505,6 +507,9 @@ jobs:
           [ "$removed" -gt 0 ] || { echo "::error title=libwayland not stripped::no bundled libwayland in usr/lib - linuxdeploy behavior changed"; exit 1; }
           left=$(find squashfs-root -name 'libwayland-*.so*' -print)
           [ -z "$left" ] || { echo "::error title=libwayland still bundled::$left"; exit 1; }
+          # Reward titles over bright item art need Tesseract 5; a 4.x library
+          # here means the build moved back to a host that ships one.
+          compgen -G 'squashfs-root/usr/lib/libtesseract.so.5*' >/dev/null || { echo "::error title=Tesseract 5 not bundled::found: $(ls squashfs-root/usr/lib | grep -i tesseract || echo none)"; exit 1; }
           # --appimage-extract creates every directory with mode 0700 (the type2
           # runtime's mkdir_p) and appimagetool packs those modes. The user who
           # mounts the image never notices, because FUSE ignores the bits for

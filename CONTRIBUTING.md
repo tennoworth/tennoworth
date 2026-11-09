@@ -259,7 +259,7 @@ Install the Rust toolchain with Cargo. Native dependencies differ by platform;
 the current build definitions are in [ui-smoke.yml](.github/workflows/ui-smoke.yml)
 and [release-desktop.yml](.github/workflows/release-desktop.yml).
 
-On Ubuntu 22.04, install the build and display packages:
+On Ubuntu 24.04, install the build and display packages:
 
 ```sh
 sudo apt-get update
