@@ -11,7 +11,7 @@
  * anything.
  */
 import type { DesktopServices } from '../../contracts/services';
-import { UPDATE_CHECK_INTERVAL_MS, type UpdateStatus } from '../../contracts/update';
+import { UPDATE_CHECK_INTERVAL_MS, type LinuxRequirement, type UpdateStatus } from '../../contracts/update';
 import { humanError } from '../../contracts/errors';
 
 export type UpdateServices = Pick<
@@ -23,6 +23,8 @@ export const LATEST_RELEASE_URL = 'https://github.com/tennoworth/tennoworth/rele
 
 export class UpdateController {
   info = $state<UpdateStatus | null>(null);
+  /** Read at start, unlike `info`, which waits for an update or a check. */
+  linuxRequirement = $state<LinuxRequirement | null>(null);
   checking = $state(false);
   installing = $state(false);
   installed = $state(false);
@@ -47,7 +49,10 @@ export class UpdateController {
     // "no update" needs no UI at all.
     const unlisten = this.services.onUpdateAvailable((s) => this.offer(s));
     void this.services.updateStatus().then(
-      (s) => { if (s.available && !this.info?.available) this.info = s; },
+      (s) => {
+        this.linuxRequirement = s.linux_requirement ?? null;
+        if (s.available && !this.info?.available) this.info = s;
+      },
       (e) => console.error('update status read failed', e),
     );
     const timer = window.setInterval(() => {

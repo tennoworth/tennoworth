@@ -259,7 +259,7 @@ Install the Rust toolchain with Cargo. Native dependencies differ by platform;
 the current build definitions are in [ui-smoke.yml](.github/workflows/ui-smoke.yml)
 and [release-desktop.yml](.github/workflows/release-desktop.yml).
 
-On Ubuntu 22.04, install the build and display packages:
+On Ubuntu 24.04, install the build and display packages:
 
 ```sh
 sudo apt-get update
@@ -324,7 +324,10 @@ cargo audit --deny warnings
 As an alternative to `cargo test --workspace`, run both
 `cargo nextest run --workspace` and `cargo test --workspace --doc`; nextest
 does not run doctests. For reward recognition/capture changes, also run
-`cargo test -p tennoworth-desktop real_three_reward_capture_survives_common_display_shapes -- --ignored`.
+`cargo test -p tennoworth-desktop real_three_reward_capture_survives_common_display_shapes -- --ignored`,
+and `real_french_capture_reads_a_two_line_title_on_common_display_shapes` the
+same way with `TENNOWORTH_TESSDATA_DIR` naming a directory that holds
+`fra.traineddata` (same `tessdata_fast` 4.1.0 revision). Both need Tesseract 5.
 
 Install the separate check tools with `cargo install cargo-nextest cargo-shear cargo-audit --locked`. The ordinary
 suite uses local fixtures and mock servers. The weekly audit runs the opt-in

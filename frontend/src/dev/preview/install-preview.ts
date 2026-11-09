@@ -39,6 +39,7 @@ export async function installPreview() {
     current_version: 'preview',
     version: null,
     notes: null,
+    linux_requirement: { glibc_required: '2.39', glibc_found: '2.41' },
   };
   // An offered update; with `update-signature` its install fails the way a
   // release signed by a key this install does not trust does.

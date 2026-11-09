@@ -8067,6 +8067,18 @@ msgctxt "settings.update.disabled"
 msgid "Updates are disabled in this test build."
 msgstr "У цій тестовій збірці оновлення вимкнено."
 
+#. Warning under the update controls, shown on Linux only. glibc is the name of a system library; keep it untranslated, like the distribution names.
+#, fuzzy
+msgctxt "settings.linuxRequirement"
+msgid "On Linux, TennoWorth needs glibc {required} or newer: Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or a later release. Older systems can’t start it."
+msgstr "У Linux для TennoWorth потрібна glibc {required} або новіша: Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 чи новіший випуск. На старіших системах застосунок не запуститься."
+
+#. Follows settings.linuxRequirement when the system reports its glibc version.
+#, fuzzy
+msgctxt "settings.linuxRequirementFound"
+msgid "This system has glibc {found}."
+msgstr "У цій системі glibc {found}."
+
 #. Text before a link to the latest release. Keep the trailing space.
 #, fuzzy
 msgctxt "settings.manualBefore"

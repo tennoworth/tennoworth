@@ -1,8 +1,8 @@
 use super::{diagnostics_attempt_dir, elapsed_ms, unix_millis, OverlayStageTimings};
 use super::{
     OverlayBox, OverlaySettings, RelicOverlayResult, RelicOverlaySlot,
-    REWARD_CARD_WIDTH_PER_HEIGHT, REWARD_SLOT_SPACING_PER_HEIGHT, REWARD_TITLE_TARGET_WIDTH,
-    WARFRAME_DESIGN_ASPECT,
+    REWARD_CARD_WIDTH_PER_HEIGHT, REWARD_SLOT_SPACING_PER_HEIGHT, REWARD_TITLE_HEIGHT_PER_HEIGHT,
+    REWARD_TITLE_TARGET_WIDTH, REWARD_TITLE_TOP_PER_HEIGHT, WARFRAME_DESIGN_ASPECT,
 };
 use crate::services::market::sellables::{OverlayCatalogItem, OverlayMarketFacts};
 use crate::vision::capture::CapturedFrame;
@@ -361,8 +361,8 @@ pub(super) fn reward_header_layout(frame: &CapturedFrame, count: usize) -> Rewar
     let width = REWARD_CARD_WIDTH_PER_HEIGHT * design_height / frame.width as f64;
     let card_y = (design_top + design_height * 0.22) / frame.height as f64;
     let card_height = design_height * 0.25 / frame.height as f64;
-    let title_y = (design_top + design_height * 0.35) / frame.height as f64;
-    let title_height = design_height * 0.11 / frame.height as f64;
+    let title_y = (design_top + design_height * REWARD_TITLE_TOP_PER_HEIGHT) / frame.height as f64;
+    let title_height = design_height * REWARD_TITLE_HEIGHT_PER_HEIGHT / frame.height as f64;
     let offsets = (0..count).map(|index| index as f64 - (count as f64 - 1.0) / 2.0);
     let slots = offsets
         .enumerate()
@@ -477,8 +477,8 @@ pub(super) fn detected_reward_header_layout(
     let width = spacing * width_ratio;
     let card_y = (design_top + design_height * 0.22) / frame.height as f64;
     let card_height = design_height * 0.25 / frame.height as f64;
-    let title_y = (design_top + design_height * 0.35) / frame.height as f64;
-    let title_height = design_height * 0.11 / frame.height as f64;
+    let title_y = (design_top + design_height * REWARD_TITLE_TOP_PER_HEIGHT) / frame.height as f64;
+    let title_height = design_height * REWARD_TITLE_HEIGHT_PER_HEIGHT / frame.height as f64;
     let slots = (0..count)
         .map(|index| {
             let offset = index as f64 - (count as f64 - 1.0) / 2.0;

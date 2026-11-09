@@ -85,7 +85,7 @@ jobs:
           retention-days: 7
 
   linux-bundle-probe:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       TENNOWORTH_OCR_TEST_BUILD: '1'
@@ -98,7 +98,7 @@ jobs:
         run: echo "version=${ImageVersion:?Runner image version is required}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-rust
         with:
-          shared-key: linux-ubuntu-22.04-ocr-test-release-${{ steps.runner-image.outputs.version }}
+          shared-key: linux-ubuntu-24.04-ocr-test-release-${{ steps.runner-image.outputs.version }}
 
       - name: Install Linux bundle and display dependencies
         run: >
@@ -135,7 +135,7 @@ jobs:
           cd "$probe_root"
           "$img" --appimage-extract >/dev/null
           test "$(find squashfs-root/usr/lib -name eng.traineddata | wc -l)" -eq 1
-          test -n "$(find squashfs-root/usr/lib -maxdepth 1 -name 'libtesseract.so*' -print -quit)"
+          compgen -G 'squashfs-root/usr/lib/libtesseract.so.5*' >/dev/null
           test -n "$(find squashfs-root/usr/lib -maxdepth 1 \( -name 'libleptonica.so*' -o -name 'liblept.so*' \) -print -quit)"
           probe_out="$RUNNER_TEMP/ocr-linux-boot-probe.txt"
           xvfb-run -a env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 \

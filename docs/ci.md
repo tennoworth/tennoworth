@@ -85,7 +85,7 @@ exclude workspace crates. The pinned rust-cache action ignores `key` when
 `shared-key` is set, so compatibility identities are part of `shared-key` itself.
 Windows release and smoke share a release-profile
 group keyed by the native compatibility identity. OCR installers have their
-own groups. Linux Ubuntu 22.04 release, smoke debug and OCR installer groups
+own groups. Linux Ubuntu 24.04 release, smoke debug and OCR installer groups
 are separate, with runner image identity included. Tool-install, preflight
 and audit jobs keep their existing job-specific caches.
 

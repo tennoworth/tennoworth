@@ -20,6 +20,13 @@ export interface UpdateStatus {
   current_version: string;
   version: string | null;
   notes: string | null;
+  /** Linux only: the glibc this build needs and the one this system has. */
+  linux_requirement?: LinuxRequirement | null;
+}
+
+export interface LinuxRequirement {
+  glibc_required: string;
+  glibc_found: string | null;
 }
 
 

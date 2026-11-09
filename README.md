@@ -98,7 +98,10 @@ The installer is not code-signed, so Windows SmartScreen may require
 
 ### Linux
 
-Linux is distributed as one self-updating AppImage:
+Linux is distributed as one self-updating AppImage. It needs glibc 2.39 or
+newer: Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or a later release.
+Older systems cannot start it; Settings → Updates shows the glibc your system
+has.
 
 ```bash
 curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage
