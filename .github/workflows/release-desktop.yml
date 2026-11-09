@@ -465,8 +465,10 @@ jobs:
           bin=rust/target/release/tennoworth-desktop
           max=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
           echo "highest glibc symbol required: $max"
-          if [ "$(printf '%s\n2.39\n' "$max" | sort -V | tail -1)" != "2.39" ]; then
-            echo "::error title=glibc floor too high::Binary needs glibc $max but the build host should cap it at 2.39. It would fail to start on older distros."
+          # The app shows this floor to Linux players (Settings > Updates).
+          floor=$(jq -er .glibc tests/fixtures/linux-requirements.json)
+          if [ "$(printf '%s\n%s\n' "$max" "$floor" | sort -V | tail -1)" != "$floor" ]; then
+            echo "::error title=glibc floor too high::Binary needs glibc $max but the build host should cap it at $floor. It would fail to start on older distros."
             exit 1
           fi
           ldd "$bin" | grep -E 'webkit2gtk|libgtk-3' || true

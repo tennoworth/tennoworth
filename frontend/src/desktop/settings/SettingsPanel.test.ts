@@ -271,6 +271,45 @@ describe('SettingsPanel', () => {
     expect(screen.queryByText(/You’re up to date/)).toBeNull();
   });
 
+  it('warns Linux players which glibc this build needs before any check', async () => {
+    const { theme } = fakeTheme();
+    installTauri(vi.fn(async (command: string) => {
+      if (command === 'update_status') {
+        return {
+          checked: false, available: false, support: 'supported', current_version: '0.9.103', version: null, notes: null,
+          linux_requirement: { glibc_required: '2.39', glibc_found: '2.41' },
+        };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }), undefined);
+    const updates = new UpdateController(createDesktopServices());
+    const stop = updates.start();
+    render(SettingsPanel, { props: { theme, updates } });
+
+    const warning = await screen.findByTestId('settings-linux-requirement');
+    expect(warning.textContent).toContain('needs glibc 2.39 or newer');
+    expect(warning.textContent).toContain('can’t start it. This system has glibc 2.41.');
+    stop();
+  });
+
+  it('shows no Linux requirement on Windows', async () => {
+    const { theme } = fakeTheme();
+    installTauri(vi.fn(async (command: string) => {
+      if (command === 'update_status') {
+        return { checked: false, available: false, support: 'supported', current_version: '0.9.103', version: null, notes: null, linux_requirement: null };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    }), undefined);
+    const updates = new UpdateController(createDesktopServices());
+    const stop = updates.start();
+    render(SettingsPanel, { props: { theme, updates } });
+
+    await screen.findByRole('button', { name: 'Check for updates' });
+    await Promise.resolve();
+    expect(screen.queryByTestId('settings-linux-requirement')).toBeNull();
+    stop();
+  });
+
   it('labels the branch-only OCR package as a test build', async () => {
     const { theme } = fakeTheme();
     installTauri(vi.fn().mockResolvedValue({

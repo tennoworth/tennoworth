@@ -38,6 +38,41 @@ pub struct UpdateStatus {
     pub current_version: String,
     pub version: Option<String>,
     pub notes: Option<String>,
+    /// Linux only: the glibc this build needs and the one this system has.
+    pub linux_requirement: Option<LinuxRequirement>,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct LinuxRequirement {
+    pub glibc_required: String,
+    pub glibc_found: Option<String>,
+}
+
+/// The oldest glibc the AppImage starts on: the release build host's. The
+/// release workflow fails a build that needs more, reading the same value from
+/// `tests/fixtures/linux-requirements.json`.
+#[cfg(target_os = "linux")]
+const LINUX_GLIBC_REQUIRED: &str = "2.39";
+
+#[cfg(target_os = "linux")]
+fn linux_requirement() -> Option<LinuxRequirement> {
+    // SAFETY: gnu_get_libc_version takes no arguments and returns a pointer to
+    // a static NUL-terminated string owned by glibc for the process lifetime.
+    let found = unsafe {
+        let version = libc::gnu_get_libc_version();
+        (!version.is_null()).then(|| std::ffi::CStr::from_ptr(version))
+    }
+    .and_then(|version| version.to_str().ok())
+    .map(str::to_string);
+    Some(LinuxRequirement {
+        glibc_required: LINUX_GLIBC_REQUIRED.into(),
+        glibc_found: found,
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_requirement() -> Option<LinuxRequirement> {
+    None
 }
 
 #[derive(serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +92,7 @@ impl Default for UpdateStatus {
             current_version: env!("CARGO_PKG_VERSION").to_string(),
             version: None,
             notes: None,
+            linux_requirement: linux_requirement(),
         }
     }
 }
@@ -269,6 +305,23 @@ pub fn restart_app(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_linux_requirement_matches_the_release_floor_and_reads_this_glibc() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/linux-requirements.json"
+        ))
+        .unwrap();
+        assert_eq!(fixture["glibc"], LINUX_GLIBC_REQUIRED);
+        let requirement = linux_requirement().unwrap();
+        assert_eq!(requirement.glibc_required, LINUX_GLIBC_REQUIRED);
+        let found = requirement.glibc_found.expect("glibc reports its version");
+        assert!(
+            found.split('.').all(|part| part.parse::<u32>().is_ok()),
+            "{found}"
+        );
+    }
 
     #[test]
     fn update_support_distinguishes_appimage_windows_and_test_builds() {

@@ -111,6 +111,8 @@ export const SETTINGS = {
   'settings.update.current': m('You’re up to date · v{current}', 'Update status.'),
   'settings.update.appimage': m('This install can’t update itself. Download and run the TennoWorth AppImage to receive updates.', 'Update status.'),
   'settings.update.disabled': m('Updates are disabled in this test build.', 'Update status.'),
+  'settings.linuxRequirement': m('On Linux, TennoWorth needs glibc {required} or newer: Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or a later release. Older systems can’t start it.', 'Warning under the update controls, shown on Linux only. glibc is the name of a system library; keep it untranslated, like the distribution names.'),
+  'settings.linuxRequirementFound': m('This system has glibc {found}.', 'Follows settings.linuxRequirement when the system reports its glibc version.'),
   'settings.manualBefore': m('This update can’t be installed from inside the app. Download it once from the ', 'Text before a link to the latest release. Keep the trailing space.'),
   'settings.latestRelease': m('latest release', 'Link text.'),
   'settings.manualAfter': m(' and run it - your settings and data are kept, and updates install normally again after that.', 'Text after the link. Keep the leading space.'),

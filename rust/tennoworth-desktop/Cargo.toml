@@ -123,6 +123,9 @@ xcap = "0.8"
 windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+# gnu_get_libc_version, to show the glibc this system has beside the minimum
+# the AppImage needs. Already in the lockfile through wfm-trading.
+libc = "0.2"
 # Keep the passive overlay from accepting focus when GTK maps it.
 gtk = "0.18"
 # Enumerate and capture the Warframe X11/XWayland window without pulling in a

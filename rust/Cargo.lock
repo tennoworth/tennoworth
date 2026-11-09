@@ -5717,6 +5717,7 @@ dependencies = [
  "image",
  "keyring",
  "leptess",
+ "libc",
  "market-domain",
  "memmap2",
  "minisign-verify",

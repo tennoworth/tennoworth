@@ -450,6 +450,10 @@
           {/if}
         </div>
       </div>
+      {#if updates?.linuxRequirement}
+        {@const requirement = updates.linuxRequirement}
+        <p class="warning manual" data-testid="settings-linux-requirement">{[t('settings.linuxRequirement', { required: requirement.glibc_required }), requirement.glibc_found ? t('settings.linuxRequirementFound', { found: requirement.glibc_found }) : ''].filter(Boolean).join(' ')}</p>
+      {/if}
       {#if updates?.needsManualInstall}
         <p class="warning manual" data-testid="settings-update-manual-install">{t('settings.manualBefore')}<a href={LATEST_RELEASE_URL} target="_blank" rel="noopener noreferrer">{t('settings.latestRelease')}</a>{t('settings.manualAfter')}</p>
       {/if}
