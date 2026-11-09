@@ -604,6 +604,22 @@ fn low_confidence_matches_never_receive_a_recommendation() {
 }
 
 #[test]
+fn a_log_started_scan_waits_for_the_names_to_be_drawn() {
+    let early = Duration::from_millis(400);
+    for source in ["eelog", "eelog-snapshot"] {
+        assert!(waits_for_reward_names(source, false, early), "{source}");
+        assert!(!waits_for_reward_names(source, true, early), "{source}");
+        assert!(
+            !waits_for_reward_names(source, false, REWARD_DRAW_WAIT),
+            "{source}"
+        );
+    }
+    for source in ["hotkey", "settings button"] {
+        assert!(!waits_for_reward_names(source, false, early), "{source}");
+    }
+}
+
+#[test]
 fn reward_marker_updates_are_bounded_and_trimmed() {
     install_reward_markers(&["  Rewards ready  ".into()]).unwrap();
     assert_eq!(&*REWARD_MARKERS.read().unwrap(), &["Rewards ready"]);

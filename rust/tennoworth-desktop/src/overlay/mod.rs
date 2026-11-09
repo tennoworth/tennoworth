@@ -952,6 +952,17 @@ fn write_run_diagnostics(
     }
 }
 
+/// The game logs a reward batch while its cards still read "Loading...", up
+/// to about a second before the names are drawn. A scan the log started keeps
+/// looking until a first name appears, so its three attempts are spent on the
+/// drawn screen. A scan the player asked for answers at once.
+const REWARD_DRAW_WAIT: Duration = Duration::from_secs(3);
+const REWARD_DRAW_POLL: Duration = Duration::from_millis(150);
+
+fn waits_for_reward_names(source: &str, any_name_read: bool, elapsed: Duration) -> bool {
+    source.starts_with("eelog") && !any_name_read && elapsed < REWARD_DRAW_WAIT
+}
+
 fn capture_and_recognize(
     app: &AppHandle,
     source: &str,
@@ -1013,12 +1024,12 @@ fn capture_and_recognize(
     let mut recognized: Option<(CapturedFrame, LayoutRead)> = None;
     let mut last_frame = None;
     let mut last_error = None;
-    for attempt in 0..3 {
+    let mut attempt = 0;
+    while attempt < 3 {
         let capture_started = Instant::now();
         match capture_warframe() {
             Ok(frame) => {
                 timings.capture_ms += elapsed_ms(capture_started);
-                write_scan_frame_debug(run_dir.as_deref(), attempt, &frame);
                 let debug_dir = diagnostics_attempt_dir(run_dir.as_deref(), attempt);
                 match read_centered_reward_layout(
                     ocr,
@@ -1032,6 +1043,16 @@ fn capture_and_recognize(
                     }
                     Err(error) => last_error = Some(error),
                 }
+                if waits_for_reward_names(
+                    source,
+                    !consensus.reads.is_empty(),
+                    run_started.elapsed(),
+                ) {
+                    last_frame = Some(frame);
+                    std::thread::sleep(REWARD_DRAW_POLL);
+                    continue;
+                }
+                write_scan_frame_debug(run_dir.as_deref(), attempt, &frame);
                 let current_expected = state.expected_slots.load(Ordering::Acquire);
                 if (1..=4).contains(&current_expected)
                     && consensus.resolve(current_expected, true).is_none()
@@ -1093,6 +1114,7 @@ fn capture_and_recognize(
         if attempt < 2 {
             std::thread::sleep(Duration::from_millis(if attempt == 0 { 75 } else { 125 }));
         }
+        attempt += 1;
     }
     let Some((frame, read)) = recognized else {
         let current_expected = state.expected_slots.load(Ordering::Acquire);
