@@ -54,6 +54,30 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.100 - 2026-11-09
+
+# 🐧 TennoWorth Desktop 0.10.100
+
+TennoWorth Desktop 0.10.100 is ready.
+
+The relic overlay now reads reward names that wrap onto two lines, such as a Prime chassis blueprint shown over its bright helmet, and it is faster to appear after a relic opens. On Linux, this version needs a 2024-or-newer system: glibc 2.39 or newer, which means Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or a later release. Rolling distributions such as Bazzite, CachyOS and Arch are fine. On Ubuntu 22.04, Linux Mint 21, Debian 12 or older, stay on 0.9.102: this version will not start there.
+
+## Changelog (4)
+
+### Relic overlay
+
+- **Two-line reward names are recognized** A reward whose name wraps onto two lines, like "Wisp Prime - Châssis (Schéma)", showed "Reward not recognized" when it was drawn over bright item art. The overlay now reads only the text lines of each title, at a larger size, and recognizes it in every game language. <!-- app-note {"id":"relic-two-line-titles","kind":"fixed"} -->
+- **Rewards appear sooner and more reliably** When a relic opens, the game logs the rewards before it draws their names. The overlay now waits for the names instead of spending its attempts on the loading screen, so it shows all four rewards on its first look. <!-- app-note {"id":"relic-wait-for-names","kind":"improved"} -->
+
+### Linux
+
+- **Newer text recognition** The Linux app now uses Tesseract 5, which reads reward names over bright item art that the previous version could not. <!-- app-note {"id":"linux-tesseract-5","kind":"improved","platforms":["linux"]} -->
+- **Linux needs glibc 2.39 or newer** This version needs Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or a later release. Settings → Updates shows the glibc version your system has. On older systems, keep 0.9.102, which is still available on the releases page. <!-- app-note {"id":"linux-glibc-2-39","kind":"action","platforms":["linux"]} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below. On Linux, check that your system meets the requirement above before you update.
+
 ## 0.9.102 - 2026-11-08
 
 # 🌍 TennoWorth Desktop 0.9.102
