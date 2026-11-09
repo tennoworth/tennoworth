@@ -428,6 +428,21 @@ jobs:
         run: >-
           cargo test -p tennoworth-desktop
           real_three_reward_capture_survives_common_display_shapes -- --ignored --nocapture
+      # The French model is not bundled, so it is fetched here at the app's own
+      # pin (vision/ocr_models.rs) and kept out of the bundled resources.
+      - name: Real French two-line OCR regression
+        env:
+          OMP_THREAD_LIMIT: '1'
+          TENNOWORTH_TESSDATA_DIR: ${{ runner.temp }}/tessdata-fra
+        run: |
+          set -euo pipefail
+          mkdir -p "$TENNOWORTH_TESSDATA_DIR"
+          curl --fail --location --retry 3 \
+            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/fra.traineddata \
+            --output "$TENNOWORTH_TESSDATA_DIR/fra.traineddata"
+          echo "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca  $TENNOWORTH_TESSDATA_DIR/fra.traineddata" | sha256sum --check
+          cargo test -p tennoworth-desktop \
+            real_french_capture_reads_a_two_line_title_on_common_display_shapes -- --ignored --nocapture
 
   # External availability must stay visible without making a successful Rust
   # suite look broken or preventing its cache from being saved.

@@ -56,7 +56,14 @@ pub(crate) const RECOMMENDATION_CONFIDENCE: f64 = 0.9;
 // ultrawide displays instead of stretching the card grid with the viewport.
 const REWARD_SLOT_SPACING_PER_HEIGHT: f64 = 0.221;
 const REWARD_CARD_WIDTH_PER_HEIGHT: f64 = 0.226;
-const REWARD_TITLE_TARGET_WIDTH: u32 = 256;
+// The two text lines of a reward title and nothing above them: a crop that
+// takes in the item art garbles the upper line of a two-line title drawn over
+// a bright item. Measured on a French capture at five display shapes, every
+// top from 0.372 to 0.382 reads all four titles at this crop width; at half
+// the width only 0.380 does.
+const REWARD_TITLE_TOP_PER_HEIGHT: f64 = 0.377;
+const REWARD_TITLE_HEIGHT_PER_HEIGHT: f64 = 0.058;
+const REWARD_TITLE_TARGET_WIDTH: u32 = 512;
 const WARFRAME_DESIGN_ASPECT: f64 = 16.0 / 9.0;
 static REWARD_MARKERS: LazyLock<RwLock<Vec<String>>> =
     LazyLock::new(|| RwLock::new(vec![DEFAULT_REWARD_MARKER.into()]));

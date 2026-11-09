@@ -377,7 +377,9 @@ fn reward_grid_uses_viewport_height_across_aspect_ratios() {
             < 0.01
     );
     let narrow_title_top = narrow.slots[0].title.y * frame_narrow.height as f64;
-    assert!((narrow_title_top - 249.0).abs() < 1.0);
+    let narrow_design_top = (632.0 - narrow_design_height) / 2.0;
+    let expected_title_top = narrow_design_top + narrow_design_height * REWARD_TITLE_TOP_PER_HEIGHT;
+    assert!((narrow_title_top - expected_title_top).abs() < 0.01);
 }
 
 #[test]
@@ -709,6 +711,41 @@ fn a_localized_reward_title_matches_its_item_despite_a_lost_accent() {
         Some("volt_prime_neuroptics_blueprint")
     );
     assert!(got[0].confidence >= 0.9, "{}", got[0].confidence);
+}
+
+#[test]
+fn a_wrapped_localized_title_is_not_read_as_a_sibling_part() {
+    // What Tesseract returns for a two-line French title: the hyphen is lost
+    // and the item art above the text leaves a line of noise.
+    let mut candidates = french_catalog();
+    candidates.extend(
+        [
+            (
+                "Wisp Prime - Châssis (Schéma)",
+                "wisp_prime_chassis_blueprint",
+            ),
+            (
+                "Wisp Prime - Systèmes (Schéma)",
+                "wisp_prime_systems_blueprint",
+            ),
+            ("Wisp Prime (Schéma)", "wisp_prime_blueprint"),
+            (
+                "Atlas Prime - Châssis (Schéma)",
+                "atlas_prime_chassis_blueprint",
+            ),
+        ]
+        .map(|(name, slug)| OverlayCatalogItem {
+            name: name.into(),
+            slug: Some(slug.into()),
+        }),
+    );
+    let got = match_ocr_lines("HN ZA!\n\nWisp Prime Châssis\n(Schéma)", &candidates);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(
+        got[0].item.slug.as_deref(),
+        Some("wisp_prime_chassis_blueprint")
+    );
+    assert_eq!(got[0].confidence, 1.0);
 }
 
 #[test]
@@ -1066,29 +1103,116 @@ fn corpus_two_reward_screen_detects_both() {
     assert_eq!(read.matches.len(), 2);
 }
 
-#[test]
-#[ignore = "requires the pinned release OCR model"]
-fn real_three_reward_capture_survives_common_display_shapes() {
-    let band = image::load_from_memory(include_bytes!(
-        "../../../../tests/fixtures/relic-ocr/three-reward-band.png"
-    ))
-    .unwrap()
-    .to_rgba8();
+/// A reward band cut from a 2560x1440 capture at `x`, 480, as the game would
+/// draw it on common display shapes.
+fn display_shapes(band: &[u8], x: i64) -> [(&'static str, RgbaImage); 5] {
+    let band = image::load_from_memory(band).unwrap().to_rgba8();
     let mut source = RgbaImage::new(2560, 1440);
-    image::imageops::overlay(&mut source, &band, 760, 480);
+    image::imageops::overlay(&mut source, &band, x, 480);
     let scaled_1080 = image::imageops::resize(&source, 1920, 1080, FilterType::Triangle);
     let scaled_720 = image::imageops::resize(&source, 1280, 720, FilterType::Triangle);
     let mut ultrawide = RgbaImage::new(3440, 1440);
     image::imageops::overlay(&mut ultrawide, &source, 440, 0);
     let mut sixteen_ten = RgbaImage::new(1920, 1200);
     image::imageops::overlay(&mut sixteen_ten, &scaled_1080, 0, 60);
-    let variants = [
+    [
         ("native-1440p", source),
         ("scaled-1080p", scaled_1080),
         ("scaled-720p", scaled_720),
         ("ultrawide-1440p", ultrawide),
         ("sixteen-ten-1200p", sixteen_ten),
+    ]
+}
+
+/// A two-line title reaches up over the item art, here a white helmet. The
+/// fast title crops must read it as they read the three single-line titles
+/// beside it (issue #466).
+#[test]
+#[ignore = "requires fra.traineddata in TENNOWORTH_TESSDATA_DIR"]
+fn real_french_capture_reads_a_two_line_title_on_common_display_shapes() {
+    let candidates: Vec<OverlayCatalogItem> = [
+        ("Burston Prime (Schéma)", Some("burston_prime_blueprint")),
+        ("Atlas Prime (Schéma)", Some("atlas_prime_blueprint")),
+        ("Forma", None),
+        (
+            "Wisp Prime - Châssis (Schéma)",
+            Some("wisp_prime_chassis_blueprint"),
+        ),
+        (
+            "Wisp Prime - Systèmes (Schéma)",
+            Some("wisp_prime_systems_blueprint"),
+        ),
+        ("Wisp Prime (Schéma)", Some("wisp_prime_blueprint")),
+        (
+            "Atlas Prime - Châssis (Schéma)",
+            Some("atlas_prime_chassis_blueprint"),
+        ),
+    ]
+    .into_iter()
+    .map(|(name, slug)| OverlayCatalogItem {
+        name: name.into(),
+        slug: slug.map(String::from),
+    })
+    .collect();
+    let expected = [
+        "Burston Prime (Schéma)",
+        "Atlas Prime (Schéma)",
+        "Forma",
+        "Wisp Prime - Châssis (Schéma)",
     ];
+    let tessdata = std::env::var_os("TENNOWORTH_TESSDATA_DIR")
+        .map(PathBuf::from)
+        .expect("TENNOWORTH_TESSDATA_DIR names the directory holding fra.traineddata");
+    assert!(
+        tessdata.join("fra.traineddata").is_file(),
+        "fra.traineddata is missing from {}",
+        tessdata.display()
+    );
+    let (ocr, ready) = OcrWorker::start(Ok(tessdata), "fra");
+    ready.unwrap();
+    let variants = display_shapes(
+        include_bytes!("../../../../tests/fixtures/relic-ocr/four-reward-band-fr.png"),
+        630,
+    );
+    for (label, image) in variants {
+        let frame = CapturedFrame {
+            width: image.width(),
+            height: image.height(),
+            image,
+            x: 0,
+            y: 0,
+        };
+        let mut timings = OverlayStageTimings::default();
+        let reads = [
+            (
+                "expected",
+                read_expected_layout(&ocr, &frame, &candidates, 4, None, &mut timings),
+            ),
+            (
+                "centered",
+                read_centered_reward_layout(&ocr, &frame, &candidates, None, &mut timings),
+            ),
+        ];
+        for (path, read) in reads {
+            let read = read.unwrap_or_else(|error| panic!("{label} {path} path: {error}"));
+            let names: Vec<(usize, &str)> = read
+                .matches
+                .iter()
+                .map(|(index, found)| (*index, found.item.name.as_str()))
+                .collect();
+            let wanted: Vec<(usize, &str)> = expected.iter().copied().enumerate().collect();
+            assert_eq!(names, wanted, "{label} {path} path");
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires the pinned release OCR model"]
+fn real_three_reward_capture_survives_common_display_shapes() {
+    let variants = display_shapes(
+        include_bytes!("../../../../tests/fixtures/relic-ocr/three-reward-band.png"),
+        760,
+    );
     let candidates = vec![
         OverlayCatalogItem {
             name: "Paris Prime String".into(),
