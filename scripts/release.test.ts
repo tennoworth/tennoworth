@@ -164,12 +164,15 @@ describe("live snapshot for the website build", () => {
 test("the website refresh reads the snapshot line the website build writes", () => {
   const read = (name: string) =>
     Bun.YAML.parse(readFileSync(fileURLToPath(new URL(`../.github/workflows/${name}`, import.meta.url)), "utf8")) as any;
-  const steps = read("build-web.yml").jobs.build.steps as any[];
+  const jobs = read("build-web.yml").jobs;
+  const steps = jobs.build.steps as any[];
   const live = steps.findIndex((step) => step.id === "snapshot");
   expect(steps[live].run).toContain("bun scripts/release.ts snapshot-live");
   expect(live).toBeLessThan(steps.findIndex((step) => step.name === "Build"));
-  const body: string = steps.find((step) => step.uses === "./.github/actions/publish-rolling-release").with.body;
-  expect(body.split("\n")).toContain("Snapshot: ${{ steps.snapshot.outputs.updated_at }}");
+  expect(jobs.build.outputs.snapshot).toBe("${{ steps.snapshot.outputs.updated_at }}");
+  const publish = jobs.publish.steps as any[];
+  const body: string = publish.find((step) => step.uses === "./.github/actions/publish-rolling-release").with.body;
+  expect(body.split("\n")).toContain("Snapshot: ${{ needs.build.outputs.snapshot }}");
 
   const refresh = read("refresh-web.yml").jobs.refresh.steps[0].run as string;
   expect(refresh).toContain("sed -n 's/^Snapshot: //p'");

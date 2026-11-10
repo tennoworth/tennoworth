@@ -1003,6 +1003,21 @@ describe.each(collectors)('$name collector signature', ({ name, binary }) => {
   });
 });
 
+describe('web bundle signature', () => {
+  test('CI signs the bundle apart from the build, with the comment the box requires', () => {
+    const ci = readFileSync(new URL('../.github/workflows/build-web.yml', import.meta.url), 'utf8');
+    const jobs = (Bun.YAML.parse(ci) as any).jobs;
+    expect(jobs.publish.environment).toBe('collector-release');
+    expect(jobs.build.environment, 'the job that runs the npm tree never holds the key').not.toBe('collector-release');
+    const sign = jobs.publish.steps.find((step: any) => step.name === 'Sign');
+    expect(sign.run).toContain('-t "tennoworth-web dist.tgz $GITHUB_SHA"');
+    const release = jobs.publish.steps.find((step: any) => step.uses === './.github/actions/publish-rolling-release');
+    expect(release.with.files.split('\n').filter(Boolean)).toEqual(['dist/dist.tgz', 'dist/dist.tgz.minisig']);
+    const published = Object.values(jobs).filter((job: any) => job.steps?.some((step: any) => step.uses === './.github/actions/publish-rolling-release'));
+    expect(published, 'web-latest is published only by the signing job').toEqual([jobs.publish]);
+  });
+});
+
 // ---- run-scrape.sh: a run that publishes nothing must not republish --------
 
 function runScrapeFixture(scrape: string, env: Record<string, string> = {}) {
