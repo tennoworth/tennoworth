@@ -276,6 +276,9 @@ publisher to startup. The shared `command_error` contract is independent of
 both adapters and services. Persistence owns the
 SQLite connection, migration SQL, record formats, and operations grouped by
 table family. Moving an operation does not change its transaction semantics.
+Opening the store refuses a schema newer than the build knows without writing
+to it, and copies an older on-disk store beside itself before migrating it;
+startup reports either failure on stderr and as a desktop notification.
 
 Overlay capture selects a Windows, X11, or unsupported backend at compile time.
 Recognition owns Tesseract and item matching. Presentation owns window behavior,

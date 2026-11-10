@@ -115,6 +115,19 @@ Both builds update themselves. The app checks at launch and every 30 minutes
 while it is open, and **Settings → Check for updates** installs a new version
 on demand.
 
+The desktop app keeps its data in `tennoworth.db`, in
+`~/.local/share/app.tennoworth.desktop/` on Linux and
+`%APPDATA%\app.tennoworth.desktop\` on Windows. Before an update changes that
+database's format, the app writes a copy beside it named
+`tennoworth.db.schema-v<N>.bak`, where `<N>` is the format it had before, and
+keeps the three most recent copies. If it cannot write the copy, it leaves the
+database unchanged and does not start. To restore a copy, quit TennoWorth from
+the tray, move `tennoworth.db`, `tennoworth.db-wal` and `tennoworth.db-shm`
+out of the folder, and rename the copy to `tennoworth.db`. Moving the copy
+rather than duplicating it lets the next update take a fresh one. TennoWorth
+does not open data that a newer version has already changed; it says so and
+asks you to update instead.
+
 Linux kernels commonly restrict reading another process even when both belong
 to the same user. If the app reports a ptrace permission error, it will include
 the detected policy and an actionable command. For a temporary, reboot-scoped
