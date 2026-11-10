@@ -60,7 +60,7 @@ The product crosses the following trust boundaries:
 5. **Our build + release pipeline** (GitHub Actions):
    - `build-web.yml` - on a push touching `frontend/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
-     prerelease asset (the self-host box pulls it with a plain curl).
+     prerelease asset, signed in a separate job (see below).
    - `audit.yml` - on pull requests, weekly, on demand, and on `develop`
      pushes that rotate a CI cache key, routes changes
      through proportional dependency, frontend, Rust, generated-data, and
@@ -88,18 +88,41 @@ The product crosses the following trust boundaries:
    boundary the repo's public CI does not cover - compromising it would
    let an attacker serve malicious JS or a stale snapshot to visitors.
 
-   Two signatures narrow what sits between the box and its users:
-   - The box installs the opt-in collector binaries as root only when they
-     carry a Minisign signature from a key held in the `main`-only
-     `collector-release` environment, naming that binary. A token that can
-     edit release assets cannot produce one.
+   Three Minisign keys narrow what sits between our builds, the box and
+   users. Each verifier also checks which artifact a signature was made for
+   (a trusted comment, or a payload that must name its purpose), so one
+   artifact's signature cannot pass as another's:
+   - The offline WFM policy key, which never reaches CI or the box, signs
+     the WFM access policy and the remote scan definitions. The public key
+     is compiled into release desktops and into the box's `wfm-policy`
+     verifier; see [WFM access](docs/wfm-access.md).
+   - The collector key, held in the `main`-only `collector-release`
+     environment, signs the opt-in collector binaries and the `web-latest`
+     bundle in jobs that build nothing. The box installs a collector as root,
+     or unpacks the bundle as its rollback copy of the site, only when the
+     signature verifies under the public key placed on the box and names that
+     artifact; otherwise it keeps what it has and the unit fails. A token that
+     can edit release assets cannot produce one, but it can republish an
+     older signed build: the signature carries the commit, and the box does
+     not refuse an older one.
    - The box signs `market.json` and `history.json` after every scrape with
-     its own key, which is not the offline WFM policy key. Release desktop
-     builds accept those files only when the signature verifies, and keep
-     their cached copy otherwise, so the Worker, tunnel or CDN cannot feed the
-     app prices. Release CI refuses to ship a build carrying the key while
-     the live pair does not verify under it. This does not protect against a
-     compromised box, which holds the key.
+     its own key. Release desktop builds accept those files only when the
+     signature verifies, and keep their cached copy otherwise, so the Worker,
+     tunnel or CDN cannot feed the app prices. Release CI refuses to ship a
+     build carrying the key while the live pair does not verify under it.
+     These files are not signed away from the box, because they are made
+     there every two hours, so a compromised box can sign whatever it likes.
+     Their prices drive the app's price suggestions and the reference price
+     the listing plan checks a slug against, so a compromised box can mislead
+     both; it cannot list anything, which happens only from a plan the user
+     reviews and starts. Development builds, which carry no key, check
+     nothing.
+
+   Everything else the box serves - the site's rollback copy once unpacked,
+   `announcements.json`, the other derived data files - rests on the box
+   and the delivery path. The scrape binary and the box's `wfm-policy`
+   verifier are not downloaded: `deploy/install-pipeline.sh` builds them
+   from a reviewed revision and copies them to the box.
 
 ## What we commit to
 

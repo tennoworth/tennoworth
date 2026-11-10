@@ -24,7 +24,8 @@ fi
 echo "==> Base packages"
 apt-get update
 apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gpg
-# Signs the published live data and verifies the collector builds before install.
+# Signs the published live data and verifies the collector builds and the web
+# bundle before install.
 apt-get install -y minisign
 
 echo "==> Caddy"
@@ -91,7 +92,8 @@ echo "==> Signing keys"
 #   artifact-signing.key  the box's own secret key for market.json and
 #                         history.json, readable by wfm only (the scrape signs)
 #   collector-signing.pub the public key of the CI-held collector key, checked
-#                         before a collector binary is installed as root
+#                         before a collector binary is installed as root and
+#                         before pull-web.sh unpacks the web bundle
 # Generating the box key: `minisign -G -W -p artifact-signing.pub -s
 # artifact-signing.key`; its public half is built into release desktops.
 install -d -m 0755 -o root -g root /etc/tennoworth
