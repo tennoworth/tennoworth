@@ -3,10 +3,9 @@ Description=Check for new commits on main every 30 minutes
 
 [Timer]
 # The checkout supplies the pullers and the served bundle, so it has the same
-# "moves on every push" cadence as the web bundle. It is polled at the slower
-# 30min interval anyway because most attempts land while tennoworth-scrape.service is
-# running and skip (see SuccessExitStatus in the .service) - a tighter interval
-# would just spend more attempts hitting the same busy window.
+# "moves on every push" cadence as the web bundle. The pull runs whether or not
+# a sweep is: the sweep reads and writes only /srv/wfm/data and its own
+# installed copies, none of which the checkout or this pull touches.
 OnBootSec=8min
 OnUnitActiveSec=30min
 RandomizedDelaySec=120
