@@ -26,11 +26,54 @@ use schema::MIGRATIONS;
 //   - app STATE (`setting` kv) - the desktop backing for
 //     the persistence the browser keeps in localStorage.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::poison::guard;
 use rusqlite::{Connection, OptionalExtension};
+
+/// Why the store could not be opened.
+#[derive(Debug)]
+pub enum OpenError {
+    /// A later TennoWorth migrated the store past what this build knows. Its
+    /// tables may mean something this build would misread or overwrite.
+    NewerSchema {
+        found: i64,
+        supported: i64,
+    },
+    /// The copy taken before a migration could not be written, so the
+    /// migration did not run.
+    Backup {
+        path: PathBuf,
+        reason: String,
+    },
+    Sqlite(rusqlite::Error),
+}
+
+impl std::fmt::Display for OpenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OpenError::NewerSchema { found, supported } => write!(
+                f,
+                "the data was written by a newer version of TennoWorth (schema {found}, this version reads up to {supported})"
+            ),
+            OpenError::Backup { path, reason } => write!(
+                f,
+                "could not write the pre-upgrade backup {}: {reason}",
+                path.display()
+            ),
+            OpenError::Sqlite(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for OpenError {}
+
+impl From<rusqlite::Error> for OpenError {
+    fn from(e: rusqlite::Error) -> Self {
+        OpenError::Sqlite(e)
+    }
+}
 
 /// The open database. `Connection` is not `Sync`, so it lives behind a `Mutex`;
 /// held as Tauri managed state (`State<'_, Db>`) and shared across commands.
@@ -42,13 +85,23 @@ pub struct Db {
 
 impl Db {
     /// Open (creating if absent) the store at `path` and bring it to the latest
-    /// schema version. Fails only on a genuine I/O / corruption problem - the
-    /// desktop treats that as unrecoverable (the store is canonical).
-    pub fn open(path: &Path) -> rusqlite::Result<Db> {
+    /// schema version, backing up an on-disk store before migrating it. The
+    /// desktop treats every failure as unrecoverable (the store is canonical).
+    pub fn open(path: &Path) -> Result<Db, OpenError> {
         Self::init(Connection::open(path)?)
     }
 
-    fn init(conn: Connection) -> rusqlite::Result<Db> {
+    fn init(conn: Connection) -> Result<Db, OpenError> {
+        // Checked before anything below writes: setting the journal mode
+        // rewrites the file header, and a newer store must be left as found.
+        let found: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        let supported = MIGRATIONS.len() as i64;
+        if found > supported {
+            return Err(OpenError::NewerSchema { found, supported });
+        }
+        if 0 < found && found < supported {
+            backup_before_migration(&conn, found)?;
+        }
         // FK enforcement is per-connection (not persisted); turn it on so a
         // snapshot_item can never dangle without its snapshot.
         conn.pragma_update(None, "foreign_keys", "ON")?;
@@ -70,7 +123,7 @@ impl Db {
     // ---- watches ----
 
     #[cfg(test)]
-    pub(crate) fn open_in_memory() -> rusqlite::Result<Db> {
+    pub(crate) fn open_in_memory() -> Result<Db, OpenError> {
         Self::init(Connection::open_in_memory()?)
     }
 
@@ -119,6 +172,101 @@ fn write_allowance(
         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
     conn.execute("INSERT INTO trade_allowance (id, observation) VALUES (1, ?1) ON CONFLICT(id) DO UPDATE SET observation = excluded.observation", [raw])?;
     Ok(())
+}
+
+/// One copy is written per schema version a store is migrated away from, so
+/// this covers the current upgrade and the two before it: a migration whose
+/// logic error surfaces a release or two later still has its source, while a
+/// store that grows with the trade ledger cannot multiply without bound.
+const BACKUPS_KEPT: usize = 3;
+
+fn backup_path(store: &Path, version: i64) -> PathBuf {
+    let mut name = store.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".schema-v{version}.bak"));
+    store.with_file_name(name)
+}
+
+/// Copy an on-disk store at schema `version` beside itself before it is
+/// migrated. An existing copy for that version is kept, not replaced: it was
+/// taken before the first attempt, and a later attempt may follow a migration
+/// that already ran and failed further on.
+fn backup_before_migration(conn: &Connection, version: i64) -> Result<(), OpenError> {
+    let Some(store) = conn.path().filter(|p| !p.is_empty()).map(PathBuf::from) else {
+        return Ok(());
+    };
+    let target = backup_path(&store, version);
+    let exists = target.try_exists().map_err(|e| OpenError::Backup {
+        path: target.clone(),
+        reason: e.to_string(),
+    })?;
+    if !exists {
+        write_backup(conn, &target).map_err(|reason| OpenError::Backup {
+            path: target.clone(),
+            reason,
+        })?;
+    }
+    prune_backups(&store, &target);
+    Ok(())
+}
+
+/// `VACUUM INTO` takes a consistent copy, including what is still in the
+/// write-ahead log. It writes to a side file renamed into place, so a crash
+/// mid-copy never leaves a partial file under the name a later attempt trusts.
+fn write_backup(conn: &Connection, target: &Path) -> Result<(), String> {
+    let mut partial = target.as_os_str().to_os_string();
+    partial.push(".partial");
+    let partial = PathBuf::from(partial);
+    let partial_name = partial
+        .to_str()
+        .ok_or_else(|| "backup path is not valid UTF-8".to_string())?;
+    // VACUUM INTO refuses a target that is not empty, which a crashed copy is.
+    let _ = std::fs::remove_file(&partial);
+    // Created empty at owner-only permissions first, because VACUUM INTO keeps
+    // an existing file's mode but would create a new one world-readable.
+    wfm_trading::platform::write_restricted(&partial, b"").map_err(|e| format!("{e:#}"))?;
+    let copied = conn
+        .execute("VACUUM INTO ?1", [partial_name])
+        .map_err(|e| e.to_string())
+        .and_then(|_| std::fs::rename(&partial, target).map_err(|e| e.to_string()));
+    if copied.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    copied
+}
+
+/// Best effort: a backup that cannot be removed costs disk space, not data.
+fn prune_backups(store: &Path, keep: &Path) {
+    let (Some(dir), Some(name)) = (store.parent(), store.file_name().and_then(|n| n.to_str()))
+    else {
+        return;
+    };
+    let prefix = format!("{name}.schema-v");
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut older: Vec<(i64, PathBuf)> = entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let file = entry.file_name();
+            let version = file
+                .to_str()?
+                .strip_prefix(&prefix)?
+                .strip_suffix(".bak")?
+                .parse()
+                .ok()?;
+            let path = entry.path();
+            (path != keep).then_some((version, path))
+        })
+        .collect();
+    older.sort_by_key(|(version, _)| std::cmp::Reverse(*version));
+    for (_, path) in older.into_iter().skip(BACKUPS_KEPT.saturating_sub(1)) {
+        if let Err(e) = std::fs::remove_file(&path) {
+            eprintln!(
+                "tennoworth: could not remove old backup {}: {e}",
+                path.display()
+            );
+        }
+    }
 }
 
 /// Apply only migrations newer than the persisted schema version.
@@ -190,7 +338,9 @@ mod tests {
 
     #[test]
     fn notification_v5_upgrade_keeps_history_and_adds_trade_allowance() {
-        let path = temp_db_path();
+        // A directory of its own: the upgrade leaves a backup beside the store.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tennoworth.db");
         {
             let conn = Connection::open(&path).unwrap();
             for sql in MIGRATIONS.iter().take(5) {
@@ -227,8 +377,193 @@ mod tests {
             .unwrap()
             .is_none());
         assert_eq!(db.list_notifications().unwrap().len(), 1);
+    }
+
+    /// A store at `version` holding one setting, closed before returning.
+    fn store_at(path: &Path, version: usize) {
+        let conn = Connection::open(path).unwrap();
+        for sql in MIGRATIONS.iter().take(version) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", version as i64)
+            .unwrap();
+        conn.execute(
+            "INSERT INTO setting(key,value) VALUES ('before-upgrade','kept')",
+            [],
+        )
+        .unwrap();
+    }
+
+    fn backups(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .filter(|name| name.contains(".schema-v"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn a_store_from_a_newer_version_is_refused_and_left_untouched() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tennoworth.db");
+        let future = MIGRATIONS.len() as i64 + 1;
+        {
+            let db = Db::open(&path).unwrap();
+            db.set_setting("written-by", "newer").unwrap();
+            guard(&db.conn)
+                .pragma_update(None, "user_version", future)
+                .unwrap();
+        }
+        let before = std::fs::read(&path).unwrap();
+        let listing = |dir: &Path| {
+            let mut names: Vec<_> = std::fs::read_dir(dir)
+                .unwrap()
+                .map(|e| e.unwrap().file_name())
+                .collect();
+            names.sort();
+            names
+        };
+        let files_before = listing(dir.path());
+
+        match Db::open(&path) {
+            Err(OpenError::NewerSchema { found, supported }) => {
+                assert_eq!((found, supported), (future, MIGRATIONS.len() as i64));
+            }
+            Err(other) => panic!("expected NewerSchema, got {other}"),
+            Ok(_) => panic!("a newer store must not open"),
+        }
+
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(listing(dir.path()), files_before);
+    }
+
+    #[test]
+    fn an_older_store_is_backed_up_before_it_is_migrated() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tennoworth.db");
+        let old = MIGRATIONS.len() - 1;
+        store_at(&path, old);
+
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.user_version().unwrap(), MIGRATIONS.len() as i64);
         drop(db);
-        std::fs::remove_file(path).unwrap();
+
+        let name = format!("tennoworth.db.schema-v{old}.bak");
+        assert_eq!(backups(dir.path()), vec![name.clone()]);
+        let backup = Connection::open(dir.path().join(&name)).unwrap();
+        let version: i64 = backup
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, old as i64);
+        let kept: String = backup
+            .query_row(
+                "SELECT value FROM setting WHERE key='before-upgrade'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(kept, "kept");
+        // The fold the last migration performs has not run in the copy.
+        let reserve: i64 = backup
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name='reserve'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(reserve, 1);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(dir.path().join(&name))
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+    }
+
+    #[test]
+    fn an_existing_backup_for_the_version_is_not_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tennoworth.db");
+        let old = MIGRATIONS.len() - 1;
+        store_at(&path, old);
+        let earlier = dir.path().join(format!("tennoworth.db.schema-v{old}.bak"));
+        std::fs::write(&earlier, b"first attempt").unwrap();
+
+        Db::open(&path).unwrap();
+
+        assert_eq!(std::fs::read(&earlier).unwrap(), b"first attempt");
+    }
+
+    #[test]
+    fn a_new_store_gets_no_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tennoworth.db");
+        drop(Db::open(&path).unwrap());
+        drop(Db::open(&path).unwrap());
+        assert_eq!(backups(dir.path()), Vec::<String>::new());
+    }
+
+    #[test]
+    fn only_the_newest_backups_are_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tennoworth.db");
+        for version in 1..=4 {
+            std::fs::write(
+                dir.path()
+                    .join(format!("tennoworth.db.schema-v{version}.bak")),
+                b"older",
+            )
+            .unwrap();
+        }
+        let unrelated = dir.path().join("other.db.schema-v1.bak");
+        std::fs::write(&unrelated, b"not ours").unwrap();
+        let old = MIGRATIONS.len() - 1;
+        store_at(&path, old);
+
+        Db::open(&path).unwrap();
+
+        let mut expected = vec![
+            "tennoworth.db.schema-v3.bak".to_string(),
+            "tennoworth.db.schema-v4.bak".to_string(),
+            format!("tennoworth.db.schema-v{old}.bak"),
+        ];
+        expected.sort();
+        assert_eq!(BACKUPS_KEPT, expected.len());
+        assert_eq!(
+            backups(dir.path())
+                .into_iter()
+                .filter(|name| name.starts_with("tennoworth.db"))
+                .collect::<Vec<_>>(),
+            expected
+        );
+        assert!(unrelated.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_store_whose_backup_cannot_be_written_is_not_migrated() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tennoworth.db");
+        let old = MIGRATIONS.len() - 1;
+        store_at(&path, old);
+        // Read-only directory: the store itself stays writable, but no new
+        // file can be created beside it.
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let result = Db::open(&path);
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+
+        assert!(matches!(result, Err(OpenError::Backup { .. })));
+        let conn = Connection::open(&path).unwrap();
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(version, old as i64);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::ShortcutState;
 
 use crate::game_events::{GameEvent, GameEvents};
-use crate::persistence::Db;
+use crate::persistence::{Db, OpenError};
 use crate::services::market::cache::MarketCache;
 use crate::services::wfm::session::WfmSession;
 
@@ -43,6 +43,43 @@ fn install_definitions(
         out.rejected.push(format!("reward_log_markers: {reason}"));
     }
     out
+}
+
+/// Startup aborts when the store cannot open, and a release build on Windows
+/// has no console, so the reason also goes out as a desktop notification: it
+/// is the one surface that exists before any window does and outlives the
+/// process. Returns the setup error.
+fn store_unavailable(app: &tauri::AppHandle, path: &std::path::Path, error: &OpenError) -> String {
+    use tauri_plugin_notification::NotificationExt;
+    let (title, body) = match error {
+        OpenError::NewerSchema { .. } => (
+            "Update TennoWorth to open your data",
+            "Your TennoWorth data was saved by a newer version of TennoWorth. \
+             Install the latest version to open it. Your data has not been changed."
+                .to_string(),
+        ),
+        OpenError::Backup { path, .. } => (
+            "TennoWorth could not start",
+            format!(
+                "It could not back up your data before upgrading it, so it left \
+                 the data unchanged. Check the free space and permissions of {}.",
+                path.parent().unwrap_or(path).display()
+            ),
+        ),
+        OpenError::Sqlite(e) => (
+            "TennoWorth could not start",
+            format!("It could not open its data: {e}"),
+        ),
+    };
+    let message = format!("opening state DB {}: {error}", path.display());
+    eprintln!("tennoworth: {message}");
+    match app.notification().builder().title(title).body(body).show() {
+        // The plugin delivers on a background task with no completion signal,
+        // and the abort that follows would end the process before it runs.
+        Ok(()) => std::thread::sleep(std::time::Duration::from_secs(2)),
+        Err(e) => eprintln!("tennoworth: could not show the startup failure notification: {e}"),
+    }
+    message
 }
 
 pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
@@ -216,8 +253,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             }
             let db_path = data_dir.join("tennoworth.db");
             let profile_existed = db_path.exists();
-            let store = Db::open(&db_path)
-                .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
+            let store = Db::open(&db_path).map_err(|e| store_unavailable(app.handle(), &db_path, &e))?;
             app.manage(crate::services::inventory::auto_scan::AutoScanState::from_db(&store));
             app.manage(crate::services::wfm::presence::PresenceState::from_db(&store));
             app.manage(store);
