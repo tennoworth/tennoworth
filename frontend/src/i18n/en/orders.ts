@@ -118,6 +118,7 @@ export const ORDERS = {
   'orders.notConfirmedStatus': m('WFM did not confirm the update ({status}). Recheck My Orders before trusting this row.', 'Error.'),
   'orders.toggleFailed': m("Couldn't toggle: {error}", 'Toast.'),
   'orders.priceCap': m('Price {price}p is above the {cap}p cap.', 'Toast.'),
+  'orders.priceFloor': m('Price {price}p is below the {floor}p minimum for this lot.', 'Toast.'),
   'orders.updateFailed': m("Couldn't update: {error}", 'Toast.'),
   'orders.deleted': m('Deleted {item}.', 'Toast.'),
   'orders.deleteFailed': m("Couldn't delete: {error}", 'Toast.'),

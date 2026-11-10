@@ -155,3 +155,19 @@ it.each([false, true])('never shows the previous account a live quote after a se
   expect(controller.liveTop.quotes.size).toBe(0);
   expect(desktopLiveTopPrices).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+  [null, 4, false],
+  [null, 5, true],
+  [3, 14, false],
+  [3, 15, true],
+])('refuses a price edit below the per-unit floor (lot %s, %sp)', async (perTrade, price, sent) => {
+  const updateOrder = vi.fn().mockResolvedValue({ status: 'ok' });
+  const c = setup({ fetchOrders: vi.fn().mockResolvedValue([{ ...order, per_trade: perTrade }]), updateOrder });
+  await settle();
+  c.startEdit(c.orders[0]);
+  c.editValue = price;
+  await c.saveEdit(c.orders[0]);
+  expect(updateOrder).toHaveBeenCalledTimes(sent ? 1 : 0);
+  if (!sent) expect(c.toasts).toEqual([expect.objectContaining({ kind: 'error', text: expect.stringContaining('minimum for this lot') })]);
+});

@@ -480,16 +480,9 @@ pub async fn update_order(
     order_id: String,
     patch: UpdateRequest,
 ) -> Result<PerOrderResult, CmdError> {
-    // Same cap as the create path - mirrors serve's pre-auth 400 so an edit
-    // can't push a listing past what the WFM UI allows.
-    if let Some(p) = patch.platinum {
-        if p > MAX_PLATINUM {
-            return Err(CmdError::of(
-                "wfm",
-                format!("price {p}p > max {MAX_PLATINUM}p"),
-            ));
-        }
-    }
+    // Refused before the unlock check, so an out-of-range edit is not turned
+    // into a login prompt; wfm-trading applies the same rules again.
+    wfm_trading::orders::listing::validate_update(&order_id, &patch).map_err(CmdError::wfm)?;
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let mutations = crate::services::trading::order_mutations::OrderMutations::new(Arc::clone(&s));
@@ -506,7 +499,7 @@ pub async fn update_order(
                     "slug":row.get("item").and_then(|i| i.get("slug")),
                     "quantity":patch.quantity.map(serde_json::Value::from).or_else(|| row.get("quantity").cloned()),
                     "rank":patch.rank.map(serde_json::Value::from).or_else(|| row.get("rank").cloned()),
-                    "subtype":row.get("subtype"), "platinum":patch.platinum.unwrap_or(5), "visible":false, "order_type":"sell"
+                    "subtype":row.get("subtype"), "platinum":patch.platinum.unwrap_or(MIN_PLATINUM), "visible":false, "order_type":"sell"
                 })).map_err(|e| CmdError::internal(e.to_string()))?;
                 validate_protected_contents(&app.state::<Db>(), &market, &body, &[item]).map_err(CmdError::internal)?;
             }
@@ -522,6 +515,7 @@ pub async fn delete_order(
     session: State<'_, Arc<WfmSession>>,
     order_id: String,
 ) -> Result<(), CmdError> {
+    wfm_trading::orders::listing::validate_order_id(&order_id).map_err(CmdError::wfm)?;
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let mutations =
