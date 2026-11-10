@@ -129,8 +129,10 @@ everything every sweep.
 The host check is host-only, next to the pipeline: `deploy/bin/host-check.sh`
 (with `tennoworth-host-check.service`/`.timer`, installed by
 `deploy/install-pipeline.sh`) runs hourly and fails when the sweep timer is
-not scheduled, the sweep unit failed, the sweep output is missing, disk is under
-its floor, the installed binary is not the recorded revision's, or pipeline
+not scheduled, the sweep unit failed, the sweep output is missing, the published
+snapshot's `updated_at` is over 8 hours old, ahead of the clock or unreadable
+(read through `tennoworth-pipeline stamp`, which applies the market contract),
+disk is under its floor, the installed binary is not the recorded revision's, or pipeline
 changes in the box's checkout of `main` have waited past a 24-hour grace for a
 deploy - the pipeline is installed only by hand. It never ends without a
 report: an absent field is reported as absent and failed.

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Hourly health check for the market host: is the sweep scheduled, and is the
-# installed pipeline the one main says it should be?
+# Hourly health check for the market host: is the sweep scheduled, is what it
+# publishes current, and is the installed pipeline the one main says it should be?
 #
-# Two failures go unnoticed without it. A sweep timer that is disabled, stopped
-# or past its boundary never fails a unit, so OnFailure never fires. And the
+# Three failures go unnoticed without it. A sweep timer that is disabled, stopped
+# or past its boundary never fails a unit, so OnFailure never fires. A schedule
+# that looks right can still publish nothing - a wrong clock, a sweep that ends
+# 0 without building - while every reader keeps the older snapshot; only the snapshot's own updated_at shows that, because a restore or
+# copy refreshes the file's mtime without refreshing its data. And the
 # pipeline is installed only by deploy/install-pipeline.sh, by hand, while
 # the checkout follows main on its own: on 2026-10-01 the box ran 03ff5b0 three
 # pipeline merges behind main and nothing said so. A failed or timed-out sweep
@@ -31,6 +34,9 @@ usage: host-check.sh [options]
                               for a deploy before the host is not healthy (default 24)
   --csv <path>                the sweep's CSV (default /srv/wfm/data/scrape/wfm_results.csv)
   --snapshot <path>           published snapshot (default /srv/wfm/data/public/market.json)
+  --max-snapshot-age-hours <n>
+                              how old the snapshot's updated_at may be before the
+                              host is not healthy (default 8)
   --disk-path <dir>           filesystem whose free space is checked (default /srv/wfm)
   --disk-floor-bytes <n>      free-space floor (default 1073741824)
   --now <iso>                 evaluation instant, for reproducing a report
@@ -44,6 +50,17 @@ APP="/srv/wfm/app"
 DEPLOY_GRACE_HOURS=24
 CSV="/srv/wfm/data/scrape/wfm_results.csv"
 SNAPSHOT="/srv/wfm/data/public/market.json"
+# Sweeps start every 3 hours plus up to 10 minutes of jitter and take about an
+# hour (two at the unit's timeout), so consecutive stamps sit about 3 hours
+# apart and at most about 4h15m. One failed sweep, which already alerts through
+# its own OnFailure, stretches that to at most about 7h15m and must not page
+# again; a second missed sweep takes the stamp past 8 hours before a third
+# could replace it.
+MAX_SNAPSHOT_AGE_HOURS=8
+# The desktops' tolerance for a stamp ahead of their clock (MAX_FUTURE_SKEW_SECS
+# in the desktop's market cache). A stamp further out means this clock or the
+# sweep's was wrong, and readers would hold it over every newer snapshot.
+FUTURE_SKEW_SECONDS=3600
 DISK_PATH="/srv/wfm"
 DISK_FLOOR_BYTES=1073741824
 BOUNDARY_GRACE_SECONDS=900
@@ -59,6 +76,7 @@ while [ $# -gt 0 ]; do
     --deploy-grace-hours) DEPLOY_GRACE_HOURS="$2"; shift 2;;
     --csv) CSV="$2"; shift 2;;
     --snapshot) SNAPSHOT="$2"; shift 2;;
+    --max-snapshot-age-hours) MAX_SNAPSHOT_AGE_HOURS="$2"; shift 2;;
     --disk-path) DISK_PATH="$2"; shift 2;;
     --disk-floor-bytes) DISK_FLOOR_BYTES="$2"; shift 2;;
     --now) NOW="$2"; shift 2;;
@@ -150,8 +168,22 @@ else
   error "$CSV is missing"
 fi
 snapshot_age=""
+snapshot_updated_at=""
 if [ -f "$SNAPSHOT" ]; then
   snapshot_age=$((NOW_EPOCH - $(stat -c %Y "$SNAPSHOT" 2>/dev/null || printf '%s' "$NOW_EPOCH")))
+  # The installed pipeline parses it: nothing else on the box reads JSON, and
+  # it applies the same contract every reader of the snapshot does.
+  stamp_epoch="$("$BINARY" stamp "$SNAPSHOT" 2>/dev/null)" || stamp_epoch=""
+  case "$stamp_epoch" in
+    ''|*[!0-9]*) error "$SNAPSHOT has no readable updated_at, or is not a market snapshot";;
+    *)
+      snapshot_updated_at="$(epoch_to_iso "$stamp_epoch")"
+      if [ $((stamp_epoch - NOW_EPOCH)) -gt "$FUTURE_SKEW_SECONDS" ]; then
+        error "$SNAPSHOT is stamped $snapshot_updated_at, in the future"
+      elif [ $((NOW_EPOCH - stamp_epoch)) -gt $((MAX_SNAPSHOT_AGE_HOURS * 3600)) ]; then
+        error "$SNAPSHOT was last updated at $snapshot_updated_at, over $MAX_SNAPSHOT_AGE_HOURS hours ago"
+      fi;;
+  esac
 else
   error "$SNAPSHOT is missing"
 fi
@@ -339,7 +371,8 @@ report="$(cat <<EOF
   },
   "sweep": {
     "csv_rows": $(jnum "$csv_rows"),
-    "snapshot_age_seconds": $(jnum "$snapshot_age")
+    "snapshot_age_seconds": $(jnum "$snapshot_age"),
+    "snapshot_updated_at": $(jstr_or_null "$snapshot_updated_at")
   },
   "disk": {
     "path": $(jstr "$DISK_PATH"),
