@@ -35,6 +35,16 @@ classified in `wfm-client/tests/send_sites.rs`.
   `PAGE_GUARD`. No elevation needed if running as the user that
   launched WF.
 
+## DE inventory request
+
+`inventory.rs` sends `User-Agent: Warframe/<build>` to
+`api.warframe.com/api/inventory.php`. This is a deliberate exception to the
+project's descriptive user agent, which `wfm-client` owns and applies to
+warframe.market: the request imitates the game's own. It has been this way
+since the first tracked revision, and neither the code nor the history records
+why, so whether it should stay is an open policy question for the maintainer,
+not a settled rule. Do not change it without a running game to verify the scan.
+
 Patterns scanned (`regex::bytes::Regex`):
 - `accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})` - session creds
 - `"BuildLabel":"([0-9.]+)/[A-Za-z0-9]+` - game build → appVersion
