@@ -6320,6 +6320,11 @@ msgid "Price {price}p is above the {cap}p cap."
 msgstr "Cena {price}p przekracza limit {cap}p."
 
 #. Toast.
+msgctxt "orders.priceFloor"
+msgid "Price {price}p is below the {floor}p minimum for this lot."
+msgstr ""
+
+#. Toast.
 #, fuzzy
 msgctxt "orders.updateFailed"
 msgid "Couldn't update: {error}"
@@ -7882,8 +7887,9 @@ msgstr "Sesja konta"
 
 #. Setting help.
 #, fuzzy
+#| msgid "Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed."
 msgctxt "settings.logoutHelp"
-msgid "Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed."
+msgid "Logging out removes the encrypted login saved on this device and forgets its remembered unlock key. Resume or discard a saved listing batch first. Your listings on warframe.market are not changed."
 msgstr "Wylogowanie usuwa zaszyfrowane logowanie zapisane na tym urządzeniu, zapomina zapamiętany klucz odblokowania i odrzuca każdą przerwaną lokalną partię ofert. Twoje oferty na warframe.market się nie zmieniają."
 
 #. Setting help.

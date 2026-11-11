@@ -105,6 +105,8 @@ export class ListingController {
       await this.port.logout();
     } catch (error) {
       this.wfmStatus = await this.port.status().catch(() => previousStatus);
+      // Bring up the saved-batch banner, where the batch can be resumed or discarded.
+      if (error instanceof DesktopCmdError && error.code === 'pending_plan') await this.refreshPendingPlan();
       throw error;
     }
     this.wfmStatus = { logged_in: false, unlocked: false };

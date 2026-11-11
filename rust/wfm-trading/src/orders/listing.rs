@@ -4,7 +4,9 @@
 //! the crash-recoverable plan executor, and [`crate::market::catalog`] for the WFM
 //! item catalog fetch both this module and the plan executor depend on.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use market_domain::limits::{MAX_PLATINUM, MIN_PLATINUM};
+use market_domain::orders::OrderRow;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -152,7 +154,84 @@ pub fn bulk_set_visibility(unlocked: &Unlocked, req: &VisibilityRequest) -> Vec<
     out
 }
 
+/// Longest id accepted. WFM ids are 24-character hex object ids; the bound
+/// only has to keep an arbitrary string out of the request path.
+const MAX_ORDER_ID_LEN: usize = 64;
+
+/// An order id is interpolated into the request path, so a `/`, `..`, `?` or
+/// `#` in it would address a different endpoint with the user's credentials.
+pub fn validate_order_id(id: &str) -> Result<()> {
+    if id.is_empty()
+        || id.len() > MAX_ORDER_ID_LEN
+        || !id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+    {
+        bail!("Invalid order id; refresh your orders and try again.");
+    }
+    Ok(())
+}
+
+fn order_url(id: &str) -> Result<String> {
+    validate_order_id(id)?;
+    Ok(format!("https://api.warframe.market/v2/order/{id}"))
+}
+
+/// Everything about an edit that can be refused without the live order. An
+/// order's `platinum` is the price of one lot, so the cap here is the lot cap
+/// and the floor is the single-unit floor; [`update_order`] adds the floor for
+/// the order's actual lot once it has read it.
+pub fn validate_update(id: &str, upd: &UpdateRequest) -> Result<()> {
+    validate_order_id(id)?;
+    if upd.platinum.is_none()
+        && upd.quantity.is_none()
+        && upd.visible.is_none()
+        && upd.rank.is_none()
+    {
+        bail!("update body has no fields to patch");
+    }
+    if let Some(p) = upd.platinum {
+        if p > MAX_PLATINUM {
+            bail!("price {p}p > max {MAX_PLATINUM}p");
+        }
+        if p < MIN_PLATINUM {
+            bail!("price {p}p < min {MIN_PLATINUM}p");
+        }
+    }
+    if upd.quantity == Some(0) {
+        bail!("quantity must be at least 1");
+    }
+    Ok(())
+}
+
+/// A lot of `per_trade` units must ask at least `MIN_PLATINUM` for each unit,
+/// the same floor a reviewed batch applies before it multiplies by the lot.
+pub fn validate_lot_price(platinum: u32, per_trade: Option<u64>) -> Result<()> {
+    let lot = per_trade.unwrap_or(1).max(1);
+    if u64::from(platinum) < u64::from(MIN_PLATINUM).saturating_mul(lot) {
+        bail!("price {platinum}p for a lot of {lot} < min {MIN_PLATINUM}p each");
+    }
+    Ok(())
+}
+
 pub fn update_order(unlocked: &Unlocked, id: &str, upd: &UpdateRequest) -> Result<PerOrderResult> {
+    validate_update(id, upd)?;
+    if let Some(platinum) = upd.platinum {
+        // Every mutation invalidates the read cache, so a cached lot cannot be
+        // one this app has since changed.
+        let rows = read_user_order_rows(unlocked, false)?;
+        let per_trade = decode_user_orders(unlocked, &rows)?
+            .orders
+            .into_iter()
+            .find_map(|row| match row {
+                OrderRow::Supported(order) if order.id == id => Some(order.per_trade),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                anyhow!("The order is not among your current orders; refresh and try again.")
+            })?;
+        validate_lot_price(platinum, per_trade)?;
+    }
     let client = wfm_client()?;
     let mut body = serde_json::Map::new();
     if let Some(v) = upd.platinum {
@@ -166,9 +245,6 @@ pub fn update_order(unlocked: &Unlocked, id: &str, upd: &UpdateRequest) -> Resul
     }
     if let Some(v) = upd.rank {
         body.insert("rank".into(), serde_json::json!(v));
-    }
-    if body.is_empty() {
-        bail!("update body has no fields to patch");
     }
     Ok(patch_one_order(
         &client,
@@ -184,7 +260,16 @@ pub(crate) fn patch_one_order(
     id: &str,
     body: &serde_json::Value,
 ) -> PerOrderResult {
-    let url = format!("https://api.warframe.market/v2/order/{id}");
+    let url = match order_url(id) {
+        Ok(url) => url,
+        Err(e) => {
+            return PerOrderResult {
+                order_id: id.into(),
+                status: "error".into(),
+                message: Some(e.to_string()),
+            }
+        }
+    };
     let resp = send_mutation(
         wfm_client::wfm_authed_headers(client.patch(&url), &unlocked.platform, &unlocked.jwt)
             .json(body),
@@ -221,8 +306,8 @@ pub(crate) fn patch_one_order(
 }
 
 pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
+    let url = order_url(id)?;
     let client = wfm_client()?;
-    let url = format!("https://api.warframe.market/v2/order/{id}");
     let resp = send_mutation(wfm_client::wfm_authed_headers(
         client.delete(&url),
         &unlocked.platform,
@@ -404,5 +489,127 @@ mod response_tests {
         assert!(validate_orders_body(&body, &session).is_err());
         body["data"][0]["subtype"] = serde_json::json!("revealed");
         assert!(validate_orders_body(&body, &session).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+
+    fn unlocked() -> Unlocked {
+        Unlocked {
+            jwt: String::new(),
+            username: "fixture".into(),
+            platform: "pc".into(),
+            catalog: Arc::new(BTreeMap::new()),
+            id_to_item: Arc::new(BTreeMap::new()),
+        }
+    }
+
+    fn patch(platinum: Option<u32>, quantity: Option<u32>) -> UpdateRequest {
+        UpdateRequest {
+            platinum,
+            quantity,
+            visible: None,
+            rank: None,
+        }
+    }
+
+    fn refusal(result: Result<PerOrderResult>) -> String {
+        match result {
+            Ok(_) => panic!("the edit should have been refused"),
+            Err(error) => error.to_string(),
+        }
+    }
+
+    const PATH_SHAPED: [&str; 7] = [
+        "",
+        "../../v2/me",
+        "abc/def",
+        "abc?visible=true",
+        "abc#fragment",
+        "abc%2F..",
+        "abc def",
+    ];
+
+    #[test]
+    fn order_ids_are_limited_to_the_id_alphabet() {
+        assert!(validate_order_id("5f1e8c2b9d3a4e7f6c0b1a2d").is_ok());
+        assert!(validate_order_id("order-id_1").is_ok());
+        assert!(validate_order_id(&"a".repeat(64)).is_ok());
+        assert!(validate_order_id(&"a".repeat(65)).is_err());
+        assert!(validate_order_id("ordér").is_err());
+        for id in PATH_SHAPED {
+            assert!(validate_order_id(id).is_err(), "{id:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn a_path_shaped_id_is_refused_before_any_request() {
+        let session = unlocked();
+        let error = delete_order(&session, "../../v2/me").unwrap_err();
+        assert!(error.to_string().contains("Invalid order id"));
+        let error = refusal(update_order(&session, "abc/def", &patch(None, Some(1))));
+        assert!(error.contains("Invalid order id"));
+    }
+
+    #[test]
+    fn bulk_visibility_reports_a_bad_id_per_order() {
+        let results = bulk_set_visibility(
+            &unlocked(),
+            &VisibilityRequest {
+                order_ids: vec!["../../v2/me".into(), "abc?x".into()],
+                visible: true,
+            },
+        );
+        assert_eq!(results.len(), 2);
+        for (result, id) in results.iter().zip(["../../v2/me", "abc?x"]) {
+            assert_eq!(result.order_id, id);
+            assert_eq!(result.status, "error");
+            assert!(result
+                .message
+                .as_deref()
+                .is_some_and(|m| m.contains("Invalid order id")));
+        }
+    }
+
+    #[test]
+    fn edits_enforce_the_listing_caps() {
+        let id = "5f1e8c2b9d3a4e7f6c0b1a2d";
+        assert!(validate_update(id, &patch(Some(MIN_PLATINUM), None)).is_ok());
+        assert!(validate_update(id, &patch(Some(MAX_PLATINUM), None)).is_ok());
+        assert!(validate_update(id, &patch(None, Some(1))).is_ok());
+        let low = validate_update(id, &patch(Some(MIN_PLATINUM - 1), None)).unwrap_err();
+        assert!(low.to_string().contains("< min"));
+        let high = validate_update(id, &patch(Some(MAX_PLATINUM + 1), None)).unwrap_err();
+        assert!(high.to_string().contains("> max"));
+        let empty = validate_update(id, &patch(Some(0), None)).unwrap_err();
+        assert!(empty.to_string().contains("< min"));
+        let zero = validate_update(id, &patch(None, Some(0))).unwrap_err();
+        assert!(zero.to_string().contains("quantity"));
+        assert!(validate_update(id, &patch(None, None)).is_err());
+    }
+
+    #[test]
+    fn caps_are_checked_before_any_request() {
+        let session = unlocked();
+        let id = "5f1e8c2b9d3a4e7f6c0b1a2d";
+        let error = refusal(update_order(&session, id, &patch(None, Some(0))));
+        assert!(error.contains("quantity"));
+        let error = refusal(update_order(
+            &session,
+            id,
+            &patch(Some(MAX_PLATINUM + 1), None),
+        ));
+        assert!(error.contains("> max"));
+    }
+
+    #[test]
+    fn a_lot_price_must_cover_the_minimum_for_each_unit() {
+        assert!(validate_lot_price(MIN_PLATINUM, None).is_ok());
+        assert!(validate_lot_price(MIN_PLATINUM, Some(1)).is_ok());
+        assert!(validate_lot_price(MIN_PLATINUM * 3, Some(3)).is_ok());
+        assert!(validate_lot_price(MIN_PLATINUM * 3 - 1, Some(3)).is_err());
+        assert!(validate_lot_price(MIN_PLATINUM * 6 - 1, Some(6)).is_err());
     }
 }

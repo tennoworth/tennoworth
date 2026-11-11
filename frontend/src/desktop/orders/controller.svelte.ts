@@ -183,6 +183,12 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
       pushToast(t('orders.priceCap', { price: newPrice, cap: MAX_PLATINUM }), 'error');
       return;
     }
+    // The edited value is the lot total, so the per-unit floor scales with the lot.
+    const floor = orderLotPrice(MIN_PLATINUM, o.per_trade) ?? MIN_PLATINUM;
+    if (newPrice < floor) {
+      pushToast(t('orders.priceFloor', { price: newPrice, floor }), 'error');
+      return;
+    }
     markBusy(o.id, true);
     try {
       assertOrderOk(await input.transport.updateOrder(o.id, { platinum: newPrice }));

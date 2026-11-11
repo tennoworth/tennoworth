@@ -25,6 +25,7 @@ use wfm_trading::auth::{
     EncryptedJwt,
 };
 use wfm_trading::orders::listing::{warm_unlocked, Unlocked};
+use wfm_trading::orders::pending::{journal_state, JournalState};
 use wfm_trading::orders::plan::PlanGuard;
 use wfm_trading::paths::{config_dir_for, default_jwt_path};
 use wfm_trading::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
@@ -297,6 +298,12 @@ impl WfmSession {
     /// the sole owner; dropping still frees the plaintext, just without an
     /// explicit overwrite first. Also forgets the remembered device key -
     /// an explicit logout that silently re-unlocked itself wouldn't be one.
+    ///
+    /// A saved listing batch refuses the logout instead of being deleted with
+    /// it: the journal may be the only record of listings whose outcome on the
+    /// market is unknown, so it is resumed or explicitly discarded first. The
+    /// check runs under the plan guard, so no batch can be journaled between
+    /// it and the logout.
     pub fn logout(&self) -> Result<(), CmdError> {
         let _logout_guard = self.begin_plan().ok_or_else(|| {
             CmdError::of(
@@ -304,14 +311,19 @@ impl WfmSession {
                 "Wait for the active listing batch to finish before logging out.",
             )
         })?;
-        match fs::remove_file(&self.pending_path) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(CmdError::internal(format!(
-                    "could not discard the interrupted listing batch at {}: {error}",
-                    self.pending_path.display()
-                )))
+        match journal_state(&self.pending_path) {
+            JournalState::Absent => {}
+            JournalState::Unfinished | JournalState::Finished => {
+                return Err(CmdError::of(
+                    "pending_plan",
+                    "A listing batch is still saved on this device. Resume or discard it before logging out.",
+                ))
+            }
+            JournalState::Unreadable(detail) => {
+                return Err(CmdError::of(
+                    "pending_plan",
+                    format!("A saved listing batch could not be read. Discard it before logging out. {detail}"),
+                ))
             }
         }
         let credential = guard(&self.credential_file);
@@ -1030,16 +1042,13 @@ mod tests {
     #[test]
     fn logout_clears_the_session_and_saved_login() {
         let path = tmp_path("logout");
-        let pending = path.with_extension("pending.json");
         fs::write(&path, b"encrypted login placeholder").unwrap();
-        fs::write(&pending, b"pending listing placeholder").unwrap();
         let s = session_with(path.clone());
         s.debug_set_unlocked(dummy_unlocked());
         assert!(s.is_unlocked());
         s.logout().unwrap();
         assert!(!s.is_unlocked());
         assert!(!path.exists());
-        assert!(!pending.exists());
         assert_eq!(s.auth_status(), (false, false));
         assert_eq!(
             s.require_unlocked()
@@ -1053,9 +1062,7 @@ mod tests {
     #[test]
     fn logout_reports_when_the_saved_login_cannot_be_removed() {
         let path = tmp_path("logout-remove-error");
-        let pending = path.with_extension("pending.json");
         fs::create_dir(&path).unwrap();
-        fs::write(&pending, b"pending listing placeholder").unwrap();
         let s = session_with(path.clone());
         s.debug_set_unlocked(dummy_unlocked());
 
@@ -1067,29 +1074,55 @@ mod tests {
             .contains("could not remove the saved warframe.market login"));
         assert!(s.is_unlocked());
         assert!(path.exists());
-        assert!(!pending.exists());
         fs::remove_dir(&path).unwrap();
     }
 
+    fn saved_batch(statuses: &[&str]) -> Vec<u8> {
+        let items: Vec<_> = statuses
+            .iter()
+            .map(|status| {
+                serde_json::json!({
+                    "slug": "fixture_prime_part", "platinum": 10, "quantity": 1,
+                    "order_type": "sell", "visible": false, "rank": null, "status": status,
+                })
+            })
+            .collect();
+        serde_json::to_vec(&serde_json::json!({
+            "plan_id": "plan", "started_at": "2026-01-01T00:00:00Z", "items": items,
+        }))
+        .unwrap()
+    }
+
+    /// Whatever the journal still holds - unsent items, an unknown outcome, a
+    /// finished batch whose history was never recorded, or bytes that do not
+    /// parse - logout leaves it and the login in place for resume or discard.
     #[test]
-    fn logout_keeps_the_login_live_when_the_pending_batch_cannot_be_removed() {
-        let path = tmp_path("logout-pending-error");
-        let pending = path.with_extension("pending.json");
-        fs::write(&path, b"encrypted login placeholder").unwrap();
-        fs::create_dir(&pending).unwrap();
-        let s = session_with(path.clone());
-        s.debug_set_unlocked(dummy_unlocked());
+    fn logout_refuses_while_a_listing_batch_is_saved() {
+        let journals: [(&str, Vec<u8>); 4] = [
+            ("pending", saved_batch(&["ok", "pending"])),
+            ("uncertain", saved_batch(&["uncertain_mutation"])),
+            ("finished", saved_batch(&["ok", "error"])),
+            ("unreadable", b"{ not a batch".to_vec()),
+        ];
+        for (tag, journal) in journals {
+            let path = tmp_path(&format!("logout-saved-{tag}"));
+            let pending = path.with_extension("pending.json");
+            fs::write(&path, b"encrypted login placeholder").unwrap();
+            fs::write(&pending, &journal).unwrap();
+            let s = session_with(path.clone());
+            s.debug_set_unlocked(dummy_unlocked());
 
-        let error = s.logout().unwrap_err();
+            let error = s.logout().unwrap_err();
 
-        assert_eq!(error.code, "internal");
-        assert!(error
-            .message
-            .contains("could not discard the interrupted listing batch"));
-        assert!(s.is_unlocked());
-        assert!(path.exists());
-        fs::remove_dir(&pending).unwrap();
-        fs::remove_file(&path).unwrap();
+            assert_eq!(error.code, "pending_plan", "{tag}");
+            assert!(error.message.contains("before logging out"), "{tag}");
+            assert!(s.is_unlocked(), "{tag}");
+            assert!(path.exists(), "{tag}");
+            assert_eq!(fs::read(&pending).unwrap(), journal, "{tag}");
+            fs::remove_file(&pending).unwrap();
+            s.logout().unwrap();
+            assert!(!path.exists(), "{tag}");
+        }
     }
 
     #[test]

@@ -347,8 +347,8 @@ Reviewed listing batches write an uncertain marker to the pending-plan file
 before each market mutation, then write the observed result. The desktop holds
 the account mutation guard through journal cleanup. A failed result write
 leaves the journal for recovery; finished records can retry cleanup without
-contacting the market. Only an absent journal permits a new batch, and an
-explicit discard removes a saved record.
+contacting the market. Only an absent journal permits a new batch or a logout,
+and only an explicit discard removes a saved record.
 
 A validation refusal that will not pass on a retry (a newer scan, protected
 copies, a spent allowance) records every unsent item as an error, so a batch

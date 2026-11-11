@@ -463,7 +463,17 @@ const PROBE_JS: &str = r#"(function(){
     })
     .then(function(){ return invkE('get_pending_plan').then(function(v){ R.wfm.pendingAfterPlan = v; }); })
     .then(function(){ return invkE('resume_pending_plan').then(function(v){ R.wfm.resumeNoPending = v; }); })
-    .then(function(){ return invkE('wfm_logout').then(function(v){ R.wfm.logout = v; }); })
+    // A saved batch refuses logout instead of being deleted by it. Whether this
+    // refused batch is still saved here depends on how the executor settled it,
+    // so the refusal is asserted only when the journal is there.
+    .then(function(){ return invkE('get_pending_plan').then(function(saved){
+      return invkE('wfm_logout').then(function(v){
+        R.wfm.logoutWhileSaved = v;
+        if (saved.ok && saved.value && (v.ok || v.code !== 'pending_plan')) throw new Error('logout did not refuse while a listing batch was saved');
+      });
+    }); })
+    .then(function(){ return invkE('discard_pending_plan').then(function(v){ R.wfm.discard = v; if (!v.ok) throw new Error('saved listing batch was not discarded'); }); })
+    .then(function(){ return invkE('wfm_logout').then(function(v){ R.wfm.logout = v; if (!v.ok) throw new Error('logout failed with no saved listing batch'); }); })
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status3 = v; }); })
     // After logout, listing reads and writes must agree on the auth state.
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planAfterLogout = v; }); })
