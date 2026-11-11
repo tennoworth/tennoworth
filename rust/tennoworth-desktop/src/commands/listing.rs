@@ -30,14 +30,20 @@ use crate::services::wfm::session::WfmSession;
 
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 
-fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), PlanValidationError> {
+/// `orders` is the account's orders body the executor has just read fresh for
+/// the item it is about to send; when absent, the protection check reads its own.
+fn validate_session_plan(
+    app: &AppHandle,
+    items: &[PlanItem],
+    orders: Option<&serde_json::Value>,
+) -> Result<(), PlanValidationError> {
     for item in items.iter().filter(|item| item.order_type == "sell") {
         crate::services::trading::protection::validate_snapshot(
             &app.state::<Db>(),
             item.inventory_snapshot_id,
         )?;
     }
-    validate_protected_plan(app, items)?;
+    validate_protected_plan(app, items, orders)?;
     if items.iter().all(|i| i.session.is_none()) {
         return Ok(());
     }
@@ -70,7 +76,11 @@ fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Plan
     .map_err(PlanValidationError::from)
 }
 
-fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), PlanValidationError> {
+fn validate_protected_plan(
+    app: &AppHandle,
+    items: &[PlanItem],
+    orders: Option<&serde_json::Value>,
+) -> Result<(), PlanValidationError> {
     let db = app.state::<Db>();
     let protection = crate::services::trading::protection::ProtectionPlan::load(&db)?;
     if !protection.active(&db)?
@@ -97,8 +107,15 @@ fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Pl
     }) {
         return Ok(());
     }
-    let body = list_user_orders(&unlocked).map_err(PlanValidationError::Market)?;
-    validate_protected_contents(&db, &market, &body, items).map_err(PlanValidationError::from)
+    let fetched;
+    let body = match orders {
+        Some(body) => body,
+        None => {
+            fetched = list_user_orders(&unlocked).map_err(PlanValidationError::Market)?;
+            &fetched
+        }
+    };
+    validate_protected_contents(&db, &market, body, items).map_err(PlanValidationError::from)
 }
 
 fn validate_protected_contents(
@@ -325,7 +342,7 @@ pub async fn submit_plan(
             s.pending_path(),
             &unlocked,
             PlanRequest { items },
-            || validate_session_plan(&app, &reviewed),
+            |orders| validate_session_plan(&app, &reviewed, orders),
         ));
         finish_plan(s.pending_path(), &mut response);
         record_outcomes(&app, &reviewed, &response);
@@ -365,7 +382,8 @@ pub fn cancel_plan(
     session.cancel_plan(&request_id)
 }
 
-/// Re-run the pending plan, skipping items already in a terminal state.
+/// Re-run the pending plan, skipping items already in a terminal state. Items
+/// whose send went unconfirmed are first checked against current orders.
 #[tauri::command]
 pub async fn resume_pending_plan(
     app: AppHandle,
@@ -398,8 +416,8 @@ pub async fn resume_pending_plan(
         }
         let (_guard, unlocked) = mutations.begin()?;
         let mut response = wfm_client::governor::with_context(request.context(), || {
-            run_pending(s.pending_path(), &unlocked, &mut pending, || {
-                validate_session_plan(&app, &reviewed)
+            run_pending(s.pending_path(), &unlocked, &mut pending, |orders| {
+                validate_session_plan(&app, &reviewed, orders)
             })
         });
         finish_plan(s.pending_path(), &mut response);

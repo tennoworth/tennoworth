@@ -9,12 +9,15 @@ this file covers what the core does with it.
 - The listing caps are imported from `market_domain::limits` (cross-crate
   invariant in ../AGENTS.md). `MAX_PLATINUM` is the WFM UI cap because maxed
   arcanes legitimately trade at 1500-2500p; an earlier 999 cap silently blocked
-  them. The slug-mismatch guard refuses a listing priced 3× or more below the
-  reference `low_sell`.
+  them. The slug-mismatch guard refuses a sell priced more than 3× below the
+  reference `low_sell`, and a buy priced more than 3× above it.
 - Reviewed batches are journaled to `~/.config/wfminv/pending_plan.json`
   before the first POST, through `orders/pending.rs`; the recovery semantics
-  (uncertain marker per item, journal cleanup order, discard) are owned by
+  (uncertain marker per item, journal cleanup order, refusals, reconciling
+  unknown outcomes on resume, discard) are owned by
   [docs/architecture.md](../../docs/architecture.md#data-and-failure-boundaries).
+  The plan validator receives the orders the executor read for the item; it
+  must not read its own then (`execute_plan`'s documentation).
   The desktop exposes them as `get_pending_plan` / `resume_pending_plan` /
   `discard_pending_plan`. Change the journal format only with a migration for
   files already on disk.
