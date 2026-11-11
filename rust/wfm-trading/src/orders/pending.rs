@@ -64,6 +64,12 @@ pub struct PendingItem {
     pub session: Option<crate::orders::plan::SessionConstraint>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reviewed_order: Option<crate::orders::plan::ReviewedOrder>,
+    /// The account's order for this item as read immediately before the
+    /// current send was dispatched. Unlike `reviewed_order` it is recorded for
+    /// every batch, so a resume can tell an unconfirmed send that never landed
+    /// from one that did. Cleared when a new attempt starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sent_against: Option<crate::orders::plan::ReviewedOrder>,
     pub order_type: String,
     pub visible: bool,
     pub rank: Option<u32>,
@@ -244,6 +250,7 @@ mod tests {
                     per_trade: Some(1),
                     session: None,
                     reviewed_order: None,
+                    sent_against: None,
                     order_type: "sell".into(),
                     visible: false,
                     rank: None,
@@ -262,6 +269,7 @@ mod tests {
                     per_trade: None,
                     session: None,
                     reviewed_order: None,
+                    sent_against: None,
                     order_type: "sell".into(),
                     visible: false,
                     rank: None,

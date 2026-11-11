@@ -344,7 +344,8 @@ current implementation, including freshly built binaries where applicable.
 Shared cross-language behavior uses fixtures under `tests/fixtures/`.
 
 Reviewed listing batches write an uncertain marker to the pending-plan file
-before each market mutation, then write the observed result. The desktop holds
+before each market mutation, then the account's order for that item as read
+immediately before the send, then the observed result. The desktop holds
 the account mutation guard through journal cleanup. A failed result write
 leaves the journal for recovery; finished records can retry cleanup without
 contacting the market. Only an absent journal permits a new batch or a logout,
@@ -355,8 +356,10 @@ copies, a spent allowance) records every unsent item as an error, so a batch
 refused before or during sending does not hold a journal open; a transient
 market or governor refusal keeps unsent items pending for Resume. Resume checks
 unknown outcomes against current orders before it sends anything, and moves an
-item only on unambiguous evidence; the rules are documented on
-`reconcile_pending` in `wfm-trading/src/orders/plan.rs`.
+item only on unambiguous evidence: the recorded pre-send order tells a send
+that never landed, which is sent again, from one that did, which is confirmed.
+The rules are documented on `reconcile_pending` in
+`wfm-trading/src/orders/plan.rs`.
 
 Only after that cleanup does the desktop record the batch's confirmed sell
 listings in `listing_outcome`, and a failure there is logged, never reported as

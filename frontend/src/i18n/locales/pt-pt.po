@@ -4171,11 +4171,10 @@ msgctxt "listing.resumed"
 msgid "Resumed."
 msgstr "Retomado."
 
-#. Banner count.
-#, fuzzy
-msgctxt "listing.created"
-msgid "{count} created"
-msgstr "{count} criados"
+#. Banner count: listings a resume sent, updated, or found already live.
+msgctxt "listing.resumedListed"
+msgid "{count} listed"
+msgstr ""
 
 #. Banner count.
 #, fuzzy
@@ -4243,6 +4242,11 @@ msgstr "{count} já concluídos"
 msgctxt "listing.mayBeLive"
 msgid "A listing whose outcome the market never confirmed may already be live. Resume checks your current orders first and sends it again only if it is clearly missing; otherwise check My Orders."
 msgstr "Um anúncio cujo resultado o mercado nunca confirmou pode já estar ativo. Consulte As minhas ordens antes de o anunciar novamente."
+
+#. Banner text after a resume left an outcome unknown.
+msgctxt "listing.stillUnknown"
+msgid "Resume checked your current orders and could not tell whether this listing was applied, so nothing was sent. Check My Orders, then discard this batch."
+msgstr ""
 
 #. Button.
 #, fuzzy

@@ -15,6 +15,8 @@ export class ListingController {
   resumePhase = $state<'idle' | 'running' | 'done' | 'error'>('idle');
   resumeError = $state<string | null>(null);
   resumeResults = $state<ItemResult[]>([]);
+  /** The last resume left an unconfirmed listing it could not settle. */
+  resumeUnresolved = $state(false);
   durabilityError = $state<string | null>(null);
   sessionEpoch = $state(0);
   listingOpen = $state(false);
@@ -70,12 +72,18 @@ export class ListingController {
     if (this.resumePhase === 'running') return;
     this.resumePhase = 'running';
     this.resumeError = null;
+    this.resumeUnresolved = false;
     try {
       const resp = await this.port.resumePendingPlan();
       this.resumeResults = resp?.results ?? [];
       this.durabilityError = resp?.durability_error ?? null;
+      // The account's orders changed under views that only reload on this.
+      if (this.resumeResults.some(r => r.status === 'ok')) this.sessionEpoch += 1;
       if (!await this.refreshPendingPlan()) return;
       this.resumePhase = this.pendingPlan ? 'idle' : 'done';
+      // A resume that settles nothing leaves the banner as it was; without
+      // this it reads as though the button did nothing.
+      this.resumeUnresolved = !!this.pendingPlan && this.resumeResults.some(r => r.status === 'uncertain_mutation');
     } catch (e) {
       // Desktop locked-session rejection: keep the banner (the plan is still
       // pending) and open the matching auth dialog - Resume works after that.
@@ -93,6 +101,7 @@ export class ListingController {
     this.pendingPlan = null;
     this.resumePhase = 'idle';
     this.resumeResults = [];
+    this.resumeUnresolved = false;
     this.durabilityError = null;
   }
   handleWfmUnlocked(next: string | null) {
