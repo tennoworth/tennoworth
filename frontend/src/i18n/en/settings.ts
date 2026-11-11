@@ -80,7 +80,7 @@ export const SETTINGS = {
   'settings.loadingOverlay': m('Loading overlay settings…', 'Status.'),
   'settings.account': m('warframe.market account', 'Section heading.'),
   'settings.session': m('Account session', 'Row label.'),
-  'settings.logoutHelp': m('Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed.', 'Setting help.'),
+  'settings.logoutHelp': m('Logging out removes the encrypted login saved on this device and forgets its remembered unlock key. Resume or discard a saved listing batch first. Your listings on warframe.market are not changed.', 'Setting help.'),
   'settings.manageLogin': m('Manage the encrypted login saved on this device.', 'Setting help.'),
   'settings.loggingOut': m('Logging out…', 'Button while busy.'),
   'settings.confirmLogout': m('Confirm log out', 'Button.'),

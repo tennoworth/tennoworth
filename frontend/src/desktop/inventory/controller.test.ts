@@ -89,6 +89,16 @@ describe('listing lifecycle', () => {
     expect(c.wfmStatus?.unlocked).toBe(true);
     expect(c.listingOpen).toBe(true);
   });
+
+  it('shows the saved batch when logout is refused to keep it', async () => {
+    const plan = { plan_id: 'saved', started_at: '2026-09-08', items: [] } as PendingPlan;
+    const refusal = new DesktopCmdError('pending_plan', 'A listing batch is still saved on this device. Resume or discard it before logging out.');
+    const c = new ListingController({ getPendingPlan: vi.fn().mockResolvedValue(plan), resumePendingPlan: vi.fn(), discardPendingPlan: vi.fn(), status: async () => ({ logged_in: true, unlocked: true }), logout: async () => { throw refusal; } }, vi.fn());
+    c.wfmStatus = { logged_in: true, unlocked: true };
+    await expect(c.handleWfmLogout()).rejects.toBe(refusal);
+    expect(c.pendingPlan?.plan_id).toBe('saved');
+    expect(c.wfmStatus?.logged_in).toBe(true);
+  });
 });
 
 it('restores filter preferences and preserves reserves when changing presets', async () => {

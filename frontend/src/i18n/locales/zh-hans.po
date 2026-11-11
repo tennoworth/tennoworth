@@ -6319,6 +6319,11 @@ msgid "Price {price}p is above the {cap}p cap."
 msgstr "价格 {price}p 超过了 {cap}p 的上限。"
 
 #. Toast.
+msgctxt "orders.priceFloor"
+msgid "Price {price}p is below the {floor}p minimum for this lot."
+msgstr ""
+
+#. Toast.
 #, fuzzy
 msgctxt "orders.updateFailed"
 msgid "Couldn't update: {error}"
@@ -7881,8 +7886,9 @@ msgstr "账户会话"
 
 #. Setting help.
 #, fuzzy
+#| msgid "Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed."
 msgctxt "settings.logoutHelp"
-msgid "Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed."
+msgid "Logging out removes the encrypted login saved on this device and forgets its remembered unlock key. Resume or discard a saved listing batch first. Your listings on warframe.market are not changed."
 msgstr "退出登录会删除保存在此设备上的加密登录信息，忘记已记住的解锁密钥，并放弃任何中断的本地挂单批次。你在 warframe.market 上的挂单不会改变。"
 
 #. Setting help.

@@ -6319,6 +6319,11 @@ msgid "Price {price}p is above the {cap}p cap."
 msgstr "가격 {price}p가 상한 {cap}p를 넘습니다."
 
 #. Toast.
+msgctxt "orders.priceFloor"
+msgid "Price {price}p is below the {floor}p minimum for this lot."
+msgstr ""
+
+#. Toast.
 #, fuzzy
 msgctxt "orders.updateFailed"
 msgid "Couldn't update: {error}"
@@ -7881,8 +7886,9 @@ msgstr "계정 세션"
 
 #. Setting help.
 #, fuzzy
+#| msgid "Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed."
 msgctxt "settings.logoutHelp"
-msgid "Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed."
+msgid "Logging out removes the encrypted login saved on this device and forgets its remembered unlock key. Resume or discard a saved listing batch first. Your listings on warframe.market are not changed."
 msgstr "로그아웃하면 이 기기에 저장된 암호화 로그인과 기억된 잠금 해제 키가 삭제되고, 중단된 로컬 등록 묶음도 버려집니다. warframe.market의 등록은 바뀌지 않습니다."
 
 #. Setting help.

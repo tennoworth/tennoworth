@@ -4,6 +4,7 @@
 ///   - `needs_unlock`  - login present, session locked → open the passphrase modal.
 ///   - `bad_passphrase`- wrong passphrase in the unlock/login modal.
 ///   - `no_pending` / `busy` - pending-plan resume edge cases.
+///   - `pending_plan` - logout refused while a listing batch is still saved.
 ///   - `wfm` / `internal` - everything else, message shown verbatim.
 ///
 /// Never carries the JWT, the passphrase, or the WFM password.
