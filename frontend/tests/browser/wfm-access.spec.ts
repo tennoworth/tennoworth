@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test';
 import defaults from '../../../tests/fixtures/pacing.json' with { type: 'json' };
 import { WFM_ACCESS_EVENT } from '../../src/contracts/generated/desktop';
+import { pinSampleMarket } from './sample-market';
+
+test.beforeEach(async ({ page }) => { await pinSampleMarket(page); });
 
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} market access preserves draft edits through a pause and recovery`, async ({ page }, info) => {

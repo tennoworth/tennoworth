@@ -54,6 +54,31 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.101 - 2026-11-11
+
+# 🔒 TennoWorth Desktop 0.10.101
+
+TennoWorth Desktop 0.10.101 is ready.
+
+This release is for anyone who lists on warframe.market from the app. A listing batch that is interrupted, by a crash, a dropped connection or a refusal from the market, now recovers cleanly instead of leaving you unsure what was sent. It also makes the app more careful with your data and, on Linux, with the permission it uses to read your inventory.
+
+## Changelog (5)
+
+### Listing
+
+- **Interrupted listings recover on Resume** If the app stopped while a listing was being sent, Resume now checks your current orders first. A listing that never arrived is sent again, one that did arrive is confirmed without a duplicate, and My Orders reloads afterwards. When the app cannot tell, it says so and points you to My Orders. <!-- app-note {"id":"listing-resume-reconcile","kind":"fixed"} -->
+- **A refused batch no longer blocks the next one** A batch the market or the app refused before anything was sent used to stay saved, where it could be neither resumed nor replaced. Each refused item now shows its reason and the batch is finished. <!-- app-note {"id":"listing-refused-batch","kind":"fixed"} -->
+- **Sign-out waits for a saved batch** Signing out of warframe.market is refused while an unfinished listing batch is saved, so the batch cannot be stranded. Resume or discard it first. Order edits are also checked before they are sent. <!-- app-note {"id":"listing-logout-pending","kind":"improved"} -->
+
+### Safety
+
+- **Your data is backed up before it changes** Before an update changes the app's database, the app saves a copy next to it and keeps the last three. An older version of the app now refuses to open data written by a newer one instead of risking damage to it. <!-- app-note {"id":"db-backup-before-migration","kind":"improved"} -->
+- **The inventory scan holds less privilege on Linux** On systems where the scan needs a granted capability, the app now uses it only for the moment it opens the game's memory and holds nothing the rest of the time. An existing grant keeps working. <!-- app-note {"id":"linux-ptrace-scoped","kind":"improved","platforms":["linux"]} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.10.100 - 2026-11-09
 
 # 🐧 TennoWorth Desktop 0.10.100

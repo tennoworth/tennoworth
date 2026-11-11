@@ -1,5 +1,5 @@
 {
-  "version": "0.10.100",
+  "version": "0.10.101",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2048,6 +2048,66 @@
           "kind": "action",
           "title": "Linux needs glibc 2.39 or newer",
           "body": "This version needs Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or a later release. Settings → Updates shows the glibc version your system has. On older systems, keep 0.9.102, which is still available on the releases page.",
+          "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.101",
+      "date": "2026-11-11",
+      "changes": [
+        {
+          "id": "listing-resume-reconcile",
+          "kind": "fixed",
+          "title": "Interrupted listings recover on Resume",
+          "body": "If the app stopped while a listing was being sent, Resume now checks your current orders first. A listing that never arrived is sent again, one that did arrive is confirmed without a duplicate, and My Orders reloads afterwards. When the app cannot tell, it says so and points you to My Orders.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "listing-refused-batch",
+          "kind": "fixed",
+          "title": "A refused batch no longer blocks the next one",
+          "body": "A batch the market or the app refused before anything was sent used to stay saved, where it could be neither resumed nor replaced. Each refused item now shows its reason and the batch is finished.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "listing-logout-pending",
+          "kind": "improved",
+          "title": "Sign-out waits for a saved batch",
+          "body": "Signing out of warframe.market is refused while an unfinished listing batch is saved, so the batch cannot be stranded. Resume or discard it first. Order edits are also checked before they are sent.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "db-backup-before-migration",
+          "kind": "improved",
+          "title": "Your data is backed up before it changes",
+          "body": "Before an update changes the app's database, the app saves a copy next to it and keeps the last three. An older version of the app now refuses to open data written by a newer one instead of risking damage to it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "linux-ptrace-scoped",
+          "kind": "improved",
+          "title": "The inventory scan holds less privilege on Linux",
+          "body": "On systems where the scan needs a granted capability, the app now uses it only for the moment it opens the game's memory and holds nothing the rest of the time. An existing grant keeps working.",
           "platforms": [
             "linux"
           ],
