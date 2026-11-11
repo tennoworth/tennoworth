@@ -1731,6 +1731,7 @@ name = "game-acquisition"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "libc",
  "regex",
  "regex-syntax",
  "reqwest 0.12.28",

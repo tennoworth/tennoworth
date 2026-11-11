@@ -125,8 +125,13 @@ sudo sysctl kernel.yama.ptrace_scope=0
 ```
 
 That relaxes same-user ptrace protection system-wide until reboot; do not apply
-it without understanding the trade-off. File capabilities are appropriate for
-a locally built binary, but do not work on the AppImage's `nosuid` mount.
+it without understanding the trade-off. A locally built binary can instead carry
+the `cap_sys_ptrace` file capability, which does not work on the AppImage's
+`nosuid` mount. It is not the narrower choice: it is held by that one binary,
+but it can read any process on the machine, including root's, and code that
+gets into the app as you - a GTK module named in your own settings, for
+example - can use it. The app keeps the capability inactive except while it
+opens the game's memory, which prevents accidental use but not deliberate use.
 
 The optional reward overlay works with Borderless Fullscreen or Windowed mode
 on both platforms. Windows and X11 use direct window capture. Wayland capture
