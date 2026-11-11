@@ -5,6 +5,7 @@
 //! nothing about warframe.market. Like the trading crate it has **no
 //! interactive terminal I/O**: the desktop shell drives it.
 
+pub mod capability;
 pub mod error;
 pub mod inventory;
 pub mod scan;

@@ -45,6 +45,9 @@ fn get_inventory(url: &str, info: &SessionInfo, ct: &str) -> Result<Vec<u8>> {
     if let Some(b) = &info.build {
         params.push(("appVersion", b.as_str()));
     }
+    // A deliberate exception to the descriptive project user agent: this one
+    // request presents itself as the game. No recorded reason exists, and
+    // whether it should stay is open - see game-acquisition/AGENTS.md.
     let client = Client::builder()
         .user_agent(format!(
             "Warframe/{}",

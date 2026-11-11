@@ -679,9 +679,17 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     let maps_path = format!("/proc/{pid}/maps");
     let mem_path = format!("/proc/{pid}/mem");
 
-    let maps_file = File::open(&maps_path)
-        .with_context(|| format!("cannot open {maps_path} - does PID {pid} exist?"))?;
-    let mut mem_file = File::open(&mem_path).map_err(|e| ptrace_open_error(&mem_path, pid, e))?;
+    // The kernel checks ptrace access when each file is opened and later reads
+    // use the address space pinned then, so the capability is effective for
+    // the two opens only. Both are inside: a game running as another user
+    // needs it for `maps` as well.
+    let (maps_file, mut mem_file) = {
+        let _raised = crate::capability::PtraceRaised::raise();
+        let maps_file = File::open(&maps_path)
+            .with_context(|| format!("cannot open {maps_path} - does PID {pid} exist?"))?;
+        let mem_file = File::open(&mem_path).map_err(|e| ptrace_open_error(&mem_path, pid, e))?;
+        (maps_file, mem_file)
+    };
 
     let mut counts = PatternCounts::default();
     let budget = ScanBudget::default();
@@ -763,8 +771,12 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 //     the app closes, so the grant could not outlive one run. The honest fix
 //     is to relax Yama.
 //
-//   A local or extracted binary - the per-binary capability is still the
-//     tightest grant available, so keep it.
+//   A local or extracted binary - both routes work, and neither is strictly
+//     narrower, so the message offers both and states the trade-off. The file
+//     capability is confined to one binary but reaches every process,
+//     including root's, and anything that gets code into this GTK process as
+//     the user can raise it (see `capability`). The ptrace scope reaches only
+//     the user's own processes, but lets every one of them trace the others.
 #[cfg(target_os = "linux")]
 pub(super) fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Error {
     if e.kind() != std::io::ErrorKind::PermissionDenied {
@@ -799,11 +811,17 @@ pub(super) fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> 
                 .and_then(|p| p.to_str().map(str::to_owned))
                 .unwrap_or_else(|| "tennoworth-desktop".to_string());
             format!(
-                "Permission denied reading {mem_path} - reading the game's memory needs CAP_SYS_PTRACE.\n\
-                 Grant it once (no sudo needed afterwards):\n  \
-                 sudo setcap cap_sys_ptrace=eip \"{bin}\"\n  \
-                 {bin}\n\
-                 Note: re-installing or rebuilding the binary clears the capability - re-run setcap after an upgrade.\n\
+                "Permission denied reading {mem_path} - reading the game's memory needs \
+                 CAP_SYS_PTRACE or a relaxed ptrace scope.\n\
+                 Either grant this binary the capability (re-run after every rebuild or upgrade, \
+                 which clears it):\n  \
+                 sudo setcap cap_sys_ptrace=p \"{bin}\"\n\
+                 or allow same-user ptrace system-wide:\n  \
+                 sudo sysctl kernel.yama.ptrace_scope=0\n\
+                 They trade differently. The capability is held by this binary alone, but it can \
+                 read any process, root's included, and code that gets into the app as you - a \
+                 GTK module named in your own settings, say - can use it. The ptrace scope covers \
+                 only your own processes, but lets each of them read the others.\n\
                  Launching the app itself with sudo is not the alternative: it is a \
                  networked GUI that holds your WFM credentials."
             )
@@ -859,9 +877,23 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     // One snapshot for the whole scan - see the Linux leg.
     let pats = current_patterns();
 
+    /// Closes the process handle on every exit, including the budget error
+    /// `aggregate_match` returns from inside the walk.
+    struct ProcessHandle(HANDLE);
+    impl Drop for ProcessHandle {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from a successful OpenProcess and is
+            // closed exactly once, here.
+            let _ = unsafe { CloseHandle(self.0) };
+        }
+    }
+
     unsafe {
-        let handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, BOOL(0), pid)
-            .context(OPEN_PROCESS_FAILED)?;
+        let process = ProcessHandle(
+            OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, BOOL(0), pid)
+                .context(OPEN_PROCESS_FAILED)?,
+        );
+        let handle: HANDLE = process.0;
 
         let mut counts = PatternCounts::default();
         let budget = ScanBudget::default();
@@ -934,7 +966,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             }
         }
 
-        let _ = CloseHandle(handle);
+        drop(process);
         pick_dominant(counts)
     }
 }
@@ -1429,8 +1461,13 @@ mod tests {
         );
         // The narrow route is the whole point of the message, so it must stay.
         assert!(
-            msg.contains("sudo setcap cap_sys_ptrace=eip"),
+            msg.contains("sudo setcap cap_sys_ptrace=p "),
             "the per-binary capability route must survive: {msg}"
+        );
+        // Neither route is strictly narrower, so a local binary is offered both.
+        assert!(
+            msg.contains("ptrace_scope=0"),
+            "the same-user ptrace route must be offered too: {msg}"
         );
     }
 
