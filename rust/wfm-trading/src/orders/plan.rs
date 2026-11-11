@@ -361,8 +361,7 @@ pub fn run_pending(
     })
 }
 
-type Validator<'a> =
-    dyn FnMut(Option<&serde_json::Value>) -> Result<(), PlanValidationError> + 'a;
+type Validator<'a> = dyn FnMut(Option<&serde_json::Value>) -> Result<(), PlanValidationError> + 'a;
 
 fn run_pending_with(
     pending_path: &std::path::Path,
@@ -581,8 +580,9 @@ fn reconcile_pending(
             }
             Reconciled::NotApplied => {
                 item.status = STATUS_PENDING.into();
-                item.message =
-                    Some("Current orders show this listing was not applied, so it can be sent.".into());
+                item.message = Some(
+                    "Current orders show this listing was not applied, so it can be sent.".into(),
+                );
             }
             Reconciled::Unclear => {
                 item.message = Some("Current orders do not show clearly whether this listing was applied. Check My Orders before listing it again, then discard this batch.".into());
@@ -1203,15 +1203,18 @@ mod tests {
         );
         assert_eq!(attempted, ["sent", "refused"]);
         assert_eq!(response.results.len(), 3);
-        assert_eq!(
-            response.results[0].order_id.as_deref(),
-            Some("remote-sent")
-        );
+        assert_eq!(response.results[0].order_id.as_deref(), Some("remote-sent"));
         for row in &response.results[1..] {
             assert_eq!(row.status, STATUS_ERROR);
-            assert!(row.message.as_deref().unwrap().contains("inventory changed"));
+            assert!(row
+                .message
+                .as_deref()
+                .unwrap()
+                .contains("inventory changed"));
         }
-        let saved = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+        let saved = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .unwrap();
         assert!(saved.is_finished());
         clear_finished_pending(&path, &saved).unwrap();
         assert!(matches!(journal_state(&path), JournalState::Absent));
@@ -1253,7 +1256,9 @@ mod tests {
             .iter()
             .all(|row| row.status == STATUS_ERROR
                 && row.message.as_deref() == Some("Inventory changed")));
-        let saved = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+        let saved = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .unwrap();
         clear_finished_pending(&path, &saved).unwrap();
         assert!(matches!(journal_state(&path), JournalState::Absent));
 
@@ -1262,7 +1267,9 @@ mod tests {
             .results
             .iter()
             .all(|row| row.status == STATUS_PENDING));
-        let saved = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+        let saved = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .unwrap();
         clear_finished_pending(&path, &saved).unwrap();
         assert!(matches!(journal_state(&path), JournalState::Unfinished));
         let _ = std::fs::remove_file(&path);
@@ -1708,7 +1715,10 @@ mod tests {
                 ItemResult {
                     slug: item.slug.clone(),
                     status: "uncertain_mutation".into(),
-                    message: Some("The listing may have been applied, but its response could not be read.".into()),
+                    message: Some(
+                        "The listing may have been applied, but its response could not be read."
+                            .into(),
+                    ),
                     order_id: None,
                     action: None,
                 }
@@ -2010,7 +2020,9 @@ mod tests {
         );
         assert_eq!(result.results[0].status, STATUS_ERROR);
         assert!(result.results[0].order_id.is_none());
-        let saved = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+        let saved = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .unwrap();
         assert_eq!(saved.items[0].status, STATUS_ERROR);
         assert!(saved.is_finished());
         std::fs::remove_file(&path).unwrap();
@@ -2461,10 +2473,7 @@ mod tests {
             let case = format!("{side} {platinum}p against {reference}p");
             if refused {
                 assert_eq!(result.status, STATUS_ERROR, "{case}");
-                assert!(
-                    result.message.unwrap().contains("slug mismatch"),
-                    "{case}"
-                );
+                assert!(result.message.unwrap().contains("slug mismatch"), "{case}");
                 assert_eq!(reads, 0, "{case}");
             } else {
                 assert_eq!(result.status, STATUS_PENDING, "{case}");
@@ -2505,7 +2514,10 @@ mod tests {
         .unwrap()
     }
 
-    fn reconcile_one(item: serde_json::Value, orders: anyhow::Result<serde_json::Value>) -> PendingItem {
+    fn reconcile_one(
+        item: serde_json::Value,
+        orders: anyhow::Result<serde_json::Value>,
+    ) -> PendingItem {
         let mut pending = uncertain_plan(vec![item]);
         let path = std::env::temp_dir().join(format!("reconcile-{}.json", random_token(8)));
         reconcile_pending(
@@ -2516,7 +2528,9 @@ mod tests {
             write_pending_atomic,
         )
         .unwrap_or_else(|_| panic!("reconciliation could not be saved"));
-        let saved = crate::orders::pending::load_pending(&path).unwrap().unwrap();
+        let saved = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .unwrap();
         std::fs::remove_file(&path).unwrap();
         saved.items.into_iter().next().unwrap()
     }
@@ -2536,32 +2550,165 @@ mod tests {
         let bulk_new = serde_json::json!({"slug":"bulk", "quantity":6, "per_trade":3,
             "reviewed_order":{"state":"new"}});
         let orders = |rows: Vec<serde_json::Value>| Ok(serde_json::json!({ "data": rows }));
-        let cases: Vec<(&str, serde_json::Value, anyhow::Result<serde_json::Value>, &str, Option<&str>, Option<&str>)> = vec![
-            ("create that did not land", new.clone(), orders(vec![]), STATUS_PENDING, None, None),
-            ("create that landed", new.clone(), orders(vec![order("o1", "plain", 10, 2)]), STATUS_OK, Some("o1"), Some("created")),
-            ("create with duplicates", new.clone(), orders(vec![order("o1", "plain", 10, 2), order("o2", "plain", 10, 2)]), STATUS_UNCERTAIN, None, None),
-            ("create with a different price", new.clone(), orders(vec![order("o1", "plain", 11, 2)]), STATUS_UNCERTAIN, None, None),
-            ("bulk create that landed", bulk_new.clone(), orders(vec![{
-                let mut row = order("o1", "bulk", 30, 6);
-                row["perTrade"] = 3.into();
-                row
-            }]), STATUS_OK, Some("o1"), Some("created")),
-            ("bulk create with another lot", bulk_new, orders(vec![{
-                let mut row = order("o1", "bulk", 30, 6);
-                row["perTrade"] = 2.into();
-                row
-            }]), STATUS_UNCERTAIN, None, None),
-            ("update that landed", existing.clone(), orders(vec![order("o1", "plain", 10, 2)]), STATUS_OK, Some("o1"), Some("updated")),
-            ("update that did not land", existing.clone(), orders(vec![order("o1", "plain", 8, 1)]), STATUS_PENDING, None, None),
-            ("update half applied", existing.clone(), orders(vec![order("o1", "plain", 10, 1)]), STATUS_UNCERTAIN, None, None),
-            ("updated order gone", existing.clone(), orders(vec![]), STATUS_UNCERTAIN, None, None),
-            ("updated order replaced", existing, orders(vec![order("o2", "plain", 10, 2)]), STATUS_UNCERTAIN, None, None),
-            ("older journal, no order", legacy.clone(), orders(vec![]), STATUS_UNCERTAIN, None, None),
-            ("older journal, intended order", legacy.clone(), orders(vec![order("o1", "plain", 10, 2)]), STATUS_OK, Some("o1"), None),
-            ("older journal, other order", legacy, orders(vec![order("o1", "plain", 8, 2)]), STATUS_UNCERTAIN, None, None),
-            ("orders unreadable", new.clone(), orders(vec![serde_json::json!({"itemId":"id-plain", "type":"sell"})]), STATUS_UNCERTAIN, None, None),
-            ("orders read failed", new.clone(), Err(anyhow::anyhow!("offline")), STATUS_UNCERTAIN, None, None),
-            ("item not in catalogue", serde_json::json!({"slug":"unknown", "reviewed_order":{"state":"new"}}), orders(vec![]), STATUS_UNCERTAIN, None, None),
+        // Case, journal item, orders read, then the expected status, order id and action.
+        type Case<'a> = (
+            &'a str,
+            serde_json::Value,
+            anyhow::Result<serde_json::Value>,
+            &'a str,
+            Option<&'a str>,
+            Option<&'a str>,
+        );
+        let cases: Vec<Case> = vec![
+            (
+                "create that did not land",
+                new.clone(),
+                orders(vec![]),
+                STATUS_PENDING,
+                None,
+                None,
+            ),
+            (
+                "create that landed",
+                new.clone(),
+                orders(vec![order("o1", "plain", 10, 2)]),
+                STATUS_OK,
+                Some("o1"),
+                Some("created"),
+            ),
+            (
+                "create with duplicates",
+                new.clone(),
+                orders(vec![
+                    order("o1", "plain", 10, 2),
+                    order("o2", "plain", 10, 2),
+                ]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "create with a different price",
+                new.clone(),
+                orders(vec![order("o1", "plain", 11, 2)]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "bulk create that landed",
+                bulk_new.clone(),
+                orders(vec![{
+                    let mut row = order("o1", "bulk", 30, 6);
+                    row["perTrade"] = 3.into();
+                    row
+                }]),
+                STATUS_OK,
+                Some("o1"),
+                Some("created"),
+            ),
+            (
+                "bulk create with another lot",
+                bulk_new,
+                orders(vec![{
+                    let mut row = order("o1", "bulk", 30, 6);
+                    row["perTrade"] = 2.into();
+                    row
+                }]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "update that landed",
+                existing.clone(),
+                orders(vec![order("o1", "plain", 10, 2)]),
+                STATUS_OK,
+                Some("o1"),
+                Some("updated"),
+            ),
+            (
+                "update that did not land",
+                existing.clone(),
+                orders(vec![order("o1", "plain", 8, 1)]),
+                STATUS_PENDING,
+                None,
+                None,
+            ),
+            (
+                "update half applied",
+                existing.clone(),
+                orders(vec![order("o1", "plain", 10, 1)]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "updated order gone",
+                existing.clone(),
+                orders(vec![]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "updated order replaced",
+                existing,
+                orders(vec![order("o2", "plain", 10, 2)]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "older journal, no order",
+                legacy.clone(),
+                orders(vec![]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "older journal, intended order",
+                legacy.clone(),
+                orders(vec![order("o1", "plain", 10, 2)]),
+                STATUS_OK,
+                Some("o1"),
+                None,
+            ),
+            (
+                "older journal, other order",
+                legacy,
+                orders(vec![order("o1", "plain", 8, 2)]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "orders unreadable",
+                new.clone(),
+                orders(vec![
+                    serde_json::json!({"itemId":"id-plain", "type":"sell"}),
+                ]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "orders read failed",
+                new.clone(),
+                Err(anyhow::anyhow!("offline")),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
+            (
+                "item not in catalogue",
+                serde_json::json!({"slug":"unknown", "reviewed_order":{"state":"new"}}),
+                orders(vec![]),
+                STATUS_UNCERTAIN,
+                None,
+                None,
+            ),
         ];
         for (case, item, orders, status, order_id, action) in cases {
             let item = reconcile_one(item, orders);
@@ -2608,10 +2755,15 @@ mod tests {
         .unwrap_or_else(|_| panic!("reconciliation could not be saved"));
         assert_eq!(reads, 1, "one orders read covers every unknown outcome");
         let mut sent = vec![];
-        let response = run_pending_with(&path, &mut pending, |_| Ok(()), |item, validate| {
-            sent.push((item.slug.clone(), item.order_type.clone()));
-            send_after(item, validate)
-        });
+        let response = run_pending_with(
+            &path,
+            &mut pending,
+            |_| Ok(()),
+            |item, validate| {
+                sent.push((item.slug.clone(), item.order_type.clone()));
+                send_after(item, validate)
+            },
+        );
         assert_eq!(sent, [("plain".to_string(), "sell".to_string())]);
         assert_eq!(
             response
