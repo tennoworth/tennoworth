@@ -1005,6 +1005,21 @@ describe.each(collectors)('$name collector signature', ({ name, binary }) => {
   });
 });
 
+describe('web bundle signature', () => {
+  test('CI signs the bundle apart from the build, with the comment the box requires', () => {
+    const ci = readFileSync(new URL('../.github/workflows/build-web.yml', import.meta.url), 'utf8');
+    const jobs = (Bun.YAML.parse(ci) as any).jobs;
+    expect(jobs.publish.environment).toBe('collector-release');
+    expect(jobs.build.environment, 'the job that runs the npm tree never holds the key').not.toBe('collector-release');
+    const sign = jobs.publish.steps.find((step: any) => step.name === 'Sign');
+    expect(sign.run).toContain('-t "tennoworth-web dist.tgz $GITHUB_SHA"');
+    const release = jobs.publish.steps.find((step: any) => step.uses === './.github/actions/publish-rolling-release');
+    expect(release.with.files.split('\n').filter(Boolean)).toEqual(['dist/dist.tgz', 'dist/dist.tgz.minisig']);
+    const published = Object.values(jobs).filter((job: any) => job.steps?.some((step: any) => step.uses === './.github/actions/publish-rolling-release'));
+    expect(published, 'web-latest is published only by the signing job').toEqual([jobs.publish]);
+  });
+});
+
 // ---- run-scrape.sh: a run that publishes nothing must not republish --------
 
 function runScrapeFixture(scrape: string, env: Record<string, string> = {}) {
@@ -1058,6 +1073,115 @@ describe('run-scrape signing', () => {
     const verified = execFileSync('minisign', ['-V', '-p', join(keys, 'k.pub'), '-m', join(publish, 'market.json'), '-x', join(publish, 'market.json.minisig')], { encoding: 'utf8' });
     expect(verified).toContain(`Trusted comment: ${fixture.comment_prefix} market.json\n`);
     expect(readdirSync(publish).filter((f) => f.endsWith('.tmp')), 'no partial signature left behind').toEqual([]);
+  });
+});
+
+// pull-web.sh replaces the served rollback copy as root, from a release anyone
+// able to edit release assets can rewrite. Only the CI key's signature for the
+// web bundle decides what is unpacked.
+function webPullFixture(options: { minisign?: string; signature?: boolean; key?: boolean; bundle?: string } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'web-pull-')); directories.push(root);
+  const mocks = join(root, 'mocks'), release = join(root, 'release'), dist = join(root, 'app/frontend/dist');
+  for (const dir of [mocks, release, join(dist, 'assets')]) mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dist, 'index.html'), 'current site');
+  const bundle = join(root, 'bundle');
+  mkdirSync(join(bundle, 'assets'), { recursive: true });
+  writeFileSync(join(bundle, 'index.html'), options.bundle ?? 'new site');
+  execFileSync('tar', ['-C', bundle, '-czf', join(release, 'dist.tgz'), '.']);
+  if (options.signature !== false) writeFileSync(join(release, 'dist.tgz.minisig'), 'fixture signature');
+  writeFileSync(join(root, 'pull.sh'), readFileSync(new URL('../deploy/bin/pull-web.sh', import.meta.url), 'utf8').replaceAll('/srv/wfm', root));
+  // The API answer carries the asset stamp; a download copies the named asset
+  // from the fixture release, failing like curl -f when it is absent.
+  writeFileSync(join(mocks, 'curl'), [
+    '#!/bin/sh',
+    'out=""; url=""',
+    'while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2 ;; -*) shift ;; *) url="$1"; shift ;; esac; done',
+    `[ -n "$out" ] || { printf '%s\\n' '"name": "dist.tgz",' '"updated_at": "2026-11-10T12:00:00Z"'; exit 0; }`,
+    `[ -f '${release}'/"\${url##*/}" ] || exit 22`,
+    `cp '${release}'/"\${url##*/}" "$out"`,
+    '',
+  ].join('\n'));
+  writeFileSync(join(mocks, 'chown'), '#!/bin/sh\nexit 0\n');
+  writeFileSync(join(mocks, 'systemctl'), `#!/bin/sh\ntouch '${root}/reloaded'\n`);
+  const commands = ['curl', 'chown', 'systemctl'];
+  if (options.minisign !== undefined) { writeFileSync(join(mocks, 'minisign'), `#!/bin/sh\n${options.minisign}\n`); commands.push('minisign'); }
+  for (const command of commands) chmodSync(join(mocks, command), 0o755);
+  if (options.key !== false) writeFileSync(join(root, 'collector.pub'), 'fixture');
+  const run = (env: Record<string, string> = {}) => spawnSync('sh', [join(root, 'pull.sh')], {
+    env: { ...process.env, PATH: `${mocks}:${process.env.PATH}`, COLLECTOR_SIGNING_PUB: join(root, 'collector.pub'), ...env },
+    encoding: 'utf8',
+  });
+  return { root, release, dist, run };
+}
+
+function expectWebKept(f: ReturnType<typeof webPullFixture>, result: ReturnType<typeof spawnSync>) {
+  expect(result.status, String(result.stderr)).not.toBe(0);
+  expect(readFileSync(join(f.dist, 'index.html'), 'utf8'), 'the current site stays').toBe('current site');
+  expect(existsSync(join(f.root, 'web-latest.stamp')), 'the next run retries').toBe(false);
+  expect(existsSync(join(f.root, 'reloaded')), 'nothing reloads').toBe(false);
+}
+
+describe.skipIf(process.platform === 'win32')('web bundle pull', () => {
+  const signedAsWeb = "echo 'Trusted comment: tennoworth-web dist.tgz 0123abc'";
+  test('installs a bundle signed as the web bundle', () => {
+    const f = webPullFixture({ minisign: signedAsWeb });
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(f.dist, 'index.html'), 'utf8')).toBe('new site');
+    expect(readFileSync(join(f.root, 'web-latest.stamp'), 'utf8')).toBe('2026-11-10T12:00:00Z');
+  });
+
+  const refusals = [
+    ['a signature that does not verify', { minisign: 'exit 1' }],
+    ['a signature made for a collector', { minisign: "echo 'Trusted comment: tennoworth-collector tennoworth-usage 0123abc'" }],
+    ['a release without a signature', { minisign: signedAsWeb, signature: false }],
+    ['a box without the public key', { minisign: signedAsWeb, key: false }],
+  ] as const;
+  for (const [why, options] of refusals) {
+    test(`refuses ${why} and keeps the current site`, () => {
+      const f = webPullFixture(options);
+      expectWebKept(f, f.run());
+    });
+  }
+
+  test.skipIf(!hasMinisign)('verifies with real minisign: the right key installs, a tampered bundle or another key does not', () => {
+    const keys = mkdtempSync(join(tmpdir(), 'web-key-')); directories.push(keys);
+    for (const name of ['ci', 'other']) {
+      execFileSync('minisign', ['-G', '-W', '-p', join(keys, `${name}.pub`), '-s', join(keys, `${name}.key`)], { stdio: 'ignore' });
+    }
+    const sign = (f: ReturnType<typeof webPullFixture>, key: string, comment = 'tennoworth-web dist.tgz 0123abc') =>
+      execFileSync('minisign', ['-S', '-s', join(keys, `${key}.key`), '-m', join(f.release, 'dist.tgz'), '-x', join(f.release, 'dist.tgz.minisig'), '-t', comment], { stdio: 'ignore' });
+    const env = { COLLECTOR_SIGNING_PUB: join(keys, 'ci.pub') };
+
+    const good = webPullFixture();
+    sign(good, 'ci');
+    const installed = good.run(env);
+    expect(installed.status, installed.stderr).toBe(0);
+    expect(readFileSync(join(good.dist, 'index.html'), 'utf8')).toBe('new site');
+
+    const other = webPullFixture();
+    sign(other, 'other');
+    expectWebKept(other, other.run(env));
+
+    const collector = webPullFixture();
+    sign(collector, 'ci', 'tennoworth-collector tennoworth-usage 0123abc');
+    expectWebKept(collector, collector.run(env));
+
+    const tampered = webPullFixture();
+    sign(tampered, 'ci');
+    const swapped = join(tampered.root, 'swapped');
+    mkdirSync(join(swapped, 'assets'), { recursive: true });
+    writeFileSync(join(swapped, 'index.html'), 'attacker site');
+    execFileSync('tar', ['-C', swapped, '-czf', join(tampered.release, 'dist.tgz'), '.']);
+    expectWebKept(tampered, tampered.run(env));
+  });
+
+  test('the box key path matches the collectors\' trust root', () => {
+    const web = readFileSync(new URL('../deploy/bin/pull-web.sh', import.meta.url), 'utf8');
+    const collector = readFileSync(new URL('../deploy/bin/pull-collector.sh', import.meta.url), 'utf8');
+    const pub = /\$\{COLLECTOR_SIGNING_PUB:-([^}]+)\}/;
+    expect(web.match(pub)?.[1]).toBe(collector.match(pub)?.[1]);
+    expect(web).toContain('"tennoworth-web dist.tgz "*)');
   });
 });
 
