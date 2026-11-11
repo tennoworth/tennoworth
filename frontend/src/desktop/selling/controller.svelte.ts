@@ -77,6 +77,8 @@ export class ListingController {
       const resp = await this.port.resumePendingPlan();
       this.resumeResults = resp?.results ?? [];
       this.durabilityError = resp?.durability_error ?? null;
+      // The account's orders changed under views that only reload on this.
+      if (this.resumeResults.some(r => r.status === 'ok')) this.sessionEpoch += 1;
       if (!await this.refreshPendingPlan()) return;
       this.resumePhase = this.pendingPlan ? 'idle' : 'done';
       // A resume that settles nothing leaves the banner as it was; without

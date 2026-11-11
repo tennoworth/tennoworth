@@ -183,9 +183,11 @@ it('says so when a resume leaves an unconfirmed listing unsettled, until the nex
   c.pendingPlan = uncertain;
   expect(c.resumeUnresolved).toBe(false);
 
+  const epoch = c.sessionEpoch;
   await c.doResume();
   expect(c.resumePhase).toBe('idle');
   expect(c.resumeUnresolved, 'the banner must not look untouched').toBe(true);
+  expect(c.sessionEpoch, 'nothing was listed, so nothing reloads').toBe(epoch);
 
   // A resume that settles the batch clears it.
   resume.mockResolvedValue({ plan_id: 'p', results: [{ slug: 'primed_flow', status: 'ok' }] });
@@ -193,6 +195,7 @@ it('says so when a resume leaves an unconfirmed listing unsettled, until the nex
   await c.doResume();
   expect(c.resumePhase).toBe('done');
   expect(c.resumeUnresolved).toBe(false);
+  expect(c.sessionEpoch, 'My Orders reloads once a resume lists something').toBe(epoch + 1);
 
   c.resumeUnresolved = true;
   await c.doDiscard();
