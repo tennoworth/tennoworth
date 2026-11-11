@@ -347,6 +347,14 @@ leaves the journal for recovery; finished records can retry cleanup without
 contacting the market. Only an absent journal permits a new batch, and an
 explicit discard removes a saved record.
 
+A validation refusal that will not pass on a retry (a newer scan, protected
+copies, a spent allowance) records every unsent item as an error, so a batch
+refused before or during sending does not hold a journal open; a transient
+market or governor refusal keeps unsent items pending for Resume. Resume checks
+unknown outcomes against current orders before it sends anything, and moves an
+item only on unambiguous evidence; the rules are documented on
+`reconcile_pending` in `wfm-trading/src/orders/plan.rs`.
+
 Only after that cleanup does the desktop record the batch's confirmed sell
 listings in `listing_outcome`, and a failure there is logged, never reported as
 a batch failure, so this record cannot hold a journal open. The Ledger derives

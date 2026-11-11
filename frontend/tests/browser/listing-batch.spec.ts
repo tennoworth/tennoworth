@@ -4,7 +4,8 @@ import { expect, test } from '@playwright/test';
  * An interrupted listing batch holds up to two kinds of unfinished work, and
  * they are not interchangeable. An item that was never sent can be resumed; an
  * item whose send outcome the market never confirmed may already be live, so
- * offering Resume would promise a re-send nobody can safely perform.
+ * Resume checks current orders before sending anything for it, and My Orders
+ * stays one click away for whatever that check cannot settle.
  *
  * This drives the real styled shell, because the banner is what tells the user
  * either of these exists - and a batch that renders nothing is a batch they
@@ -24,7 +25,7 @@ test('a never-sent item offers Resume', async ({ page }) => {
   await expect(banner.getByRole('button', { name: 'Discard' })).toBeVisible();
 });
 
-test('an unconfirmed outcome says so and does not offer Resume', async ({ page }) => {
+test('an unconfirmed outcome says so and offers Resume beside My Orders', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=batch-uncertain');
   await expect(page.locator('.shell')).toBeVisible();
 
@@ -33,9 +34,10 @@ test('an unconfirmed outcome says so and does not offer Resume', async ({ page }
   await expect(banner).toContainText('1 with an unknown outcome');
   // The consequence and the next step, not just a label.
   await expect(banner).toContainText('may already be live');
+  await expect(banner).toContainText('Resume checks your current orders first');
   await expect(banner.getByRole('button', { name: 'Review in My Orders' })).toBeVisible();
   await expect(banner.getByRole('button', { name: 'Discard' })).toBeVisible();
-  await expect(banner.getByRole('button', { name: 'Resume' })).toHaveCount(0);
+  await expect(banner.getByRole('button', { name: 'Resume' })).toBeVisible();
 });
 
 test('the banner stays readable at every required size in both themes', async ({ page }, testInfo) => {

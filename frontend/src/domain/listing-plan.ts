@@ -4,21 +4,20 @@ import type { PendingPlan } from '../contracts/data';
  * What an interrupted listing batch should say for itself.
  *
  * The batch holds items in three states and they do not mean the same thing.
- * A `pending` item was never sent, so offering Resume is honest. An
- * `uncertain_mutation` item may already have reached the market, so offering
- * Resume would promise a retry nobody can safely perform - it needs
- * reconciliation against the account's live orders first. A batch can hold both
- * at once, and the banner has to say so rather than reporting one and hiding the
- * other.
+ * A `pending` item was never sent, so Resume sends it. An `uncertain_mutation`
+ * item may already have reached the market, so Resume never simply re-sends it:
+ * it checks the account's current orders first, records a listing that landed,
+ * sends one that clearly did not, and leaves anything unclear for the user to
+ * check in My Orders. A batch can hold both at once, and the banner has to say
+ * so rather than reporting one and hiding the other.
  */
 export interface InterruptedBatch {
   pending: number;
   uncertain: number;
   done: number;
   /**
-   * Whether Resume may be offered. False when the only work left is an
-   * unresolved outcome, because resuming would re-send a request whose fate is
-   * unknown.
+   * Whether Resume may be offered: there is unsent work, or an unknown outcome
+   * a check of current orders may resolve.
    */
   resumable: boolean;
 }
@@ -39,6 +38,6 @@ export function interruptedBatch(plan: PendingPlan | null | undefined): Interrup
     pending,
     uncertain,
     done,
-    resumable: pending > 0,
+    resumable: pending > 0 || uncertain > 0,
   };
 }

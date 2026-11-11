@@ -144,7 +144,7 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
     },
     // An interrupted batch the SPA has to describe. `batch-pending` is work that
     // was never sent; `batch-uncertain` is work whose outcome the market never
-    // confirmed, which must not be offered as a retry.
+    // confirmed, which Resume checks against current orders before any send.
     get_pending_plan:
       scenario === 'batch-pending' || scenario === 'batch-uncertain' || scenario === 'batch-finished'
         ? {

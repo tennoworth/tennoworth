@@ -73,7 +73,8 @@ let resumeErr = $derived(listing.resumeResults.filter(r => r.status !== 'ok').le
           <div data-shell class="row gap-sm">
             {#if batch.resumable}
               <button data-shell onclick={() => listing.doResume()} disabled={marketAccess.mutationsBlocked}>{t('listing.resume')}</button>
-            {:else}
+            {/if}
+            {#if !batch.resumable || uncertainRemaining > 0}
               <button data-shell onclick={onorders}>{t('listing.reviewOrders')}</button>
             {/if}
             <button data-shell class="ghost" onclick={() => listing.doDiscard()}>{t('listing.discard')}</button>

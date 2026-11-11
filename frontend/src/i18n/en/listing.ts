@@ -34,7 +34,7 @@ export const LISTING = {
   'listing.pending': m('{count} pending', 'Batch detail part.'),
   'listing.uncertain': m('{count} with an unknown outcome', 'Batch detail part.'),
   'listing.alreadyDone': m('{count} already done', 'Batch detail part.'),
-  'listing.mayBeLive': m('A listing whose outcome the market never confirmed may already be live. Check My Orders before listing it again.', 'Banner text.'),
+  'listing.mayBeLive': m('A listing whose outcome the market never confirmed may already be live. Resume checks your current orders first and sends it again only if it is clearly missing; otherwise check My Orders.', 'Banner text.'),
   'listing.resume': m('Resume', 'Button.'),
   'listing.reviewOrders': m('Review in My Orders', 'Button.'),
   'listing.discard': m('Discard', 'Button.'),

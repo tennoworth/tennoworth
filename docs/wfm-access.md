@@ -32,8 +32,13 @@ never shortened. Missing or malformed headers use exponential cooldowns from
 unrepresentable deadlines keep access paused. Short explicit `429` rejections can
 be retried once for mutations; transport errors and server failures are ambiguous
 and never trigger automatic mutation replay. Interrupted batches remain saved.
-Resume requires explicit action and fresh reconciliation before every item. Stop after
-the current request cancels unsent work while retaining the saved batch.
+Resume requires explicit action. It first checks items whose outcome is unknown
+against one fresh read of the account's orders: a listing found in its intended
+state is recorded, one that clearly did not land is sent again, and anything
+ambiguous is left for the user to check. Each item then gets its own fresh orders
+read, which the final validation before its send also uses, so a send costs one
+read plus at most one for the batch. Stop after the current request cancels
+unsent work while retaining the saved batch.
 
 The bulk reader is patient only within limits, because abandoning a cycle costs
 more traffic later. It waits out a cooldown when a single one is five seconds or

@@ -34,16 +34,15 @@ describe('interruptedBatch', () => {
     });
   });
 
-  // The reason this module exists: an unknown outcome is not retryable work.
-  // Offering Resume for it would promise a re-send whose predecessor may
-  // already have been applied.
-  it('does not offer resume when the only work left has an unknown outcome', () => {
+  // Resume checks current orders before it sends anything for an unknown
+  // outcome, so a batch holding only those can still be resumed.
+  it('offers resume to check current orders when the only work left has an unknown outcome', () => {
     const batch = interruptedBatch(plan(['ok', 'uncertain_mutation', 'uncertain_mutation']));
     expect(batch).toEqual({
       pending: 0,
       uncertain: 2,
       done: 1,
-      resumable: false,
+      resumable: true,
     });
   });
 

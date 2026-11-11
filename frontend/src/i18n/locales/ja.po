@@ -4239,8 +4239,9 @@ msgstr "完了済み {count} 件"
 
 #. Banner text.
 #, fuzzy
+#| msgid "A listing whose outcome the market never confirmed may already be live. Check My Orders before listing it again."
 msgctxt "listing.mayBeLive"
-msgid "A listing whose outcome the market never confirmed may already be live. Check My Orders before listing it again."
+msgid "A listing whose outcome the market never confirmed may already be live. Resume checks your current orders first and sends it again only if it is clearly missing; otherwise check My Orders."
 msgstr "マーケットが結果を確認できなかった出品は、すでに公開されている可能性があります。もう一度出品する前に「自分の注文」を確認してください。"
 
 #. Button.
