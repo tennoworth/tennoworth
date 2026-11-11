@@ -425,7 +425,9 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     writeFileSync(join(root, 'check-report.json'), '{"ready": true, "errors": []}');
   }
 
-  write(join(root, 'artifacts/tennoworth-pipeline'), '#!/bin/sh\nprintf "usage: tennoworth-pipeline\\n"\n');
+  // `stamp` reports a snapshot published just now, which is what the check's
+  // freshness test reads from the binary the deploy installed.
+  write(join(root, 'artifacts/tennoworth-pipeline'), '#!/bin/sh\n[ "$1" = stamp ] && [ -f "$2" ] && exec date -u +%s\nprintf "usage: tennoworth-pipeline\\n"\n');
   // One argument checks the live policy; two check the published successor
   // against it, which is how a deploy across a key rotation proves its key.
   write(join(root, 'artifacts/wfm-policy'), '#!/bin/sh\n[ $# -ge 2 ] && exit "${FIXTURE_SUCCESSOR_EXIT:-1}"\nexit "${FIXTURE_POLICY_EXIT:-0}"\n');
@@ -1174,10 +1176,33 @@ function hostFixture() {
   for (const path of [join(box, 'app/frontend/public'), join(box, 'bin'), bin]) mkdirSync(path, { recursive: true });
   writeFileSync(join(box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\n');
   const snapshot = join(box, 'app/frontend/public/market.json');
-  writeFileSync(snapshot, '{"catalog":{}}');
-  utimesSync(snapshot, FIXTURE_NOW - 1700, FIXTURE_NOW - 1700);
+  // The mtime stays FIXTURE_NOW - 1700 whatever the body says: the check must
+  // judge the stamp inside the file, which a restore or copy does not refresh.
+  const publish = (body: string) => {
+    writeFileSync(snapshot, body);
+    utimesSync(snapshot, FIXTURE_NOW - 1700, FIXTURE_NOW - 1700);
+  };
+  const stampedAt = (secondsAgo: number) => new Date((FIXTURE_NOW - secondsAgo) * 1000).toISOString().replace('.000Z', 'Z');
+  const publishStamped = (secondsAgo: number) => publish(JSON.stringify({ updated_at: stampedAt(secondsAgo), items: { primed_flow: { avg: 10 } } }));
+  publishStamped(1700);
+  // The installed pipeline's `stamp` contract - Unix seconds for a snapshot that
+  // meets the market contract, failure otherwise - which the pipeline's own
+  // stamp tests hold against tests/fixtures/market-contract.
   const binary = join(box, 'bin/tennoworth-pipeline');
-  writeFileSync(binary, '#!/bin/sh\necho wfm-scrape\n');
+  writeFileSync(binary, [
+    `#!${process.execPath}`,
+    'const [command, path] = process.argv.slice(2);',
+    'if (command !== "stamp" || !path) process.exit(1);',
+    'try {',
+    '  const body = JSON.parse(require("node:fs").readFileSync(path, "utf8"));',
+    '  const at = Date.parse(body?.updated_at);',
+    '  const items = body?.items;',
+    '  if (typeof body?.updated_at !== "string" || !Number.isFinite(at) || !items || typeof items !== "object" || Array.isArray(items) || !Object.keys(items).length) process.exit(1);',
+    '  console.log(Math.floor(at / 1000));',
+    '} catch { process.exit(1); }',
+    '',
+  ].join('\n'));
+  chmodSync(binary, 0o755);
   const sha256 = createHash('sha256').update(readFileSync(binary)).digest('hex');
   writeFileSync(join(box, 'deployed.json'), `{\n  "revision": "fixture-rev",\n  "sha256": "${sha256}"\n}\n`);
 
@@ -1215,7 +1240,7 @@ function hostFixture() {
     env: withoutUndefined({ ...process.env, PATH: `${bin}:${process.env.PATH}`, ...env }),
   });
   const report = () => JSON.parse(readFileSync(reportPath, 'utf8'));
-  return { root, box, run, report };
+  return { root, box, run, report, publish, publishStamped, stampedAt };
 }
 
 describe.skipIf(process.platform === 'win32')('host check', () => {
@@ -1225,7 +1250,7 @@ describe.skipIf(process.platform === 'win32')('host check', () => {
     expect(result.status, result.stderr).toBe(0);
     const report = f.report();
     expect(report.ready).toBe(true);
-    expect(report.sweep).toEqual({ csv_rows: 2, snapshot_age_seconds: 1700 });
+    expect(report.sweep).toEqual({ csv_rows: 2, snapshot_age_seconds: 1700, snapshot_updated_at: f.stampedAt(1700) });
     expect(report.timers.sweep_enabled).toBe('enabled');
     expect(report.disk.free_bytes).toBeGreaterThan(0);
     expect(report.deployment.revision).toBe('fixture-rev');
@@ -1249,9 +1274,63 @@ describe.skipIf(process.platform === 'win32')('host check', () => {
     rmSync(join(f.box, 'app/frontend/public/market.json'));
     expect(f.run().status).not.toBe(0);
     const report = f.report();
-    expect(report.sweep).toEqual({ csv_rows: null, snapshot_age_seconds: null });
+    expect(report.sweep).toEqual({ csv_rows: null, snapshot_age_seconds: null, snapshot_updated_at: null });
     expect(report.errors.join('\n')).toContain('wfm_results.csv is missing');
     expect(report.errors.join('\n')).toContain('market.json is missing');
+  });
+
+  describe('snapshot freshness', () => {
+    test('one missed sweep is not paged again; two are', () => {
+      const f = hostFixture();
+      f.publishStamped(7 * 3600 + 15 * 60);
+      const late = f.run();
+      expect(late.status, late.stderr).toBe(0);
+      f.publishStamped(8 * 3600 + 60);
+      expect(f.run().status).not.toBe(0);
+      expect(f.report().errors.join('\n')).toContain(`was last updated at ${f.stampedAt(8 * 3600 + 60)}, over 8 hours ago`);
+      expect(f.report().sweep.snapshot_updated_at).toBe(f.stampedAt(8 * 3600 + 60));
+    });
+
+    test('the threshold can be set', () => {
+      const f = hostFixture();
+      f.publishStamped(3 * 3600);
+      expect(f.run({}, ['--max-snapshot-age-hours', '2']).status).not.toBe(0);
+      expect(f.report().errors.join('\n')).toContain('over 2 hours ago');
+    });
+
+    test('a stamp far ahead of the clock is not healthy; ordinary skew is', () => {
+      const f = hostFixture();
+      f.publishStamped(-30 * 60);
+      const skewed = f.run();
+      expect(skewed.status, skewed.stderr).toBe(0);
+      f.publishStamped(-2 * 3600);
+      expect(f.run().status).not.toBe(0);
+      expect(f.report().errors.join('\n')).toContain('in the future');
+    });
+
+    for (const [name, body] of [
+      ['malformed JSON', '{"updated_at":"2026-09-16T17:00:00Z",'],
+      ['no updated_at', '{"items":{"primed_flow":{"avg":10}}}'],
+      ['an unparseable updated_at', '{"updated_at":"yesterday","items":{"primed_flow":{"avg":10}}}'],
+      ['no items', '{"updated_at":"2026-09-16T17:00:00Z","items":{}}'],
+      ['an empty file', ''],
+    ] as const) {
+      test(`a snapshot with ${name} is not healthy`, () => {
+        const f = hostFixture();
+        f.publish(body);
+        expect(f.run().status).not.toBe(0);
+        expect(f.report().errors.join('\n')).toContain('has no readable updated_at');
+        expect(f.report().sweep.snapshot_updated_at).toBeNull();
+      });
+    }
+
+    test('a snapshot the check cannot read is not healthy', () => {
+      if (process.getuid?.() === 0) return;
+      const f = hostFixture();
+      chmodSync(join(f.box, 'app/frontend/public/market.json'), 0o000);
+      expect(f.run().status).not.toBe(0);
+      expect(f.report().errors.join('\n')).toContain('has no readable updated_at');
+    });
   });
 
   test('free space under the floor is not healthy', () => {

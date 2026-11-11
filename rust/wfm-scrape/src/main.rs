@@ -6,6 +6,9 @@
 //! - `scrape`: the full WFM scrape to `wfm_results.csv`.
 //! - `art`: download new or changed item pictures from the Warframe wiki into
 //!   `<publish>/item-art/` and write `<publish>/item-art.json`.
+//! - `stamp <market.json>`: print the snapshot's `updated_at` as Unix seconds,
+//!   or fail when the file breaks the market contract. The host check judges
+//!   freshness with it: the box has no other JSON parser.
 //!
 //! Flags:
 //! - `--fixtures-dir <DIR>`: run offline using frozen fixture files.
@@ -22,7 +25,7 @@ use wfm_scrape::{clock, ingest::LiveHttp};
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let Some(command) = args.get(1) else {
-        eprintln!("usage: tennoworth-pipeline build|scrape|history|art [--fixtures-dir <DIR>] [--data-dir <DIR>] [--publish-dir <DIR>] [--now <ISO>]");
+        eprintln!("usage: tennoworth-pipeline build|scrape|history|art|stamp [--fixtures-dir <DIR>] [--data-dir <DIR>] [--publish-dir <DIR>] [--now <ISO>]");
         return std::process::ExitCode::FAILURE;
     };
     let live = extract_flag(&args, "--fixtures-dir").is_none();
@@ -91,6 +94,7 @@ fn main() -> std::process::ExitCode {
         }
         "scrape" => run_scrape_cmd(&args),
         "art" => run_art_cmd(&args, dirs.as_ref()),
+        "stamp" => run_stamp_cmd(&args),
         _ => {
             eprintln!("unknown subcommand: {command}");
             return std::process::ExitCode::FAILURE;
@@ -238,6 +242,31 @@ fn run_art_cmd(args: &[String], dirs: Option<&Dirs>) -> Result<(), String> {
         eprintln!("art: stopped early ({why}); the next run resumes");
     }
     Ok(())
+}
+
+fn run_stamp_cmd(args: &[String]) -> Result<(), String> {
+    let path = args
+        .get(2)
+        .ok_or("usage: tennoworth-pipeline stamp <market.json>")?;
+    let body = std::fs::read_to_string(path).map_err(|e| format!("read {path}: {e}"))?;
+    let stamp = contract_stamp(&body)
+        .ok_or_else(|| format!("{path} is not a market snapshot with an RFC 3339 updated_at"))?;
+    println!("{}", stamp.timestamp());
+    Ok(())
+}
+
+/// The stamp of a body that meets the runtime market contract every reader
+/// applies (`tests/fixtures/market-contract/cases.json`): an RFC 3339
+/// `updated_at` and a non-empty `items` object. A snapshot no reader accepts
+/// is no fresher than a missing one.
+fn contract_stamp(body: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    let root = value.as_object()?;
+    let stamp = chrono::DateTime::parse_from_rfc3339(root.get("updated_at")?.as_str()?).ok()?;
+    if root.get("items")?.as_object()?.is_empty() {
+        return None;
+    }
+    Some(stamp)
 }
 
 fn extract_flag(args: &[String], flag: &str) -> Option<String> {
@@ -467,6 +496,26 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn the_stamp_follows_the_shared_market_contract() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/market-contract/cases.json"
+        ))
+        .unwrap();
+        for case in cases.as_array().unwrap() {
+            let body = serde_json::to_string(&case["body"]).unwrap();
+            assert_eq!(
+                contract_stamp(&body).is_some(),
+                case["valid"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+        }
+        // The host check compares instants, so an offset is resolved, not dropped.
+        let offset = r#"{"updated_at":"2026-10-13T13:00:00+02:00","items":{"a":{}}}"#;
+        assert_eq!(contract_stamp(offset).unwrap().timestamp(), 1_791_889_200);
+    }
 
     #[test]
     fn a_daily_timer_that_fires_a_little_early_still_runs() {
