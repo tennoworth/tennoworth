@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { pinSampleMarket } from './sample-market';
+
+test.beforeEach(async ({ page }) => { await pinSampleMarket(page); });
 
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} Trade Session preserves review edits at wide, narrow and short sizes`, async ({ page }, info) => {
