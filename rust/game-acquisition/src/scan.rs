@@ -877,9 +877,23 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     // One snapshot for the whole scan - see the Linux leg.
     let pats = current_patterns();
 
+    /// Closes the process handle on every exit, including the budget error
+    /// `aggregate_match` returns from inside the walk.
+    struct ProcessHandle(HANDLE);
+    impl Drop for ProcessHandle {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from a successful OpenProcess and is
+            // closed exactly once, here.
+            let _ = unsafe { CloseHandle(self.0) };
+        }
+    }
+
     unsafe {
-        let handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, BOOL(0), pid)
-            .context(OPEN_PROCESS_FAILED)?;
+        let process = ProcessHandle(
+            OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, BOOL(0), pid)
+                .context(OPEN_PROCESS_FAILED)?,
+        );
+        let handle: HANDLE = process.0;
 
         let mut counts = PatternCounts::default();
         let budget = ScanBudget::default();
@@ -952,7 +966,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             }
         }
 
-        let _ = CloseHandle(handle);
+        drop(process);
         pick_dominant(counts)
     }
 }
