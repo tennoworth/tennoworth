@@ -37,7 +37,7 @@ let resumeErr = $derived(listing.resumeResults.filter(r => r.status !== 'ok').le
             <span data-shell class="dot fresh" aria-hidden="true"></span>
             <strong data-shell>{t('listing.resumed')}</strong>
             <span data-shell class="muted">
-              <span data-shell class="ok-text">{t('listing.created', { count: resumeOk })}</span>{#if resumeErr > 0}{' · '}<span data-shell class="bad">{t('listing.failed', { count: resumeErr })}</span>{/if}.
+              <span data-shell class="ok-text">{t('listing.resumedListed', { count: resumeOk })}</span>{#if resumeErr > 0}{' · '}<span data-shell class="bad">{t('listing.failed', { count: resumeErr })}</span>{/if}.
               {t('listing.stillHidden')}
             </span>
           </div>
@@ -66,7 +66,7 @@ let resumeErr = $derived(listing.resumeResults.filter(r => r.status !== 'ok').le
             <span data-shell class="muted">{detail}</span>
             {#if uncertainRemaining > 0}
               <span data-shell class="muted">
-                {t('listing.mayBeLive')}
+                {listing.resumeUnresolved ? t('listing.stillUnknown') : t('listing.mayBeLive')}
               </span>
             {/if}
           </div>

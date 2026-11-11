@@ -171,3 +171,30 @@ describe('WfmAccessController', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+it('says so when a resume leaves an unconfirmed listing unsettled, until the next attempt', async () => {
+  const uncertain: PendingPlan = { ...unfinished, items: [{ ...unfinished.items[0], status: 'uncertain_mutation' }] };
+  const resume = vi.fn().mockResolvedValue({ plan_id: 'p', results: [{ slug: 'primed_flow', status: 'uncertain_mutation' }] });
+  let saved: PendingPlan | null = uncertain;
+  const c = new ListingController(
+    { getPendingPlan: vi.fn(() => Promise.resolve(saved)), resumePendingPlan: resume, discardPendingPlan: vi.fn().mockResolvedValue(undefined), status: vi.fn(), logout: vi.fn() },
+    () => {},
+  );
+  c.pendingPlan = uncertain;
+  expect(c.resumeUnresolved).toBe(false);
+
+  await c.doResume();
+  expect(c.resumePhase).toBe('idle');
+  expect(c.resumeUnresolved, 'the banner must not look untouched').toBe(true);
+
+  // A resume that settles the batch clears it.
+  resume.mockResolvedValue({ plan_id: 'p', results: [{ slug: 'primed_flow', status: 'ok' }] });
+  saved = null;
+  await c.doResume();
+  expect(c.resumePhase).toBe('done');
+  expect(c.resumeUnresolved).toBe(false);
+
+  c.resumeUnresolved = true;
+  await c.doDiscard();
+  expect(c.resumeUnresolved).toBe(false);
+});

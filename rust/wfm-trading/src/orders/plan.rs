@@ -283,6 +283,7 @@ fn execute_plan_with(
                 per_trade: p.per_trade,
                 session: p.session,
                 reviewed_order: p.reviewed_order,
+                sent_against: None,
                 order_type: p.order_type,
                 visible: p.visible,
                 rank: p.rank,
@@ -350,19 +351,58 @@ pub fn run_pending(
     ) {
         return response;
     }
-    run_pending_with(pending_path, pending, validate, |item, validate| {
-        execute_one(
-            &http,
-            unlocked,
-            item,
-            &mut || list_user_orders(unlocked),
-            validate,
-        )
+    run_pending_with_store(
+        pending_path,
+        pending,
+        validate,
+        |item, validate| {
+            execute_one(
+                &http,
+                unlocked,
+                item,
+                &mut || list_user_orders(unlocked),
+                validate,
+            )
+        },
+        |item, orders| observed_order(unlocked, item, orders),
+        write_pending_atomic,
+    )
+}
+
+/// The account's order for `item` in an orders response, in the shape a
+/// review records it. None when it cannot be stated exactly: the slug is not
+/// in the catalogue, the response does not decode, or the matching order is
+/// ambiguous or lacks a visibility.
+fn observed_order(
+    unlocked: &Unlocked,
+    item: &PlanItem,
+    orders: &serde_json::Value,
+) -> Option<ReviewedOrder> {
+    let cat = unlocked.catalog.get(&item.slug)?;
+    let existing = index_existing_orders(&decode_user_orders(unlocked, orders).ok()?);
+    observed_in(existing.get(&plan_item_key(item, cat)))
+}
+
+fn observed_in(prior: Option<&ExistingOrder>) -> Option<ReviewedOrder> {
+    let Some(prior) = prior else {
+        return Some(ReviewedOrder::New);
+    };
+    if prior.ambiguous {
+        return None;
+    }
+    Some(ReviewedOrder::Existing {
+        id: prior.id.clone(),
+        platinum: prior.platinum,
+        quantity: prior.quantity,
+        per_trade: prior.per_trade,
+        visible: prior.visible?,
     })
 }
 
 type Validator<'a> = dyn FnMut(Option<&serde_json::Value>) -> Result<(), PlanValidationError> + 'a;
 
+/// The loop without an observer, for tests that drive a stub executor.
+#[cfg(test)]
 fn run_pending_with(
     pending_path: &std::path::Path,
     pending: &mut PendingPlan,
@@ -374,6 +414,7 @@ fn run_pending_with(
         pending,
         validate,
         execute,
+        |_, _| None,
         write_pending_atomic,
     )
 }
@@ -383,6 +424,7 @@ fn run_pending_with_store(
     pending: &mut PendingPlan,
     mut validate: impl FnMut(Option<&serde_json::Value>) -> Result<(), PlanValidationError>,
     mut execute: impl FnMut(&PlanItem, &mut Validator<'_>) -> ItemResult,
+    observe: impl Fn(&PlanItem, &serde_json::Value) -> Option<ReviewedOrder>,
     mut persist: impl FnMut(&std::path::Path, &PendingPlan) -> anyhow::Result<()>,
 ) -> PlanResponse {
     if let Err(error) = validate(None) {
@@ -410,6 +452,8 @@ fn run_pending_with_store(
         if let Some(item) = pending.items.get_mut(i) {
             item.status = STATUS_UNCERTAIN.into();
             item.message = Some("The app stopped while handling this listing. Check My Orders before listing it again.".into());
+            // An earlier attempt's observation says nothing about this one.
+            item.sent_against = None;
         }
         if let Err(error) = persist(pending_path, pending) {
             if let Some(item) = pending.items.get_mut(i) {
@@ -427,7 +471,27 @@ fn run_pending_with_store(
             if let Err(PlanValidationError::Invalid(message)) = &outcome {
                 refused = Some(message.clone());
             }
-            outcome
+            outcome?;
+            // The executor validates against the orders it is about to send
+            // against, so this is the last point before dispatch. Recording
+            // what those orders showed lets a resume decide whether an
+            // unconfirmed send landed. A send whose record cannot be saved is
+            // not made: it would be unresolvable.
+            let observed = orders.and_then(|orders| observe(&plan_item, orders));
+            if let Some(observed) = observed {
+                if let Some(item) = pending.items.get_mut(i) {
+                    item.sent_against = Some(observed);
+                }
+                if let Err(error) = persist(pending_path, pending) {
+                    if let Some(item) = pending.items.get_mut(i) {
+                        item.sent_against = None;
+                    }
+                    return Err(PlanValidationError::Market(anyhow::anyhow!(
+                        "Could not save the listing before sending it: {error}"
+                    )));
+                }
+            }
+            Ok(())
         });
         // Both stop the batch, but they do not mean the same thing and the
         // journal must not say they do. `pending` was never dispatched, so
@@ -535,13 +599,15 @@ enum Reconciled {
 }
 
 /// Resolve `uncertain_mutation` items against one fresh read of the account's
-/// orders before a resume sends anything. Only unambiguous evidence moves an
-/// item: a single order with the item's identity in the intended state is
-/// recorded `ok`; a reviewed create with no such order, or a reviewed update
-/// whose order still holds exactly the reviewed prior state, returns to
-/// `pending` and is sent by this resume after the usual checks. Everything
-/// else - duplicates, a partial match, an older journal with nothing reviewed to
-/// compare against, a failed or unreadable read - stays uncertain for the user
+/// orders before a resume sends anything. Each is compared with the order the
+/// send was dispatched against (`sent_against`, recorded for every batch just
+/// before the send) or, in journals written before that was kept, the
+/// reviewed order. Only unambiguous evidence moves an item: a single order
+/// with the item's identity in the intended state is recorded `ok`; a create
+/// with no such order, or an update whose order still holds exactly the prior
+/// state, returns to `pending` and is sent by this resume after the usual
+/// checks. Everything else - duplicates, a partial match, a journal with
+/// neither record, a failed or unreadable read - stays uncertain for the user
 /// to check.
 fn reconcile_pending(
     pending_path: &std::path::Path,
@@ -570,7 +636,13 @@ fn reconcile_pending(
                 continue;
             }
         };
-        match reconcile_item(&PlanItem::from(&*item), catalog, orders) {
+        // What the send was dispatched against is the newer evidence; the
+        // reviewed state stands in for journals written before it was kept.
+        let mut intended = PlanItem::from(&*item);
+        if item.sent_against.is_some() {
+            intended.reviewed_order = item.sent_against.clone();
+        }
+        match reconcile_item(&intended, catalog, orders) {
             Reconciled::Applied { order_id, action } => {
                 item.status = STATUS_OK.into();
                 item.message =
@@ -1435,6 +1507,7 @@ mod tests {
                     order_id: Some(format!("remote-{}", item.slug)),
                     action: Some("created".into()),
                 },
+                |_, _| None,
                 |path, plan| {
                     writes += 1;
                     if writes == count * 2 {
@@ -1494,6 +1567,7 @@ mod tests {
                         order_id: Some("remote-final".into()),
                         action: Some("created".into()),
                     },
+                    |_, _| None,
                     |path, plan| {
                         writes += 1;
                         if writes == 2 {
@@ -1550,6 +1624,7 @@ mod tests {
                     action: None,
                 }
             },
+            |_, _| None,
             |_, _| anyhow::bail!("injected marker write failure"),
         );
         assert!(!sent);
@@ -2797,5 +2872,175 @@ mod tests {
             |_, _| panic!("nothing changed, nothing written"),
         );
         assert!(result.is_ok());
+    }
+
+    /// The executor validates against the orders it is about to send against;
+    /// this stands in for it with one such call before "sending".
+    fn send_validated(item: &PlanItem, validate: &mut Validator<'_>, status: &str) -> ItemResult {
+        let mut result = ItemResult {
+            slug: item.slug.clone(),
+            status: status.into(),
+            message: None,
+            order_id: None,
+            action: None,
+        };
+        if let Err(error) = validate(Some(&serde_json::json!({"data": []}))) {
+            result.status = STATUS_PENDING.into();
+            result.message = Some(error.to_string());
+        }
+        result
+    }
+
+    #[test]
+    fn an_ordinary_listing_records_what_it_was_sent_against_before_the_send() {
+        let path = std::env::temp_dir().join(format!("sent-against-{}.json", random_token(8)));
+        let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"observe", "started_at":"test", "items":[
+                {"slug":"plain","quantity":2,"platinum":10,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        write_pending_atomic(&path, &pending).unwrap();
+        let mut on_disk_at_send = None;
+        let response = run_pending_with_store(
+            &path,
+            &mut pending,
+            |_| Ok(()),
+            |item, validate| {
+                let result = send_validated(item, validate, STATUS_UNCERTAIN);
+                on_disk_at_send = Some(
+                    crate::orders::pending::load_pending(&path)
+                        .unwrap()
+                        .unwrap()
+                        .items[0]
+                        .sent_against
+                        .clone(),
+                );
+                result
+            },
+            |_, _| Some(ReviewedOrder::New),
+            write_pending_atomic,
+        );
+        assert_eq!(on_disk_at_send, Some(Some(ReviewedOrder::New)));
+        assert_eq!(response.results[0].status, STATUS_UNCERTAIN);
+
+        // The resume: no such order is live, so the send did not land and the
+        // item is sent again, once.
+        let mut pending = crate::orders::pending::load_pending(&path)
+            .unwrap()
+            .unwrap();
+        reconcile_pending(
+            &path,
+            &mut pending,
+            &reconcile_catalog(),
+            || {
+                crate::orders::decode::decode_orders(
+                    &serde_json::json!({"data": []}),
+                    &Unconstrained,
+                )
+            },
+            write_pending_atomic,
+        )
+        .unwrap_or_else(|_| panic!("reconciliation could not be saved"));
+        assert_eq!(pending.items[0].status, STATUS_PENDING);
+        let mut sends = 0;
+        let mut stale_at_send = None;
+        let response = run_pending_with_store(
+            &path,
+            &mut pending,
+            |_| Ok(()),
+            |item, validate| {
+                sends += 1;
+                // Read before this attempt's own observation is recorded.
+                stale_at_send = Some(
+                    crate::orders::pending::load_pending(&path)
+                        .unwrap()
+                        .unwrap()
+                        .items[0]
+                        .sent_against
+                        .clone(),
+                );
+                send_validated(item, validate, STATUS_OK)
+            },
+            |_, _| None,
+            write_pending_atomic,
+        );
+        assert_eq!(sends, 1);
+        assert_eq!(
+            stale_at_send,
+            Some(None),
+            "a new attempt must not inherit the earlier attempt's observation"
+        );
+        assert_eq!(response.results[0].status, STATUS_OK);
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn an_unconfirmed_ordinary_listing_that_is_live_is_confirmed_not_resent() {
+        let saved = reconcile_one(
+            serde_json::json!({"sent_against":{"state":"new"}}),
+            Ok(serde_json::json!({"data":[order("o1", "plain", 10, 2)]})),
+        );
+        assert_eq!(saved.status, STATUS_OK);
+        assert_eq!(saved.order_id.as_deref(), Some("o1"));
+        assert_eq!(saved.action.as_deref(), Some("created"));
+    }
+
+    #[test]
+    fn a_send_whose_observation_cannot_be_saved_is_not_made() {
+        let path = std::env::temp_dir().join(format!("sent-against-io-{}.json", random_token(8)));
+        let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"observe-io", "started_at":"test", "items":[
+                {"slug":"plain","quantity":2,"platinum":10,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        let mut writes = 0;
+        let response = run_pending_with_store(
+            &path,
+            &mut pending,
+            |_| Ok(()),
+            |item, validate| send_validated(item, validate, STATUS_OK),
+            |_, _| Some(ReviewedOrder::New),
+            |path, plan| {
+                writes += 1;
+                // 1: the pre-send marker. 2: the observation.
+                if writes == 2 {
+                    anyhow::bail!("injected observation write failure");
+                }
+                write_pending_atomic(path, plan)
+            },
+        );
+        assert_eq!(response.results[0].status, STATUS_PENDING);
+        assert!(response.results[0]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("before sending"));
+        assert_eq!(pending.items[0].sent_against, None);
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn the_observation_is_stated_only_when_it_is_exact() {
+        let prior = |visible, ambiguous| ExistingOrder {
+            id: "o1".into(),
+            platinum: 8,
+            quantity: 1,
+            per_trade: None,
+            visible,
+            ambiguous,
+        };
+        assert_eq!(observed_in(None), Some(ReviewedOrder::New));
+        assert_eq!(
+            observed_in(Some(&prior(Some(true), false))),
+            Some(ReviewedOrder::Existing {
+                id: "o1".into(),
+                platinum: 8,
+                quantity: 1,
+                per_trade: None,
+                visible: true,
+            })
+        );
+        assert_eq!(observed_in(Some(&prior(Some(true), true))), None);
+        assert_eq!(observed_in(Some(&prior(None, false))), None);
     }
 }

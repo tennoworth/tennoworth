@@ -4171,11 +4171,10 @@ msgctxt "listing.resumed"
 msgid "Resumed."
 msgstr "재개됨."
 
-#. Banner count.
-#, fuzzy
-msgctxt "listing.created"
-msgid "{count} created"
-msgstr "{count}개 생성"
+#. Banner count: listings a resume sent, updated, or found already live.
+msgctxt "listing.resumedListed"
+msgid "{count} listed"
+msgstr ""
 
 #. Banner count.
 #, fuzzy
@@ -4243,6 +4242,11 @@ msgstr "{count}개 이미 완료"
 msgctxt "listing.mayBeLive"
 msgid "A listing whose outcome the market never confirmed may already be live. Resume checks your current orders first and sends it again only if it is clearly missing; otherwise check My Orders."
 msgstr "시장에서 결과를 확인받지 못한 등록이 이미 올라가 있을 수 있습니다. 다시 등록하기 전에 내 주문을 확인하세요."
+
+#. Banner text after a resume left an outcome unknown.
+msgctxt "listing.stillUnknown"
+msgid "Resume checked your current orders and could not tell whether this listing was applied, so nothing was sent. Check My Orders, then discard this batch."
+msgstr ""
 
 #. Button.
 #, fuzzy

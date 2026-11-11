@@ -4171,11 +4171,10 @@ msgctxt "listing.resumed"
 msgid "Resumed."
 msgstr "Продолжено."
 
-#. Banner count.
-#, fuzzy
-msgctxt "listing.created"
-msgid "{count} created"
-msgstr "создано: {count}"
+#. Banner count: listings a resume sent, updated, or found already live.
+msgctxt "listing.resumedListed"
+msgid "{count} listed"
+msgstr ""
 
 #. Banner count.
 #, fuzzy
@@ -4243,6 +4242,11 @@ msgstr "уже выполнено: {count}"
 msgctxt "listing.mayBeLive"
 msgid "A listing whose outcome the market never confirmed may already be live. Resume checks your current orders first and sends it again only if it is clearly missing; otherwise check My Orders."
 msgstr "Лот, итог которого рынок так и не подтвердил, может уже быть размещён. Проверьте «Мои заказы», прежде чем выставлять его снова."
+
+#. Banner text after a resume left an outcome unknown.
+msgctxt "listing.stillUnknown"
+msgid "Resume checked your current orders and could not tell whether this listing was applied, so nothing was sent. Check My Orders, then discard this batch."
+msgstr ""
 
 #. Button.
 #, fuzzy

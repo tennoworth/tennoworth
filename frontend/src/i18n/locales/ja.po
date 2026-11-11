@@ -4171,11 +4171,10 @@ msgctxt "listing.resumed"
 msgid "Resumed."
 msgstr "再開しました。"
 
-#. Banner count.
-#, fuzzy
-msgctxt "listing.created"
-msgid "{count} created"
-msgstr "{count} 件作成"
+#. Banner count: listings a resume sent, updated, or found already live.
+msgctxt "listing.resumedListed"
+msgid "{count} listed"
+msgstr ""
 
 #. Banner count.
 #, fuzzy
@@ -4243,6 +4242,11 @@ msgstr "完了済み {count} 件"
 msgctxt "listing.mayBeLive"
 msgid "A listing whose outcome the market never confirmed may already be live. Resume checks your current orders first and sends it again only if it is clearly missing; otherwise check My Orders."
 msgstr "マーケットが結果を確認できなかった出品は、すでに公開されている可能性があります。もう一度出品する前に「自分の注文」を確認してください。"
+
+#. Banner text after a resume left an outcome unknown.
+msgctxt "listing.stillUnknown"
+msgid "Resume checked your current orders and could not tell whether this listing was applied, so nothing was sent. Check My Orders, then discard this batch."
+msgstr ""
 
 #. Button.
 #, fuzzy
