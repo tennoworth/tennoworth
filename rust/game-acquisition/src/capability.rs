@@ -1,8 +1,10 @@
 //! Keeping `CAP_SYS_PTRACE` out of the effective set except while the scan
 //! opens the game's memory.
 //!
-//! A locally built binary may carry `cap_sys_ptrace` as a file capability, and
-//! with the file's effective flag the kernel makes it effective from `exec` on.
+//! A locally built binary may carry `cap_sys_ptrace` as a file capability. The
+//! documented grant sets only the permitted flag, so the capability is never
+//! effective until the scan raises it. An earlier grant also set the file's
+//! effective flag, and with that the kernel makes it effective from `exec` on.
 //! That would leave the whole GUI - a networked webview that loads GTK modules
 //! and plugins - able to trace any process on the machine, root's included, for
 //! as long as it runs, when only the moment `/proc/<pid>/mem` is opened needs

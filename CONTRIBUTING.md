@@ -305,7 +305,7 @@ Launch `rust/target/debug/tennoworth-desktop` from the root on Linux, or the
 corresponding `.exe` on Windows.
 
 Scanning requires the game to be running. For a locally built Linux binary,
-`sudo setcap cap_sys_ptrace=eip rust/target/debug/tennoworth-desktop` grants
+`sudo setcap cap_sys_ptrace=p rust/target/debug/tennoworth-desktop` grants
 memory-read capability; every rebuild replaces the file and removes that
 grant. AppImages have different ptrace constraints; see [README.md](README.md#linux).
 No capability grant is needed for UI or fixture tests.

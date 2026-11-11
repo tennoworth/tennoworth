@@ -13,11 +13,16 @@ classified in `wfm-client/tests/send_sites.rs`.
   chunks with a small overlap so cross-chunk pattern matches don't escape.
   AppImage runs cannot retain file capabilities on their temporary nosuid
   mount, so `ptrace_open_error()` directs them to adjust Yama's ptrace scope.
-  A local binary is offered both `setcap cap_sys_ptrace=eip` and
+  A local binary is offered both `setcap cap_sys_ptrace=p` and
   `ptrace_scope=0`, because neither is narrower: the capability is held by one
   binary but can trace any process, root's included, while scope 0 reaches only
   the user's own processes but opens all of them to each other. Scope 3
   disables ptrace even for a capable binary.
+- **The grant is permitted-only (`=p`), not `=eip`.** The file's effective
+  flag would make the capability effective from `exec`, through the dynamic
+  loader and every library constructor, before `main` can lower it. The scan
+  raises it itself, so only the permitted flag is needed. A binary still
+  carrying an older `=eip` grant keeps working; the startup drop covers it.
 - **`CAP_SYS_PTRACE` is effective only around the two opens.** `capability.rs`
   clears it from the effective set (keeping it permitted) first thing in the
   desktop's `main`, before any thread exists, and `PtraceRaised` raises it on

@@ -815,7 +815,7 @@ pub(super) fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> 
                  CAP_SYS_PTRACE or a relaxed ptrace scope.\n\
                  Either grant this binary the capability (re-run after every rebuild or upgrade, \
                  which clears it):\n  \
-                 sudo setcap cap_sys_ptrace=eip \"{bin}\"\n\
+                 sudo setcap cap_sys_ptrace=p \"{bin}\"\n\
                  or allow same-user ptrace system-wide:\n  \
                  sudo sysctl kernel.yama.ptrace_scope=0\n\
                  They trade differently. The capability is held by this binary alone, but it can \
@@ -1461,7 +1461,7 @@ mod tests {
         );
         // The narrow route is the whole point of the message, so it must stay.
         assert!(
-            msg.contains("sudo setcap cap_sys_ptrace=eip"),
+            msg.contains("sudo setcap cap_sys_ptrace=p "),
             "the per-binary capability route must survive: {msg}"
         );
         // Neither route is strictly narrower, so a local binary is offered both.

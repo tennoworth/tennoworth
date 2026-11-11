@@ -20,7 +20,8 @@ The product crosses the following trust boundaries:
    README.md#linux; Windows: same-user process access). Neither Linux route
    is strictly narrower: the capability is held by one binary but can trace
    any process, root's included, while `ptrace_scope=0` reaches only the
-   user's own processes but lets each of them trace the others. A capable
+   user's own processes but lets each of them trace the others. The
+   documented grant is permitted-only (`cap_sys_ptrace=p`), and a capable
    binary keeps `CAP_SYS_PTRACE` out of its effective set except while a scan
    opens the game's memory. That stops code running in the app from using it
    by accident; it does not stop code injected into the app, which can raise
