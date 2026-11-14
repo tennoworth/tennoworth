@@ -11,7 +11,7 @@ fn allowed_external_url(raw: &str) -> Option<String> {
     }
     let allowed = matches!(
         url.host_str(),
-        Some("warframe.market" | "github.com" | "ko-fi.com")
+        Some("warframe.market" | "github.com" | "ko-fi.com" | "discord.gg")
     ) || crate::services::announcements::source_allowed(url.as_str());
     allowed.then(|| url.into())
 }
@@ -42,6 +42,8 @@ mod tests {
         assert!(allowed_external_url("https://warframe.market/items/kogake_prime_set").is_some());
         assert!(allowed_external_url("https://github.com/tennoworth/tennoworth").is_some());
         assert!(allowed_external_url("https://ko-fi.com/prowly").is_some());
+        assert!(allowed_external_url("https://discord.gg/rTEsjdk8hy").is_some());
+        assert!(allowed_external_url("https://discord.gg.evil.example/x").is_none());
         assert!(allowed_external_url("http://warframe.market/items/foo").is_none());
         assert!(allowed_external_url("https://warframe.market.evil.example/items/foo").is_none());
         assert!(allowed_external_url("javascript:alert(1)").is_none());

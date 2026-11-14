@@ -191,7 +191,7 @@
     stroke-linecap: square;
     stroke-linejoin: miter;
   }
-  .project-link svg.github-mark[data-shell] { fill: currentColor; stroke: none; }
+  .project-link svg.brand-mark[data-shell] { fill: currentColor; stroke: none; }
   .statusbar .site-links[data-shell] { flex-wrap: wrap; row-gap: var(--s1); }
   .statusbar .cell .link[data-shell] {
     font: inherit;
