@@ -5703,7 +5703,7 @@ dependencies = [
 
 [[package]]
 name = "tennoworth-desktop"
-version = "0.10.101"
+version = "0.10.102"
 dependencies = [
  "announcement-feed",
  "anyhow",

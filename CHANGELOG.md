@@ -54,6 +54,28 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.102 - 2026-11-15
+
+# 🔒 TennoWorth Desktop 0.10.102
+
+TennoWorth Desktop 0.10.102 is ready.
+
+This is a small release for everyone. TennoWorth now has a Discord server, linked from the top of the app, where you can ask questions, report problems and help test new features. It also updates a networking component to fix three published security issues.
+
+## Changelog (2)
+
+### Community
+
+- **TennoWorth has a Discord** A Discord link now sits next to GitHub at the top of the app. Join to ask questions, report problems, suggest improvements or help test, including on Linux and the Steam Deck. <!-- app-note {"id":"discord-link","kind":"improved"} -->
+
+### Safety
+
+- **Network security fixes** A component the app uses for network connections is updated to fix three published security issues, one of which could make it use too much memory. <!-- app-note {"id":"quinn-rustsec-2026-11","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.10.101 - 2026-11-11
 
 # 🔒 TennoWorth Desktop 0.10.101
