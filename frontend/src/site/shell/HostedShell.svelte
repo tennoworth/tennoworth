@@ -156,6 +156,9 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
     <a data-shell href="#trust">{t('shell.trust')}</a>
     <a data-shell href={reportUrl} target="_blank" rel="noopener noreferrer">Report a problem</a>
     <a data-shell href={improvementUrl} target="_blank" rel="noopener noreferrer">Suggest an improvement</a>
+    <!-- Not in the header: there the extra link wraps the row in wider
+         fallback fonts until Plex loads, shifting the whole page. -->
+    <a data-shell href="https://discord.gg/rTEsjdk8hy" target="_blank" rel="noopener noreferrer">Discord</a>
     <span data-shell class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
     <!-- The theme control's home is Settings → Appearance, inside the shell.
          A visitor who never searches never reaches the shell, so the mode
@@ -225,7 +228,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
 {/snippet}
 {#snippet projectLinkAnchors()}
   <a data-shell class="project-link" href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">
-    <svg data-shell class="github-mark" viewBox="0 0 24 24" aria-hidden="true">
+    <svg data-shell class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
       <path data-shell d="M12 2.7a9.5 9.5 0 0 0-3 18.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 0 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.7-1.3-2.2-.3-4.6-1.1-4.6-4.7 0-1 .4-1.9 1-2.6-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.6 0 3.7-2.4 4.5-4.6 4.7.4.3.7.9.7 1.8v2.8c0 .4.2.6.7.5A9.5 9.5 0 0 0 12 2.7Z" />
     </svg>
     <span data-shell>GitHub</span>

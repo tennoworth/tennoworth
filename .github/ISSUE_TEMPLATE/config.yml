@@ -3,3 +3,6 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/tennoworth/tennoworth/security/advisories/new
     about: Private report. Do not open a public issue for security problems.
+  - name: Ask a question on Discord
+    url: https://discord.gg/rTEsjdk8hy
+    about: Questions, price talk and help getting started. Bugs and ideas still belong in an issue here.

@@ -13,6 +13,9 @@ set-completion plays, relic expected value, Riven context, and listing health.
 - **Use your own inventory:** install the desktop app from the
   [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
   The inventory scan and account-specific tools are desktop-only.
+- **Ask, report and talk prices:** join the
+  [TennoWorth Discord](https://discord.gg/rTEsjdk8hy). Bugs still go to
+  [GitHub issues](https://github.com/tennoworth/tennoworth/issues/new/choose).
 
 > [!WARNING]
 > TennoWorth reads the running game's memory. It never writes to the game,
