@@ -1,5 +1,5 @@
 {
-  "version": "0.10.101",
+  "version": "0.10.102",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2109,6 +2109,34 @@
           "title": "The inventory scan holds less privilege on Linux",
           "body": "On systems where the scan needs a granted capability, the app now uses it only for the moment it opens the game's memory and holds nothing the rest of the time. An existing grant keeps working.",
           "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.102",
+      "date": "2026-11-15",
+      "changes": [
+        {
+          "id": "discord-link",
+          "kind": "improved",
+          "title": "TennoWorth has a Discord",
+          "body": "A Discord link now sits next to GitHub at the top of the app. Join to ask questions, report problems, suggest improvements or help test, including on Linux and the Steam Deck.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "quinn-rustsec-2026-11",
+          "kind": "fixed",
+          "title": "Network security fixes",
+          "body": "A component the app uses for network connections is updated to fix three published security issues, one of which could make it use too much memory.",
+          "platforms": [
+            "windows",
             "linux"
           ],
           "supersedes": []
