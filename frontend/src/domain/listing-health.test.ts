@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { assessListing, assessListings, summarize, ownedKey, ownedEvidence } from './listing-health.js';
+import { assessListing, assessListings, summarize, ownedKey, ownedEvidence, parseHealthPrefs } from './listing-health.js';
+import { DEFAULT_PRICE_RULE } from './price-rule';
 
 const live = (over = {}) => ({
   slug: 'x', sells: [], buys: [], low_sell: null, top_buy: null, own_ask: null, own_bid: null, error: null, ...over,
@@ -107,5 +108,41 @@ describe('ownedEvidence', () => {
     expect(ownedEvidence('primed_flow', null, new Map(), null)).toBeNull();
     // A count the scan carries does not depend on the market.
     expect(ownedEvidence('primed_flow', null, owned, null)).toBe(3);
+  });
+});
+
+describe('health preferences', () => {
+  const rule = (basis, offset) => ({ basis, offset });
+  const prefs = (over = {}) => ({ rule: DEFAULT_PRICE_RULE, tolerance: 0, muted: [], ...over });
+
+  it('targets the player rule instead of the lowest ask', () => {
+    const median = rule('median-90d', 1);
+    const [i] = assessListing(order({ platinum: 40, live: live({ low_sell: 30 }), stats: { median90d: 34 } }), prefs({ rule: median }));
+    expect(i.kind).toBe('overpriced');
+    expect(i.suggested).toBe(35);
+    expect(assessListing(order({ platinum: 35, live: live({ low_sell: 30 }), stats: { median90d: 34 } }), prefs({ rule: median }))).toEqual([]);
+  });
+
+  it('stays quiet when the rule basis is unknown for the item', () => {
+    expect(assessListing(order({ platinum: 99, live: live({ low_sell: 30 }), stats: {} }), prefs({ rule: rule('median-90d', 1) }))).toEqual([]);
+  });
+
+  it('lets an ask sit within the tolerance above the target', () => {
+    const o = order({ platinum: 17, live: live({ low_sell: 15 }) });
+    expect(assessListing(o, prefs({ tolerance: 2 }))).toEqual([]);
+    expect(assessListing(o, prefs({ tolerance: 1 }))[0].kind).toBe('overpriced');
+  });
+
+  it('drops muted verdicts and keeps the rest', () => {
+    const o = order({ quantity: 5, owned: 2, platinum: 20, live: live({ low_sell: 15 }) });
+    expect(assessListings([o], prefs({ muted: ['overpriced'] })).map(i => i.kind)).toEqual(['excess-qty']);
+  });
+
+  it('parses the stored setting defensively', () => {
+    const r = rule('avg-48h', 1);
+    expect(parseHealthPrefs('{"tolerance":3,"muted":["underbid","bogus"]}', r)).toEqual({ rule: r, tolerance: 3, muted: ['underbid'] });
+    expect(parseHealthPrefs('{"tolerance":-4}', r)).toEqual({ rule: r, tolerance: 0, muted: [] });
+    expect(parseHealthPrefs('nope', r)).toEqual({ rule: r, tolerance: 0, muted: [] });
+    expect(parseHealthPrefs(null, r)).toEqual({ rule: r, tolerance: 0, muted: [] });
   });
 });

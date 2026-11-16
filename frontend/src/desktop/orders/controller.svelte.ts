@@ -7,7 +7,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import { MAX_PLATINUM, MIN_PLATINUM } from '../../domain/limits';
   import { humanError } from '../../contracts/errors';
   import { selectDrifted, type DriftRow } from '../../domain/order-drift';
-  import { assessListings, summarize, ownedEvidence, type HealthIssue } from '../../domain/listing-health';
+  import { assessListings, summarize, ownedEvidence, type HealthIssue, type HealthPrefs } from '../../domain/listing-health';
   import type { Market } from '../../contracts/data';
   import { orderUnitPrice, orderLotPrice, cachedUnitMarket } from '../../domain/order-prices';
 
@@ -42,6 +42,8 @@ import type { DesktopServices } from '../../contracts/services';
     /** Whether the orders view is on screen. The view stays mounted while
      *  hidden, so each return refreshes, with the last rows kept in view. */
     active?: boolean;
+    /** The player's price rule and health filters; absent = built-in verdicts. */
+    healthPrefs?: HealthPrefs;
   }
 
 export function createOrdersController(input: OrdersInput, services: Pick<DesktopServices, 'desktopLiveTopPrices' | 'listenForTauriEvent'>) {
@@ -325,14 +327,18 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
         .filter((o) => o.side !== 'buy')
         .map((o) => {
           const slug = itemSlug(o);
+          const entry = slug ? input.market?.items?.[slug] : undefined;
+          const stats = entry && cachedUnitMarket(entry, (o.per_trade ?? 1) > 1);
           return {
             id: o.id, slug, name: itemName(o),
             platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN, quantity: o.quantity, type: 'sell' as const,
             live: slug ? liveForOrder(o) : null,
             owned: slug ? ownedEvidence(slug, o.subtype ?? null, input.ownedQty, composedSlugs) : null,
+            stats: stats && { low5Avg: stats.low5_avg, avg48h: stats.avg, median90d: stats.median_90d },
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
+      input.healthPrefs,
     );
   });
   let healthSummary = $derived(summarize(health));

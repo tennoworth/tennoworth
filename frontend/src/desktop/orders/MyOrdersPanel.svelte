@@ -11,9 +11,9 @@
   import { LIQUID_VOL } from '../../domain/sell-priority';
   import { MAX_PLATINUM } from '../../domain/limits';
   import { formatLocale, t } from '../../i18n/i18n.svelte';
-  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, marketStaleness = null, onsummary, banner, active = true, activity }: OrdersInput & { banner?: Snippet; activity?: ActivityLog } = $props();
+  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, marketStaleness = null, onsummary, banner, active = true, activity, healthPrefs }: OrdersInput & { banner?: Snippet; activity?: ActivityLog } = $props();
 
-  const controller = createOrdersController({ get transport() { return transport; }, get market() { return market; }, get ownedQty() { return ownedQty; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onsummary() { return onsummary; }, get active() { return active; } }, useDesktopServices());
+  const controller = createOrdersController({ get transport() { return transport; }, get market() { return market; }, get ownedQty() { return ownedQty; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onsummary() { return onsummary; }, get active() { return active; }, get healthPrefs() { return healthPrefs; } }, useDesktopServices());
   // Rows on screen but not freshly confirmed (refreshing, or the refresh
   // failed): they stay readable, and changes wait for a confirmed list.
   let unconfirmed = $derived(controller.phase !== 'done');

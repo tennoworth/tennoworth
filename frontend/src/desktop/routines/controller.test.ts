@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { StateStore, SettingKey } from '../../contracts/state-store';
-import { MAX_GOALS, MAX_GOAL_LENGTH, parseRoutineState, routinePeriodId, RoutineController } from './controller.svelte';
+import { MAX_GOALS, MAX_GOAL_LENGTH, MAX_TASKS, parseRoutineState, routinePeriodId, RoutineController } from './controller.svelte';
 
 function memoryStore(initial: string | null = null, write = async () => {}): StateStore & { values: Map<string, string>; writes: string[] } {
   const values = new Map<string, string>();
@@ -297,5 +297,76 @@ describe('RoutineController', () => {
     const routine = new RoutineController(store, NOW);
     await routine.toggle('sortie', true);
     expect(routine.saveError).toMatch(/Retry before closing/);
+  });
+});
+
+describe('editable daily and weekly lists', () => {
+  const DAILY = ['login-tribute', 'foundry-build', 'syndicate-standing', 'steel-path-incursions', 'sortie'];
+
+  it('migrates a v2 checklist to the default lists, keeping its ticks and goals, and rewrites it once', async () => {
+    const store = memoryStore(JSON.stringify({
+      version: 2,
+      periods: { daily: { id: '2026-09-14', completed: ['sortie'] }, weekly: { id: '2026-09-14', completed: ['archon-hunt'] }, monthly: { id: '2026-09', completed: [] } },
+      monthlyGoals: [{ id: 'goal-3', text: 'Sell sets' }],
+      nextGoalId: 4,
+    }));
+    const routine = new RoutineController(store, NOW);
+    expect(routine.tasks.map(task => task.id)).toEqual(DAILY);
+    expect(routine.completed).toEqual(new Set(['sortie']));
+    routine.start();
+    await vi.waitFor(() => expect(store.writes).toHaveLength(1));
+    const saved = JSON.parse(store.writes[0]);
+    expect(saved.version).toBe(3);
+    expect(saved.monthlyGoals).toEqual([{ id: 'goal-3', text: 'Sell sets' }]);
+    expect(saved.periods.weekly.completed).toEqual(['archon-hunt']);
+  });
+
+  it('adds, removes and restores items, and forgets the tick of a removed one', async () => {
+    const store = memoryStore();
+    const routine = new RoutineController(store, NOW);
+    routine.select('weekly');
+    await routine.addBuiltinTask('elite-deep-archimedea');
+    await routine.addCustomTask('  Farm Kuva for rivens  ');
+    const custom = routine.state.lists.weekly.at(-1)!;
+    expect(routine.tasks.at(-1)?.title).toBe('Farm Kuva for rivens');
+    expect(routine.availableBuiltins.map(task => task.id)).not.toContain('elite-deep-archimedea');
+
+    await routine.toggle('archon-hunt', true);
+    await routine.removeTask('archon-hunt');
+    await routine.removeTask(custom);
+    expect(routine.completed.has('archon-hunt')).toBe(false);
+    expect(routine.state.custom).toEqual({});
+    expect(routine.state.lists.weekly).toEqual(['maroo-treasure', 'nightwave-acts', 'elite-deep-archimedea']);
+
+    await routine.restoreDefaults();
+    expect(routine.state.lists.weekly).toEqual(['maroo-treasure', 'nightwave-acts', 'elite-deep-archimedea', 'archon-hunt']);
+    expect(JSON.parse(store.values.get('routine-checklist')!).lists.weekly).toHaveLength(4);
+  });
+
+  it('refuses unknown built-ins, built-ins of another cadence, and items past the cap', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    await routine.addBuiltinTask('not-a-task');
+    await routine.addBuiltinTask('icebind');
+    expect(routine.state.lists.daily).toEqual(DAILY);
+    for (let i = 0; i < 20; i += 1) await routine.addCustomTask(`item ${i}`);
+    expect(routine.state.lists.daily).toHaveLength(MAX_TASKS);
+    expect(routine.taskLimitReached).toBe(true);
+  });
+
+  it('keeps a deliberately emptied list but restores defaults for a missing or corrupt one', () => {
+    const base = { version: 3, periods: {}, monthlyGoals: [], custom: {}, nextGoalId: 1 };
+    expect(parseRoutineState(JSON.stringify({ ...base, lists: { daily: [], weekly: [] } }), NOW).state.lists).toEqual({ daily: [], weekly: [] });
+    expect(parseRoutineState(JSON.stringify({ ...base, lists: { daily: 'x' } }), NOW).state.lists.daily).toEqual(DAILY);
+  });
+
+  it('drops custom items without text and never reuses their ids', () => {
+    const parsed = parseRoutineState(JSON.stringify({
+      version: 3, periods: {}, monthlyGoals: [{ id: 'goal-2', text: 'g' }], nextGoalId: 1,
+      lists: { daily: ['task-9', 'task-4', 'sortie', 'sortie', 'icebind'], weekly: [] },
+      custom: { 'task-4': 'Trade chat hour' },
+    }), NOW);
+    expect(parsed.state.lists.daily).toEqual(['task-4', 'sortie']);
+    expect(parsed.state.custom).toEqual({ 'task-4': 'Trade chat hour' });
+    expect(parsed.state.nextGoalId).toBe(10);
   });
 });

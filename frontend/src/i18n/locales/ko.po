@@ -10396,6 +10396,71 @@ msgctxt "routine.task.nightwave-acts.detail"
 msgid "Choose the acts that fit your goals before the week ends."
 msgstr "주가 끝나기 전에 목표에 맞는 과제를 고르세요."
 
+#. Optional weekly task. Use the game’s name.
+msgctxt "routine.task.elite-temporal-archimedea"
+msgid "Elite Temporal Archimedea"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.elite-temporal-archimedea.detail"
+msgid "Run this week’s elite challenge while its modifiers suit your squad."
+msgstr ""
+
+#. Optional weekly task. Use the game’s name.
+msgctxt "routine.task.elite-deep-archimedea"
+msgid "Elite Deep Archimedea"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.elite-deep-archimedea.detail"
+msgid "Run this week’s elite challenge while its modifiers suit your squad."
+msgstr ""
+
+#. Optional weekly task. Use the game’s names.
+msgctxt "routine.task.teshin-honors"
+msgid "Teshin’s Steel Path Honors"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.teshin-honors.detail"
+msgid "Check this week’s Steel Essence offer before it rotates."
+msgstr ""
+
+#. Optional weekly task. Paladino is a game character.
+msgctxt "routine.task.paladino"
+msgid "Visit Paladino"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.paladino.detail"
+msgid "Check what Paladino offers before the week ends."
+msgstr ""
+
+#. Optional weekly task. Use the game’s name.
+msgctxt "routine.task.icebind"
+msgid "Icebind runs"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.icebind.detail"
+msgid "Use this week’s runs with a premade squad."
+msgstr ""
+
+#. Optional weekly task. Use the game’s name for the calendar.
+msgctxt "routine.task.calendar-1999"
+msgid "1999 calendar"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.calendar-1999.detail"
+msgid "Complete this week’s calendar tasks and claim their rewards."
+msgstr ""
+
+#. Detail under an item the player added.
+msgctxt "routine.customDetail"
+msgid "Your own item. Its tick resets with the list."
+msgstr ""
+
 #. Detail under a monthly goal.
 #, fuzzy
 msgctxt "routine.goalDetail"
