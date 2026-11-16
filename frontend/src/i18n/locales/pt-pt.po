@@ -10396,6 +10396,46 @@ msgctxt "routine.task.nightwave-acts.detail"
 msgid "Choose the acts that fit your goals before the week ends."
 msgstr "Escolha os atos que se adequam aos seus objetivos antes do fim da semana."
 
+#. Optional daily task. Use the game’s name for Focus.
+msgctxt "routine.task.focus-cap"
+msgid "Fill the daily Focus cap"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.focus-cap.detail"
+msgid "Earn Focus up to today’s limit while you play other missions."
+msgstr ""
+
+#. Optional daily task. Use the game’s name for Nightwave.
+msgctxt "routine.task.nightwave-daily"
+msgid "Nightwave daily acts"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.nightwave-daily.detail"
+msgid "Finish the daily acts that fit today’s session."
+msgstr ""
+
+#. Optional daily task.
+msgctxt "routine.task.open-world-standing"
+msgid "Open-world Syndicate standing"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.open-world-standing.detail"
+msgid "Turn in bounties or tokens toward today’s standing cap."
+msgstr ""
+
+#. Optional daily task. Acrithis is a game character.
+msgctxt "routine.task.acrithis-daily"
+msgid "Acrithis’s daily special"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.acrithis-daily.detail"
+msgid "Check today’s offer in Duviri before it changes."
+msgstr ""
+
 #. Optional weekly task. Use the game’s name.
 msgctxt "routine.task.elite-temporal-archimedea"
 msgid "Elite Temporal Archimedea"

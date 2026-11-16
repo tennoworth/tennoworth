@@ -25,7 +25,7 @@ export const ROUTINE_TASKS = {
 /** Built-ins a player can add but nobody starts with: game modes and vendors
  *  that only matter to part of the player base. */
 const OPTIONAL_TASKS = {
-  daily: [],
+  daily: ['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily'],
   weekly: ['elite-temporal-archimedea', 'elite-deep-archimedea', 'teshin-honors', 'paladino', 'icebind', 'calendar-1999'],
 } as const;
 

@@ -343,6 +343,16 @@ describe('editable daily and weekly lists', () => {
     expect(JSON.parse(store.values.get('routine-checklist')!).lists.weekly).toHaveLength(4);
   });
 
+  it('offers optional daily items on the daily list only', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    expect(routine.availableBuiltins.map(task => task.id)).toEqual(['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily']);
+    await routine.addBuiltinTask('focus-cap');
+    expect(routine.state.lists.daily).toEqual([...DAILY, 'focus-cap']);
+    routine.select('weekly');
+    await routine.addBuiltinTask('nightwave-daily');
+    expect(routine.state.lists.weekly).not.toContain('nightwave-daily');
+  });
+
   it('refuses unknown built-ins, built-ins of another cadence, and items past the cap', async () => {
     const routine = new RoutineController(memoryStore(), NOW);
     await routine.addBuiltinTask('not-a-task');
