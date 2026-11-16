@@ -36,7 +36,7 @@ export interface HealthInput {
   /** Tradeable copies owned per the latest scan; `null` = unknown (no scan). */
   owned?: number | null;
   /** Snapshot statistics for the rule bases a live check does not report. */
-  stats?: { low5Avg?: number | null; avg48h?: number | null; median90d?: number | null };
+  stats?: { low5Avg?: number | null; low20Avg?: number | null; avg48h?: number | null; median90d?: number | null };
 }
 
 /** What the player asked the health check to flag. The defaults reproduce the

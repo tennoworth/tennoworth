@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PRICE_RULE, MAX_PRICE_OFFSET, MIN_PRICE_OFFSET, parsePriceRule, priceFromRule } from './price-rule';
 
 describe('priceFromRule', () => {
-  const evidence = { lowestAsk: 20, low5Avg: 22.4, avg48h: 25.2, median90d: 30 };
+  const evidence = { lowestAsk: 20, low5Avg: 22.4, low20Avg: 27, avg48h: 25.2, median90d: 30 };
+
+  it('prices from the average of the twenty cheapest asks, and only when the snapshot has it', () => {
+    expect(priceFromRule({ basis: 'low20-avg', offset: 1 }, evidence)).toBe(28);
+    expect(priceFromRule({ basis: 'low20-avg', offset: -3 }, { ...evidence, low20Avg: 0 })).toBeNull();
+    expect(parsePriceRule('{"basis":"low20-avg","offset":-2}')).toEqual({ basis: 'low20-avg', offset: -2 });
+  });
 
   it('adds the offset to the chosen basis without rounding the unit price', () => {
     expect(priceFromRule({ basis: 'lowest-ask', offset: 0 }, evidence)).toBe(20);

@@ -39,7 +39,7 @@ const API_ROOT: &str = "https://api.warframe.market";
 
 /// The CSV column order - the keys of `analyze_item`'s dict, in insertion
 /// order, which is also what `csv_input::CsvRow` reads back.
-const HEADER: [&str; 20] = [
+const HEADER: [&str; 21] = [
     "url_name",
     "name",
     "tags",
@@ -60,6 +60,7 @@ const HEADER: [&str; 20] = [
     "donch_bot_90d",
     "score",
     "price_basis",
+    "low20_avg",
 ];
 
 /// A master-catalog item - the fields `analyze_item` reads off the raw
@@ -94,6 +95,7 @@ pub struct AnalyzedRow {
     pub donch_top_90d: f64,
     pub donch_bot_90d: f64,
     pub score: f64,
+    pub low20_avg: f64,
 }
 
 /// Parse the `/v2/items` master list into [`CatalogItem`]s. Entries without a
@@ -234,6 +236,7 @@ pub fn analyze_orders(
     let top = top_buy(&live_buys);
     let low = low_sell(&live_sells);
     let low5 = clamp_low5(avg_lowest_asks(&live_sells, 5), median_90d, low);
+    let low20 = clamp_low5(avg_lowest_asks(&live_sells, 20), median_90d, low);
     let ratio = demand_ratio(live_buys.len(), live_sells.len());
     let sc = score(volume_48h, avg_price_48h, ratio);
 
@@ -258,6 +261,7 @@ pub fn analyze_orders(
             donch_top_90d: stage.donch_top_90d,
             donch_bot_90d: stage.donch_bot_90d,
             score: round_dp(sc, 1),
+            low20_avg: low20,
         },
     }))
 }
@@ -327,6 +331,7 @@ impl AnalyzedRow {
             fmt_num(self.donch_bot_90d),
             fmt_num(self.score),
             "unit".into(),
+            fmt_num(self.low20_avg),
         ]
     }
 }
@@ -1261,12 +1266,14 @@ mod tests {
             donch_top_90d: 30.0,
             donch_bot_90d: 20.0,
             score: 100.0,
+            low20_avg: 44.1,
         };
         let f = row.to_fields();
         assert_eq!(f[2], "['mod', 'prime']"); // tags
         assert_eq!(f[3], ""); // ducats None → empty
         assert_eq!(f[7], "35"); // integral float → no trailing .0
         assert_eq!(f[15], "[25, 26]"); // medians_7d
+        assert_eq!(f[20], "44.1"); // low20_avg, last so old readers keep their columns
     }
 
     fn cached_cfg(out: &Path, cache: &Path, hours: i64) -> ScrapeConfig {

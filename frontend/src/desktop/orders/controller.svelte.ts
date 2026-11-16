@@ -334,7 +334,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
             platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN, quantity: o.quantity, type: 'sell' as const,
             live: slug ? liveForOrder(o) : null,
             owned: slug ? ownedEvidence(slug, o.subtype ?? null, input.ownedQty, composedSlugs) : null,
-            stats: stats && { low5Avg: stats.low5_avg, avg48h: stats.avg, median90d: stats.median_90d },
+            stats: stats && { low5Avg: stats.low5_avg, low20Avg: stats.low20_avg, avg48h: stats.avg, median90d: stats.median_90d },
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),

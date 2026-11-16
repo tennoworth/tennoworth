@@ -35,6 +35,9 @@ pub struct ItemEntry {
     pub avg: f64,
     pub low_sell: f64,
     pub low5_avg: f64,
+    /// Mean of the ~20 cheapest live asks, clamped like `low5_avg`. `0` when the
+    /// CSV predates the column - readers treat `0` as unknown.
+    pub low20_avg: f64,
     pub top_buy: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub price_basis: Option<&'static str>,
@@ -64,6 +67,7 @@ pub fn render_item(row: &csv_input::CsvRow, meta: &CatalogItemMeta) -> ItemEntry
         avg: clamp_avg(avg_raw, med90),
         low_sell: ls,
         low5_avg: clamp_low5(low5_raw, med90, ls),
+        low20_avg: clamp_low5(parse_f64_or(&row.low20_avg, 0.0), med90, ls),
         top_buy: parse_f64_or(&row.top_buy_price, 0.0),
         price_basis: (row.price_basis == "unit").then_some("unit"),
         vol: parse_i64_or(&row.volume_48h, 0),
@@ -425,6 +429,19 @@ mod tests {
     }
 
     #[test]
+    fn render_item_carries_and_clamps_low20() {
+        let mut row = test_row();
+        row.low20_avg = "47.3".into();
+        assert_eq!(render_item(&row, &test_meta()).low20_avg, 47.3);
+        // A cliff book: twenty asks average far above the 90-day median while
+        // the cheapest ask sits near it - the same clamp low5 gets.
+        row.median_90d = "5".into();
+        row.low_sell_price = "5".into();
+        row.low20_avg = "61.0".into();
+        assert_eq!(render_item(&row, &test_meta()).low20_avg, 5.0);
+    }
+
+    #[test]
     fn render_item_empty_fields_default_to_zero() {
         let row = CsvRow {
             url_name: "empty_item".into(),
@@ -434,6 +451,7 @@ mod tests {
         assert_eq!(entry.avg, 0.0);
         assert_eq!(entry.low_sell, 0.0);
         assert_eq!(entry.low5_avg, 0.0);
+        assert_eq!(entry.low20_avg, 0.0); // CSV from before the column
         assert_eq!(entry.top_buy, 0.0);
         assert_eq!(entry.vol, 0);
         assert_eq!(entry.ratio, 0.0);

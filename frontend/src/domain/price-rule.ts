@@ -6,7 +6,7 @@
 //
 // A rule only changes what is suggested. Nothing reprices on its own.
 
-export type PriceBasis = 'lowest-ask' | 'low5-avg' | 'avg-48h' | 'median-90d';
+export type PriceBasis = 'lowest-ask' | 'low5-avg' | 'low20-avg' | 'avg-48h' | 'median-90d';
 
 export interface PriceRule {
   basis: PriceBasis;
@@ -19,7 +19,7 @@ export const DEFAULT_PRICE_RULE: PriceRule = { basis: 'lowest-ask', offset: 0 };
 export const MIN_PRICE_OFFSET = -50;
 export const MAX_PRICE_OFFSET = 50;
 
-const BASES: readonly PriceBasis[] = ['lowest-ask', 'low5-avg', 'avg-48h', 'median-90d'];
+const BASES: readonly PriceBasis[] = ['lowest-ask', 'low5-avg', 'low20-avg', 'avg-48h', 'median-90d'];
 
 /** The figures a basis can read. Snapshots write `0` for a statistic they do
  *  not carry, so `0`, `null` and absence all mean "unknown". */
@@ -28,6 +28,8 @@ export interface PriceEvidence {
    *  clearing price when no live check has run. */
   lowestAsk?: number | null;
   low5Avg?: number | null;
+  /** Snapshot only: a live check returns at most five asks. */
+  low20Avg?: number | null;
   avg48h?: number | null;
   median90d?: number | null;
 }
@@ -40,6 +42,7 @@ function basisValue(basis: PriceBasis, evidence: PriceEvidence): number | null {
   switch (basis) {
     case 'lowest-ask': return known(evidence.lowestAsk);
     case 'low5-avg': return known(evidence.low5Avg);
+    case 'low20-avg': return known(evidence.low20Avg);
     case 'avg-48h': return known(evidence.avg48h);
     case 'median-90d': return known(evidence.median90d);
   }
