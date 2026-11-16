@@ -11,9 +11,11 @@
 // many any more". Everything is a suggestion; the user clicks.
 
 import type { LiveTop } from '../contracts/desktop';
+import { DEFAULT_PRICE_RULE, priceFromRule, type PriceRule } from './price-rule';
 
 export type HealthKind =
-  /** Your ask is above the lowest OTHER online ask - you won't sell first. */
+  /** Your ask is above your price rule's target, by default the lowest OTHER
+   *  online ask - you won't sell first. */
   | 'overpriced'
   /** A live buyer bids MORE than you're asking - you'd leave plat on the table. */
   | 'underbid'
@@ -33,6 +35,38 @@ export interface HealthInput {
   live?: LiveTop | null;
   /** Tradeable copies owned per the latest scan; `null` = unknown (no scan). */
   owned?: number | null;
+  /** Snapshot statistics for the rule bases a live check does not report. */
+  stats?: { low5Avg?: number | null; low20Avg?: number | null; avg48h?: number | null; median90d?: number | null };
+}
+
+/** What the player asked the health check to flag. The defaults reproduce the
+ *  verdicts from before preferences existed. */
+export interface HealthPrefs {
+  rule: PriceRule;
+  /** Platinum an ask may sit above the rule's target before it is flagged. */
+  tolerance: number;
+  muted: HealthKind[];
+}
+
+export const MAX_HEALTH_TOLERANCE = 100;
+const KINDS: readonly HealthKind[] = ['overpriced', 'underbid', 'excess-qty', 'not-owned'];
+
+const DEFAULT_HEALTH_PREFS: HealthPrefs = { rule: DEFAULT_PRICE_RULE, tolerance: 0, muted: [] };
+
+/** Reads the `listing-health` setting. The rule is passed in because it has
+ *  its own `price-rule` setting, shared with the Sell view. */
+export function parseHealthPrefs(raw: string | null, rule: PriceRule): HealthPrefs {
+  const fallback = { ...DEFAULT_HEALTH_PREFS, rule };
+  if (!raw) return fallback;
+  try {
+    const value = JSON.parse(raw) as { tolerance?: unknown; muted?: unknown };
+    const tolerance = typeof value.tolerance === 'number' && Number.isInteger(value.tolerance)
+      ? Math.min(MAX_HEALTH_TOLERANCE, Math.max(0, value.tolerance)) : 0;
+    const muted = Array.isArray(value.muted) ? KINDS.filter(kind => (value.muted as unknown[]).includes(kind)) : [];
+    return { rule, tolerance, muted };
+  } catch {
+    return fallback;
+  }
 }
 
 export interface HealthIssue {
@@ -48,16 +82,17 @@ export interface HealthIssue {
 
 /** Only sell listings are assessed - buy orders are the user's own bids and
  *  "someone asks less than your bid" is not a problem, it's a purchase. */
-export function assessListing(o: HealthInput): HealthIssue[] {
+export function assessListing(o: HealthInput, prefs: HealthPrefs = DEFAULT_HEALTH_PREFS): HealthIssue[] {
   const out: HealthIssue[] = [];
   if (o.type !== 'sell') return out;
 
   const t = o.live;
   if (t && !t.error) {
-    if (t.low_sell != null && o.platinum > t.low_sell) {
+    const target = priceFromRule(prefs.rule, { lowestAsk: t.low_sell, ...o.stats });
+    if (target != null && o.platinum > target + prefs.tolerance) {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'overpriced',
-        current: o.platinum, suggested: t.low_sell,
+        current: o.platinum, suggested: target,
       });
     } else if (t.top_buy != null && o.platinum < t.top_buy) {
       out.push({
@@ -80,11 +115,11 @@ export function assessListing(o: HealthInput): HealthIssue[] {
       });
     }
   }
-  return out;
+  return prefs.muted.length ? out.filter(issue => !prefs.muted.includes(issue.kind)) : out;
 }
 
-export function assessListings(orders: HealthInput[]): HealthIssue[] {
-  return orders.flatMap(assessListing);
+export function assessListings(orders: HealthInput[], prefs: HealthPrefs = DEFAULT_HEALTH_PREFS): HealthIssue[] {
+  return orders.flatMap(o => assessListing(o, prefs));
 }
 
 export interface HealthSummary {

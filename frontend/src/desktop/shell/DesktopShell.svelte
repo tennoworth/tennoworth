@@ -76,6 +76,8 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
 
   const APP_COMMIT = __APP_COMMIT__;
   import type { StateStore } from '../../contracts/state-store';
+  import { parseHealthPrefs } from '../../domain/listing-health';
+  import { parsePriceRule } from '../../domain/price-rule';
   import type { ThemeController } from '../../ui/theme';
   import { DisplayController, provideDisplay } from '../../ui/display.svelte';
 
@@ -202,6 +204,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   onMount(() => appIcon.start());
   const display = untrack(() => new DisplayController(store));
   const crackAnyway = untrack(() => new CrackAnyway(store));
+  const healthPrefs = untrack(() => parseHealthPrefs(store.getSetting('listing-health'), parsePriceRule(store.getSetting('price-rule'))));
   provideDisplay(display);
   // The first launch asks for a language once; the game's own language, from
   // its log, is where the cursor starts. Undefined while that is being read.
@@ -741,6 +744,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
         {marketStaleness}
         onauthrequired={(code) => wfmAuthDialogsRef?.open(code)}
         onsummary={(s) => (listing.ordersSummary = s)}
+        {healthPrefs}
       />
     </div>
     {/if}

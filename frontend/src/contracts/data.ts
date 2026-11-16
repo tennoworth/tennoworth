@@ -17,6 +17,7 @@ export interface MarketItemEntry {
   tags?: string[];
   ducats?: number | null;
   low5_avg?: number; // avg of the ~5 cheapest live asks (depth-aware current price); 0/absent on older snapshots
+  low20_avg?: number; // avg of the ~20 cheapest live asks, clamped like low5; 0/absent on older snapshots
   median_now?: number; // latest daily median ("today"); falls back to median_90d on pre-split snapshots
   median_90d?: number; // median OF the 90-day daily medians (the baseline, not "today")
   medians_7d?: number[];

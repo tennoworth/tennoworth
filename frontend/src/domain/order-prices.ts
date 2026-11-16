@@ -17,5 +17,5 @@ export function orderLotPrice(unit: number, perTrade?: number | null): number | 
  * before those book prices can be called per-unit evidence. */
 export function cachedUnitMarket(m: MarketItemEntry, bulk = false): MarketItemEntry {
   if (m.price_basis === 'unit' || (!bulk && !m.tags?.some(t => t === 'arcane_enhancement' || t === 'relic'))) return m;
-  return { ...m, low_sell: 0, top_buy: 0, low5_avg: 0 };
+  return { ...m, low_sell: 0, top_buy: 0, low5_avg: 0, low20_avg: 0 };
 }

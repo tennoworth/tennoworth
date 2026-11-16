@@ -14,30 +14,56 @@ export interface MonthlyGoal {
   text: string;
 }
 
+type ListCadence = Exclude<RoutineCadence, 'monthly'>;
+
+/** The built-ins a fresh checklist starts with, in order. */
 export const ROUTINE_TASKS = {
   daily: ['login-tribute', 'foundry-build', 'syndicate-standing', 'steel-path-incursions', 'sortie'],
   weekly: ['maroo-treasure', 'archon-hunt', 'nightwave-acts'],
 } as const;
 
-type RoutineTaskId = (typeof ROUTINE_TASKS)[keyof typeof ROUTINE_TASKS][number];
+/** Built-ins a player can add but nobody starts with: game modes and vendors
+ *  that only matter to part of the player base. */
+const OPTIONAL_TASKS = {
+  daily: ['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily'],
+  weekly: ['elite-temporal-archimedea', 'elite-deep-archimedea', 'teshin-honors', 'paladino', 'icebind', 'calendar-1999'],
+} as const;
+
+type RoutineTaskId =
+  | (typeof ROUTINE_TASKS)[ListCadence][number]
+  | (typeof OPTIONAL_TASKS)[ListCadence][number];
 const routineTask = (id: RoutineTaskId): RoutineTask => ({ id, title: t(`routine.task.${id}`), detail: t(`routine.task.${id}.detail`) });
+
+const BUILTINS: Record<ListCadence, ReadonlySet<string>> = {
+  daily: new Set<string>([...ROUTINE_TASKS.daily, ...OPTIONAL_TASKS.daily]),
+  weekly: new Set<string>([...ROUTINE_TASKS.weekly, ...OPTIONAL_TASKS.weekly]),
+};
 
 interface PeriodState {
   id: string;
   completed: string[];
 }
 
+// v3 keeps v2's monthly goals as they were and adds the daily/weekly lists: an
+// ordered id list per cadence, where an id is either a built-in or a
+// `task-N` the player wrote (text in `custom`). A built-in missing from its
+// list is one the player removed.
 interface PersistedRoutineState {
-  version: 2;
+  version: 3;
   periods: Record<RoutineCadence, PeriodState>;
   monthlyGoals: MonthlyGoal[];
+  lists: Record<ListCadence, string[]>;
+  custom: Record<string, string>;
+  /** Next number for a `goal-N` or `task-N` id; the two share one sequence. */
   nextGoalId: number;
 }
 
 export const MAX_GOAL_LENGTH = 120;
 export const MAX_GOALS = 8;
+export const MAX_TASKS = 12;
 
 const NUMBERED_GOAL_ID = /^goal-(\d+)$/;
+const CUSTOM_TASK_ID = /^task-(\d+)$/;
 
 export function routinePeriodId(cadence: RoutineCadence, timestamp: number): string {
   const date = new Date(timestamp);
@@ -57,15 +83,50 @@ export function nextRoutinePeriod(cadence: Exclude<RoutineCadence, 'monthly'>, t
 
 function emptyState(now: number): PersistedRoutineState {
   return {
-    version: 2,
+    version: 3,
     periods: {
       daily: { id: routinePeriodId('daily', now), completed: [] },
       weekly: { id: routinePeriodId('weekly', now), completed: [] },
       monthly: { id: routinePeriodId('monthly', now), completed: [] },
     },
     monthlyGoals: [],
+    lists: { daily: [...ROUTINE_TASKS.daily], weekly: [...ROUTINE_TASKS.weekly] },
+    custom: {},
     nextGoalId: 1,
   };
+}
+
+// Keeps known built-ins and custom ids that still have text, in stored order.
+// `highest` covers every task-N the payload named, kept or not, for the same
+// reason normalizeGoals tracks goal ids.
+function normalizeLists(rawLists: unknown, rawCustom: unknown): { lists: Record<ListCadence, string[]>; custom: Record<string, string>; highest: number } {
+  const lists: Record<ListCadence, string[]> = { daily: [], weekly: [] };
+  const custom: Record<string, string> = {};
+  const source = rawCustom && typeof rawCustom === 'object' ? rawCustom as Record<string, unknown> : {};
+  const listed = rawLists && typeof rawLists === 'object' ? rawLists as Record<string, unknown> : {};
+  let highest = 0;
+  const seen = new Set<string>();
+  for (const cadence of ['daily', 'weekly'] as const) {
+    const ids = listed[cadence];
+    // An empty array is a player's choice; a missing or corrupt one is not.
+    if (!Array.isArray(ids)) {
+      lists[cadence] = [...ROUTINE_TASKS[cadence]];
+      continue;
+    }
+    for (const id of ids) {
+      if (typeof id !== 'string' || seen.has(id) || lists[cadence].length === MAX_TASKS) continue;
+      const numbered = CUSTOM_TASK_ID.exec(id);
+      if (numbered) {
+        highest = Math.max(highest, Number(numbered[1]));
+        const text = goalText(source[id]);
+        if (!text) continue;
+        custom[id] = text;
+      } else if (!BUILTINS[cadence].has(id)) continue;
+      seen.add(id);
+      lists[cadence].push(id);
+    }
+  }
+  return { lists, custom, highest };
 }
 
 function goalText(value: unknown): string {
@@ -101,17 +162,25 @@ export function parseRoutineState(raw: string | null, now: number): { state: Per
   const fallback = emptyState(now);
   if (!raw) return { state: fallback, repaired: false };
   try {
-    const candidate = JSON.parse(raw) as Partial<PersistedRoutineState>;
-    if (candidate.version !== 2 || !candidate.periods || !Array.isArray(candidate.monthlyGoals)) {
+    const candidate = JSON.parse(raw) as Partial<Omit<PersistedRoutineState, 'version'>> & { version?: unknown };
+    if ((candidate.version !== 2 && candidate.version !== 3) || !candidate.periods || !Array.isArray(candidate.monthlyGoals)) {
       return { state: fallback, repaired: true };
     }
     const state = emptyState(now);
     const { goals, nextGoalId } = normalizeGoals(candidate.monthlyGoals, candidate.nextGoalId);
     state.monthlyGoals = goals;
     state.nextGoalId = nextGoalId;
+    // A v2 payload predates editable lists, so it keeps the defaults emptyState
+    // already holds; the version change alone marks it for one rewrite.
+    if (candidate.version === 3) {
+      const { lists, custom, highest } = normalizeLists(candidate.lists, candidate.custom);
+      state.lists = lists;
+      state.custom = custom;
+      state.nextGoalId = Math.max(state.nextGoalId, highest + 1);
+    }
     const allowed: Record<RoutineCadence, Set<string>> = {
-      daily: new Set<string>(ROUTINE_TASKS.daily),
-      weekly: new Set<string>(ROUTINE_TASKS.weekly),
+      daily: new Set(state.lists.daily),
+      weekly: new Set(state.lists.weekly),
       monthly: new Set(goals.map(goal => goal.id)),
     };
     for (const cadence of ['daily', 'weekly', 'monthly'] as const) {
@@ -146,8 +215,63 @@ export class RoutineController {
   }
 
   get tasks(): RoutineTask[] {
-    if (this.cadence !== 'monthly') return ROUTINE_TASKS[this.cadence].map(routineTask);
+    if (this.cadence !== 'monthly') return this.state.lists[this.cadence].map(id => this.#task(id));
     return this.state.monthlyGoals.map(goal => ({ id: goal.id, title: goal.text, detail: t('routine.goalDetail') }));
+  }
+
+  /** Built-ins for the current daily/weekly list that are not on it. */
+  get availableBuiltins(): RoutineTask[] {
+    if (this.cadence === 'monthly') return [];
+    const listed = new Set(this.state.lists[this.cadence]);
+    return [...BUILTINS[this.cadence]].filter(id => !listed.has(id)).map(id => routineTask(id as RoutineTaskId));
+  }
+
+  get taskLimitReached(): boolean {
+    return this.cadence !== 'monthly' && this.state.lists[this.cadence].length >= MAX_TASKS;
+  }
+
+  #task(id: string): RoutineTask {
+    const text = this.state.custom[id];
+    return text ? { id, title: text, detail: t('routine.customDetail') } : routineTask(id as RoutineTaskId);
+  }
+
+  addCustomTask(value: string): Promise<void> {
+    const text = goalText(value);
+    if (this.cadence === 'monthly' || !text || this.taskLimitReached) return Promise.resolve();
+    const id = `task-${this.state.nextGoalId}`;
+    this.state.nextGoalId += 1;
+    this.state.custom[id] = text;
+    this.state.lists[this.cadence].push(id);
+    return this.#save();
+  }
+
+  addBuiltinTask(id: string): Promise<void> {
+    if (this.cadence === 'monthly' || this.taskLimitReached) return Promise.resolve();
+    const list = this.state.lists[this.cadence];
+    if (!BUILTINS[this.cadence].has(id) || list.includes(id)) return Promise.resolve();
+    list.push(id);
+    return this.#save();
+  }
+
+  /** Removes a daily/weekly item; a removed built-in can be added back. */
+  removeTask(id: string): Promise<void> {
+    if (this.cadence === 'monthly') return Promise.resolve();
+    const list = this.state.lists[this.cadence];
+    if (!list.includes(id)) return Promise.resolve();
+    this.state.lists[this.cadence] = list.filter(entry => entry !== id);
+    delete this.state.custom[id];
+    this.#forgetCompletion(this.cadence, id);
+    return this.#save();
+  }
+
+  /** Puts back every default the player removed, after what is already listed. */
+  restoreDefaults(): Promise<void> {
+    if (this.cadence === 'monthly') return Promise.resolve();
+    const list = this.state.lists[this.cadence];
+    const missing = ROUTINE_TASKS[this.cadence].filter(id => !list.includes(id)).slice(0, MAX_TASKS - list.length);
+    if (!missing.length) return Promise.resolve();
+    this.state.lists[this.cadence] = [...list, ...missing];
+    return this.#save();
   }
 
   get goalLimitReached(): boolean {
@@ -205,7 +329,7 @@ export class RoutineController {
     const text = goalText(value);
     if (!goal || !text || text === goal.text) return Promise.resolve();
     goal.text = text;
-    this.#forgetCompletion(id);
+    this.#forgetCompletion('monthly', id);
     return this.#save();
   }
 
@@ -213,7 +337,7 @@ export class RoutineController {
     const index = this.state.monthlyGoals.findIndex(entry => entry.id === id);
     if (index === -1) return Promise.resolve();
     this.state.monthlyGoals.splice(index, 1);
-    this.#forgetCompletion(id);
+    this.#forgetCompletion('monthly', id);
     return this.#save();
   }
 
@@ -246,8 +370,8 @@ export class RoutineController {
     return this.#save();
   }
 
-  #forgetCompletion(id: string): void {
-    const period = this.state.periods.monthly;
+  #forgetCompletion(cadence: RoutineCadence, id: string): void {
+    const period = this.state.periods[cadence];
     if (period.completed.includes(id)) period.completed = period.completed.filter(entry => entry !== id);
   }
 

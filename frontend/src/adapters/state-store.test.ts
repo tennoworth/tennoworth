@@ -46,6 +46,8 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     ['sell-columns', 'wfminv:sell-columns-v1', '{"default":["name","owned"]}'],
     ['auto-close-sold', 'wfminv:auto-close-sold-v1', 'off'],
     ['routine-checklist', 'wfminv:routine-checklist-v2', '{"version":2}'],
+    ['price-rule', 'wfminv:price-rule-v1', '{"basis":"median-90d","offset":1}'],
+    ['listing-health', 'wfminv:listing-health-v1', '{"tolerance":2,"muted":["underbid"]}'],
     ['theme.mode', 'wfminv:theme-mode-v1', 'dark'],
     ['app-icon', 'wfminv:app-icon-v1', 'match'],
     ['keyboard', 'wfminv:keyboard-v1', '{"search":"/","help":"?","enabled":true,"navigation":null}'],

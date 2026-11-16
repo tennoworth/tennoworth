@@ -46,6 +46,8 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'sell-columns': 'wfminv:sell-columns-v1',
   'auto-close-sold': 'wfminv:auto-close-sold-v1',
   'routine-checklist': 'wfminv:routine-checklist-v2',
+  'price-rule': 'wfminv:price-rule-v1',
+  'listing-health': 'wfminv:listing-health-v1',
   'theme.mode': 'wfminv:theme-mode-v1',
   'app-icon': 'wfminv:app-icon-v1',
   calendar: 'wfminv:calendar-v1',

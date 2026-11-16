@@ -23,6 +23,10 @@ export type SettingKey =
   | 'auto-close-sold'
   /** Manual Routine checklist state, versioned and validated by the feature. */
   | 'routine-checklist'
+  /** Suggested-price rule (JSON, domain/price-rule.ts): basis + platinum offset. */
+  | 'price-rule'
+  /** Order health filters (JSON, domain/listing-health.ts): tolerance, muted kinds. */
+  | 'listing-health'
   /** Visual theme: `theme.mode` = 'system' | 'light' | 'dark'. Also read RAW
    *  from localStorage by public/theme-boot.js before first paint (the one
    *  sanctioned raw read) - keep the key name below in step with it.
