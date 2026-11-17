@@ -11,8 +11,9 @@
   let open = $state<string | null>(null);
 
   // Only a confirmed date earns the countdown. An event under way counts down
-  // to its end, which is when a deadline like a Ducat change bites.
-  const next = $derived(events.filter(e => !e.estimate && eventKey(e, now) > now).sort((a, b) => eventKey(a, now) - eventKey(b, now))[0] ?? null);
+  // to its end, which is when a deadline like a Ducat change bites. A routine
+  // reset is always under a day away, so it never takes Next up from the market.
+  const next = $derived(events.filter(e => !e.estimate && e.kind !== 'routine' && eventKey(e, now) > now).sort((a, b) => eventKey(a, now) - eventKey(b, now))[0] ?? null);
   const nextAt = $derived(next ? eventKey(next, now) : 0);
   const columns = $derived.by(() => {
     const thisWeek = weekStart(now) + 7 * DAY;

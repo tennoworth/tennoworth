@@ -1,10 +1,13 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
   import type { CalendarEvent } from '../../domain/calendar-events';
+  import { OPEN_ROUTINES } from './kinds';
   import { t } from '../../i18n/i18n.svelte';
   import { utcDay, utcTime, localTime } from './time';
   import { wordsOf } from './wording';
 
   let { event, surface }: { event: CalendarEvent; surface: 'desktop' | 'hosted' } = $props();
+  const openRoutines = getContext<(() => void) | undefined>(OPEN_ROUTINES);
 </script>
 
 <div class="detail" data-kind={event.kind} class:estimate={event.estimate}>
@@ -20,6 +23,7 @@
     <span class="who">{t(`cal.source.${event.source}`)}</span>
     {#if event.sourceUrl}<a href={event.sourceUrl} target="_blank" rel="noopener noreferrer">{t('cal.source')}</a>{/if}
     {#if event.estimate}<span>{t('cal.noAdvice')}</span>{/if}
+    {#if event.kind === 'routine' && openRoutines}<button type="button" class="btn xs" onclick={openRoutines}>{t('cal.routine.open')}</button>{/if}
   </p>
 </div>
 

@@ -13482,6 +13482,52 @@ msgctxt "cal.kind.deal"
 msgid "Darvo deals"
 msgstr "Darvo-Angebote"
 
+#. Event kind: the player's own daily/weekly checklist and monthly goals.
+#. Max 20 characters.
+msgctxt "cal.kind.routine"
+msgid "My routines"
+msgstr ""
+
+#. Routine reset name.
+msgctxt "cal.routine.daily"
+msgid "Daily reset"
+msgstr ""
+
+#. Routine reset name.
+msgctxt "cal.routine.weekly"
+msgid "Weekly reset"
+msgstr ""
+
+#. Routine reset name.
+msgctxt "cal.routine.monthly"
+msgid "Monthly goals reset"
+msgstr ""
+
+#. Event title; reset reads like "Weekly reset".
+msgctxt "cal.routine.title"
+msgid "{reset} · {open} of {total} still open"
+msgstr ""
+
+#. Short event label.
+msgctxt "cal.routine.short"
+msgid "{reset} · {open} open"
+msgstr ""
+
+#. Event detail; tasks is a list of routine names.
+msgctxt "cal.routine.openList"
+msgid "Still open: {tasks}."
+msgstr ""
+
+#. Event detail when more than three are open.
+msgctxt "cal.routine.openMore"
+msgid "Still open: {tasks} and {more} more."
+msgstr ""
+
+#. Button in an event's detail.
+msgctxt "cal.routine.open"
+msgid "Open routines"
+msgstr ""
+
 #. Countdown: days and hours.
 #. Max 8 characters.
 #, fuzzy
@@ -13767,6 +13813,11 @@ msgstr "TennoWorth-Hinweis"
 msgctxt "cal.source.official"
 msgid "DE announcement"
 msgstr "DE-Ankündigung"
+
+#. Date source: the player's own checklist.
+msgctxt "cal.source.routine"
+msgid "Your routines"
+msgstr ""
 
 #. Local time beside the UTC time.
 #, fuzzy

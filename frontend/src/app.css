@@ -143,6 +143,9 @@ html[data-look="yorha"] {
   /* Vaulted is market fact, not status: a cool slate so it cannot read as
      good/warn/bad. 6.1:1 on panel, 5.1:1 on panel-2. */
   --vault: #3F4A66;
+  /* Your routines on the Calendar: a plum no status uses. 5.9:1 on panel,
+     5.0:1 on panel-2. */
+  --routine: #663F62;
   --ink-bar: #4B4739;   /* the one filled surface */
   --on-ink: #DBD7BF;
   --on-ink-muted: #CBC6AC; /* 5.4:1 on ink-bar */
@@ -193,6 +196,7 @@ html[data-look="yorha"][data-mode="dark"] {
   --bad: #F18C85;       /* 6.5:1 on panel */
   --ducat: #CBA05A;
   --vault: #A9B2CE;     /* 7.4:1 on panel, 6.4:1 on panel-2 */
+  --routine: #C49ABD;   /* 6.4:1 on panel, 5.6:1 on panel-2 */
   --ink-bar: #C0B187;   /* the bar is now rag */
   --on-ink: #1E1913;
   --on-ink-muted: #342D23;
@@ -999,6 +1003,7 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 [data-kind="resurgence"] { --k: var(--fg); }
 [data-kind="vault"] { --k: var(--vault); }
 [data-kind="notice"] { --k: var(--good); }
+[data-kind="routine"] { --k: var(--routine); }
 [data-kind="deal"] { --k: var(--muted); }
 
 /* Focus-only links let a keyboard cross long navigation and market tables. */

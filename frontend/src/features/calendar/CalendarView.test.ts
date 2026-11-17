@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/sve
 import type { Market } from '../../contracts/data';
 import type { SettingKey, SettingsStore } from '../../contracts/state-store';
 import CalendarView from './CalendarView.svelte';
+import type { CalendarEvent } from '../../domain/calendar-events';
 
 afterEach(cleanup);
 
@@ -75,5 +76,42 @@ describe('CalendarView', () => {
     const owned = new Map([['protea_prime_set|', { slug: 'protea_prime_set', count: 1, name: '', type: '', subtype: null, kept_lvl: null, leveled: 0 }]]);
     render(CalendarView, { props: { market, owned, now: NOW, surface: 'desktop' } });
     expect(screen.getByText('You hold 1 affected item')).toBeTruthy();
+  });
+});
+
+describe('CalendarView with routines', () => {
+  const resets: CalendarEvent[] = [{
+    id: 'routine-weekly-2026-10-12', kind: 'routine', from: Date.parse('2026-10-19T00:00:00Z'), to: null,
+    text: { kind: 'routine', cadence: 'weekly', open: ['Archon Hunt', 'Review Nightwave acts', 'Maroo’s Ayatan Treasure Hunt', 'Paladino'], total: 6 },
+    estimate: false, source: 'routine',
+  }, {
+    id: 'routine-daily-2026-10-13', kind: 'routine', from: Date.parse('2026-10-14T00:00:00Z'), to: null,
+    text: { kind: 'routine', cadence: 'daily', open: ['Complete the Sortie'], total: 5 },
+    estimate: false, source: 'routine',
+  }];
+
+  it('shows a reset with what is open, keeps it out of Next up, and opens Routines', async () => {
+    const onopenroutines = vi.fn();
+    render(CalendarView, { props: { market, now: NOW, surface: 'desktop', loadAnnouncements: async () => feed, extra: resets, onopenroutines } });
+    expect(screen.getByRole('checkbox', { name: 'My routines' })).toBeTruthy();
+    const next = screen.getByRole('region', { name: 'Next up' });
+    // The daily reset is sooner, but Next up is for the market.
+    expect(await within(next).findByText('Bronco Prime Barrel: 45 → 25 Ducats')).toBeTruthy();
+    expect(within(next).queryByText(/Daily reset/)).toBeNull();
+    const tile = screen.getByRole('button', { name: /Weekly reset · 4 of 6 still open/ });
+    await fireEvent.click(tile);
+    expect(screen.getByText('Still open: Archon Hunt, Review Nightwave acts, Maroo’s Ayatan Treasure Hunt and 1 more.')).toBeTruthy();
+    expect(screen.getByText('Your routines')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Open routines' }));
+    expect(onopenroutines).toHaveBeenCalledOnce();
+  });
+
+  it('hides routines with their checkbox and never offers them on the hosted site', async () => {
+    render(CalendarView, { props: { market, now: NOW, surface: 'desktop', extra: resets } });
+    await fireEvent.click(screen.getByRole('checkbox', { name: 'My routines' }));
+    expect(screen.queryByRole('button', { name: /Weekly reset/ })).toBeNull();
+    cleanup();
+    render(CalendarView, { props: { market, now: NOW, surface: 'hosted' } });
+    expect(screen.queryByRole('checkbox', { name: 'My routines' })).toBeNull();
   });
 });

@@ -380,3 +380,39 @@ describe('editable daily and weekly lists', () => {
     expect(parsed.state.nextGoalId).toBe(10);
   });
 });
+
+describe('routine resets on the Calendar', () => {
+  const at = (iso: string) => Date.parse(iso);
+
+  it('puts each list with something open at its next reset', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    await routine.addMonthlyGoal('Farm Kuva');
+    const events = routine.calendarEvents(NOW);
+    expect(events.map(e => [e.text.kind === 'routine' && e.text.cadence, e.from])).toEqual([
+      ['daily', at('2026-09-15T00:00:00Z')],
+      ['weekly', at('2026-09-21T00:00:00Z')],
+      ['monthly', at('2026-10-01T00:00:00Z')],
+    ]);
+    expect(events[1]).toMatchObject({ kind: 'routine', source: 'routine', estimate: false, to: null,
+      text: { open: ['Maroo’s Ayatan Treasure Hunt', 'Archon Hunt', 'Review Nightwave acts'], total: 3 } });
+  });
+
+  it('leaves out what is done, and a list once it is all done', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    await routine.toggle('sortie', true);
+    const [daily] = routine.calendarEvents(NOW);
+    expect(daily.text).toMatchObject({ cadence: 'daily', total: 5 });
+    expect(daily.text.kind === 'routine' && daily.text.open).not.toContain('Complete the Sortie');
+    for (const task of routine.tasks) await routine.toggle(task.id, true);
+    expect(routine.calendarEvents(NOW).map(e => e.text.kind === 'routine' && e.text.cadence)).toEqual(['weekly']);
+  });
+
+  it('counts a finished day as open again once it has reset', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    for (const task of routine.tasks) await routine.toggle(task.id, true);
+    const tomorrow = at('2026-09-15T08:00:00Z');
+    const daily = routine.calendarEvents(tomorrow).find(e => e.text.kind === 'routine' && e.text.cadence === 'daily');
+    expect(daily).toMatchObject({ from: at('2026-09-16T00:00:00Z'), text: { total: 5 } });
+    expect(daily?.text.kind === 'routine' && daily.text.open).toHaveLength(5);
+  });
+});

@@ -8,7 +8,7 @@
 import type { Market, OwnedRecord, ResurgenceRotation } from '../contracts/data';
 import type { AnnouncementFeed } from '../contracts/generated/desktop';
 
-export type EventKind = 'official' | 'event' | 'baro' | 'resurgence' | 'vault' | 'notice' | 'deal';
+export type EventKind = 'official' | 'event' | 'baro' | 'resurgence' | 'vault' | 'notice' | 'routine' | 'deal';
 
 export interface CalendarEvent {
   /** Stable across refreshes of the same snapshot, so a selection survives. */
@@ -22,7 +22,7 @@ export interface CalendarEvent {
   text: CalendarText;
   estimate: boolean;
   /** Who published the date. */
-  source: 'worldstate' | 'estimate' | 'notice' | 'official';
+  source: 'worldstate' | 'estimate' | 'notice' | 'official' | 'routine';
   sourceUrl?: string;
   /** Owned slugs this event touches; absent when that cannot be known. */
   affects?: string[];
@@ -41,7 +41,9 @@ export type CalendarText =
   | { kind: 'deal'; item: string; discount: number | null; price: number | null }
   | { kind: 'event'; title: string; rewards: string[] }
   | { kind: 'official'; title: string; note: string | null; type: string }
-  | { kind: 'given'; title: string; detail: string };
+  | { kind: 'given'; title: string; detail: string }
+  /** A routine list's next reset and what is still open on it (desktop only). */
+  | { kind: 'routine'; cadence: 'daily' | 'weekly' | 'monthly'; open: string[]; total: number };
 
 const DAY = 86_400_000;
 const BARO_PERIOD = 14 * DAY;

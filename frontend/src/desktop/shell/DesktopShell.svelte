@@ -726,7 +726,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {/if}
     {#if visited.has('calendar')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'calendar')}>
-      <CalendarView market={inventory.market} owned={inventory.resolved.owned} now={displayNow} loadAnnouncements={notesServices.desktopAnnouncements} {store} surface="desktop" />
+      <CalendarView market={inventory.market} owned={inventory.resolved.owned} now={displayNow} loadAnnouncements={notesServices.desktopAnnouncements} {store} surface="desktop" extra={routines.calendarEvents(displayNow)} onopenroutines={() => filters.setView('routines')} />
     </div>
     {/if}
     {#if visited.has('meta')}

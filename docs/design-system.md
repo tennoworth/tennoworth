@@ -64,7 +64,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
 | Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted`, `--rail-edge` | Panel, card, FAQ and dialog title rails. Light: the ink bar. Dark: a raised `--panel-2` band under a 2px rag rule, because the ink fill is reserved for selected state |
 | Row interaction | `--row-selected`, `--row-selected-hover` | Restrained selected-table fills; hover preserves selection, focus adds an outline |
-| Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault` | Success, caution, error, ducat data, and vaulted status; not decoration |
+| Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault`, `--routine` | Success, caution, error, ducat data, vaulted status, and the player's own routines on the Calendar; not decoration |
 | Type | `--font-ui`, `--font-body`, `--font-mono` | Headings/labels, reading, numeric/technical data |
 | Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--text-statement`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
 | Rhythm | `--s1` through `--s6`, `--inset`, `--gutter`, `--stack`, `--cell` | Shared spacing and contextual insets |
@@ -586,7 +586,12 @@ The Calendar is a desktop view and a section of the hosted landing (`#calendar`,
 linked from the status strip). It shows dated things that move prices: official
 DE announcements entered in the dashboard (devstreams, updates, Prime Access),
 DE's in-game events, Baro visits, Prime Resurgence rotations, estimated vaulting,
-our curated notices and, when switched on, Darvo deals. A `.ui-segmented`
+our curated notices and, when switched on, Darvo deals. On desktop it also
+shows the player's routines: each list's next reset (daily, weekly, monthly
+goals, from the Routines view's own reset maths) with what is still open, and
+an Open routines action; a list with nothing open adds nothing, and the hosted
+site never offers the kind. A routine reset is always under a day away, so it
+never takes Next up from the market. A `.ui-segmented`
 choice offers three views of the same events, remembered per device:
 
 - **Board** (default) leads with Next up: the soonest confirmed moment and a
@@ -603,7 +608,8 @@ choice offers three views of the same events, remembered per device:
 Each kind has a 3px edge colour set once in `app.css` by `data-kind`. An
 estimated date is dashed and tagged "est.", never gets a countdown, and says
 there is no advice until DE confirms it. Every event names its source (DE
-worldState, Estimate or TennoWorth notice, with a link for notices). Times are
+worldState, Estimate, TennoWorth notice or Your routines, with a link for
+notices). Times are
 UTC, with the reader's own time beside single moments. On desktop an event
 says how many held items it touches. Filters are labelled checkboxes; Darvo
 starts hidden because it changes daily and never touches tradeable items.
