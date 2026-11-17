@@ -262,10 +262,10 @@
   .facts dt { color: var(--muted); }
   .facts dd { margin: 0; overflow-wrap: anywhere; }
   ul { margin: 0; padding-left: var(--s5); }
-  .alert { border-bottom: 1px var(--rule) var(--border); padding-bottom: var(--s2); }
+  .alert { border-bottom: 1px var(--rule) var(--rule-ink); padding-bottom: var(--s2); }
   .alert pre { margin: var(--s2) 0 0; font: var(--text-caption)/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  @media (max-width: 1050px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary > div:nth-child(3) { border-left: 0; } .summary > div:nth-child(n + 3) { border-top: 1px var(--rule) var(--border); } }
+  @media (max-width: 1050px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary > div:nth-child(3) { border-left: 0; } .summary > div:nth-child(n + 3) { border-top: 1px var(--rule) var(--rule-ink); } }
   @media (max-width: 860px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
-  @media (max-width: 480px) { .summary { grid-template-columns: minmax(0, 1fr); } .summary > div + div { border-left: 0; border-top: 1px var(--rule) var(--border); } }
+  @media (max-width: 480px) { .summary { grid-template-columns: minmax(0, 1fr); } .summary > div + div { border-left: 0; border-top: 1px var(--rule) var(--rule-ink); } }
 </style>

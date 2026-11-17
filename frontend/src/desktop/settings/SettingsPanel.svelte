@@ -22,6 +22,11 @@
   import { humanError } from '../../contracts/errors';
   import { formatLocale, i18n, t } from '../../i18n/i18n.svelte';
   import { LANGUAGES, type LanguageCode } from '../../i18n/languages';
+  import type { SettingsStore } from '../../contracts/state-store';
+  import SettingsSection from './SettingsSection.svelte';
+  import PriceRuleSetting from './PriceRuleSetting.svelte';
+  import type { PricingController } from './pricing.svelte';
+  import { SettingsSections, type SettingsTarget } from './sections.svelte';
 
   interface Props {
     /** The boot-time controller from src/lib/theme.ts. */
@@ -40,16 +45,21 @@
     wfmStatus?: DesktopWfmStatus | null;
     onwfmlogout?: () => Promise<void>;
     /** Opens the page at this section (the inbox's "Notification settings",
-     *  the price sharing prompt's "What is sent"). */
-    section?: 'notifications' | 'price-sharing' | 'account' | 'scan' | 'overlay' | 'app' | null;
+     *  the price sharing prompt's "What is sent"), unfolding it first. */
+    section?: SettingsTarget | null;
+    /** Keeps which sections are collapsed; without it they fold for this visit only. */
+    store?: SettingsStore;
+    /** Desktop only: the price rule My orders judges listings by. */
+    pricing?: PricingController;
     /** Whether Settings is on screen; it stays mounted while hidden. */
     active?: boolean;
     onsectionshown?: () => void;
     /** Desktop only: switches and saves the app language. */
     onlanguage?: (code: LanguageCode) => Promise<void>;
   }
-  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true, onlanguage }: Props = $props();
+  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true, onlanguage, store, pricing }: Props = $props();
   const display = useDisplay();
+  const sections = untrack(() => new SettingsSections(store));
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -76,7 +86,8 @@
   // Waits for the overlay settings: they load after mount and would push a
   // section scrolled to earlier down out of view.
   let sectionGeneration = 0;
-  async function showSection(loaded: Promise<unknown>, wanted: NonNullable<Props['section']>, generation: number) {
+  async function showSection(loaded: Promise<unknown>, wanted: SettingsTarget, generation: number) {
+    sections.reveal(wanted);
     await loaded;
     await tick();
     if (disposed || !active || section !== wanted || generation !== sectionGeneration) return;
@@ -282,31 +293,33 @@
 
 <div class="settings ui-reading">
   <!-- Most visits ask "is it running?", so the answers lead and link to the
-       controls that change them. -->
+       controls that change them. A link unfolds the section it points at. -->
   <div class="ui-summary-strip glance" aria-label={t('settings.currentState')}>
-    {#if autoScan}<a href="#settings-scan"><span class="k">{t('settings.autoScan')}</span><strong>{autoScanSummary()}</strong><span>{autoScanStatusText(autoScan.status)}</span></a>{/if}
-    {#if transport}<a href="#settings-overlay"><span class="k">{t('settings.relicOverlay')}</span><strong>{overlaySummary()}</strong><span>{overlay?.enabled ? lastRunText() : t('settings.notReading')}</span></a>{/if}
+    {#if autoScan}<a href="#settings-scan" onclick={() => sections.reveal('scan')}><span class="k">{t('settings.autoScan')}</span><strong>{autoScanSummary()}</strong><span>{autoScanStatusText(autoScan.status)}</span></a>{/if}
+    {#if transport}<a href="#settings-overlay" onclick={() => sections.reveal('overlay')}><span class="k">{t('settings.relicOverlay')}</span><strong>{overlaySummary()}</strong><span>{overlay?.enabled ? lastRunText() : t('settings.notReading')}</span></a>{/if}
     {#if presence?.status?.signedIn}
       <!-- What buyers see is the everyday question; the session is its second line. -->
-      <a href="#settings-account"><span class="k">warframe.market</span><strong class="with-mark"><PresenceMark kind={presenceMark(presence.status)} />{presenceWord(presence.status)}</strong><span>{t('settings.sessionUnlocked', { line: presenceLine(presence.status) })}</span></a>
+      <a href="#settings-account" onclick={() => sections.reveal('account')}><span class="k">warframe.market</span><strong class="with-mark"><PresenceMark kind={presenceMark(presence.status)} />{presenceWord(presence.status)}</strong><span>{t('settings.sessionUnlocked', { line: presenceLine(presence.status) })}</span></a>
     {:else}
-      <a href="#settings-account"><span class="k">warframe.market</span><strong class:ok={wfmStatus?.unlocked}>{sessionText()}</strong><span>{t('settings.encryptedLogin')}</span></a>
+      <a href="#settings-account" onclick={() => sections.reveal('account')}><span class="k">warframe.market</span><strong class:ok={wfmStatus?.unlocked}>{sessionText()}</strong><span>{t('settings.encryptedLogin')}</span></a>
     {/if}
   </div>
   <!-- Only sections the cards above do not already link to: each extra link
        was another Tab stop to the same place. -->
   <nav class="jump" aria-label={t('settings.sections')}>
     <span class="k">{t('settings.everyday')}</span>
-    {#if !transport}<a href="#settings-overlay">{t('settings.relicOverlay')}</a>{/if}
-    <a href="#settings-notifications">{t('settings.notifications')}</a>
+    {#if pricing}<a href="#settings-selling" onclick={() => sections.reveal('selling')}>{t('settings.selling')}</a>{/if}
+    {#if !transport}<a href="#settings-overlay" onclick={() => sections.reveal('overlay')}>{t('settings.relicOverlay')}</a>{/if}
+    <a href="#settings-notifications" onclick={() => sections.reveal('notifications')}>{t('settings.notifications')}</a>
     <span class="k">{t('settings.setOnce')}</span>
-    <a href="#settings-app">{t('settings.appLink')}</a>
+    <a href="#settings-appearance" onclick={() => sections.reveal('appearance')}>{t('settings.appearance')}</a>
+    <a href="#settings-updates" onclick={() => sections.reveal('updates')}>{t('settings.updates')}</a>
+    {#if transport}<a href="#settings-privacy" onclick={() => sections.reveal('privacy')}>{t('settings.privacy')}</a>{/if}
   </nav>
 
   <p class="tier">{t('settings.everyday')}</p>
   {#if autoScan}
-    <section class="wrap tw" id="settings-scan" tabindex="-1" aria-labelledby="set-auto-scan">
-      <div class="rail"><h3 id="set-auto-scan">{t('settings.autoScan')}</h3></div>
+    <SettingsSection id="scan" title={t('settings.autoScan')} {sections}>
       {#if autoScan.settings}
         <div class="ui-setting-row">
           <div class="ui-setting-copy"><strong>{t('settings.status')}</strong><p>{autoScanStatusText(autoScan.status)}</p></div>
@@ -326,13 +339,17 @@
         </div>
       {:else}<p class="exp inset">{t('settings.loadingScan')}</p>{/if}
       {#if autoScan.settingsError}<p class="error inset" role="alert">{autoScan.settingsError}</p>{/if}
-    </section>
+    </SettingsSection>
   {/if}
-  <section class="wrap tw" id="settings-overlay" tabindex="-1" aria-labelledby="set-relic-overlay">
-    <div class="rail">
-      <h3 id="set-relic-overlay">{t('settings.overlayTitle')}</h3>
+  {#if pricing}
+    <SettingsSection id="selling" title={t('settings.selling')} {sections}>
+      <PriceRuleSetting {pricing} />
+    </SettingsSection>
+  {/if}
+  <SettingsSection id="overlay" title={t('settings.overlayTitle')} {sections}>
+    {#snippet actions()}
       {#if overlay}<button class="btn xs" onclick={previewOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>{t('settings.previewOverlay')}</button><button class="btn xs" onclick={testOverlay} disabled={!overlay.enabled} use:pending={savingOverlay}>{t('settings.scanRewards')}</button>{/if}
-    </div>
+    {/snippet}
     {#if overlay}
       <div class="ui-setting-row">
         <div class="ui-setting-copy"><label for="overlay-enabled">{t('settings.recognition')}</label><p>{t('settings.recognitionHelp')}</p>{#if overlay.enabled && overlayStatus?.lastRun}<p>{lastRunText()}</p>{/if}</div>
@@ -376,12 +393,11 @@
       </details>
     {:else}<p class="exp inset">{t('settings.loadingOverlay')}</p>{/if}
     {#if overlayError}<p class="error inset" role="alert">{overlayError}</p>{/if}
-  </section>
-  <NotificationSettings />
+  </SettingsSection>
+  <NotificationSettings {sections} />
 
   <p class="tier">{t('settings.setOnce')}</p>
-  <section class="wrap tw" id="settings-account" tabindex="-1" aria-labelledby="set-wfm-account">
-    <div class="rail"><h3 id="set-wfm-account">{t('settings.account')}</h3></div>
+  <SettingsSection id="account" title={t('settings.account')} {sections}>
     <div class="ui-setting-row">
       <div class="ui-setting-copy"><strong>{t('settings.session')}</strong><p>{t(wfmStatus?.logged_in || wfmStatus?.unlocked ? 'settings.logoutHelp' : 'settings.manageLogin')}</p></div>
       <div class="ui-setting-control">
@@ -394,73 +410,71 @@
     </div>
     {#if logoutError}<p class="error inset" role="alert">{t('settings.logoutFailed', { error: logoutError })}</p>{/if}
     {#if presence}<PresenceSettings {presence} />{/if}
-  </section>
-  <!-- Each of these is one row, set once. As three panels they used to lead the page. -->
-  <section class="wrap tw" id="settings-app" tabindex="-1" aria-labelledby="set-app">
-    <div class="rail"><h3 id="set-app">{t('settings.thisApp')}</h3></div>
-    <div class="ui-section-group first">
-      <h4>{t('settings.appearance')}</h4>
-      {#if onlanguage}
-        <div class="ui-setting-row">
-          <div class="ui-setting-copy"><strong id="app-language-label">{t('settings.appLanguage')}</strong><p>{t('settings.appLanguageHelp')}</p>
-            {#if languageFailed}<p class="ui-notice" data-tone="bad" role="alert">{t('settings.appLanguageFailed')}</p>{/if}</div>
-          <div class="ui-setting-control"><Select id="app-language" labelledby="app-language-label" value={i18n.language as LanguageCode} options={appLanguageChoices} disabled={switchingLanguage} onchange={(code) => void switchLanguage(code)} /></div>
-        </div>
-      {/if}
+  </SettingsSection>
+  <SettingsSection id="appearance" title={t('settings.appearance')} {sections}>
+    {#if onlanguage}
       <div class="ui-setting-row">
-        <div class="ui-setting-copy"><strong>{t('settings.colourMode')}</strong><p>{t('settings.colourModeHelp')}</p></div>
-        <div class="ui-setting-control"><ThemeSwitcher {theme} label={t('settings.colourMode')} /></div>
+        <div class="ui-setting-copy"><strong id="app-language-label">{t('settings.appLanguage')}</strong><p>{t('settings.appLanguageHelp')}</p>
+          {#if languageFailed}<p class="ui-notice" data-tone="bad" role="alert">{t('settings.appLanguageFailed')}</p>{/if}</div>
+        <div class="ui-setting-control"><Select id="app-language" labelledby="app-language-label" value={i18n.language as LanguageCode} options={appLanguageChoices} disabled={switchingLanguage} onchange={(code) => void switchLanguage(code)} /></div>
       </div>
-      {#if appIcon}<AppIconSetting {appIcon} />{/if}
-      {#if display}
-        <div class="ui-setting-row">
-          <div class="ui-setting-copy"><strong>{t('settings.itemLists')}</strong><p>{t('settings.itemListsHelp')}</p><p class="credit">{t('settings.credit')}</p></div>
-          <div class="ui-setting-control">
-            <div class="ui-segmented" role="group" aria-label={t('settings.itemLists')} use:roving>
-              <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>{t('settings.visual')}</button>
-              <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>{t('settings.compact')}</button>
-            </div>
+    {/if}
+    <div class="ui-setting-row">
+      <div class="ui-setting-copy"><strong>{t('settings.colourMode')}</strong><p>{t('settings.colourModeHelp')}</p></div>
+      <div class="ui-setting-control"><ThemeSwitcher {theme} label={t('settings.colourMode')} /></div>
+    </div>
+    {#if appIcon}<AppIconSetting {appIcon} />{/if}
+    {#if display}
+      <div class="ui-setting-row">
+        <div class="ui-setting-copy"><strong>{t('settings.itemLists')}</strong><p>{t('settings.itemListsHelp')}</p><p class="credit">{t('settings.credit')}</p></div>
+        <div class="ui-setting-control">
+          <div class="ui-segmented" role="group" aria-label={t('settings.itemLists')} use:roving>
+            <button type="button" aria-pressed={display.value === 'visual'} onclick={() => display.set('visual')}>{t('settings.visual')}</button>
+            <button type="button" aria-pressed={display.value === 'compact'} onclick={() => display.set('compact')}>{t('settings.compact')}</button>
           </div>
         </div>
-      {/if}
-    </div>
-    <div class="ui-section-group">
-      <h4>{t('settings.updates')}</h4>
-      <div class="ui-setting-row">
-        <div class="ui-setting-copy"><strong>{t('settings.appUpdates')}</strong><p>{t('settings.appUpdatesHelp')}</p></div>
-        <div class="ui-setting-control">
-          {#if onwhatsnew}<button class="btn" onclick={onwhatsnew}>{t('settings.whatsNew')}</button>{/if}
-          {#if updates}
-            {@const info = updates.info}
-            {#if updates.installed}
-              <button class="btn primary" onclick={() => updates.restart()}>{t('settings.restart')}</button>
-            {:else if info?.available}
-              <button class="btn primary" onclick={() => updates.install()} use:pending={updates.installing || updates.checking}>{t(updates.installing ? 'settings.installing' : 'settings.install')}</button>
-            {:else}
-              <button class="btn" onclick={() => updates.check()} use:pending={updates.checking}>{t(updates.checking ? 'settings.checking' : 'settings.checkUpdates')}</button>
-            {/if}
-            <span class="status" role="status">
-              {#if updates.installed}{t('settings.update.installed', { version: info?.version ?? '' })}
-              {:else if updates.installing}{t('settings.update.installing', { version: info?.version ?? '' })}
-              {:else if info?.available}{t('settings.update.available', { version: info.version ?? '', current: info.current_version })}
-              {:else if info?.checked && info.support === 'supported'}{t('settings.update.current', { current: info.current_version })}
-              {:else if info?.checked && info.support === 'appimage_required'}{t('settings.update.appimage')}
-              {:else if info?.checked && info.support === 'disabled_test_build'}{t('settings.update.disabled')}{/if}
-            </span>
-          {/if}
-        </div>
       </div>
-      {#if updates?.linuxRequirement}
-        {@const requirement = updates.linuxRequirement}
-        <p class="warning manual" data-testid="settings-linux-requirement">{[t('settings.linuxRequirement', { required: requirement.glibc_required }), requirement.glibc_found ? t('settings.linuxRequirementFound', { found: requirement.glibc_found }) : ''].filter(Boolean).join(' ')}</p>
-      {/if}
-      {#if updates?.needsManualInstall}
-        <p class="warning manual" data-testid="settings-update-manual-install">{t('settings.manualBefore')}<a href={LATEST_RELEASE_URL} target="_blank" rel="noopener noreferrer">{t('settings.latestRelease')}</a>{t('settings.manualAfter')}</p>
-      {/if}
-      {#if updates?.error}<p class="error inset" role="alert">{updates.error}</p>{/if}
+    {/if}
+  </SettingsSection>
+  <SettingsSection id="updates" title={t('settings.updates')} {sections}>
+    <div class="ui-setting-row">
+      <div class="ui-setting-copy"><strong>{t('settings.appUpdates')}</strong><p>{t('settings.appUpdatesHelp')}</p></div>
+      <div class="ui-setting-control">
+        {#if onwhatsnew}<button class="btn" onclick={onwhatsnew}>{t('settings.whatsNew')}</button>{/if}
+        {#if updates}
+          {@const info = updates.info}
+          {#if updates.installed}
+            <button class="btn primary" onclick={() => updates.restart()}>{t('settings.restart')}</button>
+          {:else if info?.available}
+            <button class="btn primary" onclick={() => updates.install()} use:pending={updates.installing || updates.checking}>{t(updates.installing ? 'settings.installing' : 'settings.install')}</button>
+          {:else}
+            <button class="btn" onclick={() => updates.check()} use:pending={updates.checking}>{t(updates.checking ? 'settings.checking' : 'settings.checkUpdates')}</button>
+          {/if}
+          <span class="status" role="status">
+            {#if updates.installed}{t('settings.update.installed', { version: info?.version ?? '' })}
+            {:else if updates.installing}{t('settings.update.installing', { version: info?.version ?? '' })}
+            {:else if info?.available}{t('settings.update.available', { version: info.version ?? '', current: info.current_version })}
+            {:else if info?.checked && info.support === 'supported'}{t('settings.update.current', { current: info.current_version })}
+            {:else if info?.checked && info.support === 'appimage_required'}{t('settings.update.appimage')}
+            {:else if info?.checked && info.support === 'disabled_test_build'}{t('settings.update.disabled')}{/if}
+          </span>
+        {/if}
+      </div>
     </div>
-    {#if transport}<UsageSettings {transport} /><PriceReportSettings {transport} />{/if}
-  </section>
+    {#if updates?.linuxRequirement}
+      {@const requirement = updates.linuxRequirement}
+      <p class="warning manual" data-testid="settings-linux-requirement">{[t('settings.linuxRequirement', { required: requirement.glibc_required }), requirement.glibc_found ? t('settings.linuxRequirementFound', { found: requirement.glibc_found }) : ''].filter(Boolean).join(' ')}</p>
+    {/if}
+    {#if updates?.needsManualInstall}
+      <p class="warning manual" data-testid="settings-update-manual-install">{t('settings.manualBefore')}<a href={LATEST_RELEASE_URL} target="_blank" rel="noopener noreferrer">{t('settings.latestRelease')}</a>{t('settings.manualAfter')}</p>
+    {/if}
+    {#if updates?.error}<p class="error inset" role="alert">{updates.error}</p>{/if}
+  </SettingsSection>
+  {#if transport}
+    <SettingsSection id="privacy" title={t('settings.privacy')} {sections}>
+      <UsageSettings {transport} /><PriceReportSettings {transport} />
+    </SettingsSection>
+  {/if}
 </div>
 
 <style>
@@ -479,37 +493,38 @@
   .diagnostics { padding: 0 var(--inset) var(--s4); display: flex; flex-direction: column; gap: var(--s3); }
   .warning { margin: 0; padding-left: var(--s3); border-left: 2px solid var(--warn); color: var(--warn); font-size: var(--text-control); line-height: var(--leading-body); }
   .error { margin: 0; color: var(--bad); font-size: var(--text-control); }
-  .warning.manual { margin: var(--s3) var(--inset) 0; }
+  .warning.manual { margin: 0 var(--inset) var(--s4); }
 
   /* The strip holds one to three cells, depending on what this build offers. */
   .glance { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
   .glance > a { overflow-wrap: anywhere; display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3) var(--inset); min-width: 0; color: var(--fg); border-bottom: 0; }
-  .glance > a + a { border-left: 1px var(--rule) var(--border); }
+  .glance > a + a { border-left: 1px var(--rule) var(--rule-ink); }
   .glance > a:hover { background: var(--panel-2); }
   .glance strong { font: 500 var(--text-body)/var(--leading-control) var(--font-body); overflow-wrap: anywhere; }
   .glance strong.with-mark { display: flex; align-items: center; gap: var(--s2); }
   .glance > a > span:last-child { font-size: var(--text-caption); line-height: var(--leading-body); color: var(--muted); overflow-wrap: anywhere; }
   .jump { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--text-control); }
   .jump .k, .tier { font: 600 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-  .jump .k:not(:first-child) { margin-left: var(--s2); padding-left: var(--s4); border-left: 1px var(--rule) var(--border); }
+  .jump .k:not(:first-child) { margin-left: var(--s2); padding-left: var(--s4); border-left: 1px var(--rule) var(--rule-ink); }
   .tier { display: flex; align-items: center; gap: var(--s3); margin: var(--s2) 0 calc(var(--s2) * -1); }
-  .tier::after { content: ""; flex: 1; border-top: 1px var(--rule) var(--border); }
-  section[tabindex="-1"]:focus { outline: none; }
+  /* A solid, faded line: it separates groups of sections, so it reads as
+     structure rather than as another inner divider. A background, not a
+     border, so WebKit snaps it to whole pixels. */
+  .tier::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
 
   /* Detection and Reward cards side by side while each column can still hold
      a label beside its control; they stack with the rows below 760px. */
-  .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px var(--rule) var(--border); }
+  .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px var(--rule) var(--rule-ink); }
   .split > .ui-section-group { border-top: 0; min-width: 0; }
-  .split > .ui-section-group + .ui-section-group { border-left: 1px var(--rule) var(--border); }
+  .split > .ui-section-group + .ui-section-group { border-left: 1px var(--rule) var(--rule-ink); }
   .split .ui-setting-row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); }
   .split .shortcut { width: 9rem; }
-  .troubleshooting { border-top: 1px var(--rule) var(--border); }
+  .troubleshooting { border-top: 1px var(--rule) var(--rule-ink); }
   .troubleshooting > summary { min-height: var(--ctl-lg); padding: var(--s1) var(--inset); cursor: pointer; color: var(--muted); font-size: var(--text-control); }
   .troubleshooting > .ui-setting-row { padding-top: var(--s2); }
   .requirements { display: flex; flex-direction: column; gap: var(--s2); padding: 0 var(--inset) var(--s4); }
   .requirements p { margin: 0; }
-  .ui-section-group.first { border-top: 0; }
 
-  @media (max-width: 1050px) { .split { grid-template-columns: minmax(0, 1fr); } .split > .ui-section-group + .ui-section-group { border-left: 0; border-top: 1px var(--rule) var(--border); } }
+  @media (max-width: 1050px) { .split { grid-template-columns: minmax(0, 1fr); } .split > .ui-section-group + .ui-section-group { border-left: 0; border-top: 1px var(--rule) var(--rule-ink); } }
   @media (max-width: 760px) { .split .ui-setting-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } .jump .k:not(:first-child) { margin-left: 0; padding-left: 0; border-left: 0; } }
 </style>

@@ -46,7 +46,9 @@ export type SettingKey =
   | 'sidebar'
   | 'relic-crack-anyway'
   /** Desktop app language: a code from i18n/languages.ts. Missing means English. */
-  | 'app-language';
+  | 'app-language'
+  /** Desktop Settings sections the user collapsed (JSON list of section ids). */
+  | 'settings-collapsed';
 
 
 /** The scalar settings every build persists. */

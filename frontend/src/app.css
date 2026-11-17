@@ -26,15 +26,20 @@
 @font-face { font-family: "IBM Plex Sans Fallback"; src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Helvetica"), local("Arimo"); size-adjust: 102.7%; ascent-override: 99.8%; descent-override: 26.8%; line-gap-override: 0%; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-mono-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+/* Carets and markers the UI writes as text (▸ ▾ ▲ ▼ △ ◂ ◈). Plex Sans and
+   Mono have none, so each OS used to borrow them from a different system
+   font, at different sizes. IBM Plex Math draws them to match; it is first
+   in every stack, limited to these code points (see public/fonts/LICENSES.md). */
+@font-face { font-family: "IBM Plex Math"; font-style: normal; font-weight: 100 900; font-display: block; src: url(/fonts/ibm-plex-math-shapes.woff2) format("woff2"); unicode-range: U+25B2-25B4, U+25B6, U+25B8, U+25BA, U+25BC, U+25BE, U+25C0, U+25C2, U+25C8; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-mono-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 /* ---------- shared structural tokens (every look inherits, may override) --- */
 :root {
   /* Type. --font-ui carries headings / tracked labels; the fallback here
      points it at the body stack, and the look overrides it. */
-  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "IBM Plex Math", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-ui: var(--font-body);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: "IBM Plex Math", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --text-caption: 0.8125rem;
   --text-control: 0.875rem;
   --text-body: 0.9375rem;
@@ -62,6 +67,9 @@
   /* Inner-divider style: `1px var(--rule) var(--hairline)`. Outer container
      edges stay solid in every look. */
   --rule: solid;
+  /* Ink for an inner divider that would otherwise take --border. The paper
+     look fades it to --hairline so every divider reads as one quiet line. */
+  --rule-ink: var(--border);
   /* Popover / toast lift. Paper looks set it to none: depth = ink vs paper. */
   --shadow-pop: 0 12px 28px rgba(0, 0, 0, 0.45);
   /* Button + table-header hover fill, nav-item hover wash. Derived so a look
@@ -121,7 +129,7 @@ html[data-look="yorha"] {
   --panel: #DBD7BF;     /* panel paper, half-step lighter */
   --panel-2: #CBC6AC;   /* table header, inactive segments, hover, popovers */
   --border: #706B57;    /* container outlines - 3.6:1 on panel */
-  --hairline: #B5B097;  /* inner dividers - always dotted here */
+  --hairline: #B5B097;  /* inner dividers - a solid, faded line */
   --fg: #34301F;        /* grey-brown ink - 9.1:1 on panel, 8.1:1 on bg, 7.7:1 on panel-2, 1.7:1 above muted */
   --muted: #57523F;     /* 5.4:1 on panel, 4.8:1 on bg, 4.6:1 on panel-2 */
   --faint: #8B8670;     /* decorative only */
@@ -135,6 +143,9 @@ html[data-look="yorha"] {
   /* Vaulted is market fact, not status: a cool slate so it cannot read as
      good/warn/bad. 6.1:1 on panel, 5.1:1 on panel-2. */
   --vault: #3F4A66;
+  /* Your routines on the Calendar: a plum no status uses. 5.9:1 on panel,
+     5.0:1 on panel-2. */
+  --routine: #663F62;
   --ink-bar: #4B4739;   /* the one filled surface */
   --on-ink: #DBD7BF;
   --on-ink-muted: #CBC6AC; /* 5.4:1 on ink-bar */
@@ -148,11 +159,12 @@ html[data-look="yorha"] {
   --grid: rgba(70, 66, 47, 0.07);
   --hatch: rgba(70, 66, 47, 0.035);
   --scrim: rgba(70, 66, 47, 0.45);
-  --font-ui: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", "IBM Plex Sans Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-ui: "IBM Plex Math", "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Math", "IBM Plex Sans", "IBM Plex Sans Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Math", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-lg: 0; --radius-panel: 0; --radius-ctl: 0; --radius-input: 0; --radius-tag: 0; --radius-pill: 0;
-  --rule: dotted;
+  --rule: solid;
+  --rule-ink: var(--hairline);
   /* Windows cast a flat, offset ink shadow: depth without blur or glow. */
   --shadow-offset: rgba(52, 48, 31, 0.16);
   --shadow-pop: 6px 6px 0 var(--shadow-offset);
@@ -174,7 +186,7 @@ html[data-look="yorha"][data-mode="dark"] {
   --panel: #29231B;     /* panel, one step up */
   --panel-2: #342D23;   /* table header, inactive segments, hover, popovers */
   --border: #87775B;    /* container outlines - 3.6:1 on panel */
-  --hairline: #3D3527;  /* inner dividers - always dotted here */
+  --hairline: #3D3527;  /* inner dividers - a solid, faded line */
   --fg: #D3C7A6;        /* rag ink - 9.3:1 on panel, 10.4:1 on bg */
   --muted: #A3977A;     /* 5.4:1 on panel */
   --faint: #8A7F66;     /* decorative only - 3.9:1 on panel */
@@ -184,6 +196,7 @@ html[data-look="yorha"][data-mode="dark"] {
   --bad: #F18C85;       /* 6.5:1 on panel */
   --ducat: #CBA05A;
   --vault: #A9B2CE;     /* 7.4:1 on panel, 6.4:1 on panel-2 */
+  --routine: #C49ABD;   /* 6.4:1 on panel, 5.6:1 on panel-2 */
   --ink-bar: #C0B187;   /* the bar is now rag */
   --on-ink: #1E1913;
   --on-ink-muted: #342D23;
@@ -715,7 +728,7 @@ table.tw tr.busy td { color: var(--muted); }
 .view-header { display: flex; align-items: center; gap: var(--s2) var(--s4); min-height: var(--rail); flex-wrap: wrap; margin-bottom: var(--s2); }
 .view-header > .lede { flex: 0 1 auto; min-width: 0; max-width: 58ch; margin: 0; color: var(--muted); }
 .view-header > .vh-end { margin-left: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-width: 0; }
-/* Comparable totals beside a view title: one outlined strip, dotted dividers. */
+/* Comparable totals beside a view title: one outlined strip, faded dividers. */
 .ui-totals { display: flex; flex-wrap: wrap; align-items: stretch; min-height: var(--rail); min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-ctl); font-size: var(--text-caption); }
 .ui-totals > .cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: var(--rail); border-left: 1px var(--rule) var(--hairline); }
 .ui-totals > .cell:first-child { border-left: none; }
@@ -740,20 +753,20 @@ table.tw tr.busy td { color: var(--muted); }
 .ui-setting-control > input:not([type="checkbox"]) { min-width: 0; max-width: 100%; }
 .ui-setting-control > input[type="range"] { flex: 1; }
 .ui-setting-check { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-lg); cursor: pointer; }
-.ui-section-group { padding: var(--s4) 0; border-top: 1px var(--rule) var(--border); }
+.ui-section-group { padding: var(--s4) 0; border-top: 1px var(--rule) var(--rule-ink); }
 .ui-section-group > h4 { margin: 0; padding: 0 var(--inset) var(--s3); font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .ui-section-group > .ui-setting-row:first-of-type { padding-top: 0; }
 .ui-section-group > .ui-setting-row:last-of-type { padding-bottom: 0; }
-.ui-panel-footer { padding: var(--s4) var(--inset); border-top: 1px var(--rule) var(--border); background: var(--panel-2); }
+.ui-panel-footer { padding: var(--s4) var(--inset); border-top: 1px var(--rule) var(--rule-ink); background: var(--panel-2); }
 .ui-summary-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); background: var(--panel); }
 .ui-summary-strip > div { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s4) var(--inset); min-width: 0; }
-.ui-summary-strip > div + div { border-left: 1px var(--rule) var(--border); }
+.ui-summary-strip > div + div { border-left: 1px var(--rule) var(--rule-ink); }
 .ui-summary-strip strong { font: 600 var(--text-metric)/var(--leading-body) var(--font-mono); }
 .ui-summary-strip .k { color: var(--muted); font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .1em; text-transform: uppercase; }
 @media (max-width: 1050px) { .ui-setting-row { grid-template-columns: minmax(0, 1fr) minmax(0, 15rem); gap: var(--s4); } }
 @media (max-width: 760px) { .ui-setting-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } }
-@media (max-width: 480px) { .ui-summary-strip { grid-template-columns: minmax(0, 1fr); } .ui-summary-strip > div + div { border-left: 0; border-top: 1px var(--rule) var(--border); } }
-.lede-dot { display: inline-flex; align-items: center; justify-content: center; width: var(--ctl-xs); height: var(--ctl-xs); font-size: var(--text-caption); line-height: 1; color: var(--muted); border: 1px var(--rule) var(--border); cursor: help; }
+@media (max-width: 480px) { .ui-summary-strip { grid-template-columns: minmax(0, 1fr); } .ui-summary-strip > div + div { border-left: 0; border-top: 1px var(--rule) var(--rule-ink); } }
+.lede-dot { display: inline-flex; align-items: center; justify-content: center; width: var(--ctl-xs); height: var(--ctl-xs); font-size: var(--text-caption); line-height: 1; color: var(--muted); border: 1px var(--rule) var(--rule-ink); cursor: help; }
 .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
 .general-banner { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
 .general-banner .gb-body { min-width: 0; flex: 1 1 20rem; overflow-wrap: anywhere; }
@@ -806,7 +819,7 @@ table.tw tr.busy td { color: var(--muted); }
 .ui-select-list > li[data-active]::before { background: var(--fg); }
 .ui-select-list > li[aria-selected="true"] { background: var(--ink-bar); color: var(--on-ink); font-weight: 600; }
 .ui-select-list > li[aria-selected="true"][data-active]::before { background: var(--on-ink); }
-.ui-notice { margin: 0; padding: var(--s2) var(--s3); border: 1px var(--rule) var(--border); border-left: 3px solid var(--border); color: var(--fg); background: var(--panel); overflow-wrap: anywhere; }
+.ui-notice { margin: 0; padding: var(--s2) var(--s3); border: 1px var(--rule) var(--rule-ink); border-left: 3px solid var(--border); color: var(--fg); background: var(--panel); overflow-wrap: anywhere; }
 .ui-notice[data-tone="good"] { border-left-color: var(--good); }
 .ui-notice[data-tone="warn"] { border-left-color: var(--warn); }
 .ui-notice[data-tone="bad"] { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, var(--panel)); }
@@ -814,7 +827,7 @@ table.tw tr.busy td { color: var(--muted); }
 /* A notice that is one line of a panel keeps the panel's box and takes only
    the semantic edge; inset so the text does not shift. */
 .wrap.tw > .line[data-tone="warn"] { box-shadow: inset 3px 0 0 var(--warn); }
-/* The one single-choice control: joined buttons, dotted inner rules, and the
+/* The one single-choice control: joined buttons, faded inner rules, and the
    selected option is the ink inversion - the same "selected" as the active nav
    item. Works for aria-pressed toggles, radio groups and tab lists alike.
    Counts inside an option (.n) are mono. The group wraps rather than scrolls. */
@@ -824,7 +837,7 @@ table.tw tr.busy td { color: var(--muted); }
   min-height: var(--ctl); padding: 0 var(--s3);
   font: inherit; font-size: var(--text-caption); line-height: var(--leading-control); white-space: nowrap;
   color: var(--fg); background: transparent; text-decoration: none;
-  border: 0; border-left: 1px var(--rule) var(--border); border-radius: 0;
+  border: 0; border-left: 1px var(--rule) var(--rule-ink); border-radius: 0;
   cursor: pointer;
 }
 .ui-segmented > :first-child { border-left: 0; }
@@ -864,22 +877,22 @@ html[data-look="yorha"]:not(.relic-overlay-surface, .game-notice-surface) body::
 html[data-look="yorha"] body {
   font-size: var(--text-body);
 }
-html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }
+html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--faint); }
 /* In tables every item name is a link, so a standing underline turns dense
    rows into a wall of rules. The rule appears with the row's hover or focus. */
 html[data-look="yorha"] :is(td, th) a:not(.btn) { border-bottom-color: transparent; }
 html[data-look="yorha"] tr:is(:hover, :focus-within) :is(td, th) a:not(.btn) { border-bottom-color: var(--border); }
 html[data-look="yorha"] a.btn { border-bottom-style: solid; }
-/* Row rules are a 1px-on, 1px-off background tile rather than a dotted
-   border: per-cell dotted borders cost Meta Drift ~20x the raster time of
-   the default look on every scroll. :where() keeps the base rule's weight so
+/* Row rules are a 1px background tile rather than a cell border: per-cell
+   borders in this look cost Meta Drift ~20x the raster time of the default
+   look on every scroll, and a background is snapped to whole pixels. :where() keeps the base rule's weight so
    component borders still win; cell fills therefore set background-color,
    never the background shorthand, or the row loses its rule. */
 :where(html[data-look="yorha"]) table.tw td {
   border-top-style: solid;
   border-top-color: transparent;
-  background-image: linear-gradient(to right, var(--hairline) 1px, transparent 1px);
-  background-size: 2px 1px;
+  background-image: linear-gradient(var(--hairline), var(--hairline));
+  background-size: 100% 1px;
   background-repeat: repeat-x;
   background-origin: border-box;
 }
@@ -929,7 +942,7 @@ html[data-look="yorha"] .wrap.tw > .rail .rail-toggle:hover { color: var(--rail-
 html[data-look="yorha"] .wrap.tw > .rail .btn:not(.link) { color: var(--rail-fg); background: transparent; border-color: var(--rail-muted); }
 html[data-look="yorha"] .wrap.tw > .rail .btn:not(.link):hover:not(:disabled) { background: color-mix(in srgb, var(--rail-fg) 12%, transparent); color: var(--rail-fg); }
 html[data-look="yorha"] .wrap.tw > .rail .btn:not(.link):disabled { color: var(--rail-muted); background: transparent; border-color: var(--rail-muted); }
-html[data-look="yorha"] .wrap.tw > .bar { border-bottom-style: dotted; }
+html[data-look="yorha"] .wrap.tw > .bar { border-bottom-color: var(--hairline); }
 html[data-look="yorha"] .wrap.tw .lbl { font-weight: 500; letter-spacing: 0.14em; }
 /* Card heads: the picks strip's head bar and any card whose first child is
    its h3 (market browser cards) become full-width ink title bars. */
@@ -938,7 +951,7 @@ html[data-look="yorha"] .picks-head h3 { color: inherit; font: 500 var(--text-ca
 html[data-look="yorha"] .picks-head .muted, html[data-look="yorha"] .picks-head .rail-toggle, html[data-look="yorha"] .picks-head .link { color: var(--rail-muted); }
 html[data-look="yorha"] .picks-head .rail-toggle:hover, html[data-look="yorha"] .picks-head .link:hover { color: var(--rail-fg); }
 html[data-look="yorha"] .bar .lbl { font-weight: 500; letter-spacing: 0.14em; }
-html[data-look="yorha"] .bar.raised { border-bottom-style: dotted; }
+html[data-look="yorha"] .bar.raised { border-bottom-color: var(--hairline); }
 html[data-look="yorha"] .card > h3:first-child {
   margin: -14px -16px 0; padding: 5px 12px;
   background: var(--rail-bg); color: var(--rail-fg); box-shadow: inset 0 2px 0 var(--rail-edge);
@@ -960,12 +973,12 @@ html[data-look="yorha"] .faq > h2 :focus-visible,
 html[data-look="yorha"] .modal > header :focus-visible,
 html[data-look="yorha"] dialog.cryptobox header :focus-visible { outline-color: var(--rail-fg); }
 html[data-look="yorha"] th.active { color: var(--fg); }
-html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
+html[data-look="yorha"] .picks-head { border-bottom-color: var(--hairline); }
 /* Freshness dot = 7px outlined square, filled by state. */
 html[data-look="yorha"] .dot { border-radius: 0; }
 html[data-look="yorha"] .lede-dot { border-radius: 0; }
 /* Status strip: the deadpan NieR status line - tracked caps labels in the
-   label face, mono only for the values (ages, counts), dotted cell rules; the
+   label face, mono only for the values (ages, counts), faded cell rules; the
    outer bottom edge stays solid. Names and dates are prose. */
 html[data-look="yorha"] .statusbar {
   font-family: var(--font-ui); font-size: var(--text-caption); color: var(--muted); background: var(--panel);
@@ -980,7 +993,7 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 
 /* Unread is carried by the raised surface and the explicit Unread label, not
    an edge: a delivery-failure notice inside the entry already owns the edge. */
-.notification-entry { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--inset); border-bottom: 1px var(--rule) var(--border); overflow-wrap: anywhere; }
+.notification-entry { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--inset); border-bottom: 1px var(--rule) var(--rule-ink); overflow-wrap: anywhere; }
 .notification-entry.unread { background: var(--panel-2); }
 
 /* Calendar event kinds: the 3px edge carries the kind, dashed when the date is an estimate. */
@@ -990,6 +1003,7 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 [data-kind="resurgence"] { --k: var(--fg); }
 [data-kind="vault"] { --k: var(--vault); }
 [data-kind="notice"] { --k: var(--good); }
+[data-kind="routine"] { --k: var(--routine); }
 [data-kind="deal"] { --k: var(--muted); }
 
 /* Focus-only links let a keyboard cross long navigation and market tables. */
@@ -1014,7 +1028,7 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 .public-prose > p, .public-prose > ol, .public-prose > dl { max-width: 64rem; line-height: var(--leading-body); }
 .public-prose h1 { margin-block: 0; font-size: var(--text-heading); }
 .public-prose h2 { margin-block: var(--s3) 0; padding: var(--s2) var(--s3); color: var(--rail-fg); background-color: var(--rail-bg); border-top: 2px solid var(--rail-edge); font-size: var(--text-section); }
-.public-brand, .public-footer { padding: var(--inset); border-bottom: 1px dotted var(--border); }
+.public-brand, .public-footer { padding: var(--inset); border-bottom: 1px var(--rule) var(--rule-ink); }
 .public-table { overflow-x: auto; max-width: 100%; }
 .public-table table { min-width: 34rem; width: 100%; }
 .public-table th, .public-table td { padding: var(--cell); text-align: right; }
@@ -1040,7 +1054,7 @@ html[data-look="yorha"] :is(.wrap.tw > .rail :is(h2, h3), .picks-head h3, .view-
 }
 /* The row cursor: a square in the first cell's gutter while a row is hovered
    or holds focus. Drawn as a background layer so no cell changes position;
-   table.tw keeps its dotted rule as the second layer. */
+   table.tw keeps its row rule as the second layer. */
 html[data-look="yorha"] .wrap tbody tr:is(:hover, :focus-within) > td:first-child {
   background-image: linear-gradient(var(--fg), var(--fg));
   background-size: 6px 6px; background-repeat: no-repeat; background-position: 4px 50%; background-origin: border-box;
@@ -1079,7 +1093,7 @@ html[data-look="yorha"][data-mode="dark"] .item-art img { filter: grayscale(1) s
   display: inline-flex; align-items: center; padding: 0; border: 0; background: transparent; color: inherit;
   font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
 }
-.key-legend > button:hover { color: var(--fg); background: transparent; text-decoration: underline dotted; }
+.key-legend > button:hover { color: var(--fg); background: transparent; text-decoration: underline; }
 .key-legend kbd {
   margin-right: 0.5em; padding: 0.1em 0.4em;
   font: 600 var(--text-caption)/1.2 var(--font-mono); letter-spacing: 0; text-transform: none;

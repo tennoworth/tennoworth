@@ -117,7 +117,7 @@
     </span>
     <span class="grow"></span>
     {#if controller.healthSummary.overpriced + controller.healthSummary.underbid > 1}
-      <button class="btn" onclick={controller.fixAllPrices} disabled={unconfirmed} use:waiting={controller.fixAllBusy} title={t('orders.fixAllTitle')}>{t('orders.fixAll')}</button>
+      <button class="btn" onclick={controller.fixAllPrices} disabled={unconfirmed} use:waiting={controller.fixAllBusy} title={controller.fixAllTitle}>{t('orders.fixAll')}</button>
     {/if}
   </div>
   {#if controller.health.length > 0}
@@ -232,7 +232,7 @@
                     <span class="issue" class:warn={q.h.kind === 'overpriced' || q.h.kind === 'underbid'} class:bad={q.h.kind === 'not-owned'} title={controller.healthWhy(q.h)}>
                       {#if q.h.kind === 'overpriced' || q.h.kind === 'underbid'}
                         <span class="to">{q.h.current}p → <b>{q.h.suggested}p</b></span>
-                        {t(q.h.kind === 'overpriced' ? 'orders.health.overpriced' : 'orders.health.underbid')}
+                        {q.h.kind === 'overpriced' ? controller.overpricedText : t('orders.health.underbid')}
                       {:else if q.h.kind === 'excess-qty'}
                         <span class="to">×{q.h.current} → <b>×{q.h.suggested}</b></span>
                         {t('orders.health.excess')}
@@ -339,7 +339,7 @@
   .visbtn { appearance: none; background: transparent; border: none; padding: 0; height: var(--ctl-xs); cursor: pointer; }
   .visbtn:hover:not(:disabled) { background: transparent; }
   .visbtn:hover:not(:disabled) .vis { background: var(--panel-2); }
-  button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline dotted; cursor: pointer; font: inherit; }
+  button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
   .order-filters { gap: var(--s2) var(--s3); padding-block: var(--s2); }
   .order-search { flex: 0 1 15rem; min-width: 10rem; }
   .orders td:last-child .btn { white-space: nowrap; }

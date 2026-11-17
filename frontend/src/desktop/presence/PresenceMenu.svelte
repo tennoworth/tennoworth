@@ -191,6 +191,6 @@
   .note.bad { border-left-color: var(--bad); }
   .note .btn { margin-top: var(--s2); }
   .more { padding: var(--s2) var(--s3) var(--s1); text-align: left; font: inherit; font-size: var(--text-caption); color: var(--fg); background: transparent; border: 0; cursor: pointer; }
-  .more:hover { text-decoration: underline dotted; }
+  .more:hover { text-decoration: underline; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>

@@ -235,3 +235,40 @@ describe('ListingReviewModal', () => {
     });
   });
 });
+
+describe('ListingReviewModal under a price rule', () => {
+  afterEach(removeTauri);
+  const market = { median_now: 18, median_90d: 18, avg: 20, low5_avg: 16, low20_avg: 17, vol: 30 };
+  const ruled = [{ ...rows[0], market }];
+  const undercut = { basis: 'lowest-ask' as const, offset: -1 };
+
+  it('prefills from the rule, but leaves a Trade Session row at its plan price', () => {
+    openModal({ rows: ruled, priceRule: undercut });
+    expect(screen.getByDisplayValue('17')).toBeTruthy();
+    expect(screen.getByText(/Your price rule \(Lowest ask −1p\) is applied/)).toBeTruthy();
+    cleanup();
+    openModal({ rows: [{ ...ruled[0], session: { snapshot_id: 1, utc_day: 20774, budget: 3 } }], priceRule: undercut });
+    expect(screen.getByDisplayValue('18')).toBeTruthy();
+  });
+
+  it('prices a live click from the believable ask, skipping a troll undercut', async () => {
+    installTauri(vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => cmd === 'wfm_access_status' ? null
+      : args.queries.map((q) => ({ slug: q.slug, rank: q.rank, subtype: q.subtype, sells: [2, 14, 15], buys: [9], low_sell: 2, top_buy: 9, error: null }))), undefined);
+    openModal({ rows: ruled, priceRule: undercut });
+    await fireEvent.click(screen.getByRole('button', { name: /Check live prices/ }));
+    const ask = await screen.findByRole('button', { name: '14p' });
+    expect(ask.getAttribute('title')).toBe('Online asks: 2, 14, 15p - click to price at 13p The 2p ask was skipped: it sits under a third of the median.');
+    await fireEvent.click(ask);
+    expect(screen.getByDisplayValue('13')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Price by my rule' }).getAttribute('title')).toContain('Lowest ask −1p');
+  });
+
+  it('matches the believable ask without a rule of your own', async () => {
+    installTauri(vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => cmd === 'wfm_access_status' ? null
+      : args.queries.map((q) => ({ slug: q.slug, rank: q.rank, subtype: q.subtype, sells: [2, 14, 15], buys: [], low_sell: 2, top_buy: null, error: null }))), undefined);
+    openModal({ rows: ruled });
+    await fireEvent.click(screen.getByRole('button', { name: /Check live prices/ }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Match lowest asks' }));
+    expect(screen.getByDisplayValue('14')).toBeTruthy();
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PRICE_RULE, MAX_PRICE_OFFSET, MIN_PRICE_OFFSET, parsePriceRule, priceFromRule } from './price-rule';
+import { DEFAULT_PRICE_RULE, MAX_PRICE_OFFSET, MIN_PRICE_OFFSET, parsePriceRule, priceFromRule, reasonableLowestAsk, snapshotEvidence } from './price-rule';
 
 describe('priceFromRule', () => {
   const evidence = { lowestAsk: 20, low5Avg: 22.4, low20Avg: 27, avg48h: 25.2, median90d: 30 };
@@ -41,4 +41,35 @@ describe('parsePriceRule', () => {
     'falls back to matching the lowest ask for %j',
     raw => expect(parsePriceRule(raw)).toEqual(DEFAULT_PRICE_RULE),
   );
+});
+
+describe('reasonableLowestAsk', () => {
+  it('skips a troll undercut for the next believable ask', () => {
+    expect(reasonableLowestAsk([2, 14, 15], 18)).toEqual({ ask: 14, ignored: 2 });
+    expect(reasonableLowestAsk([1, 2, 14], 18)).toEqual({ ask: 14, ignored: 1 });
+  });
+
+  it('keeps the cheapest ask when it is believable, at the third exactly too', () => {
+    expect(reasonableLowestAsk([12, 14], 18)).toEqual({ ask: 12, ignored: null });
+    expect(reasonableLowestAsk([6, 14], 18)).toEqual({ ask: 6, ignored: null });
+  });
+
+  it('treats a book that is low all the way up as a move, not a troll', () => {
+    expect(reasonableLowestAsk([3, 4, 5], 30)).toEqual({ ask: 3, ignored: null });
+  });
+
+  it('judges nothing without a median or without asks', () => {
+    expect(reasonableLowestAsk([1, 14], null)).toEqual({ ask: 1, ignored: null });
+    expect(reasonableLowestAsk([1, 14], 0)).toEqual({ ask: 1, ignored: null });
+    expect(reasonableLowestAsk([], 18)).toEqual({ ask: null, ignored: null });
+  });
+});
+
+describe('snapshotEvidence', () => {
+  it('reads the rule bases and judges outliers against today\'s median, else the baseline', () => {
+    const entry = { low5_avg: 16, low20_avg: 17, avg: 20, median_now: 18, median_90d: 21 } as Parameters<typeof snapshotEvidence>[0];
+    expect(snapshotEvidence(entry)).toEqual({ low5Avg: 16, low20Avg: 17, avg48h: 20, median90d: 21, median: 18 });
+    expect(snapshotEvidence({ ...entry!, median_now: 0 }).median).toBe(21);
+    expect(snapshotEvidence(null)).toEqual({ median: null });
+  });
 });

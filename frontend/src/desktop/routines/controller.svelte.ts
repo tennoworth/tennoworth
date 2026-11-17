@@ -1,4 +1,5 @@
 import type { SettingsStore } from '../../contracts/state-store';
+import type { CalendarEvent } from '../../domain/calendar-events';
 import { t } from '../../i18n/i18n.svelte';
 
 export type RoutineCadence = 'daily' | 'weekly' | 'monthly';
@@ -74,8 +75,9 @@ export function routinePeriodId(cadence: RoutineCadence, timestamp: number): str
   return monday.toISOString().slice(0, 10);
 }
 
-export function nextRoutinePeriod(cadence: Exclude<RoutineCadence, 'monthly'>, timestamp: number): number {
+export function nextRoutinePeriod(cadence: RoutineCadence, timestamp: number): number {
   const date = new Date(timestamp);
+  if (cadence === 'monthly') return Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
   if (cadence === 'daily') return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 1);
   const daysToMonday = ((8 - date.getUTCDay()) % 7) || 7;
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + daysToMonday);
@@ -272,6 +274,30 @@ export class RoutineController {
     if (!missing.length) return Promise.resolve();
     this.state.lists[this.cadence] = [...list, ...missing];
     return this.#save();
+  }
+
+  /** Each list's next reset with what is still open on it, for the Calendar.
+   *  A list with nothing open adds nothing, and completions from a period that
+   *  has already reset no longer count. */
+  calendarEvents(now: number): CalendarEvent[] {
+    const events: CalendarEvent[] = [];
+    for (const cadence of ['daily', 'weekly', 'monthly'] as const) {
+      const items = cadence === 'monthly'
+        ? this.state.monthlyGoals.map(goal => ({ id: goal.id, title: goal.text }))
+        : this.state.lists[cadence].map(id => this.#task(id));
+      const period = this.state.periods[cadence];
+      const current = routinePeriodId(cadence, now);
+      const done = new Set(period.id === current ? period.completed : []);
+      const open = items.filter(item => !done.has(item.id)).map(item => item.title);
+      if (!open.length) continue;
+      events.push({
+        id: `routine-${cadence}-${current}`, kind: 'routine',
+        from: nextRoutinePeriod(cadence, now), to: null,
+        text: { kind: 'routine', cadence, open, total: items.length },
+        estimate: false, source: 'routine',
+      });
+    }
+    return events;
   }
 
   get goalLimitReached(): boolean {

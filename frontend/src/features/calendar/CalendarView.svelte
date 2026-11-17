@@ -2,8 +2,8 @@
   import { roving } from '../../ui/keyboard-actions';
   // The dated things that move Warframe prices, in three views of one list:
   // Board for "what's next", Month for the familiar grid, Lanes for overlaps.
-  import { onMount, untrack } from 'svelte';
-  import { calendarEvents, type EventKind } from '../../domain/calendar-events';
+  import { onMount, setContext, untrack } from 'svelte';
+  import { calendarEvents, type CalendarEvent, type EventKind } from '../../domain/calendar-events';
   import { parseAnnouncements } from '../../domain/announcements';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import type { AnnouncementFeed } from '../../contracts/generated/desktop';
@@ -12,10 +12,10 @@
   import CalendarMonth from './CalendarMonth.svelte';
   import CalendarLanes from './CalendarLanes.svelte';
   import { t } from '../../i18n/i18n.svelte';
-  import { HIDDEN_BY_DEFAULT, KINDS, kindLabel } from './kinds';
+  import { HIDDEN_BY_DEFAULT, KINDS, OPEN_ROUTINES, kindLabel, kindsFor } from './kinds';
 
   type View = 'board' | 'month' | 'lanes';
-  let { market, owned = null, now, loadAnnouncements, store, surface, heading = 'h2' }: {
+  let { market, owned = null, now, loadAnnouncements, store, surface, heading = 'h2', extra = [], onopenroutines }: {
     market: Market | null;
     owned?: Map<string, OwnedRecord> | null;
     now: number;
@@ -23,7 +23,11 @@
     store?: SettingsStore;
     surface: 'desktop' | 'hosted';
     heading?: 'h2' | 'h3';
+    /** Events this surface adds on its own: the desktop's routine resets. */
+    extra?: CalendarEvent[];
+    onopenroutines?: () => void;
   } = $props();
+  setContext(OPEN_ROUTINES, () => onopenroutines?.());
 
   const VIEWS: View[] = ['board', 'month', 'lanes'];
   function restore(): { view: View; hidden: EventKind[] } {
@@ -56,9 +60,10 @@
     return () => { active = false; };
   });
 
-  const all = $derived(calendarEvents(market, feed, now, owned));
+  const all = $derived([...calendarEvents(market, feed, now, owned), ...extra].sort((a, b) => a.from - b.from || a.id.localeCompare(b.id)));
+  const kinds = $derived(kindsFor(surface));
   const events = $derived(all.filter(e => !hidden.includes(e.kind)));
-  const kindsShown = $derived(KINDS.filter(k => !hidden.includes(k)));
+  const kindsShown = $derived(kinds.filter(k => !hidden.includes(k)));
 </script>
 
 <section class="calendar" aria-labelledby="calendar-title">
@@ -74,7 +79,7 @@
 
   <fieldset class="kinds">
     <legend class="sr-only">{t('cal.show')}</legend>
-    {#each KINDS as kind (kind)}
+    {#each kinds as kind (kind)}
       <label class="kind" data-kind={kind}><input type="checkbox" checked={!hidden.includes(kind)} onchange={(e) => toggle(kind, e.currentTarget.checked)} /><span class="swatch" aria-hidden="true"></span>{kindLabel(kind)}</label>
     {/each}
     <span class="hint">{t('cal.dashed')}</span>

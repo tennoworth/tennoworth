@@ -76,8 +76,8 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
 
   const APP_COMMIT = __APP_COMMIT__;
   import type { StateStore } from '../../contracts/state-store';
-  import { parseHealthPrefs } from '../../domain/listing-health';
-  import { parsePriceRule } from '../../domain/price-rule';
+  import { PricingController } from '../settings/pricing.svelte';
+  import type { SettingsTarget } from '../settings/sections.svelte';
   import type { ThemeController } from '../../ui/theme';
   import { DisplayController, provideDisplay } from '../../ui/display.svelte';
 
@@ -89,15 +89,18 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   // the desktop app, driven by the wfm_session commands.
   let updateNotesRef: UpdateNotes;
   // Set only by the inbox's settings link; every other way in opens the top.
-  let settingsSection = $state<'notifications' | 'price-sharing' | 'account' | 'scan' | 'overlay' | 'app' | null>(null);
+  let settingsSection = $state<SettingsTarget | null>(null);
   // Settings people look for by name ("dark mode", "popups") rather than by view.
   const openSettings = (section: NonNullable<typeof settingsSection>) => { settingsSection = section; filters.setView('settings'); };
   let settingsDestinations = $derived([
-    { label: t('shell.go.app'), keywords: 'dark light theme colour color mode updates privacy app icon item pictures visual compact', run: () => openSettings('app') },
+    { label: t('shell.go.appearance'), keywords: 'dark light theme colour color mode language app icon item pictures visual compact', run: () => openSettings('appearance') },
+    { label: t('shell.go.selling'), keywords: 'price rule suggested price offset reprice median lowest ask undercut', run: () => openSettings('selling') },
     { label: t('shell.go.notifications'), keywords: 'popups alerts sounds in game price watches inbox', run: () => openSettings('notifications') },
     { label: t('shell.go.scan'), keywords: 'auto scan cadence rescan', run: () => openSettings('scan') },
     { label: t('shell.go.account'), keywords: 'warframe.market sign in log out status presence online invisible', run: () => openSettings('account') },
     { label: t('shell.go.overlay'), keywords: 'reward screen ocr', run: () => openSettings('overlay') },
+    { label: t('shell.go.updates'), keywords: 'update version install what\'s new release', run: () => openSettings('updates') },
+    { label: t('shell.go.privacy'), keywords: 'privacy usage statistics price sharing telemetry', run: () => openSettings('privacy') },
   ]);
 
   const notesServices = useDesktopServices();
@@ -204,7 +207,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   onMount(() => appIcon.start());
   const display = untrack(() => new DisplayController(store));
   const crackAnyway = untrack(() => new CrackAnyway(store));
-  const healthPrefs = untrack(() => parseHealthPrefs(store.getSetting('listing-health'), parsePriceRule(store.getSetting('price-rule'))));
+  const pricing = untrack(() => new PricingController(store));
   provideDisplay(display);
   // The first launch asks for a language once; the game's own language, from
   // its log, is where the cursor starts. Undefined while that is being read.
@@ -723,7 +726,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {/if}
     {#if visited.has('calendar')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'calendar')}>
-      <CalendarView market={inventory.market} owned={inventory.resolved.owned} now={displayNow} loadAnnouncements={notesServices.desktopAnnouncements} {store} surface="desktop" />
+      <CalendarView market={inventory.market} owned={inventory.resolved.owned} now={displayNow} loadAnnouncements={notesServices.desktopAnnouncements} {store} surface="desktop" extra={routines.calendarEvents(displayNow)} onopenroutines={() => filters.setView('routines')} />
     </div>
     {/if}
     {#if visited.has('meta')}
@@ -744,7 +747,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
         {marketStaleness}
         onauthrequired={(code) => wfmAuthDialogsRef?.open(code)}
         onsummary={(s) => (listing.ordersSummary = s)}
-        {healthPrefs}
+        healthPrefs={pricing.healthPrefs}
       />
     </div>
     {/if}
@@ -775,7 +778,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {/if}
     {#if visited.has('settings')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'settings')}>
-      <SettingsPanel active={effectiveView === 'settings'} onlanguage={changeLanguage} {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+      <SettingsPanel {store} {pricing} active={effectiveView === 'settings'} onlanguage={changeLanguage} {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
     </div>
     {/if}
 
@@ -910,6 +913,8 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {listingBlockReason} currentSnapshotId={inventory.nativeSnapshotId} onrecheck={checkListingRequirements} {listingActionLabel}
   bind:open={listing.listingOpen}
   sessionEpoch={listing.sessionEpoch}
+  priceRule={pricing.rule}
+  market={inventory.market}
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}

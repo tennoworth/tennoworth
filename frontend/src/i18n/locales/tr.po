@@ -2630,9 +2630,30 @@ msgstr "En düşük fiyatlara eşitle"
 
 #. Tooltip.
 #, fuzzy
+#| msgid "Set every selected row's price to its live lowest online ask (match it - no undercutting)."
 msgctxt "review.matchAsksTitle"
-msgid "Set every selected row's price to its live lowest online ask (match it - no undercutting)."
+msgid "Set every selected row's price to its live lowest online ask (match it - no undercutting). An ask under a third of the median is skipped as a troll listing."
 msgstr "Seçilen her satırın fiyatını canlı en düşük çevrimiçi satış fiyatına ayarla (eşitle - altına inme yok)."
+
+#. Sentence after the dialog introduction; rule reads like "Lowest ask −1p".
+msgctxt "review.leadRule"
+msgid "Your price rule ({rule}) is applied to that price."
+msgstr ""
+
+#. Button; the rule is set in Settings → Selling.
+msgctxt "review.matchRule"
+msgid "Price by my rule"
+msgstr ""
+
+#. Tooltip; rule reads like "Lowest ask −1p".
+msgctxt "review.matchRuleTitle"
+msgid "Set every selected row's price from its live asks by your price rule ({rule}). An ask under a third of the median is skipped as a troll listing."
+msgstr ""
+
+#. Tooltip sentence after the online asks.
+msgctxt "review.ignoredAsk"
+msgid "The {ask}p ask was skipped: it sits under a third of the median."
+msgstr ""
 
 #. Screen reader name of the checkbox column.
 #, fuzzy
@@ -4722,10 +4743,24 @@ msgid "inherited from the set"
 msgstr "setten alındı"
 
 #. Command palette entry.
-#, fuzzy
-msgctxt "shell.go.app"
-msgid "Settings › Appearance and updates"
-msgstr "Ayarlar › Görünüm ve güncellemeler"
+msgctxt "shell.go.selling"
+msgid "Settings › Selling"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.appearance"
+msgid "Settings › Appearance"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.updates"
+msgid "Settings › Updates"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.privacy"
+msgid "Settings › Privacy & sharing"
+msgstr ""
 
 #. Command palette entry.
 #, fuzzy
@@ -5812,6 +5847,11 @@ msgctxt "orders.fixAllTitle"
 msgid "Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each."
 msgstr "İşaretlenen her ilanı yeniden fiyatla: diğer en düşük satış fiyatına eşitle veya daha yüksek alış teklifini karşıla. Miktar düzeltmeleri ve silmeler tek tek birer tıklamayla kalır."
 
+#. Tooltip.
+msgctxt "orders.fixAllTitleRule"
+msgid "Reprice every flagged listing: to your price rule ({rule}), or meet the higher bid. Quantity fixes and deletions stay one click each."
+msgstr ""
+
 #. Button.
 #, fuzzy
 msgctxt "orders.fixAll"
@@ -6153,6 +6193,11 @@ msgctxt "orders.health.overpriced"
 msgid "above the lowest other ask"
 msgstr "diğer en düşük satış fiyatının üzerinde"
 
+#. Health cell, when the player set their own price rule in Settings.
+msgctxt "orders.health.overRule"
+msgid "above your price rule"
+msgstr ""
+
 #. Health cell.
 #, fuzzy
 msgctxt "orders.health.underbid"
@@ -6299,6 +6344,16 @@ msgstr " (kesin rakamlar için)."
 msgctxt "orders.why.overpriced"
 msgid "Lowest other online ask is {ask}p (you: {price}p). Match it to sell first."
 msgstr "Diğer en düşük çevrimiçi satış fiyatı {ask}p (sen: {price}p). İlk satmak için ona eşitle."
+
+#. Tooltip sentence after the reason.
+msgctxt "orders.why.ignoredAsk"
+msgid "A {ask}p ask was skipped: it sits under a third of the median, so it is a troll or stale listing rather than a price."
+msgstr ""
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+msgctxt "orders.why.overRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
+msgstr ""
 
 #. Tooltip.
 #, fuzzy
@@ -7859,12 +7914,6 @@ msgctxt "settings.setOnce"
 msgid "Set once"
 msgstr "Bir kez ayarla"
 
-#. Link.
-#, fuzzy
-msgctxt "settings.appLink"
-msgid "Appearance, updates and privacy"
-msgstr "Görünüm, güncellemeler ve gizlilik"
-
 #. Row label.
 #, fuzzy
 msgctxt "settings.status"
@@ -8133,13 +8182,7 @@ msgctxt "settings.logoutFailed"
 msgid "Couldn’t log out: {error}"
 msgstr "Çıkış yapılamadı: {error}"
 
-#. Section heading.
-#, fuzzy
-msgctxt "settings.thisApp"
-msgid "This app"
-msgstr "Bu uygulama"
-
-#. Group heading.
+#. Section heading and link.
 #, fuzzy
 msgctxt "settings.appearance"
 msgid "Appearance"
@@ -8189,11 +8232,103 @@ msgctxt "settings.compact"
 msgid "Compact"
 msgstr "Sıkı"
 
-#. Group heading.
+#. Section heading and link.
 #, fuzzy
 msgctxt "settings.updates"
 msgid "Updates"
 msgstr "Güncellemeler"
+
+#. Section heading and link: usage statistics and price sharing.
+msgctxt "settings.privacy"
+msgid "Privacy & sharing"
+msgstr ""
+
+#. Section heading and link.
+msgctxt "settings.selling"
+msgid "Selling"
+msgstr ""
+
+#. Button that folds a settings section away.
+#. Max 8 characters.
+msgctxt "settings.hide"
+msgid "Hide"
+msgstr ""
+
+#. Button that unfolds a settings section.
+#. Max 8 characters.
+msgctxt "settings.show"
+msgid "Show"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.priceRule"
+msgid "Suggested price"
+msgstr ""
+
+#. Setting help. Reprice is the button name in My orders.
+msgctxt "settings.priceRuleHelp"
+msgid "My orders flags a sell listing priced above this and offers to reprice it here. Start from a market figure, then add or take off platinum. Nothing is repriced until you press Reprice."
+msgstr ""
+
+#. Worked example under the setting, e.g. "Lowest ask at 20p → suggests 21p."
+msgctxt "settings.priceRuleExample"
+msgid "{basis} at {base}p → suggests {price}p."
+msgstr ""
+
+#. Field label: platinum added to (or taken off) the market figure.
+msgctxt "settings.priceOffset"
+msgid "Adjust by"
+msgstr ""
+
+#. Validation.
+msgctxt "settings.priceOffsetRange"
+msgid "Enter a whole number from {min} to {max}."
+msgstr ""
+
+#. Button that restores the default rule.
+msgctxt "settings.priceRuleReset"
+msgid "Match the lowest ask"
+msgstr ""
+
+#. Error.
+msgctxt "settings.priceRuleFailed"
+msgid "Couldn’t save the price rule: {error}"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.lowest-ask"
+msgid "Lowest ask"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.low5-avg"
+msgid "Average of the 5 lowest asks"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.low20-avg"
+msgid "Average of the 20 lowest asks"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.avg-48h"
+msgid "48-hour average sale"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.median-90d"
+msgid "90-day median sale"
+msgstr ""
+
+#. A price rule in words, e.g. "90-day median sale +1p".
+msgctxt "settings.ruleUp"
+msgid "{basis} +{offset}p"
+msgstr ""
+
+#. A price rule in words, e.g. "Lowest ask −2p".
+msgctxt "settings.ruleDown"
+msgid "{basis} −{offset}p"
+msgstr ""
 
 #. Setting.
 #, fuzzy
@@ -13347,6 +13482,52 @@ msgctxt "cal.kind.deal"
 msgid "Darvo deals"
 msgstr "Darvo fırsatları"
 
+#. Event kind: the player's own daily/weekly checklist and monthly goals.
+#. Max 20 characters.
+msgctxt "cal.kind.routine"
+msgid "My routines"
+msgstr ""
+
+#. Routine reset name.
+msgctxt "cal.routine.daily"
+msgid "Daily reset"
+msgstr ""
+
+#. Routine reset name.
+msgctxt "cal.routine.weekly"
+msgid "Weekly reset"
+msgstr ""
+
+#. Routine reset name.
+msgctxt "cal.routine.monthly"
+msgid "Monthly goals reset"
+msgstr ""
+
+#. Event title; reset reads like "Weekly reset".
+msgctxt "cal.routine.title"
+msgid "{reset} · {open} of {total} still open"
+msgstr ""
+
+#. Short event label.
+msgctxt "cal.routine.short"
+msgid "{reset} · {open} open"
+msgstr ""
+
+#. Event detail; tasks is a list of routine names.
+msgctxt "cal.routine.openList"
+msgid "Still open: {tasks}."
+msgstr ""
+
+#. Event detail when more than three are open.
+msgctxt "cal.routine.openMore"
+msgid "Still open: {tasks} and {more} more."
+msgstr ""
+
+#. Button in an event's detail.
+msgctxt "cal.routine.open"
+msgid "Open routines"
+msgstr ""
+
 #. Countdown: days and hours.
 #. Max 8 characters.
 #, fuzzy
@@ -13632,6 +13813,11 @@ msgstr "TennoWorth notu"
 msgctxt "cal.source.official"
 msgid "DE announcement"
 msgstr "DE duyurusu"
+
+#. Date source: the player's own checklist.
+msgctxt "cal.source.routine"
+msgid "Your routines"
+msgstr ""
 
 #. Local time beside the UTC time.
 #, fuzzy

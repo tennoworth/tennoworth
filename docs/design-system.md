@@ -33,7 +33,7 @@ Warframe. Reduce decision time, not increase time spent managing the app.
 
 - Preserve the warm paper-and-ink light theme and warm charcoal/brown-black
   dark theme. Both are first-class; neither is a cosmetic afterthought.
-- Use compact analytical layouts, square edges, dotted secondary dividers,
+- Use compact analytical layouts, square edges, faded secondary dividers,
   and restrained filled title rails. Avoid ornamental card grids, rounded
   pills, decorative gradients, glows, and entrance animations.
 - Depth is a flat offset: outer windows (panels, dialogs, menus) cast a 6px
@@ -60,11 +60,11 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Surfaces | `--bg`, `--panel`, `--panel-2` | Page, panel, and secondary surface |
 | Text | `--fg`, `--muted` | Primary and supporting readable content |
 | Decoration | `--faint`, `--hairline`, `--dot`, `--grid`, `--hatch` | Nonessential ornament only; `--faint` never colours readable text, missing-data dashes included |
-| Boundaries | `--border`, `--rule` | Solid outer outlines, dotted inner dividers |
+| Boundaries | `--border`, `--rule`, `--rule-ink`, `--hairline` | Solid outer outlines in `--border`; inner dividers are a solid, faded line (`1px var(--rule) var(--hairline)`, or `var(--rule-ink)` where the default look wants the outline colour). A free-standing rule (no box to border) is a 1px background, which WebKit snaps to whole pixels. Dotted and dashed are kept for meaning, never separation: disabled controls, fact tags, estimated dates, add actions and data guides |
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
 | Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted`, `--rail-edge` | Panel, card, FAQ and dialog title rails. Light: the ink bar. Dark: a raised `--panel-2` band under a 2px rag rule, because the ink fill is reserved for selected state |
 | Row interaction | `--row-selected`, `--row-selected-hover` | Restrained selected-table fills; hover preserves selection, focus adds an outline |
-| Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault` | Success, caution, error, ducat data, and vaulted status; not decoration |
+| Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault`, `--routine` | Success, caution, error, ducat data, vaulted status, and the player's own routines on the Calendar; not decoration |
 | Type | `--font-ui`, `--font-body`, `--font-mono` | Headings/labels, reading, numeric/technical data |
 | Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--text-statement`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
 | Rhythm | `--s1` through `--s6`, `--inset`, `--gutter`, `--stack`, `--cell` | Shared spacing and contextual insets |
@@ -220,19 +220,19 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 
 | Pattern | Contract |
 |---|---|
-| Panels and title rails | Clear heading, restrained inversion, dotted internal separation. Panel and dialog titles are always rails; controls may sit in a rail, status chips may not; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level; rail buttons are outlined in that pair rather than filled |
+| Panels and title rails | Clear heading, restrained inversion, faded internal separation. Panel and dialog titles are always rails; controls may sit in a rail, status chips may not; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level; rail buttons are outlined in that pair rather than filled |
 | Toolbars | Group related controls; allow wrapping without changing the logical or keyboard order |
 | Tag filters | The Sell view's market tags keep one line: the broadest item types and slots (never rarity, the catch-all weapon, or names), then any selected tag, then a dashed `+ N more` button. It opens a list under the line, closed by Escape, with a box that narrows it as you type (letters running on inside a name, or the start of each name word in any order: "kit jat" finds Jat Kittag) and the tags grouped as the game sorts items: type, slot and class, rarity, relic era, companions, then the mods that belong to one Warframe, weapon or companion. Each group is a bounded `--panel-2` box under its caption; the small groups share a row. Nothing moves under the pointer: a tag picked in the list stays there, pressed, and joins the line when the list closes; Clear and the OR note keep reserved space in the list's search row; a chip reserves its bold width. The filter bars hold their place while the Top picks above them change height (`ui/hold-place.ts`): growth is scrolled away, and a shrink the scroll cannot absorb is held as a gap that later growth fills. Breeds fold into their species (a Huras Kubrow's precepts are kubrow mods), category tags read as words, and names read as the game writes them. Check it in `?preview-desktop&sample=large` |
-| Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons. Links inside table cells show their dotted rule only on row hover or focus |
+| Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons. Links carry a solid `--faint` underline; inside table cells it shows only on row hover or focus |
 | Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it. Text-entry focus draws over the field's own border so it reads as one frame. Number fields hide spinner arrows; arrow keys still step. Dropdowns are `Select.svelte`, never a native `<select>`: the platform draws a native select's field and list (a white GTK box and menu on Linux) and neither takes the theme. Its field is the text input's box with a trailing ▾; its list is a menu (`--panel-2`, ink outline, offset shadow) in the top layer, opening below the field or above it when that has more room, and scrolling within the window. The chosen option is the ink inversion and the option under the keyboard or pointer carries the row cursor's square. It keeps a native select's keys (arrows, Home/End, Page Up/Down, typing to jump, Enter, Space, Tab and Escape) and its name and value for assistive technology. Name it with `labelledby` or `label`, not a wrapping `<label>`, which would read the chosen option into the name. Option labels do not repeat the field label |
-| Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, dotted inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
+| Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, faded inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
 | Prompt banners | `PromptBanner.svelte` offers something optional that is safe to ignore, such as an opt-in or a support link. It uses the neutral panel with no toned edge, because an invitation is not a warning, and says that ignoring it changes nothing. Its title names the benefit, the body states what happens, and the actions are the accept action, an optional link to the full control, and Not now. A launch shows at most one prompt, never while that launch's automatic “What’s new” is pending or open, and asks are at least a week apart across prompts. Each prompt sets its own delay, launch minimum, gap and ask limit, and may wait for an update launch for its first ask (`features/prompt-policies.ts`, highest priority first); showing it counts as an ask, so ignoring it equals Not now, and accepting retires it. Prompts stay out of first run and active trading, and step aside on the view that already holds the full control. Select Prompt banner in the living styleguide's Data state control |
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |
 | Tables | Preserve meaningful columns and item identity; align comparable numbers. Every table fits its pane through the shared fit steps (see Fitting tables), so the page and the table do not scroll sideways at any supported width. Overlay scrollbars hide that a table scrolls, so a scroll box holding a table that still overflows (enlarged text) fades its right edge while more columns sit beyond it, and drops the fade at the end or when the table fits; the sidebar's view list fades its bottom edge the same way on a short window. Prefer content-sized columns (no `fixed` layout) where numbers and buttons have a natural width, so the item and prose columns take the rest. An item picture and its name sit together in `.item-id`, so a long name wraps beside the picture, not under it. Pictures carry no per-image credit; their source is credited in the Item lists setting, where pictures are turned on, and in the site footer. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted. A sortable header is a button inside its `th`, which carries `aria-sort`, and its column is wide enough for the label plus the sort arrow. Column explanations live in one Column guide dialog beside the Columns menu, not in per-header popovers. A table's action column sits beside the item, so Top Picks keeps List and hide in view while price and reason scroll. Select Sell table in the living styleguide's Data state control for the production pattern |
 | Sparklines | `Sparkline.svelte` draws recent medians in ink, a dotted `--faint` rule at the 90-day median, and an endpoint dot coloured by the move against that median. The baseline shares the line's scale, so its distance from the line is honest |
 | Meters | `Meter.svelte` shows a share of a whole: a short label, the value in words ("9 of 14"), and an `--ink-bar` fill on one square `--panel-2` track. The words carry the value; a share with nothing to judge yet keeps an empty track and says why ("too recent"). Used for Ledger listing outcomes and Baro's ducats from spares. Select Meters in the living styleguide's Data state control |
 | Range bars | A spread drawn on a shared scale: a `--muted` hairline from minimum to maximum over a dotted `--faint` track, and a 2px ink tick at the median. Every row in the column uses the same scale (Rivens' DE weekly band: 1p to 10,000p, logarithmic), so rows compare down the column. The values stay as text beside the bar, which is decorative to assistive technology |
-| Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide |
+| Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide. Every caret and marker drawn as text (▸ ▾ ▲ ▼ △ ◂ ◈) comes from IBM Plex Math at the front of each stack, since Plex Sans and Mono have none; add a new shape to its subset (`public/fonts/LICENSES.md`) before using it |
 | Dialogs and popovers | Stay within the viewport; provide reachable dismissal and actions, visible focus, and appropriate keyboard behavior |
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
 
@@ -413,9 +413,23 @@ list. A page change brings the list's top back into view, and narrowing a
 list returns to its first page. Settings includes notification preferences within the same column.
 Settings is ordered by how often people return to it. A status strip leads,
 linking the automatic-scan, overlay and account state to their sections,
-followed by section links. Then come the everyday panels (Automatic scan,
-Relic reward overlay, Notifications) and the set-once panels (warframe.market
-account, then This app: appearance, updates, usage sharing and price sharing). Status comes
+followed by section links. Then come the everyday sections (Automatic scan,
+Selling, Relic reward overlay, Notifications) and the set-once sections
+(warframe.market account, Appearance, Updates, Privacy & sharing). Each
+section is one titled panel (`SettingsSection.svelte`) whose rail ends in a
+Show/Hide toggle with the disclosure glyph; a folded section keeps only its
+rail, and its rail actions fold with it. The folded set persists
+(`settings-collapsed`), every section starts open, and a summary card, section
+link, view-picker entry or deep link unfolds the section it points into before
+scrolling there. Folding hides the body rather than unmounting it, so a draft
+or a pending save survives. Selling holds the suggested-price rule: a basis
+(lowest ask, average of the 5 or 20 lowest asks, 48-hour average, 90-day
+median) and a whole-platinum adjustment from -50 to +50, with a worked example
+on a 20p figure. My orders judges and reprices sell listings by it, the
+listing review prefills and prices live clicks by it, and both name the rule
+wherever the default would say "the lowest other ask". Either reads the live
+book "within reason": an ask under a third of the median is skipped for the
+next one, the shown ask carries a `*`, and its tooltip names the skipped ask. Status comes
 before the controls that change it. Troubleshooting detail and full privacy
 terms sit in disclosures, and diagnostics open with their warning in view when
 enabled. The inbox's settings link opens the page at Notifications. Category
@@ -475,7 +489,7 @@ calendar's weekend and out-of-month cells.
 
 ### Visual and compact lists
 
-Settings → This app → Item lists chooses how desktop item lists draw, saved as
+Settings → Appearance → Item lists chooses how desktop item lists draw, saved as
 the `display` setting and stamped on `html[data-density]`. Visual, the
 default, puts a 28px item picture before the name and uses `--row-cf` rows on
 Sell. Compact hides pictures and keeps `--row` rows. The Sell count bar
@@ -500,7 +514,7 @@ measures and sets `data-fit`; shared rules in `app.css` do the rest.
    the rank reaches the body cells and `<col>` by position. Unranked columns
    never hide: the item, the quantity owned, the price and value a row is
    about, and the column that is the point of the table.
-4. A dotted line under the table names what is hidden ("Hidden to fit this
+4. A faded line under the table names what is hidden ("Hidden to fit this
    window: Trend, Δ 90d.") and says widening the window shows it. It is text,
    not colour, and the Columns menu still lists the column.
 
@@ -520,7 +534,7 @@ the steps.
 
 A hovered or focus-holding table row shows a 6px `--fg` square in its first
 cell's gutter, drawn as a background layer so nothing moves; `table.tw` keeps
-its dotted rule as the second layer. Secondary `.btn` controls invert to the
+its row rule as the second layer. Secondary `.btn` controls invert to the
 ink pair on hover, matching the selected state.
 
 ### Key legend
@@ -534,9 +548,9 @@ stays text. The line is a labelled footer, reserves scroll padding so focus is
 never hidden under it, and is hidden below 900px wide or 420px tall, where the
 sidebar foot's Keyboard shortcuts row takes over.
 
-Dense tables scroll often, so in `table.tw` the dotted row rule is a
-1px-on/1px-off background tile on each cell instead of a dotted border; it
-looks the same and costs a fraction of the raster time. Cell fills therefore
+Dense tables scroll often, so in `table.tw` the row rule is a 1px
+background tile on each cell instead of a border; it looks the same and
+costs a fraction of the raster time. Cell fills therefore
 set `background-color`, never the `background` shorthand, which would erase the
 rule on that row.
 
@@ -557,7 +571,7 @@ offers Copy into a new announcement for corrections that must reach them. The de
 admin browser suite verifies this styled surface in both themes and engines.
 The status strip's last cell says whether the public site serves the newest
 publication, in words with a good, warn or bad hue. Suggested drafts from the
-game calendar sit in their own panel above the editor, one dotted-rule row each
+game calendar sit in their own panel above the editor, one ruled row each
 with Open as draft and Dismiss; the panel is absent when nothing is suggested.
 An opened suggestion is unsaved edits, so leaving it asks first.
 Official dates for the player calendar have their own panel below the editor:
@@ -572,7 +586,12 @@ The Calendar is a desktop view and a section of the hosted landing (`#calendar`,
 linked from the status strip). It shows dated things that move prices: official
 DE announcements entered in the dashboard (devstreams, updates, Prime Access),
 DE's in-game events, Baro visits, Prime Resurgence rotations, estimated vaulting,
-our curated notices and, when switched on, Darvo deals. A `.ui-segmented`
+our curated notices and, when switched on, Darvo deals. On desktop it also
+shows the player's routines: each list's next reset (daily, weekly, monthly
+goals, from the Routines view's own reset maths) with what is still open, and
+an Open routines action; a list with nothing open adds nothing, and the hosted
+site never offers the kind. A routine reset is always under a day away, so it
+never takes Next up from the market. A `.ui-segmented`
 choice offers three views of the same events, remembered per device:
 
 - **Board** (default) leads with Next up: the soonest confirmed moment and a
@@ -589,7 +608,8 @@ choice offers three views of the same events, remembered per device:
 Each kind has a 3px edge colour set once in `app.css` by `data-kind`. An
 estimated date is dashed and tagged "est.", never gets a countdown, and says
 there is no advice until DE confirms it. Every event names its source (DE
-worldState, Estimate or TennoWorth notice, with a link for notices). Times are
+worldState, Estimate, TennoWorth notice or Your routines, with a link for
+notices). Times are
 UTC, with the reader's own time beside single moments. On desktop an event
 says how many held items it touches. Filters are labelled checkboxes; Darvo
 starts hidden because it changes daily and never touches tradeable items.
@@ -869,7 +889,7 @@ colour and the default everywhere: the favicon, the installed icons, the
 installer, shortcuts and the Linux launcher. Below 48px a compact drawing
 replaces the detailed one, with heavier strokes and a solid centre.
 
-The desktop App icon setting (This app → Appearance, under Colour mode) can
+The desktop App icon setting (Appearance, under Colour mode) can
 draw the window and tray icons in ink or rag, the light and dark `--fg`
 tokens, or match the resolved colour mode. Its options are radio cards in a
 two-column grid that stacks below 760px. Each card holds the shared square

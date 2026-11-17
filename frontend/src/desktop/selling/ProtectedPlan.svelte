@@ -148,7 +148,7 @@
   .ui-input { max-width: 100%; }
   input[type="number"] { width: 8rem; }
   h3, p { margin: 0; }
-  /* A line, not a panel: dotted rules above and below, like the other one-line strips under a view title. */
+  /* A line, not a panel: faded rules above and below, like the other one-line strips under a view title. */
   .keeping { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); min-width: 0; padding: var(--s1) 0; border-block: 1px var(--rule) var(--hairline); font-size: var(--text-control); }
   .keeping h3 { font: 500 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
   .keep-rules { min-width: 0; overflow-wrap: anywhere; }

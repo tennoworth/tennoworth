@@ -49,6 +49,18 @@ export function eventWords(text: CalendarText): EventWords {
     }
     case 'given':
       return { title: text.title, short: text.title, detail: text.detail };
+    case 'routine': {
+      const reset = t(`cal.routine.${text.cadence}`);
+      const shown = text.open.slice(0, 3);
+      const tasks = text.open.length > 3
+        ? t('cal.routine.openMore', { tasks: shown.join(', '), more: text.open.length - 3 })
+        : t('cal.routine.openList', { tasks: listNames(shown) });
+      return {
+        title: t('cal.routine.title', { reset, open: text.open.length, total: text.total }),
+        short: t('cal.routine.short', { reset, open: text.open.length }),
+        detail: tasks,
+      };
+    }
   }
 }
 

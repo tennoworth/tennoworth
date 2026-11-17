@@ -78,7 +78,7 @@
   .ui-notice { margin: 0 var(--inset) var(--s3); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
   .ui-notice p { margin: 0; flex: 1 1 18rem; min-width: 0; }
   .status { font-size: var(--text-control); color: var(--muted); }
-  .troubleshooting { margin-top: var(--s2); border-top: 1px var(--rule) var(--border); }
+  .troubleshooting { margin-top: var(--s2); border-top: 1px var(--rule) var(--rule-ink); }
   .troubleshooting > summary { min-height: var(--ctl-lg); padding: var(--s1) var(--inset); cursor: pointer; color: var(--muted); font-size: var(--text-control); }
   .body { display: flex; flex-direction: column; gap: var(--s2); padding: 0 var(--inset) var(--s2); font-size: var(--text-control); line-height: var(--leading-body); color: var(--muted); }
   .body p { margin: 0; }

@@ -91,12 +91,12 @@
   .entry-content p { line-height: var(--leading-body); }
   .context, .evidence, .keeping-note { color: var(--muted); font-size: var(--text-control); }
   .context, .evidence { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s3); }
-  .context span + span { padding-left: var(--s3); border-left: 1px var(--rule) var(--border); }
+  .context span + span { padding-left: var(--s3); border-left: 1px var(--rule) var(--rule-ink); }
   .best-value { gap: var(--s2); }
-  .yield-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px var(--rule) var(--border); margin: 0; }
+  .yield-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px var(--rule) var(--rule-ink); margin: 0; }
   .yield-strip > div { padding: var(--s3) var(--s4); min-width: 0; }
   .yield-strip > div:first-child { padding-left: 0; }
-  .yield-strip > div + div { border-left: 1px var(--rule) var(--border); }
+  .yield-strip > div + div { border-left: 1px var(--rule) var(--rule-ink); }
   .yield-strip dt { color: var(--muted); font: 500 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .08em; text-transform: uppercase; margin-bottom: var(--s1); }
   .yield-strip dd { margin: 0; font: 500 var(--text-metric)/var(--leading-body) var(--font-mono); }
   .yield-strip small { display: block; font: 400 var(--text-caption)/var(--leading-body) var(--font-body); color: var(--muted); }

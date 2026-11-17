@@ -28,6 +28,7 @@
   import { shimmer } from '../../ui/shimmer';
   import { AppIconController } from '../../desktop/settings/app-icon.svelte';
   import CalendarView from '../../features/calendar/CalendarView.svelte';
+  import type { CalendarEvent } from '../../domain/calendar-events';
   import PresenceSettings from '../../desktop/presence/PresenceSettings.svelte';
   import PresenceMark from '../../desktop/presence/PresenceMark.svelte';
   import { PresenceController } from '../../desktop/presence/presence.svelte';
@@ -66,6 +67,7 @@
   }, 'bo_prime_set')!;
   const notesServices = { updateNotes: async () => ({ ...notesSample, auto_show: false } as UpdateNotesStatus), acknowledgeUpdateNotes: async () => {}, updateNotesCanPresent: async () => true };
   import { onMount, untrack } from 'svelte';
+  import SettingsSection from '../../desktop/settings/SettingsSection.svelte';
   import { applyTheme, systemMode, type Mode } from '../../ui/theme';
 
   let mode = $state<Mode>('dark');
@@ -84,6 +86,10 @@
     calendar: { resurgence_current: { from: calendarAt(-12), to: calendarAt(16), frames: ['sample_prime_set', 'example_prime_set'] } },
     event_rewards: { goals: { sample: { id: 'sample', source: 'goal' as const, title: 'Sample Operation', starts_at: calendarAt(-6), ends_at: calendarAt(8), completeness: 'complete' as const, groups: [] } } },
   };
+  const calendarRoutines: CalendarEvent[] = [{
+    id: 'sample-routine-weekly', kind: 'routine', from: Date.parse(calendarAt(3)), to: null, estimate: false, source: 'routine',
+    text: { kind: 'routine', cadence: 'weekly', open: ['Archon Hunt', 'Review Nightwave acts'], total: 3 },
+  }];
   const calendarFeed = { version: 1, updated_at: calendarAt(-2), messages: [{ id: 'sample-deadline', title: 'Sample deadline notice', body: 'A fictional change that takes effect at the end of this notice.', source_url: 'https://forums.warframe.com/', starts_at: calendarAt(-2), ends_at: calendarAt(2) }] };
   // The production Trade presence group over a native side that keeps the pick
   // in memory; picking a status pauses following, as it does in the app.
@@ -115,7 +121,7 @@
   let dialog: HTMLDialogElement;
   let tokenDialog: HTMLDialogElement;
   let swatches = $state<{ token: string; value: string }[]>([]);
-  const tokens = ['--bg', '--panel', '--panel-2', '--fg', '--muted', '--border', '--accent', '--good', '--warn', '--bad', '--ducat', '--vault', '--row-selected', '--row-selected-hover'];
+  const tokens = ['--bg', '--panel', '--panel-2', '--fg', '--muted', '--border', '--accent', '--good', '--warn', '--bad', '--ducat', '--vault', '--routine', '--row-selected', '--row-selected-hover'];
   const rows = [
     { name: 'Ivara Prime Neuroptics Blueprint', owned: 4, price: 15, note: '2 copies kept · sample inventory' },
     { name: 'Pyrana Prime Set', owned: 30, price: 95, note: 'Existing visible order · sample inventory' },
@@ -232,6 +238,11 @@
     <div class="ui-setting-row"><div class="ui-setting-copy"><label for="example-shortcut">Retry shortcut example</label><p>Resize or change theme while editing. The draft stays in place.</p></div><div class="ui-setting-control"><input id="example-shortcut" class="ui-input" bind:value={exampleShortcut} disabled={!exampleEnabled} /></div></div>
     <div class="ui-panel-footer">These examples do not change desktop preferences.</div>
   </section>
+  <div class="ui-reading">
+    <SettingsSection id="selling" title="06 / Foldable settings section">
+      <div class="ui-setting-row"><div class="ui-setting-copy"><strong>Hide and Show</strong><p>The rail's toggle folds the body away and keeps it mounted, so a draft survives. In Settings the folded set persists; here it lasts for the visit.</p></div></div>
+    </SettingsSection>
+  </div>
   <footer class="muted">Reference patterns: .btn · .wrap.tw · table.tw · .ui-field · .ui-toolbar · .ui-notice · dialog.cryptobox</footer>
   {#if dataState === 'notifications'}
   <section class="ui-panel ui-stack" aria-label="Notification row reference">
@@ -247,7 +258,7 @@
   {#if dataState === 'meters'}<section class="wrap tw ui-reading" aria-labelledby="meters-title"><div class="rail"><h3 id="meters-title">Meters</h3></div><div class="body ui-stack"><p>A share of a whole: the words carry the value and the ink fill only shows the proportion. Nothing judged yet stays an empty track with its reason in words.</p><Meter label="Copies sold" value={9} max={14} text="9 of 14" /><Meter label="Sold in a week" value={4} max={4} text="4 of 4" /><Meter label="Sold in a day" value={0} max={0} text="too recent" /></div></section>{/if}
   {#if dataState === 'shimmer'}<section class="wrap tw ui-reading" aria-labelledby="shimmer-title"><div class="rail"><h3 id="shimmer-title">Field shimmer</h3></div><div class="bar"><span class="lbl">Idle</span><span class="shimmer-field grow" use:shimmer={{ mode: 'idle' }}><input class="input" type="text" aria-label="Idle shimmer sample" placeholder="At rest" /></span></div><div class="bar"><span class="lbl">Live</span><span class="shimmer-field grow" use:shimmer={{ mode: 'live', sparks: true }}><input class="input" type="text" aria-label="Live shimmer sample" placeholder="Waiting for a query" /></span></div><div class="bar"><span class="lbl">Pass</span><span class="shimmer-field grow" use:shimmer={{ mode: 'settled', pulse: shimmerPulse }}><input class="input" type="text" aria-label="Settled shimmer sample" placeholder="Focused from a shortcut" /></span><button class="btn xs" onclick={() => shimmerPulse++}>Run one pass</button></div><div class="body"><p>Idle is the quiet sweep a field shows at rest. Live is the full effect while a focused field waits for input, with sparks in the dark theme only. Pass runs once when a shortcut moves focus. Reduced motion shows the lit edges alone.</p></div></section>{/if}
   {#if dataState === 'app-icon'}<section class="wrap tw ui-reading" aria-labelledby="app-icon-title"><div class="rail"><h3 id="app-icon-title">App icon setting</h3></div><AppIconSetting appIcon={sampleAppIcon} /></section>{/if}
-  {#if dataState === 'calendar'}<CalendarView market={calendarSample} now={calendarNow} surface="desktop" loadAnnouncements={async () => calendarFeed} />{/if}
+  {#if dataState === 'calendar'}<CalendarView market={calendarSample} now={calendarNow} surface="desktop" loadAnnouncements={async () => calendarFeed} extra={calendarRoutines} onopenroutines={() => {}} />{/if}
   {#if dataState === 'presence'}<section class="wrap tw ui-reading" aria-labelledby="presence-title"><div class="rail"><h3 id="presence-title">Trade presence</h3></div><p class="presence-marks"><span><PresenceMark kind="ingame" />Online in game</span><span><PresenceMark kind="online" />Online</span><span><PresenceMark kind="invisible" />Invisible</span><span><PresenceMark kind="warn" />Needs action</span></p><PresenceSettings presence={samplePresence} /></section>{/if}
   {#if dataState === 'frame'}
     <section class="ui-panel public-prose" aria-label="Public selling guide reference">

@@ -266,3 +266,24 @@ describe('MyOrdersPanel after a failed refresh', () => {
     expect((screen.getByRole('button', { name: 'Delete Primed Flow' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('MyOrdersPanel under a price rule of the player\'s own', () => {
+  it('flags and reprices against the rule, and names it instead of the lowest ask', async () => {
+    installTauri(vi.fn(async (_cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => args.queries.map((q) => ({
+      slug: q.slug, rank: q.rank, subtype: q.subtype,
+      sells: q.slug === 'primed_flow' ? [15] : [], buys: [],
+      low_sell: q.slug === 'primed_flow' ? 15 : null, top_buy: null,
+      own_ask: q.slug === 'primed_flow' ? 20 : null, own_bid: null, error: null,
+    }))), undefined);
+    const transport = makeTransport();
+    const healthPrefs = { rule: { basis: 'lowest-ask' as const, offset: -1 }, tolerance: 0, muted: [] };
+    render(MyOrdersPanel, { props: { transport, healthPrefs } });
+    await screen.findByText('Primed Flow');
+    await fireEvent.click(screen.getByRole('button', { name: 'Check live' }));
+    const cell = await screen.findByText('above your price rule', { exact: false });
+    expect(cell.closest('.issue')?.getAttribute('title')).toBe('Your price rule (Lowest ask −1p) puts it at 14p (you: 20p).');
+    expect(screen.queryByText('above the lowest other ask', { exact: false })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Reprice' }));
+    await waitFor(() => expect(transport.updateOrder).toHaveBeenCalledWith('o1', { platinum: 14 }));
+  });
+});

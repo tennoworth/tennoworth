@@ -290,8 +290,8 @@
   .row-actions { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: var(--s2); padding-block: var(--s3); }
   .goal-edit { display: flex; align-items: center; gap: var(--s2); padding-block: var(--s3); }
   .goal-edit input { flex: 1 1 20rem; min-width: 0; }
-  .checklist-items { list-style: none; margin: 0; padding: 0; border-top: 1px var(--rule) var(--border); }
-  .checklist-items li { border-bottom: 1px var(--rule) var(--border); }
+  .checklist-items { list-style: none; margin: 0; padding: 0; border-top: 1px var(--rule) var(--rule-ink); }
+  .checklist-items li { border-bottom: 1px var(--rule) var(--rule-ink); }
   .checklist-items label { display: flex; align-items: flex-start; gap: var(--s3); min-height: var(--row); padding: var(--s3) 0; cursor: pointer; }
   .checklist-items input[type="checkbox"] { flex: 0 0 auto; width: 1.25rem; height: 1.25rem; margin: var(--s1) 0 0; }
   .task-copy { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; overflow-wrap: anywhere; line-height: var(--leading-body); }
@@ -302,7 +302,7 @@
   .save-error { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
   .save-status, .empty-goal { margin: 0; }
   .routine-clocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); }
-  .clock { display: flex; flex-direction: column; gap: var(--s1); border-right: 1px var(--rule) var(--border); padding: var(--s4) var(--inset); background: var(--panel); }
+  .clock { display: flex; flex-direction: column; gap: var(--s1); border-right: 1px var(--rule) var(--rule-ink); padding: var(--s4) var(--inset); background: var(--panel); }
   .clock:last-child { border-right: 0; }
   .clock-label { color: var(--muted); font-size: var(--text-caption); letter-spacing: 0.04em; text-transform: uppercase; }
   .clock-val { color: var(--fg); font-size: var(--text-heading); font-weight: 600; }
@@ -320,7 +320,7 @@
     .goal-row, .goal-edit { flex-wrap: wrap; }
     .row-actions { padding-block: 0 var(--s3); }
     .routine-clocks { grid-template-columns: 1fr; }
-    .clock { border-right: 0; border-bottom: 1px var(--rule) var(--border); }
+    .clock { border-right: 0; border-bottom: 1px var(--rule) var(--rule-ink); }
     .clock:last-child { border-bottom: 0; }
   }
 </style>

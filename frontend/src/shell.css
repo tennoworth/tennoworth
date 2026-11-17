@@ -324,7 +324,7 @@
     display: flex; align-items: center; gap: var(--s2); width: 100%; min-height: var(--ctl);
     padding: 0 var(--s1); border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer;
   }
-  .rail-toggle:hover[data-shell] { color: var(--fg); text-decoration: underline dotted; }
+  .rail-toggle:hover[data-shell] { color: var(--fg); text-decoration: underline; }
   .rail-tip[data-shell] {
     position: fixed; z-index: var(--layer-popover); transform: translateY(-50%); pointer-events: none;
     padding: var(--s1) var(--s2); white-space: nowrap;
@@ -334,7 +334,7 @@
   }
 
   /* Rail: icons only. Labels stay in the accessibility tree; group labels
-     become the dotted rules that already separate the groups. */
+     become the rules that already separate the groups. */
   .shell[data-sidebar="rail"] .statusbar.shell-strip .brand h1[data-shell] { font-size: 0; }
   .shell[data-sidebar="rail"] .statusbar.shell-strip .brand h1[data-shell]::before { content: 'TW'; font-size: 0.9375rem; }
   .shell[data-sidebar="rail"] .statusbar.shell-strip .brand[data-shell] { justify-content: center; padding-left: 0; padding-right: 0; }
@@ -408,7 +408,7 @@
     cursor: pointer;
   }
   .sfoot .project-link:hover[data-shell],
-  .sfoot .feedback-trigger:hover[data-shell] { color: var(--fg); background: transparent; text-decoration: underline dotted; }
+  .sfoot .feedback-trigger:hover[data-shell] { color: var(--fg); background: transparent; text-decoration: underline; }
   .sfoot .ver[data-shell] { padding: 0 var(--s1); }
   /* The item pictures' source, said once here rather than on each picture. */
 
@@ -704,7 +704,7 @@
     padding: 0; font: inherit; text-transform: uppercase; letter-spacing: 0.12em;
     color: var(--fg); background: transparent; border: 0; cursor: pointer;
   }
-  .statusbar .cellbtn:hover[data-shell] { background: transparent; text-decoration: underline dotted; }
+  .statusbar .cellbtn:hover[data-shell] { background: transparent; text-decoration: underline; }
   .statusbar .cellbtn .badge.unread[data-shell] { font: 600 var(--text-caption)/1 var(--font-mono); letter-spacing: 0; color: var(--on-ink); background: var(--ink-bar); padding: 2px var(--s1); }
   .statusbar .cell.more[data-shell] { position: relative; }
   .more-pop[data-shell] {
@@ -846,7 +846,7 @@
   .relic-table td.decision .overrule[data-shell] {
     display: block; margin-top: var(--s1); padding: 0; border: 0; background: none;
     font: inherit; font-size: var(--text-caption); color: var(--muted); text-align: left;
-    text-decoration: underline dotted; cursor: pointer;
+    text-decoration: underline; cursor: pointer;
   }
   .relic-table td.decision .overrule:hover[data-shell] { color: var(--fg); }
   .relic-table td.why[data-shell] { color: var(--muted); }

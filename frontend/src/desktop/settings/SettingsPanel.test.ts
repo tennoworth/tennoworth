@@ -16,6 +16,7 @@ import { AppIconController } from './app-icon.svelte';
 import { LocalStorageStateStore, LOCAL_SETTING_KEYS } from '../../adapters/state-store';
 import { UpdateController } from '../updates/update-controller.svelte';
 import { createDesktopServices } from '../../adapters/services';
+import { PricingController } from './pricing.svelte';
 
 vi.mock('../../adapters/desktop', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../adapters/desktop')>(),
@@ -597,3 +598,98 @@ it('acknowledges an initial Settings section once', async () => {
   await act(async () => {});
   expect(shown).toHaveBeenCalledTimes(1);
 });
+
+describe('Settings sections fold and remember it', () => {
+  const store = () => new LocalStorageStateStore();
+  const body = (id: string) => document.getElementById(`settings-${id}-body`) as HTMLElement;
+  beforeEach(() => localStorage.clear());
+
+  it('groups the page into sections, every one open on a first visit', () => {
+    render(SettingsPanel, { props: { theme: fakeTheme().theme, store: store(), pricing: new PricingController(store()), transport: pollingTransportForSections() } });
+    const titles = screen.getAllByRole('region').map((region) => region.getAttribute('id'));
+    expect(titles).toEqual(['settings-selling', 'settings-overlay', 'settings-notifications', 'settings-account', 'settings-appearance', 'settings-updates', 'settings-privacy']);
+    for (const toggle of screen.getAllByRole('button', { name: /^Hide / })) expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('folds a section, keeps its controls mounted, and restores the fold next visit', async () => {
+    render(SettingsPanel, { props: { theme: fakeTheme().theme, store: store() } });
+    const toggle = screen.getByRole('button', { name: 'Hide Appearance' });
+    const modes = screen.getByRole('radio', { name: 'Dark' });
+    await fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.textContent).toContain('Show');
+    expect(body('appearance').hidden).toBe(true);
+    expect(body('appearance').contains(modes)).toBe(true);
+    expect(localStorage.getItem(LOCAL_SETTING_KEYS['settings-collapsed'])).toBe('["appearance"]');
+
+    cleanup();
+    render(SettingsPanel, { props: { theme: fakeTheme().theme, store: store() } });
+    expect(body('appearance').hidden).toBe(true);
+    expect(body('updates').hidden).toBe(false);
+    await fireEvent.click(screen.getByRole('button', { name: 'Show Appearance' }));
+    expect(body('appearance').hidden).toBe(false);
+    expect(localStorage.getItem(LOCAL_SETTING_KEYS['settings-collapsed'])).toBe('[]');
+  });
+
+  it('unfolds a section a summary card or a deep link points into', async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    localStorage.setItem(LOCAL_SETTING_KEYS['settings-collapsed'], '["notifications","account"]');
+    const panel = render(SettingsPanel, { props: { theme: fakeTheme().theme, store: store(), section: null } });
+    expect(body('account').hidden).toBe(true);
+    await fireEvent.click(within(screen.getByLabelText('Current state')).getByRole('link', { name: /warframe.market/ }));
+    expect(body('account').hidden).toBe(false);
+    await panel.rerender({ section: 'notifications' });
+    await waitFor(() => expect(body('notifications').hidden).toBe(false));
+  });
+});
+
+describe('Suggested price rule', () => {
+  beforeEach(() => localStorage.clear());
+  const setup = () => {
+    const pricing = new PricingController(new LocalStorageStateStore());
+    render(SettingsPanel, { props: { theme: fakeTheme().theme, pricing } });
+    return { pricing, offset: screen.getByRole('spinbutton', { name: /Adjust by/ }) as HTMLInputElement };
+  };
+  const saved = () => localStorage.getItem(LOCAL_SETTING_KEYS['price-rule']);
+
+  it('starts at the lowest ask with nothing added, and says what that suggests', () => {
+    const { offset } = setup();
+    expect(screen.getByRole('combobox', { name: 'Suggested price' }).textContent).toContain('Lowest ask');
+    expect(offset.value).toBe('0');
+    expect(screen.getByTestId('price-rule-example').textContent).toBe('Lowest ask at 20p → suggests 20p.');
+    expect(screen.queryByRole('button', { name: 'Match the lowest ask' })).toBeNull();
+  });
+
+  it('saves a basis and an offset, and offers the default back', async () => {
+    const { pricing, offset } = setup();
+    await fireEvent.click(screen.getByRole('combobox', { name: 'Suggested price' }));
+    await fireEvent.click(screen.getByRole('option', { name: '90-day median sale' }));
+    offset.value = '2';
+    await fireEvent.change(offset);
+    await waitFor(() => expect(saved()).toBe('{"basis":"median-90d","offset":2}'));
+    expect(pricing.healthPrefs.rule).toEqual({ basis: 'median-90d', offset: 2 });
+    expect(screen.getByTestId('price-rule-example').textContent).toBe('90-day median sale at 20p → suggests 22p.');
+    await fireEvent.click(screen.getByRole('button', { name: 'Match the lowest ask' }));
+    await waitFor(() => expect(saved()).toBe('{"basis":"lowest-ask","offset":0}'));
+  });
+
+  it('refuses an offset outside the range and keeps the saved one', async () => {
+    const { offset } = setup();
+    offset.value = '51';
+    await fireEvent.change(offset);
+    expect(screen.getByRole('alert').textContent).toBe('Enter a whole number from -50 to 50.');
+    expect(offset.value).toBe('0');
+    expect(saved()).toBeNull();
+  });
+});
+
+function pollingTransportForSections() {
+  const settings: OverlaySettings = { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1,
+    livePrices: true, showOwned: true, diagnostics: false, ocrLanguage: 'auto' };
+  return {
+    getOverlaySettings: async () => settings,
+    overlayStatus: async () => ({ state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en' }),
+    getUsagePreferences: async () => ({ enabled: false, available: false }),
+    getPriceReportPreferences: async () => ({ enabled: false, available: false, sent_this_week: 0 }),
+  } as unknown as DesktopCapabilities;
+}
