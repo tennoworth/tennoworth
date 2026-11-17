@@ -11,6 +11,7 @@ import { canonicalTags } from './tag-groups';
 import type { ScoredInventoryFact } from '../contracts/generated/domain';
 import { lookup } from './market';
 import { readDemand } from './demand';
+import { crowdedBook } from './book-depth';
 import { clearingPrice, scoreRow, bandSignal, sellableQty, spareQty, LIQUID_VOL } from './sell-priority';
 import type { Verdict } from '../contracts/generated/domain';
 import type { Market, MarketItemEntry, OwnedRecord } from '../contracts/data';
@@ -149,6 +150,8 @@ function previewRowFacts(key: string, rec: OwnedRecord, m: MarketItemEntry, mark
     donchBot: m.donch_bot_90d,
     lowSell: m.low_sell,
     topBuy: m.top_buy,
+    vol: m.vol,
+    vol28d: m.vol_28d,
   });
   return { key, sellable, clearing_price: row_price, sell_score, patience, ducats, plat_per_100d,
     medians_7d: medians, median_90d, delta_90d_pct, timing, demand,
@@ -198,6 +201,7 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     raw_value: facts.raw_value,
     sell_score,
     patience,
+    crowded: crowdedBook(m),
     // Near its 90-day low usually means "wait": over the year to 2026-10, a dip
     // won back ~20% within four weeks. Where the advisor says sell now (a new
     // prime, or a Resurgence reprint and its relic companions) the same dip

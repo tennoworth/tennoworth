@@ -16,6 +16,7 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
   import type { Market } from '../../contracts/data';
   import Toast from '../../ui/Toast.svelte';
   import Select from '../../ui/Select.svelte';
+  import BargainsPanel from './BargainsPanel.svelte';
   import { createToastQueue } from '../../ui/toast-queue.svelte';
 
   interface Props {
@@ -303,6 +304,7 @@ import { MAX_WATCHES, type NewWatch, type Watch, type WatchOutcome } from '../..
   {/if}
 
   </section>
+  <BargainsPanel {market} />
   <Toast toasts={toastQueue.toasts} ondismiss={toastQueue.dismiss} />
 </section>
 

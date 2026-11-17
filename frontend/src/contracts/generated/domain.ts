@@ -96,7 +96,7 @@ export type ScoredInventoryFact = { key: string, sellable: number, clearing_pric
 
 export type ScoringMarket = { items: { [key in string]: ScoringMarketEntry }, usage: Record<string, unknown>, set_to_parts: { [key in string]: UsageSet }, };
 
-export type ScoringMarketEntry = { vol: number | null, low_sell: number | null, avg: number | null, median_now: number | null, median_90d: number | null, low5_avg: number | null, ducats: number | null, donch_top_90d: number | null, donch_bot_90d: number | null, top_buy: number | null, medians_7d: Array<number>, };
+export type ScoringMarketEntry = { vol: number | null, low_sell: number | null, avg: number | null, median_now: number | null, median_90d: number | null, low5_avg: number | null, ducats: number | null, donch_top_90d: number | null, donch_bot_90d: number | null, top_buy: number | null, medians_7d: Array<number>, vol_28d: number | null, };
 
 export type ScrapCandidate = { slug: string, name: string, spare: number, ducats: number, plat: number,
 /**
@@ -124,7 +124,7 @@ export type SetRecoKind = "near-complete" | "complete-with-extras" | "extras";
 
 export type SetRecoPart = { slug: string, name: string, count: number, required: number, low_sell: number, };
 
-export type Timing = "hold" | "peak" | "neutral";
+export type Timing = "hold" | "drop" | "peak" | "neutral";
 
 export type UsageEntry = { name: string, category: string, year: number, share: number, peak_mr: number, by_mr: Array<number>, };
 

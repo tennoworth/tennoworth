@@ -25,7 +25,9 @@ export interface SellRow {
   advice?: 'sell_now' | 'hold' | 'neutral' | null;
   advice_reasons?: string[];
   patience: boolean;
-  timing: 'hold' | 'peak' | 'neutral';
+  /** 20+ asks within 10% of each other (domain/book-depth.ts). */
+  crowded: boolean;
+  timing: 'hold' | 'drop' | 'peak' | 'neutral';
   medians_7d: number[];
   median_90d: number | null;
   delta_90d_pct: number | null;

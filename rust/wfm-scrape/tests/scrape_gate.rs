@@ -289,21 +289,33 @@ fn scrape_keeps_expected_fixture_rows() {
         "stats_exhaust must be skipped"
     );
 
-    // low20_avg is appended last so readers that index the older columns by
+    // New columns are appended so readers that index the older columns by
     // position keep working; quoted list fields hold commas, so read from the end.
     let mut lines = csv.lines();
     assert!(
-        lines.next().unwrap().ends_with(",price_basis,low20_avg"),
-        "low20_avg must be the last column"
+        lines
+            .next()
+            .unwrap()
+            .ends_with(",price_basis,low20_avg,vol_28d"),
+        "low20_avg and vol_28d must be the last columns"
     );
-    let low20: Vec<f64> = lines
+    let tails: Vec<(f64, f64)> = lines
         .filter(|l| !l.trim().is_empty())
-        .map(|l| l.rsplit(',').next().unwrap().parse().unwrap())
+        .map(|l| {
+            let mut cells = l.rsplit(',');
+            let vol_28d = cells.next().unwrap().parse().unwrap();
+            (cells.next().unwrap().parse().unwrap(), vol_28d)
+        })
         .collect();
-    assert!(low20.iter().all(|v| *v >= 0.0), "{low20:?}");
     assert!(
-        low20.iter().any(|v| *v > 0.0),
-        "a fixture book has asks: {low20:?}"
+        tails
+            .iter()
+            .all(|(low20, vol)| *low20 >= 0.0 && *vol >= 0.0),
+        "{tails:?}"
+    );
+    assert!(
+        tails.iter().any(|(low20, _)| *low20 > 0.0),
+        "a fixture book has asks: {tails:?}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

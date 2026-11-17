@@ -670,7 +670,7 @@ table.tw tr.busy td { color: var(--muted); }
 }
 /* Advice */
 .tag:is(.peak, .flip, .advice-sell_now) { color: var(--good); }
-.tag:is(.hold, .advice-hold) { color: var(--warn); }
+.tag:is(.hold, .drop, .advice-hold) { color: var(--warn); }
 .tag.deal { color: var(--ducat); }
 /* Stale data is a caution to act on (refresh), so it takes the solid edge. */
 .tag.stale { color: var(--warn); }

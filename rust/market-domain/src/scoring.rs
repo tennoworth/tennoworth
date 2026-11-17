@@ -29,6 +29,8 @@ pub struct ScoringMarketEntry {
     pub top_buy: Option<f64>,
     #[serde(default)]
     pub medians_7d: Vec<f64>,
+    #[serde(default)]
+    pub vol_28d: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -93,6 +95,8 @@ pub struct DemandRead {
 #[serde(rename_all = "lowercase")]
 pub enum Timing {
     Hold,
+    /// Hold-band price on heavy selling: a repricing more than a dip.
+    Drop,
     Peak,
     Neutral,
 }
@@ -182,6 +186,21 @@ pub fn mastery_band(by_mr: &[f64]) -> Option<MasteryBand> {
     Some(MasteryBand { from, to })
 }
 
+/// A dip's daily volume against its 28-day normal at which it stops reading as
+/// a dip. Over a year of history, Hold-band days on under 1.5x normal volume
+/// were back near the 90-day median within 30 days 94% of the time; on 3x or
+/// more, 52% (`tests/fixtures/sell-priority/timing.json`).
+pub const FLOOD_RATIO: f64 = 3.0;
+/// The measurement covered items trading at least 5 a day; below that, three
+/// times normal is a handful of trades, not a flood.
+pub const FLOOD_MIN_DAILY: f64 = 5.0;
+
+fn flooded(m: &ScoringMarketEntry) -> bool {
+    let normal = m.vol_28d.unwrap_or(0.0);
+    let daily = m.vol.unwrap_or(0.0) / 2.0;
+    normal >= FLOOD_MIN_DAILY && daily >= normal * FLOOD_RATIO
+}
+
 /// Where `price` sits in the 90-day channel. Top picks drop a `Hold` row, and
 /// the desktop digest reads this so it drops the same rows.
 pub fn timing(price: f64, m: &ScoringMarketEntry) -> Timing {
@@ -192,7 +211,11 @@ pub fn timing(price: f64, m: &ScoringMarketEntry) -> Timing {
     }
     let position = (price - bot) / (top - bot);
     if position <= 0.2 {
-        return Timing::Hold;
+        return if flooded(m) {
+            Timing::Drop
+        } else {
+            Timing::Hold
+        };
     }
     let ask = m.low_sell.unwrap_or(0.0);
     let buy = m.top_buy.unwrap_or(0.0);
@@ -335,6 +358,30 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timing_matches_the_shared_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/sell-priority/timing.json"
+        ))
+        .unwrap();
+        assert_eq!(fixture["flood_ratio"].as_f64(), Some(FLOOD_RATIO));
+        assert_eq!(fixture["flood_min_daily"].as_f64(), Some(FLOOD_MIN_DAILY));
+        for c in fixture["cases"].as_array().unwrap() {
+            let f = |k: &str| c[k].as_f64();
+            let m = ScoringMarketEntry {
+                vol: f("vol"),
+                vol_28d: f("vol_28d"),
+                low_sell: f("low_sell"),
+                top_buy: f("top_buy"),
+                donch_top_90d: f("top"),
+                donch_bot_90d: f("bot"),
+                ..Default::default()
+            };
+            let got = serde_json::to_value(timing(f("price").unwrap(), &m)).unwrap();
+            assert_eq!(got, c["expected"], "{}", c["name"]);
+        }
+    }
 
     #[test]
     fn the_thin_book_line_matches_the_typescript_side() {

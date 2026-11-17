@@ -20,6 +20,7 @@
   import Rich from '../../ui/Rich.svelte';
   import { shimmer } from '../../ui/shimmer';
   import { formatLocale, t } from '../../i18n/i18n.svelte';
+  import { weekendNudge } from '../../domain/weekend';
   import type { MessageKey } from '../../i18n/en';
   interface Props {
     minPrice: number; minOwned: number; typeFilter: string; hideAtLvl: number;
@@ -265,7 +266,8 @@
   // no invented ETAs or destinations. Order of checks mirrors how confident
   // each signal is: a corroborated peak is the strongest "act now" case,
   // then whatever 90d trend exists, then the plain fallback for a
-  // flat/illiquid-trend row. Hold rows never become picks.
+  // flat/illiquid-trend row. Hold rows never become picks; a drop does, and
+  // says why waiting is not the advice.
   // The reason says only what the columns beside it cannot: where the price
   // sits against its 90-day baseline. Low ask and Vol 48h are already on the
   // row; the clearing price is named only when the troll-undercut clamp made it
@@ -274,6 +276,7 @@
     const price = Math.round(p.clearing_price ?? p.low_sell);
     const clamp = price !== Math.round(p.low_sell) ? t('sell.reasonClears', { price }) : '';
     const d = p.delta_90d_pct;
+    if (p.timing === 'drop') return t('sell.reasonDrop') + clamp;
     if (p.timing === 'peak') return (d != null && d > 0 ? t('sell.reasonPeakUp', { pct: Math.round(d) }) : t('sell.reasonPeak')) + clamp;
     if (d != null && d >= 1) return t('sell.reasonUp', { pct: Math.round(d) }) + clamp;
     if (d != null && d <= -1) return t('sell.reasonDown', { pct: Math.abs(Math.round(d)) }) + clamp;
@@ -420,6 +423,10 @@
     class="muted picks-exp"
     title={t('sell.picksExplainTitle', { minScore: MIN_PICK_SCORE })}
   >{t('sell.picksExplain')}</span>
+  {@const weekend = weekendNudge(new Date())}
+  {#if weekend}
+    <span class="muted picks-exp picks-weekend">{t(weekend === 'before' ? 'sell.weekendBefore' : 'sell.weekendDuring')}</span>
+  {/if}
   {#if tradesLeft != null}
     <span class="muted picks-trades" role="status" title={tradesLeft > 0 && !bulkSlugs ? t('sell.unlockToCount') : undefined}>
       {#if gauge}<span class="trade-gauge" aria-hidden="true">{#each gauge as cell}<i class={cell}></i>{/each}</span>{/if}

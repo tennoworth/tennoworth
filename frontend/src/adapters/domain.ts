@@ -82,6 +82,7 @@ export async function scoreInventoryNative(owned: Map<string, OwnedRecord>, mark
       median_now: m.median_now ?? null, median_90d: m.median_90d ?? null,
       low5_avg: m.low5_avg ?? null, ducats: m.ducats ?? null,
       donch_top_90d: m.donch_top_90d ?? null, donch_bot_90d: m.donch_bot_90d ?? null,
+      vol_28d: m.vol_28d ?? null,
       top_buy: m.top_buy ?? null, medians_7d: Array.isArray(m.medians_7d) ? m.medians_7d : [],
     };
   }

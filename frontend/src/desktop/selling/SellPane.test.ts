@@ -16,7 +16,7 @@ function row(overrides: Partial<SellRow> = {}): SellRow {
     owned: 3, sellable: 2, leveled: 0, type: 'RawUpgrades', kept_lvl: null,
     ducats: null, plat_per_100d: null, avg_price: 20, low_sell: 15, low5_avg: 14,
     top_buy: 10, volume_48h: 40, ratio: 1.4, potential_plat: 100, raw_value: 120,
-    sell_score: 45, patience: false, timing: 'peak', medians_7d: [15, 16, 15],
+    sell_score: 45, patience: false, crowded: false, timing: 'peak', medians_7d: [15, 16, 15],
     median_90d: 15, delta_90d_pct: 12, tags: ['peak'], is_augment: false,
     vault_status: 'available',
     ...overrides,
@@ -134,6 +134,30 @@ describe('SellPane', () => {
     // Without the rank the day's size is unknown, so no gauge.
     const unranked = renderPane({ results: [row(), ...later], tradeAllowance: { ...allowance, mastery_rank: null }, bulkSlugs: new Set(['arcane_energize']) });
     expect(unranked.container.querySelector('.trade-gauge')).toBeNull();
+  });
+
+  it('says when the weekend buyers come, and nothing early in the week', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 20, 12)); // a Friday
+      renderPane();
+      expect(screen.getByText(/list before Saturday to meet them/)).toBeTruthy();
+      cleanup();
+      vi.setSystemTime(new Date(2026, 10, 22, 12)); // a Sunday
+      renderPane();
+      expect(screen.getByText(/^Weekend: about a quarter more buyers/)).toBeTruthy();
+      cleanup();
+      vi.setSystemTime(new Date(2026, 10, 17, 12)); // a Tuesday
+      renderPane();
+      expect(screen.queryByText(/quarter more buyers/)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('explains a drop pick instead of hiding it like a hold', () => {
+    renderPane({ results: [row({ timing: 'drop', delta_90d_pct: -40 })] });
+    expect(screen.getByText(/on heavy selling - about half of drops like this recover/)).toBeTruthy();
   });
 
   it('hides a pick behind an Undo receipt that keeps its slot', async () => {

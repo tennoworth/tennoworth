@@ -128,7 +128,9 @@ export function scoreRow({ owned, m, usageShare }: SellScoreInput): SellScoreOut
 // flooded, which craters ~50% on arrival and recovers over weeks - is a "hold";
 // near its 90-day high is "peak", the moment to list. Neutral in between, or
 // whenever the band is missing/degenerate (CSV-only rebuilds inherit zeros).
-export type TimingState = 'hold' | 'peak' | 'neutral';
+// "drop" is a hold-band price on heavy selling: over a year of history those
+// recovered about half as often as quiet dips (tests/fixtures/sell-priority/timing.json).
+export type TimingState = 'hold' | 'drop' | 'peak' | 'neutral';
 
 export interface BandSignalInput {
   // Nullable like the other fields - the function already treats a missing
@@ -138,9 +140,14 @@ export interface BandSignalInput {
   donchBot?: number | null;
   lowSell?: number | null;
   topBuy?: number | null;
+  // 48-hour volume and the mean daily volume of the 28 days before it.
+  vol?: number | null;
+  vol28d?: number | null;
 }
 
 const HOLD_BELOW = 0.2;
+export const FLOOD_RATIO = 3;
+export const FLOOD_MIN_DAILY = 5;
 const PEAK_ABOVE = 0.8;
 // A peak must be corroborated by the live book - "peak" means "list NOW",
 // and you list into the standing market, not into a price history. Two
@@ -156,13 +163,19 @@ const PEAK_ABOVE = 0.8;
 // the cheapest state to manipulate into existence.
 const PEAK_MAX_ASK_GAP = 2;
 
-export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy }: BandSignalInput): TimingState {
+function flooded(vol: number | null | undefined, vol28d: number | null | undefined): boolean {
+  const normal = Number(vol28d) || 0;
+  const daily = (Number(vol) || 0) / 2;
+  return normal >= FLOOD_MIN_DAILY && daily >= normal * FLOOD_RATIO;
+}
+
+export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy, vol, vol28d }: BandSignalInput): TimingState {
   const p = Number(price) || 0;
   const top = Number(donchTop) || 0;
   const bot = Number(donchBot) || 0;
   if (p <= 0 || top <= 0 || bot <= 0 || top <= bot) return 'neutral';
   const pos = (p - bot) / (top - bot); // 0 = at 90d low, 1 = at 90d high
-  if (pos <= HOLD_BELOW) return 'hold';
+  if (pos <= HOLD_BELOW) return flooded(vol, vol28d) ? 'drop' : 'hold';
   if (pos >= PEAK_ABOVE) {
     const ask = Number(lowSell) || 0;
     const buy = Number(topBuy) || 0;

@@ -54,6 +54,9 @@ pub struct ItemEntry {
     pub medians_7d: Vec<f64>,
     pub donch_top_90d: i64,
     pub donch_bot_90d: i64,
+    /// Mean daily volume over the 28 days before the two `vol` covers: the
+    /// normal a selling flood is measured against. `0` when unknown.
+    pub vol_28d: f64,
 }
 
 /// Render a single CSV row into an [`ItemEntry`].
@@ -90,6 +93,7 @@ pub fn render_item(row: &csv_input::CsvRow, meta: &CatalogItemMeta) -> ItemEntry
         medians_7d: csv_input::parse_medians_7d(&row.medians_7d),
         donch_top_90d: parse_i64_or(&row.donch_top_90d, 0),
         donch_bot_90d: parse_i64_or(&row.donch_bot_90d, 0),
+        vol_28d: parse_f64_or(&row.vol_28d, 0.0).max(0.0),
     }
 }
 
@@ -472,8 +476,18 @@ mod tests {
         assert!(entry.medians_7d.is_empty());
         assert_eq!(entry.donch_top_90d, 0);
         assert_eq!(entry.donch_bot_90d, 0);
+        assert_eq!(entry.vol_28d, 0.0); // CSV from before the column
         assert!(entry.tags.is_empty());
         assert_eq!(entry.ducats, None);
+    }
+
+    #[test]
+    fn render_item_carries_the_volume_baseline() {
+        let mut row = test_row();
+        row.vol_28d = "61.5".into();
+        assert_eq!(render_item(&row, &test_meta()).vol_28d, 61.5);
+        row.vol_28d = "-3".into();
+        assert_eq!(render_item(&row, &test_meta()).vol_28d, 0.0);
     }
 
     #[test]

@@ -95,6 +95,8 @@ struct MarketEntry {
     #[serde(default)]
     donch_bot_90d: f64,
     #[serde(default)]
+    vol_28d: f64,
+    #[serde(default)]
     ducats: Option<i64>,
     #[serde(default)]
     tags: Vec<String>,
@@ -123,9 +125,12 @@ impl MarketEntry {
         }
     }
 
-    /// Selling near the 90-day low: Top picks leave these out, and so does the digest.
+    /// Selling near the 90-day low on ordinary volume: Top picks leave these
+    /// out, and so does the digest. A flooded drop stays in: waiting is not the advice.
     fn hold(&self) -> bool {
         let channel = market_domain::scoring::ScoringMarketEntry {
+            vol: Some(self.vol),
+            vol_28d: Some(self.vol_28d),
             low_sell: Some(self.low_sell),
             top_buy: Some(self.top_buy),
             donch_top_90d: Some(self.donch_top_90d),
