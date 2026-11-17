@@ -54,6 +54,25 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.104 - 2026-11-17
+
+# 🎨 TennoWorth Desktop 0.10.104
+
+TennoWorth Desktop 0.10.104 is ready.
+
+This is a small fix for everyone on 0.10.103. Scrolling far down Settings could slide the whole app up and leave an empty band under it; the page now stays put. The window also opens tall enough to show every view in the sidebar.
+
+## Changelog (2)
+
+### Appearance
+
+- **Settings no longer slides the app up** Scrolling far down Settings could move the whole app up and leave an empty space under it until you scrolled back. Only the view scrolls now, and the sidebar stays in place. <!-- app-note {"id":"settings-page-scroll","kind":"fixed"} -->
+- **The window opens with the whole sidebar** TennoWorth now opens tall enough to show every view and the links at the foot of the sidebar. On a shorter screen it opens at the screen's height, and you can still make it smaller. <!-- app-note {"id":"window-opens-full-sidebar","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.10.103 - 2026-11-17
 
 # 💰 TennoWorth Desktop 0.10.103
