@@ -387,7 +387,7 @@
     border: 0;
     padding: 0;
     color: var(--fg);
-    text-decoration: underline dotted;
+    text-decoration: underline;
     cursor: pointer;
     font: inherit;
   }

@@ -130,7 +130,7 @@
   .events > header { margin: calc(-1 * var(--s3)) calc(-1 * var(--inset)) 0; padding: var(--s3) var(--inset); background: var(--rail-bg); color: var(--rail-fg); border-bottom: 2px solid var(--rail-edge); display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2); align-items: center; }
   .events > header h2 { margin: 0; font-size: var(--text-section); }
   .events > header span { color: var(--rail-muted); font-size: var(--text-caption); }
-  .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2) var(--s3); align-items: center; padding-block: var(--s2); border-bottom: 1px var(--rule) var(--border); }
+  .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2) var(--s3); align-items: center; padding-block: var(--s2); border-bottom: 1px var(--rule) var(--rule-ink); }
   .what { display: grid; gap: var(--s1); min-width: 0; overflow-wrap: anywhere; }
   .what span { color: var(--muted); font-size: var(--text-caption); }
   form h3 { margin: var(--s2) 0 0; font-size: var(--text-section); }

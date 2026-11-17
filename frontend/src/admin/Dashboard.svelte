@@ -296,12 +296,12 @@
   .feed-check[data-tone="good"] { color: var(--good); }
   .feed-check[data-tone="warn"] { color: var(--warn); }
   .feed-check[data-tone="bad"] { color: var(--bad); }
-  .suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s3); align-items: center; padding-top: var(--s2); border-top: 1px var(--rule) var(--border); overflow-wrap: anywhere; }
+  .suggestion { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s2) var(--s3); align-items: center; padding-top: var(--s2); border-top: 1px var(--rule) var(--rule-ink); overflow-wrap: anywhere; }
   .suggestion:first-of-type { border-top: 0; padding-top: 0; }
   .suggestion small { display: block; color: var(--muted); font-size: var(--text-caption); }
   .notification-preview { padding: var(--s3); border: 1px solid var(--border); margin-top: var(--s2); }
   .prose, .notification-preview p { white-space: pre-line; overflow-wrap: anywhere; }
-  .history-entry { border-bottom: 1px var(--rule) var(--border); padding-bottom: var(--s2); overflow-wrap: anywhere; }
+  .history-entry { border-bottom: 1px var(--rule) var(--rule-ink); padding-bottom: var(--s2); overflow-wrap: anywhere; }
   footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s3); }
   @media (max-width: 760px) { .admin-workspace, .dates, .suggestion { grid-template-columns: minmax(0, 1fr); } }
 </style>

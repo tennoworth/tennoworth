@@ -339,7 +339,7 @@
   .visbtn { appearance: none; background: transparent; border: none; padding: 0; height: var(--ctl-xs); cursor: pointer; }
   .visbtn:hover:not(:disabled) { background: transparent; }
   .visbtn:hover:not(:disabled) .vis { background: var(--panel-2); }
-  button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline dotted; cursor: pointer; font: inherit; }
+  button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline; cursor: pointer; font: inherit; }
   .order-filters { gap: var(--s2) var(--s3); padding-block: var(--s2); }
   .order-search { flex: 0 1 15rem; min-width: 10rem; }
   .orders td:last-child .btn { white-space: nowrap; }

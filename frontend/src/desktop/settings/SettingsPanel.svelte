@@ -498,30 +498,33 @@
   /* The strip holds one to three cells, depending on what this build offers. */
   .glance { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
   .glance > a { overflow-wrap: anywhere; display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3) var(--inset); min-width: 0; color: var(--fg); border-bottom: 0; }
-  .glance > a + a { border-left: 1px var(--rule) var(--border); }
+  .glance > a + a { border-left: 1px var(--rule) var(--rule-ink); }
   .glance > a:hover { background: var(--panel-2); }
   .glance strong { font: 500 var(--text-body)/var(--leading-control) var(--font-body); overflow-wrap: anywhere; }
   .glance strong.with-mark { display: flex; align-items: center; gap: var(--s2); }
   .glance > a > span:last-child { font-size: var(--text-caption); line-height: var(--leading-body); color: var(--muted); overflow-wrap: anywhere; }
   .jump { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--text-control); }
   .jump .k, .tier { font: 600 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-  .jump .k:not(:first-child) { margin-left: var(--s2); padding-left: var(--s4); border-left: 1px var(--rule) var(--border); }
+  .jump .k:not(:first-child) { margin-left: var(--s2); padding-left: var(--s4); border-left: 1px var(--rule) var(--rule-ink); }
   .tier { display: flex; align-items: center; gap: var(--s3); margin: var(--s2) 0 calc(var(--s2) * -1); }
-  .tier::after { content: ""; flex: 1; height: 1px; background: var(--rule-line); }
+  /* A solid, faded line: it separates groups of sections, so it reads as
+     structure rather than as another inner divider. A background, not a
+     border, so WebKit snaps it to whole pixels. */
+  .tier::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
 
   /* Detection and Reward cards side by side while each column can still hold
      a label beside its control; they stack with the rows below 760px. */
-  .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px var(--rule) var(--border); }
+  .split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px var(--rule) var(--rule-ink); }
   .split > .ui-section-group { border-top: 0; min-width: 0; }
-  .split > .ui-section-group + .ui-section-group { border-left: 1px var(--rule) var(--border); }
+  .split > .ui-section-group + .ui-section-group { border-left: 1px var(--rule) var(--rule-ink); }
   .split .ui-setting-row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); }
   .split .shortcut { width: 9rem; }
-  .troubleshooting { border-top: 1px var(--rule) var(--border); }
+  .troubleshooting { border-top: 1px var(--rule) var(--rule-ink); }
   .troubleshooting > summary { min-height: var(--ctl-lg); padding: var(--s1) var(--inset); cursor: pointer; color: var(--muted); font-size: var(--text-control); }
   .troubleshooting > .ui-setting-row { padding-top: var(--s2); }
   .requirements { display: flex; flex-direction: column; gap: var(--s2); padding: 0 var(--inset) var(--s4); }
   .requirements p { margin: 0; }
 
-  @media (max-width: 1050px) { .split { grid-template-columns: minmax(0, 1fr); } .split > .ui-section-group + .ui-section-group { border-left: 0; border-top: 1px var(--rule) var(--border); } }
+  @media (max-width: 1050px) { .split { grid-template-columns: minmax(0, 1fr); } .split > .ui-section-group + .ui-section-group { border-left: 0; border-top: 1px var(--rule) var(--rule-ink); } }
   @media (max-width: 760px) { .split .ui-setting-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } .jump .k:not(:first-child) { margin-left: 0; padding-left: 0; border-left: 0; } }
 </style>

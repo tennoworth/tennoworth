@@ -194,17 +194,17 @@
   .keyboard-tools kbd { margin-inline-start: var(--s1); }
   .keyboard-tools.compact { width: 100%; }
   .compact > button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: var(--ctl); padding: 0 var(--s1); border: 0; background: transparent; color: var(--muted); font: inherit; text-transform: none; letter-spacing: normal; }
-  .compact > button:hover { color: var(--fg); text-decoration: underline dotted; }
+  .compact > button:hover { color: var(--fg); text-decoration: underline; }
   dialog.keyboard-dialog { max-width: 40rem; }
   :global(html[data-look="yorha"]) dialog.keyboard-dialog :global(header) { margin: 0; padding: var(--s2) var(--s3); flex-direction: row; background: var(--rail-bg); color: var(--rail-fg); }
   dialog.keyboard-dialog :global(header h2), dialog.keyboard-dialog :global(header button) { color: var(--rail-fg); }
   dialog.keyboard-dialog :global(header button) { border-color: var(--rail-edge); }
   .keyboard-body { padding: var(--inset); }
   .keyboard-body p { margin: 0; }
-  .shortcut-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); padding-block: var(--s1); border-bottom: 1px dotted var(--rule); }
+  .shortcut-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); padding-block: var(--s1); border-bottom: 1px var(--rule) var(--hairline); }
   .shortcut-row > :first-child { flex: 1 1 12rem; }
   .enable-shortcuts { display: flex; flex-direction: row; align-items: center; gap: var(--s2); }
   .destinations { max-height: 45dvh; overflow-y: auto; }
-  .destination { display: block; width: 100%; min-height: var(--ctl-lg); text-align: start; padding: var(--s2); background: var(--panel); color: var(--fg); border: 0; border-bottom: 1px dotted var(--rule); font: inherit; cursor: pointer; }
+  .destination { display: block; width: 100%; min-height: var(--ctl-lg); text-align: start; padding: var(--s2); background: var(--panel); color: var(--fg); border: 0; border-bottom: 1px var(--rule) var(--hairline); font: inherit; cursor: pointer; }
   .destination[aria-selected="true"] { background: var(--ink-bar); color: var(--on-ink); }
 </style>

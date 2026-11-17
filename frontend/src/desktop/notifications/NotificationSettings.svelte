@@ -94,14 +94,14 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
 <style>
   p { margin: 0; }
   .inset { padding: var(--s3) var(--inset); line-height: var(--leading-body); }
-  .footnote { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--border); }
+  .footnote { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--rule-ink); }
   .notice { margin: 0 var(--inset) var(--s4); }
   .notice:first-child { margin-top: var(--s4); }
-  .scroll { border-top: 1px var(--rule) var(--border); }
+  .scroll { border-top: 1px var(--rule) var(--rule-ink); }
   /* Anchors the hidden text to its cell; otherwise it escapes the table's scroll box and widens the page. */
   .categories td:last-child { position: relative; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .in-game-note { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--border); }
+  .in-game-note { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--rule-ink); }
   /* Category names are reading text that wraps, not truncated data. */
   .categories td:first-child { height: auto; padding-block: var(--s2); text-align: left; white-space: normal; font-family: var(--font-body); color: var(--fg); }
   .categories th:first-child { text-align: left; }

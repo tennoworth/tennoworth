@@ -108,8 +108,8 @@
 
 <style>
   .meta-drift { min-width: 0; }
-  .intro { padding: .75rem 1rem; border-bottom: 1px dotted var(--hairline); line-height: 1.45; }
-  .controls { display: flex; flex-wrap: wrap; gap: var(--s3); padding: var(--s3) var(--inset); align-items: end; border-bottom: 1px dotted var(--hairline); }
+  .intro { padding: .75rem 1rem; border-bottom: 1px var(--rule) var(--hairline); line-height: 1.45; }
+  .controls { display: flex; flex-wrap: wrap; gap: var(--s3); padding: var(--s3) var(--inset); align-items: end; border-bottom: 1px var(--rule) var(--hairline); }
   input, .controls :global(.ui-select) { font: inherit; font-size: var(--text-control); min-height: var(--ctl-lg); border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); color: inherit; padding: var(--s1) var(--s2); }
   input { width: 100%; min-width: 0; }
   .meta-search { flex: 1 1 15rem; }
