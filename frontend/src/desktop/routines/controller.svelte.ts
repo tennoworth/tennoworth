@@ -26,8 +26,11 @@ export const ROUTINE_TASKS = {
 /** Built-ins a player can add but nobody starts with: game modes and vendors
  *  that only matter to part of the player base. */
 const OPTIONAL_TASKS = {
-  daily: ['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily'],
-  weekly: ['elite-temporal-archimedea', 'elite-deep-archimedea', 'teshin-honors', 'paladino', 'icebind', 'calendar-1999'],
+  daily: ['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily', 'simaris-synthesis'],
+  weekly: [
+    'elite-temporal-archimedea', 'elite-deep-archimedea', 'netracells', 'bird-3-shard', 'teshin-honors', 'palladino',
+    'icebind', 'calendar-1999', 'kahls-garrison', 'the-circuit', 'descendia',
+  ],
 } as const;
 
 type RoutineTaskId =
