@@ -1,7 +1,6 @@
 use super::Http;
 use crate::clock;
-use chrono::DateTime;
-use chrono::Utc;
+use jiff::Timestamp;
 use std::collections::HashMap;
 
 /// An estimated vault within this many days marks a prime `vaulting-soon`. The
@@ -15,7 +14,7 @@ const VAULT_SOON_DAYS: i64 = 60;
 pub fn fetch_vault_status(
     http: &dyn Http,
     catalog: &HashMap<String, String>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> (HashMap<String, String>, bool) {
     let urls = [
         "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Warframes.json",
@@ -29,7 +28,7 @@ pub fn fetch_vault_status(
         "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Sentinels.json",
         "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Pets.json",
     ];
-    let vault_soon_cutoff = now + chrono::Duration::days(VAULT_SOON_DAYS);
+    let vault_soon_cutoff = now + market_domain::stamp::days(VAULT_SOON_DAYS);
     let mut out = HashMap::new();
     let mut complete = true;
 
@@ -120,7 +119,7 @@ pub fn fetch_vault_status(
 pub fn align_calendar_with_vault_status(
     calendar: &mut HashMap<String, serde_json::Value>,
     vault_status: &HashMap<String, String>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> usize {
     let Some(primes) = calendar.get_mut("primes").and_then(|p| p.as_object_mut()) else {
         return 0;

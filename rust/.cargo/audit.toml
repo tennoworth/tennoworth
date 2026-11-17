@@ -11,6 +11,11 @@
 
 [advisories]
 ignore = [
+    # chrono unmaintained. The workspace uses jiff; chrono stays in Cargo.lock
+    # only as an optional serde_with dependency (via tauri-utils) that no
+    # build enables. The audit workflow's "chrono stays out of the build" step
+    # fails if anything compiles it again, or once the lock no longer lists it.
+    "RUSTSEC-2026-0543", # chrono
     # D-Bus types moved into zbus 6. Tauri plugins still require zbus 5,
     # and the keyring Secret Service backend requires zbus 4. Revisit when
     # those upstream consumers migrate; no standalone patched versions exist.

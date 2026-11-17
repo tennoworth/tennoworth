@@ -405,7 +405,7 @@ pub struct ScrapeConfig {
     pub stats_cache: Option<StatsCacheConfig>,
     /// The injected clock. The crate reads no other time source, so a fixture
     /// run reproduces the same stamps as production.
-    pub now: chrono::DateTime<chrono::Utc>,
+    pub now: jiff::Timestamp,
 }
 
 impl Default for ScrapeConfig {
@@ -420,7 +420,7 @@ impl Default for ScrapeConfig {
             checkpoint_every: 100,
             max_coercions: DEFAULT_MAX_COERCIONS,
             stats_cache: None,
-            now: chrono::DateTime::UNIX_EPOCH,
+            now: jiff::Timestamp::UNIX_EPOCH,
         }
     }
 }
@@ -428,7 +428,7 @@ impl Default for ScrapeConfig {
 #[derive(Debug, Clone)]
 pub struct StatsCacheConfig {
     pub path: PathBuf,
-    pub interval: chrono::Duration,
+    pub interval: jiff::SignedDuration,
 }
 
 /// Outcome of a scrape run.
@@ -519,7 +519,7 @@ fn scan_item(
                 stage: analyze_stats(
                     item,
                     Some(stats),
-                    crate::clock::utc_day(cfg.now.date_naive()),
+                    crate::clock::utc_day(market_domain::stamp::utc_date(cfg.now)),
                     co,
                 )?,
                 fetched_at: crate::clock::iso_z(cfg.now),
@@ -1233,9 +1233,9 @@ mod tests {
         // Neo R3 Relic's shape on 2026-11-17: a trade every few days. Seven
         // trading days of 8 in the window is 2 a day, not 8.
         let day = |offset: i64| {
-            let date = chrono::DateTime::UNIX_EPOCH.date_naive()
-                + chrono::Duration::days(FIXTURE_TODAY - offset);
-            format!("{}T00:00:00.000+00:00", date.format("%Y-%m-%d"))
+            let date = jiff::civil::Date::constant(1970, 1, 1)
+                + market_domain::stamp::days(FIXTURE_TODAY - offset);
+            format!("{date}T00:00:00.000+00:00")
         };
         let mut rows: Vec<Value> = (0..7)
             .map(|i| json!({"datetime": day(29 - i * 4), "volume": 8, "median": 10}))
@@ -1342,9 +1342,9 @@ mod tests {
         ScrapeConfig {
             stats_cache: Some(StatsCacheConfig {
                 path: cache.to_path_buf(),
-                interval: chrono::Duration::hours(6),
+                interval: jiff::SignedDuration::from_hours(6),
             }),
-            now: chrono::DateTime::UNIX_EPOCH + chrono::Duration::hours(hours),
+            now: jiff::Timestamp::UNIX_EPOCH + jiff::SignedDuration::from_hours(hours),
             ..cfg(out)
         }
     }

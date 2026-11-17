@@ -3,7 +3,8 @@ use crate::contracts::{
     Snapshot,
 };
 use announcement_feed::{parse, stamp, AnnouncementFeed};
-use chrono::{SecondsFormat, Utc};
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::{
@@ -42,9 +43,9 @@ fn decode<T: serde::de::DeserializeOwned>(value: String) -> Result<T, Error> {
     Ok(serde_json::from_str(&value)?)
 }
 pub(crate) fn utc(now: i64) -> Result<String, Error> {
-    chrono::DateTime::from_timestamp(now, 0)
-        .map(|v| v.to_rfc3339_opts(SecondsFormat::Secs, true))
-        .ok_or_else(|| Error::Invalid("Date is outside the supported range.".into()))
+    Timestamp::from_second(now)
+        .map(|v| v.to_string())
+        .map_err(|_| Error::Invalid("Date is outside the supported range.".into()))
 }
 
 impl Store {
@@ -603,7 +604,7 @@ fn prune_events(feed: &mut AnnouncementFeed, now: i64) {
 }
 
 pub fn now() -> i64 {
-    Utc::now().timestamp()
+    Timestamp::now().as_second()
 }
 
 pub fn backup_file(path: &Path, destination: &Path) -> anyhow::Result<()> {
@@ -664,9 +665,10 @@ pub fn snapshot(path: &Path, dir: &Path, now: i64, keep: usize) -> anyhow::Resul
     if keep == 0 {
         anyhow::bail!("keep at least one snapshot");
     }
-    let stamp = chrono::DateTime::from_timestamp(now, 0)
-        .ok_or_else(|| anyhow::anyhow!("snapshot time is out of range"))?
-        .format("%Y%m%dT%H%M%SZ");
+    let stamp = Timestamp::from_second(now)
+        .map_err(|_| anyhow::anyhow!("snapshot time is out of range"))?
+        .strftime("%Y%m%dT%H%M%SZ")
+        .to_string();
     let destination = dir.join(format!("announcements-{stamp}.sqlite"));
     backup_file(path, &destination)?;
     // Partials from interrupted runs are never snapshots; clear them once one succeeds.
@@ -708,9 +710,11 @@ pub fn latest_snapshot(dir: &Path) -> std::io::Result<(Option<i64>, usize)> {
                 .strip_prefix("announcements-")?
                 .strip_suffix(".sqlite")?
                 .to_owned();
-            chrono::NaiveDateTime::parse_from_str(&stamp, "%Y%m%dT%H%M%SZ")
+            jiff::civil::DateTime::strptime("%Y%m%dT%H%M%SZ", &stamp)
+                .ok()?
+                .to_zoned_datetime(TimeZone::UTC)
                 .ok()
-                .map(|time| time.and_utc().timestamp())
+                .map(|time| time.timestamp().as_second())
         })
         .collect();
     stamps.sort_unstable();

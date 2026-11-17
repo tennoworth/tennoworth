@@ -7,6 +7,7 @@ pub mod limits;
 pub mod math;
 pub mod planners;
 pub mod scoring;
+pub mod stamp;
 pub mod trade_session;
 
 pub mod dispatch;

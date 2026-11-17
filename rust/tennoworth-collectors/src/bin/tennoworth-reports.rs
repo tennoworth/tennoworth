@@ -1,4 +1,4 @@
-use chrono::Utc;
+use jiff::Timestamp;
 use std::path::PathBuf;
 use tennoworth_collectors::reports::{Collector, Store};
 
@@ -8,7 +8,7 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("TENNOWORTH_REPORTS_DB")
             .unwrap_or_else(|_| "/var/lib/tennoworth-reports/reports.db".into()),
     );
-    let now = Utc::now();
+    let now = Timestamp::now();
     match std::env::args().nth(1).as_deref() {
         // Aggregates only: raw rows and contributor ids are never backup material.
         Some("export") => {

@@ -30,7 +30,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
+use market_domain::stamp::whole_days;
 
 use crate::clock;
 
@@ -214,7 +215,7 @@ pub fn reconcile<T: Mergeable + Default>(
     observation: Observation<T>,
     prior: Option<&T>,
     prior_stamp: Option<&str>,
-    now: DateTime<Utc>,
+    now: Timestamp,
     stale_days: i64,
 ) -> Reconciled<T> {
     let attempted_at = clock::iso_z(now);
@@ -229,11 +230,11 @@ pub fn reconcile<T: Mergeable + Default>(
                 None
             } else {
                 clock::parse_stamp(kept_since).and_then(|kept_dt| {
-                    let age = now.signed_duration_since(kept_dt);
-                    if age.num_days() >= stale_days {
+                    let age = now.duration_since(kept_dt);
+                    if age.as_hours() / 24 >= stale_days {
                         Some(StaleWarning {
                             surface: name.to_string(),
-                            days: age.num_days(),
+                            days: age.as_hours() / 24,
                         })
                     } else {
                         None
@@ -371,7 +372,7 @@ pub fn reconcile_keyed<V: Clone>(
     prior: Option<&HashMap<String, V>>,
     prior_stamp: Option<&str>,
     prior_keys: Option<&KeyStamps>,
-    now: DateTime<Utc>,
+    now: Timestamp,
     stale_days: i64,
 ) -> (Reconciled<HashMap<String, V>>, KeyStamps) {
     let (mut data, prior_map) = match (observation, prior) {
@@ -415,13 +416,13 @@ pub fn reconcile_keyed<V: Clone>(
         }
         let stamp = stamps.of(key);
         match clock::parse_stamp(stamp) {
-            Some(at) if now.signed_duration_since(at).num_days() < stale_days => {
+            Some(at) if whole_days(now, at) < stale_days => {
                 oldest = oldest.min(at);
                 data.insert(key.clone(), value.clone());
                 carried.insert(key.clone(), stamp.to_string());
             }
             at => {
-                let days = at.map_or(stale_days, |at| now.signed_duration_since(at).num_days());
+                let days = at.map_or(stale_days, |at| whole_days(now, at));
                 dropped_days = Some(dropped_days.map_or(days, |d| d.max(days)));
             }
         }
@@ -450,10 +451,9 @@ pub fn reconcile_keyed<V: Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
-    fn utc(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(y, mo, d, h, mi, s).unwrap()
+    fn utc(y: i16, mo: i8, d: i8, h: i8, mi: i8, s: i8) -> Timestamp {
+        crate::clock::naive_utc(jiff::civil::datetime(y, mo, d, h, mi, s, 0)).unwrap()
     }
 
     fn hm<V: Clone>(pairs: &[(&str, V)]) -> HashMap<String, V> {
@@ -468,7 +468,7 @@ mod tests {
         fresh: T,
         prior: Option<&T>,
         prior_stamp: Option<&str>,
-        now: DateTime<Utc>,
+        now: Timestamp,
         complete: bool,
         stale_days: i64,
     ) -> Reconciled<T> {
@@ -655,7 +655,7 @@ mod tests {
         prior: Option<&HashMap<String, i32>>,
         prior_stamp: Option<&str>,
         prior_keys: Option<&KeyStamps>,
-        now: DateTime<Utc>,
+        now: Timestamp,
     ) -> (Reconciled<HashMap<String, i32>>, KeyStamps) {
         reconcile_keyed(
             "set_to_parts",

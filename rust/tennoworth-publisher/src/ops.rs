@@ -10,7 +10,8 @@ use crate::contracts::{
     AlertEntry, BackupStatus, BoxStatus, Health, HostCheck, JobRequest, JobStatus, ServiceStatus,
     UnitStatus,
 };
-use chrono::{DateTime, NaiveDateTime, SecondsFormat};
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -462,7 +463,7 @@ fn unit_or_unknown(units: &BTreeMap<String, UnitStatus>, name: &str) -> UnitStat
 }
 
 pub fn rfc3339(at: i64) -> Option<String> {
-    DateTime::from_timestamp(at, 0).map(|time| time.to_rfc3339_opts(SecondsFormat::Secs, true))
+    Timestamp::from_second(at).ok().map(|time| time.to_string())
 }
 
 async fn run(program: &Path, args: &[&str]) -> Result<String, String> {
@@ -543,8 +544,13 @@ fn systemd_time(value: &str) -> Option<String> {
     let value = value.trim();
     let (_, rest) = value.split_once(' ')?;
     let rest = rest.strip_suffix(" UTC")?;
-    let time = NaiveDateTime::parse_from_str(rest, "%Y-%m-%d %H:%M:%S").ok()?;
-    rfc3339(time.and_utc().timestamp())
+    let time = jiff::civil::DateTime::strptime("%Y-%m-%d %H:%M:%S", rest).ok()?;
+    rfc3339(
+        time.to_zoned_datetime(TimeZone::UTC)
+            .ok()?
+            .timestamp()
+            .as_second(),
+    )
 }
 
 fn int(value: &serde_json::Value, pointer: &str) -> Option<i64> {
@@ -625,7 +631,10 @@ pub fn alerts(log: &str, since: i64) -> Vec<AlertEntry> {
     }
     entries.extend(current);
     entries.retain(|entry| {
-        DateTime::parse_from_rfc3339(&entry.at).is_ok_and(|at| at.timestamp() >= since)
+        entry
+            .at
+            .parse::<Timestamp>()
+            .is_ok_and(|at| at.as_second() >= since)
     });
     entries.reverse();
     entries.truncate(20);
@@ -669,9 +678,10 @@ mod tests {
     #[test]
     fn alert_log_keeps_recent_entries_newest_first_with_context() {
         let log = "    tail of a cut entry\n=== 2026-10-01T03:10:04Z  old.service  result=exit-code\n    old context\n=== 2026-10-09T03:10:04Z  tennoworth-app-pull.service  result=exit-code\n    fatal: unable to access\n    Failed with result 'exit-code'.\n=== 2026-10-10T01:00:00Z  tennoworth-scrape.service  result=timeout\n";
-        let since = DateTime::parse_from_rfc3339("2026-10-05T00:00:00Z")
+        let since = "2026-10-05T00:00:00Z"
+            .parse::<Timestamp>()
             .unwrap()
-            .timestamp();
+            .as_second();
         let entries = alerts(log, since);
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].unit, "tennoworth-scrape.service");

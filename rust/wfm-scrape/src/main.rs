@@ -16,7 +16,7 @@
 //!   `<DIR>/wfm_results.csv`. Writes output to `<DIR>/market.json`.
 //! - `--now <ISO>`: pin the injected clock (e.g. `2026-07-01T00:00:00Z`).
 
-use chrono::Utc;
+use jiff::Timestamp;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use wfm_scrape::pipeline::{build, find_root, Dirs};
@@ -169,10 +169,10 @@ fn acquire_output(
 /// keeps a manual run from being repeated the same day.
 const ART_INTERVAL_HOURS: i64 = 20;
 
-fn ran_recently(last_run: Option<&str>, now: chrono::DateTime<Utc>, hours: i64) -> bool {
+fn ran_recently(last_run: Option<&str>, now: jiff::Timestamp, hours: i64) -> bool {
     last_run
         .and_then(clock::parse_stamp)
-        .is_some_and(|t| now - t < chrono::Duration::hours(hours))
+        .is_some_and(|t| now.duration_since(t) < jiff::SignedDuration::from_hours(hours))
 }
 
 /// Wire the `art` subcommand. Runs at most once per `--interval-hours`
@@ -182,7 +182,7 @@ fn run_art_cmd(args: &[String], dirs: Option<&Dirs>) -> Result<(), String> {
     let dirs = dirs.ok_or("art needs --data-dir and --publish-dir, or a checkout")?;
     let now = extract_flag(args, "--now")
         .map(|s| clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
-        .unwrap_or_else(|| Ok(Utc::now()))?;
+        .unwrap_or_else(|| Ok(Timestamp::now()))?;
     let hours: i64 = extract_flag(args, "--interval-hours")
         .map(|s| s.parse().map_err(|_| format!("bad --interval-hours: {s}")))
         .transpose()?
@@ -251,7 +251,7 @@ fn run_stamp_cmd(args: &[String]) -> Result<(), String> {
     let body = std::fs::read_to_string(path).map_err(|e| format!("read {path}: {e}"))?;
     let stamp = contract_stamp(&body)
         .ok_or_else(|| format!("{path} is not a market snapshot with an RFC 3339 updated_at"))?;
-    println!("{}", stamp.timestamp());
+    println!("{}", stamp.as_second());
     Ok(())
 }
 
@@ -259,10 +259,10 @@ fn run_stamp_cmd(args: &[String]) -> Result<(), String> {
 /// applies (`tests/fixtures/market-contract/cases.json`): an RFC 3339
 /// `updated_at` and a non-empty `items` object. A snapshot no reader accepts
 /// is no fresher than a missing one.
-fn contract_stamp(body: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+fn contract_stamp(body: &str) -> Option<Timestamp> {
     let value: serde_json::Value = serde_json::from_str(body).ok()?;
     let root = value.as_object()?;
-    let stamp = chrono::DateTime::parse_from_rfc3339(root.get("updated_at")?.as_str()?).ok()?;
+    let stamp = market_domain::stamp::parse_rfc3339(root.get("updated_at")?.as_str()?)?;
     if root.get("items")?.as_object()?.is_empty() {
         return None;
     }
@@ -337,7 +337,7 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
                     .ok_or_else(|| format!("invalid --now stamp: {s}"))
             })
             .transpose()?
-            .unwrap_or_else(Utc::now),
+            .unwrap_or_else(Timestamp::now),
     };
 
     let (http, sleeper): (Box<dyn ScrapeHttp>, Box<dyn Sleeper>) = if let Some(fd) = &fixtures_dir {
@@ -391,7 +391,7 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
 
     let now = extract_flag(args, "--now")
         .map(|s| clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
-        .unwrap_or_else(|| Ok(Utc::now()))?;
+        .unwrap_or_else(|| Ok(Timestamp::now()))?;
     let public = match extract_flag(args, "--publish-dir") {
         Some(dir) => Some(PathBuf::from(dir)),
         None => find_root()
@@ -453,7 +453,7 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         .build()
         .map_err(|e| format!("build HTTP client: {e}"))?;
     let http = LiveHttp { client };
-    let yesterday = now.date_naive() - chrono::Duration::days(1);
+    let yesterday = market_domain::stamp::utc_date(now) - market_domain::stamp::days(1);
     let (hist, summary) = update_history(
         &http,
         prior,
@@ -514,7 +514,7 @@ mod tests {
         }
         // The host check compares instants, so an offset is resolved, not dropped.
         let offset = r#"{"updated_at":"2026-10-13T13:00:00+02:00","items":{"a":{}}}"#;
-        assert_eq!(contract_stamp(offset).unwrap().timestamp(), 1_791_889_200);
+        assert_eq!(contract_stamp(offset).unwrap().as_second(), 1_791_889_200);
     }
 
     #[test]

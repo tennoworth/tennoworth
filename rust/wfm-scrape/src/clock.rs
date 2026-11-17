@@ -1,37 +1,38 @@
 //! The single injected clock. Every timestamp the build stage reads or writes
-//! flows through a `DateTime<Utc>` handed in by the caller - `updated_at`,
+//! flows through a `Timestamp` handed in by the caller - `updated_at`,
 //! the per-surface `surface_fetched_at` stamps, the reconcile staleness
 //! warning, and the vaulting-soon horizon. Nothing in this crate may call
-//! `Utc::now()` except the binary's arg parsing (when `--now` is absent).
+//! `Timestamp::now()` except the binary's arg parsing (when `--now` is absent).
 
-use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
+use jiff::civil::{Date, DateTime};
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
+use market_domain::stamp::{days_between, parse_rfc3339, utc_midnight};
 
 /// A UTC calendar day as days since 1970-01-01, the form
 /// [`market_domain::math::StatsDay::day`] carries.
-pub fn utc_day(date: NaiveDate) -> i64 {
-    (date - DateTime::UNIX_EPOCH.date_naive()).num_days()
+pub fn utc_day(date: Date) -> i64 {
+    days_between(date, Date::constant(1970, 1, 1))
 }
 
 /// The day of a WFM statistics `datetime` (`2026-11-16T00:00:00.000+00:00`).
 /// WFM stamps rows in UTC, so the leading date is the row's UTC day.
 pub fn stats_day(datetime: &str) -> Option<i64> {
-    let date = NaiveDate::parse_from_str(datetime.get(..10)?, "%Y-%m-%d").ok()?;
+    let date = Date::strptime("%Y-%m-%d", datetime.get(..10)?).ok()?;
     Some(utc_day(date))
 }
 
 /// The snapshot's stamp format: UTC, whole seconds, `Z` suffix
 /// (`%Y-%m-%dT%H:%M:%SZ`).
-pub fn iso_z(dt: DateTime<Utc>) -> String {
-    dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+pub fn iso_z(dt: Timestamp) -> String {
+    dt.strftime("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
 /// Strict `%Y-%m-%dT%H:%M:%SZ` parse -
 /// used on prior `surface_fetched_at` stamps. Anything else is a parse
 /// failure.
-pub fn parse_stamp(s: &str) -> Option<DateTime<Utc>> {
-    NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%SZ")
-        .ok()
-        .map(|n| Utc.from_utc_datetime(&n))
+pub fn parse_stamp(s: &str) -> Option<Timestamp> {
+    naive_utc(DateTime::strptime("%Y-%m-%dT%H:%M:%SZ", s).ok()?)
 }
 
 /// Epoch milliseconds → UTC. DE's worldState stamps every window
@@ -39,17 +40,17 @@ pub fn parse_stamp(s: &str) -> Option<DateTime<Utc>> {
 /// [`crate::ingest::de::de_millis`] has unwrapped it, this is the only conversion
 /// needed. Out-of-range values clamp to the epoch rather than panicking - a
 /// garbage timestamp should render as obviously wrong, not take down a build.
-pub fn from_millis(ms: i64) -> DateTime<Utc> {
-    DateTime::<Utc>::from_timestamp_millis(ms).unwrap_or(DateTime::UNIX_EPOCH)
+pub fn from_millis(ms: i64) -> Timestamp {
+    Timestamp::from_millisecond(ms).unwrap_or(Timestamp::UNIX_EPOCH)
 }
 
 /// The ISO 8601 subset the build stage is fed
 /// (WFCD `estimatedVaultDate`, after the caller's `Z` → `+00:00` rewrite):
 /// RFC 3339 with offset, naive datetime with optional fraction (T or space
 /// separator), or a bare date. Naive values are assumed UTC.
-pub fn parse_isoformat_utc(s: &str) -> Option<DateTime<Utc>> {
-    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-        return Some(dt.with_timezone(&Utc));
+pub fn parse_isoformat_utc(s: &str) -> Option<Timestamp> {
+    if let Some(dt) = parse_rfc3339(s) {
+        return Some(dt);
     }
     for fmt in [
         "%Y-%m-%dT%H:%M:%S%.f",
@@ -57,26 +58,35 @@ pub fn parse_isoformat_utc(s: &str) -> Option<DateTime<Utc>> {
         "%Y-%m-%dT%H:%M",
         "%Y-%m-%d %H:%M",
     ] {
-        if let Ok(n) = NaiveDateTime::parse_from_str(s, fmt) {
-            return Some(Utc.from_utc_datetime(&n));
+        if let Ok(n) = DateTime::strptime(fmt, s) {
+            return naive_utc(n);
         }
     }
-    let d = NaiveDate::parse_from_str(s, "%Y-%m-%d").ok()?;
-    Some(Utc.from_utc_datetime(&d.and_hms_opt(0, 0, 0)?))
+    utc_midnight(Date::strptime("%Y-%m-%d", s).ok()?)
+}
+
+/// A naive datetime read as UTC.
+pub fn naive_utc(dt: DateTime) -> Option<Timestamp> {
+    dt.to_zoned_datetime(TimeZone::UTC)
+        .ok()
+        .map(|z| z.timestamp())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn utc(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(y, mo, d, h, mi, s).unwrap()
+    fn utc(y: i16, mo: i8, d: i8, h: i8, mi: i8, s: i8) -> Timestamp {
+        naive_utc(jiff::civil::datetime(y, mo, d, h, mi, s, 0)).unwrap()
     }
 
     #[test]
     fn days_count_from_the_epoch() {
-        assert_eq!(utc_day(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()), 0);
-        assert_eq!(utc_day(utc(2026, 11, 17, 23, 59, 0).date_naive()), 20_774);
+        assert_eq!(utc_day(Date::constant(1970, 1, 1)), 0);
+        assert_eq!(
+            utc_day(market_domain::stamp::utc_date(utc(2026, 11, 17, 23, 59, 0))),
+            20_774
+        );
         assert_eq!(stats_day("2026-11-16T00:00:00.000+00:00"), Some(20_773));
         assert_eq!(stats_day("2026-11"), None);
         assert_eq!(stats_day("yesterday at noon"), None);
@@ -139,6 +149,6 @@ mod de_millis_tests {
 
     #[test]
     fn from_millis_clamps_instead_of_panicking() {
-        assert_eq!(from_millis(i64::MAX), DateTime::UNIX_EPOCH);
+        assert_eq!(from_millis(i64::MAX), Timestamp::UNIX_EPOCH);
     }
 }

@@ -1,5 +1,9 @@
 use crate::math::stat_median as median;
-use chrono::{DateTime, NaiveDate};
+use jiff::civil::Date;
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
+
+use crate::stamp::parse_rfc3339;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -113,14 +117,13 @@ pub fn slope30(values: &[Option<f64>]) -> Option<f64> {
 }
 fn date_ms(date: &str) -> Option<f64> {
     if date.len() == 10 {
-        NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        Date::strptime("%Y-%m-%d", date)
             .ok()?
-            .and_hms_opt(0, 0, 0)
-            .map(|d| d.and_utc().timestamp_millis() as f64)
-    } else {
-        DateTime::parse_from_rfc3339(date)
+            .to_zoned_datetime(TimeZone::UTC)
             .ok()
-            .map(|d| d.timestamp_millis() as f64)
+            .map(|d| d.timestamp().as_millisecond() as f64)
+    } else {
+        parse_rfc3339(date).map(|d| d.as_millisecond() as f64)
     }
 }
 pub fn pre_vault_median(start: &str, values: &[Option<f64>], vault: &str) -> Option<f64> {
@@ -319,8 +322,8 @@ fn advise(slug: &str, set: &str, request: &AdvisorRequest, reprint: &Reprint) ->
         if active {
             let end = string(rc, "to")
                 .and_then(date_ms)
-                .and_then(|ms| DateTime::from_timestamp_millis(ms as i64))
-                .map(|d| d.format("%Y-%m-%d").to_string())?;
+                .and_then(|ms| Timestamp::from_millisecond(ms as i64).ok())
+                .map(|d| d.strftime("%Y-%m-%d").to_string())?;
             let mut reasons = vec![if reprinted {
                 format!("Prime Resurgence is reprinting it until {end}")
             } else {

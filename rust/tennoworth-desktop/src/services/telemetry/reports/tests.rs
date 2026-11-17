@@ -56,7 +56,7 @@ fn resolve(name: &str) -> Option<(String, bool)> {
     }
 }
 
-fn today() -> NaiveDate {
+fn today() -> Date {
     "2026-10-08".parse().unwrap()
 }
 
@@ -80,7 +80,7 @@ fn ids_match_the_shared_derivation_vectors() {
 #[test]
 fn iso_weeks_match_the_shared_vectors() {
     for v in fixture()["iso_weeks"].as_array().unwrap() {
-        let day: NaiveDate = v["day"].as_str().unwrap().parse().unwrap();
+        let day: Date = v["day"].as_str().unwrap().parse().unwrap();
         assert_eq!(iso_week(day), v["week"].as_str().unwrap());
     }
 }
@@ -247,13 +247,13 @@ fn record(db: &Db, id_hint: u64, at: i64, name: &str, plat: i64) -> i64 {
 #[test]
 fn opting_in_covers_trades_from_now_on_only() {
     let db = Db::open_in_memory().unwrap();
-    let before = record(&db, 1, Utc::now().timestamp(), "Primed Flow", 40);
+    let before = record(&db, 1, Timestamp::now().as_second(), "Primed Flow", 40);
     let state = reports(true);
     update_preferences(&db, &state, true).unwrap();
     assert!(opted_in(&db));
     assert_eq!(mark(&db).unwrap(), before);
     assert!(load_key(&db, false).unwrap().is_some());
-    let after = record(&db, 2, Utc::now().timestamp(), "Primed Flow", 41);
+    let after = record(&db, 2, Timestamp::now().as_second(), "Primed Flow", 41);
     let pending = db
         .trades_after(mark(&db).unwrap(), TRADES_PER_PASS)
         .unwrap();
@@ -307,7 +307,7 @@ async fn run_pass(endpoint: &str, consent_on: bool) -> (Db, i64, i64) {
     let state = reports(true);
     update_preferences(&db, &state, true).unwrap();
     let opted = mark(&db).unwrap();
-    let now = Utc::now().timestamp();
+    let now = Timestamp::now().as_second();
     for i in 0..3 {
         record(&db, 10 + i, now, "Primed Flow", 40 + i as i64);
     }
@@ -345,7 +345,10 @@ async fn an_accepted_batch_advances_the_mark_and_the_weekly_count() {
 
     let (db, _, newest) = run_pass(&endpoint, true).await;
     assert_eq!(mark(&db).unwrap(), newest);
-    assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 3);
+    assert_eq!(
+        sent_this_week(&db, &iso_week(utc_date(Timestamp::now()))),
+        3
+    );
     task.abort();
 }
 
@@ -386,7 +389,10 @@ async fn a_refused_batch_is_settled_and_not_counted() {
         newest,
         "a refused batch must not be resent forever"
     );
-    assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 0);
+    assert_eq!(
+        sent_this_week(&db, &iso_week(utc_date(Timestamp::now()))),
+        0
+    );
     task.abort();
 }
 
@@ -412,7 +418,7 @@ async fn deleting_reports_skips_queued_trades_even_if_the_service_is_unavailable
         let db = Db::open_in_memory().unwrap();
         let state = reports(true);
         update_preferences(&db, &state, true).unwrap();
-        let newest = record(&db, 10, Utc::now().timestamp(), "Primed Flow", 40);
+        let newest = record(&db, 10, Timestamp::now().as_second(), "Primed Flow", 40);
         let (endpoint, task) = answering(status).await;
         let client = usage::client().unwrap();
         let result = erase_recent(&db, &state, &client, endpoint.trim_end_matches("/sales")).await;
@@ -424,12 +430,18 @@ async fn deleting_reports_skips_queued_trades_even_if_the_service_is_unavailable
         );
         let mut receiver = state.consent.subscribe();
         assert!(pass(&db, &market, &client, &endpoint, &mut receiver, &state).await);
-        assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 0);
+        assert_eq!(
+            sent_this_week(&db, &iso_week(utc_date(Timestamp::now()))),
+            0
+        );
         if status == 204 {
-            let future = record(&db, 11, Utc::now().timestamp(), "Primed Flow", 41);
+            let future = record(&db, 11, Timestamp::now().as_second(), "Primed Flow", 41);
             assert!(pass(&db, &market, &client, &endpoint, &mut receiver, &state).await);
             assert_eq!(mark(&db).unwrap(), future);
-            assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 1);
+            assert_eq!(
+                sent_this_week(&db, &iso_week(utc_date(Timestamp::now()))),
+                1
+            );
         }
         task.abort();
     }
@@ -442,7 +454,7 @@ async fn deletion_waits_for_an_active_upload_then_erases_its_results() {
     let db = Db::open_in_memory().unwrap();
     let state = reports(true);
     update_preferences(&db, &state, true).unwrap();
-    record(&db, 10, Utc::now().timestamp(), "Primed Flow", 40);
+    record(&db, 10, Timestamp::now().as_second(), "Primed Flow", 40);
     let entered = Arc::new(tokio::sync::Notify::new());
     let release = Arc::new(tokio::sync::Notify::new());
     let events = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -504,6 +516,9 @@ async fn deletion_waits_for_an_active_upload_then_erases_its_results() {
     .unwrap();
     assert!(sent);
     assert_eq!(*events.lock().unwrap(), ["sale", "erase", "erase"]);
-    assert_eq!(sent_this_week(&db, &iso_week(Utc::now().date_naive())), 0);
+    assert_eq!(
+        sent_this_week(&db, &iso_week(utc_date(Timestamp::now()))),
+        0
+    );
     server.abort();
 }

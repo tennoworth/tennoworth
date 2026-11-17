@@ -42,7 +42,9 @@ jsonwebtoken = { version = "11.1", default-features = false, features = ["aws_lc
 # 1.53.3 is the first release on this line that patches RUSTSEC-2026-0386.
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
 
-chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+# chrono is unmaintained (RUSTSEC-2026-0543). Features are opt-in per crate:
+# market-domain compiles to wasm and reads no clock or zone database.
+jiff = { version = "1.0", default-features = false, features = ["std"] }
 anyhow = "1"
 base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
