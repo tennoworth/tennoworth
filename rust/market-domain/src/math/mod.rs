@@ -298,6 +298,16 @@ pub fn clamp_low5(low5: f64, median_90d: f64, low_sell: f64) -> f64 {
     }
 }
 
+/// The 20-ask mean gets the same cliff clamp, but a deep book crosses the 3×
+/// line far more often than a 5-ask one, and the 90-day median it falls back
+/// to can sit below every live ask. The first live sweep published that for
+/// 44 items (Paris Prime Grip: cheapest ask 4p, 20-ask "average" 3p). A mean
+/// of more asks can never honestly be lower than the mean of fewer, so the
+/// clamped value is floored at the (already clamped) 5-ask mean.
+pub fn clamp_low20(low20: f64, low5: f64, median_90d: f64, low_sell: f64) -> f64 {
+    clamp_low5(low20, median_90d, low_sell).max(low5)
+}
+
 /// Highest live buy price, or 0 when there are no buys.
 pub fn top_buy(buys: &[LiveOrder]) -> f64 {
     buys.iter()
@@ -693,6 +703,21 @@ mod tests {
     #[test]
     fn clamp_low5_preserves_a_real_across_the_board_high() {
         assert_eq!(clamp_low5(72.0, 17.0, 59.0), 72.0);
+    }
+
+    #[test]
+    fn clamp_low20_never_drops_below_the_five_ask_mean() {
+        // Paris Prime Grip in the first live sweep: low 4, low5 5.4, median 3,
+        // 20-ask mean well past 3× the median.
+        assert_eq!(clamp_low20(11.2, 5.4, 3.0, 4.0), 5.4);
+        // A cliff that also pulled low5 down keeps both at the median.
+        assert_eq!(clamp_low20(61.0, 5.0, 5.0, 5.0), 5.0);
+    }
+
+    #[test]
+    fn clamp_low20_leaves_an_ordinary_deep_book_alone() {
+        assert_eq!(clamp_low20(14.0, 12.0, 9.0, 11.0), 14.0);
+        assert_eq!(clamp_low20(0.0, 0.0, 5.0, 0.0), 0.0);
     }
 
     #[test]

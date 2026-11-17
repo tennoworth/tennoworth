@@ -24,9 +24,9 @@ use std::sync::Mutex;
 use serde_json::Value;
 
 use market_domain::math::{
-    avg_lowest_asks, canonical_subtype, clamp_low5, demand_ratio, drop_poisoned_rows, low_sell,
-    rank0_orders, rank0_rows, round_dp, score, series_stats, spread, subtype_rows, top_buy,
-    weighted_avg_48h, StatsDay,
+    avg_lowest_asks, canonical_subtype, clamp_low20, clamp_low5, demand_ratio, drop_poisoned_rows,
+    low_sell, rank0_orders, rank0_rows, round_dp, score, series_stats, spread, subtype_rows,
+    top_buy, weighted_avg_48h, StatsDay,
 };
 
 use crate::coerce::{Coercions, DEFAULT_MAX_COERCIONS};
@@ -236,7 +236,7 @@ pub fn analyze_orders(
     let top = top_buy(&live_buys);
     let low = low_sell(&live_sells);
     let low5 = clamp_low5(avg_lowest_asks(&live_sells, 5), median_90d, low);
-    let low20 = clamp_low5(avg_lowest_asks(&live_sells, 20), median_90d, low);
+    let low20 = clamp_low20(avg_lowest_asks(&live_sells, 20), low5, median_90d, low);
     let ratio = demand_ratio(live_buys.len(), live_sells.len());
     let sc = score(volume_48h, avg_price_48h, ratio);
 
