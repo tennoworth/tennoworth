@@ -60,13 +60,13 @@ format; the app explicitly identifies incomplete coverage for older upgrades.
 
 TennoWorth Desktop 0.10.103 is ready.
 
-This release is for anyone who sells. You can now choose how the app suggests prices, such as one platinum over the 90-day average, and the advice reads more of the market: it tells a dip worth waiting out from a sell-off, flags crowded books, and finds bargains for Watches. Routines are now yours to shape, with Warframe's daily and weekly activities one click away, and Settings is reorganised into foldable sections.
+This release is for anyone who sells. You can now choose how the app suggests prices, such as one platinum over the 90-day average, and the advice reads more of the market: it tells a dip worth waiting out from a sell-off, flags crowded books, and finds bargains for Watches. Routines are now yours to shape, with Warframe's daily and weekly activities one click away, and Settings is reorganised into foldable sections. Thanks to Lawr on the TennoWorth Discord, who suggested the price offsets and the routine activities.
 
 ## Changelog (11)
 
 ### Selling
 
-- **Choose how prices are suggested** Settings → Selling sets the suggested price: the lowest other ask, the average of the 5 or 20 cheapest asks, the 48-hour average or the 90-day median, plus or minus up to 50 platinum. New listings, live price checks and My orders all follow it and name it. <!-- app-note {"id":"price-rule","kind":"improved"} -->
+- **Choose how prices are suggested** Settings → Selling sets the suggested price: the lowest other ask, the average of the 5 or 20 cheapest asks, the 48-hour average or the 90-day median, plus or minus up to 50 platinum. New listings, live price checks and My orders all follow it and name it. Suggested by Lawr on the TennoWorth Discord. <!-- app-note {"id":"price-rule","kind":"improved"} -->
 - **Troll asks are skipped** A live ask under a third of the item's usual price is skipped for the next one. The price shown is marked with an asterisk, and its tooltip names the ask that was skipped. <!-- app-note {"id":"live-troll-skip","kind":"improved"} -->
 - **Hold or sell-off** A price near the bottom of its 90-day range on ordinary trading usually recovers within a month, and the advice now says how often. On three times the usual trading it is marked Drop instead, because waiting is then a gamble. <!-- app-note {"id":"hold-drop-split","kind":"improved"} -->
 - **Crowded books** When the 20 cheapest asks sit close together, the row is tagged Crowded: buyers take the cheapest, so match the lowest ask. <!-- app-note {"id":"crowded-tag","kind":"improved"} -->
@@ -75,7 +75,7 @@ This release is for anyone who sells. You can now choose how the app suggests pr
 
 ### Routines
 
-- **Add Warframe's activities to your lists** The daily and weekly lists offer the game's activities to add with one click, such as The Icebind, the 1999 Calendar, Palladino's weekly offerings, Netracells and Bird 3's Archon Shard. You can also add your own items or remove any you skip. <!-- app-note {"id":"routine-picker","kind":"improved"} -->
+- **Add Warframe's activities to your lists** The daily and weekly lists offer the game's activities to add with one click, such as The Icebind, the 1999 Calendar, Palladino's weekly offerings, Netracells and Bird 3's Archon Shard. You can also add your own items or remove any you skip. Suggested by Lawr on the TennoWorth Discord. <!-- app-note {"id":"routine-picker","kind":"improved"} -->
 - **Routine resets on the Calendar** Each list with something still open shows its next reset on the Calendar, with what is left and a link back to Routines. <!-- app-note {"id":"routines-calendar","kind":"improved"} -->
 
 ### Appearance
