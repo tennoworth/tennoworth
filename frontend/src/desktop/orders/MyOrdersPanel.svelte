@@ -117,7 +117,7 @@
     </span>
     <span class="grow"></span>
     {#if controller.healthSummary.overpriced + controller.healthSummary.underbid > 1}
-      <button class="btn" onclick={controller.fixAllPrices} disabled={unconfirmed} use:waiting={controller.fixAllBusy} title={t('orders.fixAllTitle')}>{t('orders.fixAll')}</button>
+      <button class="btn" onclick={controller.fixAllPrices} disabled={unconfirmed} use:waiting={controller.fixAllBusy} title={controller.fixAllTitle}>{t('orders.fixAll')}</button>
     {/if}
   </div>
   {#if controller.health.length > 0}
@@ -232,7 +232,7 @@
                     <span class="issue" class:warn={q.h.kind === 'overpriced' || q.h.kind === 'underbid'} class:bad={q.h.kind === 'not-owned'} title={controller.healthWhy(q.h)}>
                       {#if q.h.kind === 'overpriced' || q.h.kind === 'underbid'}
                         <span class="to">{q.h.current}p → <b>{q.h.suggested}p</b></span>
-                        {t(q.h.kind === 'overpriced' ? 'orders.health.overpriced' : 'orders.health.underbid')}
+                        {q.h.kind === 'overpriced' ? controller.overpricedText : t('orders.health.underbid')}
                       {:else if q.h.kind === 'excess-qty'}
                         <span class="to">×{q.h.current} → <b>×{q.h.suggested}</b></span>
                         {t('orders.health.excess')}

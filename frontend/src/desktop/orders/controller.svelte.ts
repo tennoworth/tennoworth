@@ -15,6 +15,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 
 import { untrack } from 'svelte';
 import { t } from '../../i18n/i18n.svelte';
+import { isDefaultRule } from '../settings/pricing.svelte';
+import { ruleText } from '../settings/price-rule-text';
 import { createToastQueue } from '../../ui/toast-queue.svelte';
 
 import type { DesktopServices } from '../../contracts/services';
@@ -451,9 +453,14 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   function healthAction(h: HealthIssue): string {
     return t(h.kind === 'not-owned' ? 'orders.action.delete' : h.kind === 'excess-qty' ? 'orders.action.setQty' : 'orders.action.reprice');
   }
+  // A rule of the player's own is named wherever the default would say
+  // "the lowest other ask", which would then be untrue.
+  let ownRule = $derived(input.healthPrefs && !isDefaultRule(input.healthPrefs.rule) ? ruleText(input.healthPrefs.rule) : null);
   function healthWhy(h: HealthIssue): string {
     switch (h.kind) {
-      case 'overpriced': return t('orders.why.overpriced', { ask: h.suggested, price: h.current });
+      case 'overpriced': return ownRule
+        ? t('orders.why.overRule', { rule: ownRule, target: h.suggested, price: h.current })
+        : t('orders.why.overpriced', { ask: h.suggested, price: h.current });
       case 'underbid': return t('orders.why.underbid', { bid: h.suggested, price: h.current });
       case 'not-owned': return t('orders.why.notOwned');
       case 'excess-qty': return t('orders.why.excess', { listed: h.current, owned: h.suggested });
@@ -525,6 +532,8 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     get fixAllBusy() { return fixAllBusy; },
     get health() { return health; },
     get healthSummary() { return healthSummary; },
+    get overpricedText() { return t(ownRule ? 'orders.health.overRule' : 'orders.health.overpriced'); },
+    get fixAllTitle() { return ownRule ? t('orders.fixAllTitleRule', { rule: ownRule }) : t('orders.fixAllTitle'); },
     get show() { return show; },
     set show(value: typeof show) { show = value; },
     get nameFilter() { return nameFilter; },

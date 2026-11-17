@@ -66,6 +66,7 @@
   }, 'bo_prime_set')!;
   const notesServices = { updateNotes: async () => ({ ...notesSample, auto_show: false } as UpdateNotesStatus), acknowledgeUpdateNotes: async () => {}, updateNotesCanPresent: async () => true };
   import { onMount, untrack } from 'svelte';
+  import SettingsSection from '../../desktop/settings/SettingsSection.svelte';
   import { applyTheme, systemMode, type Mode } from '../../ui/theme';
 
   let mode = $state<Mode>('dark');
@@ -232,6 +233,11 @@
     <div class="ui-setting-row"><div class="ui-setting-copy"><label for="example-shortcut">Retry shortcut example</label><p>Resize or change theme while editing. The draft stays in place.</p></div><div class="ui-setting-control"><input id="example-shortcut" class="ui-input" bind:value={exampleShortcut} disabled={!exampleEnabled} /></div></div>
     <div class="ui-panel-footer">These examples do not change desktop preferences.</div>
   </section>
+  <div class="ui-reading">
+    <SettingsSection id="selling" title="06 / Foldable settings section">
+      <div class="ui-setting-row"><div class="ui-setting-copy"><strong>Hide and Show</strong><p>The rail's toggle folds the body away and keeps it mounted, so a draft survives. In Settings the folded set persists; here it lasts for the visit.</p></div></div>
+    </SettingsSection>
+  </div>
   <footer class="muted">Reference patterns: .btn · .wrap.tw · table.tw · .ui-field · .ui-toolbar · .ui-notice · dialog.cryptobox</footer>
   {#if dataState === 'notifications'}
   <section class="ui-panel ui-stack" aria-label="Notification row reference">

@@ -423,11 +423,11 @@ for (const theme of ['light', 'dark'] as const) {
         const box = section.getBoundingClientRect();
         return { left: box.left, right: box.right };
       }));
-      // Automatic scan, Relic reward overlay, Notifications, WFM account, and
-      // This app (appearance, updates, usage). The count guards against a
-      // section silently disappearing; the shared bounds below are what this
-      // test is about.
-      expect(bounds).toHaveLength(5);
+      // Automatic scan, Selling, Relic reward overlay, Notifications, WFM
+      // account, Appearance, Updates, and Privacy & sharing. The count guards
+      // against a section silently disappearing; the shared bounds below are
+      // what this test is about.
+      expect(bounds).toHaveLength(8);
       for (const box of bounds) {
         expect(box.left).toBeCloseTo(bounds[0].left, 0);
         expect(box.right).toBeCloseTo(bounds[0].right, 0);

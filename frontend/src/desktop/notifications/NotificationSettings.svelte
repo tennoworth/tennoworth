@@ -9,6 +9,9 @@ import { NOTIFICATION_CATEGORIES, IN_GAME_CATEGORIES } from '../../contracts/des
 import { type NotificationPreferences, type NotificationCategory } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
   import { t } from '../../i18n/i18n.svelte';
+  import SettingsSection from '../settings/SettingsSection.svelte';
+  import type { SettingsSections } from '../settings/sections.svelte';
+  let { sections }: { sections?: SettingsSections } = $props();
   let preferences = $state<NotificationPreferences | null>(null);
   let error = $state('');
   let message = $state('');
@@ -56,8 +59,8 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
     finally { busy = false; }
   }
 </script>
-<section class="wrap tw notification-settings" id="settings-notifications" tabindex="-1" aria-labelledby="notification-settings-title">
-  <div class="rail"><h3 id="notification-settings-title">{t('inbox.title')}</h3><button class="btn xs" use:pending={busy} onclick={test}>{t('notify.test')}</button></div>
+<SettingsSection id="notifications" title={t('inbox.title')} {sections}>
+  {#snippet actions()}<button class="btn xs" use:pending={busy} onclick={test}>{t('notify.test')}</button>{/snippet}
   {#if error}<div class="ui-notice notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} use:pending={busy}>{t('notify.retryLoad')}</button></div>{/if}
   {#if preferences}
     <div class="ui-setting-row">
@@ -87,13 +90,13 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   {:else if !error}<p class="inset" role="status">{t('notify.loading')}</p>{/if}
   <p class="inset footnote">{t('notify.footnote')}</p>
   {#if message}<p class="ui-notice notice" data-tone="good" role="status">{message}</p>{/if}
-</section>
+</SettingsSection>
 <style>
   p { margin: 0; }
   .inset { padding: var(--s3) var(--inset); line-height: var(--leading-body); }
   .footnote { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--border); }
   .notice { margin: 0 var(--inset) var(--s4); }
-  .rail + .notice { margin-top: var(--s4); }
+  .notice:first-child { margin-top: var(--s4); }
   .scroll { border-top: 1px var(--rule) var(--border); }
   /* Anchors the hidden text to its cell; otherwise it escapes the table's scroll box and widens the page. */
   .categories td:last-child { position: relative; }

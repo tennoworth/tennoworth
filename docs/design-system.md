@@ -413,9 +413,20 @@ list. A page change brings the list's top back into view, and narrowing a
 list returns to its first page. Settings includes notification preferences within the same column.
 Settings is ordered by how often people return to it. A status strip leads,
 linking the automatic-scan, overlay and account state to their sections,
-followed by section links. Then come the everyday panels (Automatic scan,
-Relic reward overlay, Notifications) and the set-once panels (warframe.market
-account, then This app: appearance, updates, usage sharing and price sharing). Status comes
+followed by section links. Then come the everyday sections (Automatic scan,
+Selling, Relic reward overlay, Notifications) and the set-once sections
+(warframe.market account, Appearance, Updates, Privacy & sharing). Each
+section is one titled panel (`SettingsSection.svelte`) whose rail ends in a
+Show/Hide toggle with the disclosure glyph; a folded section keeps only its
+rail, and its rail actions fold with it. The folded set persists
+(`settings-collapsed`), every section starts open, and a summary card, section
+link, view-picker entry or deep link unfolds the section it points into before
+scrolling there. Folding hides the body rather than unmounting it, so a draft
+or a pending save survives. Selling holds the suggested-price rule: a basis
+(lowest ask, average of the 5 or 20 lowest asks, 48-hour average, 90-day
+median) and a whole-platinum adjustment from -50 to +50, with a worked example
+on a 20p figure. My orders judges and reprices sell listings by it, and names
+the rule wherever the default would say "the lowest other ask". Status comes
 before the controls that change it. Troubleshooting detail and full privacy
 terms sit in disclosures, and diagnostics open with their warning in view when
 enabled. The inbox's settings link opens the page at Notifications. Category
@@ -475,7 +486,7 @@ calendar's weekend and out-of-month cells.
 
 ### Visual and compact lists
 
-Settings → This app → Item lists chooses how desktop item lists draw, saved as
+Settings → Appearance → Item lists chooses how desktop item lists draw, saved as
 the `display` setting and stamped on `html[data-density]`. Visual, the
 default, puts a 28px item picture before the name and uses `--row-cf` rows on
 Sell. Compact hides pictures and keeps `--row` rows. The Sell count bar
@@ -869,7 +880,7 @@ colour and the default everywhere: the favicon, the installed icons, the
 installer, shortcuts and the Linux launcher. Below 48px a compact drawing
 replaces the detailed one, with heavier strokes and a solid centre.
 
-The desktop App icon setting (This app → Appearance, under Colour mode) can
+The desktop App icon setting (Appearance, under Colour mode) can
 draw the window and tray icons in ink or rag, the light and dark `--fg`
 tokens, or match the resolved colour mode. Its options are radio cards in a
 two-column grid that stacks below 760px. Each card holds the shared square

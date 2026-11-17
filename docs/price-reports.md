@@ -6,7 +6,7 @@ publishes them as weekly aggregates. It also collects riven fingerprint
 riven format reaches the parser without anyone pasting raw data.
 
 The service is `rust/tennoworth-collectors/src/reports`. The desktop app sends sale reports
-once enabled in Settings → This app → Price sharing, or from the invitation
+once enabled in Settings → Privacy & sharing → Price sharing, or from the invitation
 the app shows above its views (at most three times, two weeks apart, and never
 once enabled); it does not send riven
 shapes yet, and they will have a switch of their own. There are no TennoWorth

@@ -2,7 +2,10 @@
 import { m, type Source } from '../source';
 
 export const SHELL = {
-  'shell.go.app': m('Settings › Appearance and updates', 'Command palette entry.'),
+  'shell.go.selling': m('Settings › Selling', 'Command palette entry.'),
+  'shell.go.appearance': m('Settings › Appearance', 'Command palette entry.'),
+  'shell.go.updates': m('Settings › Updates', 'Command palette entry.'),
+  'shell.go.privacy': m('Settings › Privacy & sharing', 'Command palette entry.'),
   'shell.go.notifications': m('Settings › Notifications', 'Command palette entry.'),
   'shell.go.scan': m('Settings › Automatic scan', 'Command palette entry.'),
   'shell.go.account': m('Settings › Account', 'Command palette entry.'),

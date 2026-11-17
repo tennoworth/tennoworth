@@ -1,8 +1,8 @@
 // A user's pricing rule: which market figure a suggested ask starts from, and
-// how many platinum to add to it. Every place that proposes a price - the
-// listing-review prefill and the order-health repricing fix - reads the same
-// rule, so a player who prices at "90-day median +1p" sees that number
-// everywhere instead of the app's built-in "match the lowest ask".
+// how many platinum to add to it. My orders' health check flags and reprices
+// sell listings by it, so a player who prices at "90-day median +1p" sees that
+// number instead of the app's built-in "match the lowest ask". Set in
+// Settings → Selling.
 //
 // A rule only changes what is suggested. Nothing reprices on its own.
 

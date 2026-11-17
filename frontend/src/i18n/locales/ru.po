@@ -4722,10 +4722,24 @@ msgid "inherited from the set"
 msgstr "унаследовано от набора"
 
 #. Command palette entry.
-#, fuzzy
-msgctxt "shell.go.app"
-msgid "Settings › Appearance and updates"
-msgstr "Настройки › Внешний вид и обновления"
+msgctxt "shell.go.selling"
+msgid "Settings › Selling"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.appearance"
+msgid "Settings › Appearance"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.updates"
+msgid "Settings › Updates"
+msgstr ""
+
+#. Command palette entry.
+msgctxt "shell.go.privacy"
+msgid "Settings › Privacy & sharing"
+msgstr ""
 
 #. Command palette entry.
 #, fuzzy
@@ -5812,6 +5826,11 @@ msgctxt "orders.fixAllTitle"
 msgid "Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each."
 msgstr "Изменить цену всех отмеченных лотов: вровень с самым дешёвым чужим лотом или до более высокой цены покупки. Исправления количества и удаления - по одному щелчку на каждое."
 
+#. Tooltip.
+msgctxt "orders.fixAllTitleRule"
+msgid "Reprice every flagged listing: to your price rule ({rule}), or meet the higher bid. Quantity fixes and deletions stay one click each."
+msgstr ""
+
 #. Button.
 #, fuzzy
 msgctxt "orders.fixAll"
@@ -6153,6 +6172,11 @@ msgctxt "orders.health.overpriced"
 msgid "above the lowest other ask"
 msgstr "дороже самого дешёвого чужого лота"
 
+#. Health cell, when the player set their own price rule in Settings.
+msgctxt "orders.health.overRule"
+msgid "above your price rule"
+msgstr ""
+
 #. Health cell.
 #, fuzzy
 msgctxt "orders.health.underbid"
@@ -6299,6 +6323,11 @@ msgstr " для точных данных."
 msgctxt "orders.why.overpriced"
 msgid "Lowest other online ask is {ask}p (you: {price}p). Match it to sell first."
 msgstr "Самый дешёвый чужой лот онлайн - {ask}p (у вас {price}p). Уравняйте цену, чтобы продать первым."
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+msgctxt "orders.why.overRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
+msgstr ""
 
 #. Tooltip.
 #, fuzzy
@@ -7859,12 +7888,6 @@ msgctxt "settings.setOnce"
 msgid "Set once"
 msgstr "Один раз"
 
-#. Link.
-#, fuzzy
-msgctxt "settings.appLink"
-msgid "Appearance, updates and privacy"
-msgstr "Внешний вид, обновления и приватность"
-
 #. Row label.
 #, fuzzy
 msgctxt "settings.status"
@@ -8133,13 +8156,7 @@ msgctxt "settings.logoutFailed"
 msgid "Couldn’t log out: {error}"
 msgstr "Не удалось выйти: {error}"
 
-#. Section heading.
-#, fuzzy
-msgctxt "settings.thisApp"
-msgid "This app"
-msgstr "Это приложение"
-
-#. Group heading.
+#. Section heading and link.
 #, fuzzy
 msgctxt "settings.appearance"
 msgid "Appearance"
@@ -8189,11 +8206,103 @@ msgctxt "settings.compact"
 msgid "Compact"
 msgstr "Компактно"
 
-#. Group heading.
+#. Section heading and link.
 #, fuzzy
 msgctxt "settings.updates"
 msgid "Updates"
 msgstr "Обновления"
+
+#. Section heading and link: usage statistics and price sharing.
+msgctxt "settings.privacy"
+msgid "Privacy & sharing"
+msgstr ""
+
+#. Section heading and link.
+msgctxt "settings.selling"
+msgid "Selling"
+msgstr ""
+
+#. Button that folds a settings section away.
+#. Max 8 characters.
+msgctxt "settings.hide"
+msgid "Hide"
+msgstr ""
+
+#. Button that unfolds a settings section.
+#. Max 8 characters.
+msgctxt "settings.show"
+msgid "Show"
+msgstr ""
+
+#. Setting.
+msgctxt "settings.priceRule"
+msgid "Suggested price"
+msgstr ""
+
+#. Setting help. Reprice is the button name in My orders.
+msgctxt "settings.priceRuleHelp"
+msgid "My orders flags a sell listing priced above this and offers to reprice it here. Start from a market figure, then add or take off platinum. Nothing is repriced until you press Reprice."
+msgstr ""
+
+#. Worked example under the setting, e.g. "Lowest ask at 20p → suggests 21p."
+msgctxt "settings.priceRuleExample"
+msgid "{basis} at {base}p → suggests {price}p."
+msgstr ""
+
+#. Field label: platinum added to (or taken off) the market figure.
+msgctxt "settings.priceOffset"
+msgid "Adjust by"
+msgstr ""
+
+#. Validation.
+msgctxt "settings.priceOffsetRange"
+msgid "Enter a whole number from {min} to {max}."
+msgstr ""
+
+#. Button that restores the default rule.
+msgctxt "settings.priceRuleReset"
+msgid "Match the lowest ask"
+msgstr ""
+
+#. Error.
+msgctxt "settings.priceRuleFailed"
+msgid "Couldn’t save the price rule: {error}"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.lowest-ask"
+msgid "Lowest ask"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.low5-avg"
+msgid "Average of the 5 lowest asks"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.low20-avg"
+msgid "Average of the 20 lowest asks"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.avg-48h"
+msgid "48-hour average sale"
+msgstr ""
+
+#. Price basis option.
+msgctxt "settings.basis.median-90d"
+msgid "90-day median sale"
+msgstr ""
+
+#. A price rule in words, e.g. "90-day median sale +1p".
+msgctxt "settings.ruleUp"
+msgid "{basis} +{offset}p"
+msgstr ""
+
+#. A price rule in words, e.g. "Lowest ask −2p".
+msgctxt "settings.ruleDown"
+msgid "{basis} −{offset}p"
+msgstr ""
 
 #. Setting.
 #, fuzzy
