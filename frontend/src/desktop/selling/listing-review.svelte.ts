@@ -8,7 +8,11 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
 
 import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop';
   
-  import type { ItemResult, SessionConstraint, ReviewedOrder, MarketItemEntry } from '../../contracts/data';
+  import type { ItemResult, SessionConstraint, ReviewedOrder, MarketItemEntry, Market } from '../../contracts/data';
+  import { priceFromRule, reasonableLowestAsk, snapshotEvidence, type LiveAskRead, type PriceRule } from '../../domain/price-rule';
+  import { cachedUnitMarket } from '../../domain/order-prices';
+  import { isDefaultRule } from '../settings/pricing.svelte';
+  import { ruleText } from '../settings/price-rule-text';
   import { validSessionLot } from '../../domain/trade-session';
   import { clearingPrice } from '../../domain/sell-priority';
   import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS, MAX_PER_TRADE } from '../../domain/limits';
@@ -69,6 +73,10 @@ import { t } from '../../i18n/i18n.svelte';
     currentSnapshotId?: number | null;
     /** Bumped when the WFM session changes; live prices belong to one account. */
     sessionEpoch?: number;
+    /** Settings → Selling. Absent means match the lowest ask. */
+    priceRule?: PriceRule;
+    /** The snapshot, for the rule's bases on rows that do not carry their entry. */
+    market?: Market | null;
   }
 
 export function createListingReview(input: ListingReviewInput, services: Pick<DesktopServices, 'desktopAccessStatus' | 'desktopLiveTopPrices' | 'desktopTradeSessionState' | 'listenForTauriEvent'>) {
@@ -86,6 +94,18 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
   let serverResults = $state<ItemResult[]>([]);
   let networkError = $state<string | null>(null);
   let durabilityError = $state<string | null>(null);
+
+  // Trade Session rows are priced by the session's own plan, whose totals
+  // assume those prices, so the rule leaves them alone.
+  function evidenceFor(r: { slug: string; bulk?: boolean; market?: MarketItemEntry }) {
+    const entry = r.market ?? input.market?.items?.[r.slug];
+    return snapshotEvidence(entry ? cachedUnitMarket(entry, r.bulk ?? false) : null);
+  }
+  function byRule(lowestAsk: number, r: { slug: string; bulk?: boolean; market?: MarketItemEntry; session?: SessionConstraint }): number {
+    if (!input.priceRule || r.session) return lowestAsk;
+    return priceFromRule(input.priceRule, { ...evidenceFor(r), lowestAsk }) ?? lowestAsk;
+  }
+  let ownRule = $derived(input.priceRule && !isDefaultRule(input.priceRule) ? ruleText(input.priceRule) : null);
 
   function initialPlanFor(rows: InputRow[]): PlanRow[] {
     return rows.map((r) => {
@@ -110,7 +130,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
         subtype: r.subtype ?? null,
         name: r.name,
         include: true,
-        platinum: Math.max(5, target),
+        platinum: Math.max(5, Math.ceil(byRule(target, r))),
         quantity: r.proposed_quantity ?? 1,
         per_trade: r.per_trade ?? 1,
         bulk: r.bulk ?? false,
@@ -266,14 +286,23 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
     await liveTop.check(plan.filter((r) => r.include).map((r) => ({ slug: r.slug, rank: r.rank, subtype: r.subtype })));
   }
 
-  /** Set the row's price to the live lowest online ask (match, don't undercut). */
+  /** The cheapest live ask worth competing with; a troll undercut is skipped. */
+  function liveAsk(row: PlanRow): LiveAskRead | null {
+    const t = liveFor(row);
+    if (!t || t.error) return null;
+    return t.sells.length ? reasonableLowestAsk(t.sells, evidenceFor(row).median) : { ask: t.low_sell, ignored: null };
+  }
+  /** What a click on the live ask sets: the rule applied to that ask. */
+  function livePrice(row: PlanRow): number | null {
+    const t = liveFor(row);
+    const read = liveAsk(row);
+    if (!t || read?.ask == null) return null;
+    return Math.max(MIN_PLATINUM, Math.ceil(row.session && row.market
+      ? clearingPrice({ ...row.market, low_sell: t.low_sell ?? read.ask }) : byRule(read.ask, row)));
+  }
   function useLive(i: number): void {
-    const t = liveFor(plan[i]);
-    if (t?.low_sell != null) {
-      const row = plan[i];
-      row.platinum = Math.max(MIN_PLATINUM, Math.ceil(row.session && row.market
-        ? clearingPrice({ ...row.market, low_sell: t.low_sell }) : t.low_sell));
-    }
+    const price = livePrice(plan[i]);
+    if (price != null) plan[i].platinum = price;
   }
   function useLiveAll(): void {
     plan.forEach((_, i) => { if (plan[i].include) useLive(i); });
@@ -283,7 +312,8 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
   function liveVerdict(row: PlanRow): 'above' | 'below-bid' | 'ok' | null {
     const t = liveFor(row);
     if (!t || t.error) return null;
-    if (t.low_sell != null && row.platinum > t.low_sell) return 'above';
+    const ask = liveAsk(row)?.ask;
+    if (ask != null && row.platinum > ask) return 'above';
     if (t.top_buy != null && row.platinum < t.top_buy) return 'below-bid';
     return 'ok';
   }
@@ -435,6 +465,9 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
     liveFor,
     checkLivePrices,
     useLive,
+    liveAsk,
+    livePrice,
+    get ownRule() { return ownRule; },
     useLiveAll,
     liveVerdict,
     close,

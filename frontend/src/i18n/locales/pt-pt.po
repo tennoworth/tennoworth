@@ -2630,9 +2630,30 @@ msgstr "Igualar vendas mais baixas"
 
 #. Tooltip.
 #, fuzzy
+#| msgid "Set every selected row's price to its live lowest online ask (match it - no undercutting)."
 msgctxt "review.matchAsksTitle"
-msgid "Set every selected row's price to its live lowest online ask (match it - no undercutting)."
+msgid "Set every selected row's price to its live lowest online ask (match it - no undercutting). An ask under a third of the median is skipped as a troll listing."
 msgstr "Define o preço de cada linha selecionada como a oferta de venda online mais baixa atual (igualar - sem baixar o preço)."
+
+#. Sentence after the dialog introduction; rule reads like "Lowest ask −1p".
+msgctxt "review.leadRule"
+msgid "Your price rule ({rule}) is applied to that price."
+msgstr ""
+
+#. Button; the rule is set in Settings → Selling.
+msgctxt "review.matchRule"
+msgid "Price by my rule"
+msgstr ""
+
+#. Tooltip; rule reads like "Lowest ask −1p".
+msgctxt "review.matchRuleTitle"
+msgid "Set every selected row's price from its live asks by your price rule ({rule}). An ask under a third of the median is skipped as a troll listing."
+msgstr ""
+
+#. Tooltip sentence after the online asks.
+msgctxt "review.ignoredAsk"
+msgid "The {ask}p ask was skipped: it sits under a third of the median."
+msgstr ""
 
 #. Screen reader name of the checkbox column.
 #, fuzzy
@@ -6323,6 +6344,11 @@ msgstr " para valores exatos."
 msgctxt "orders.why.overpriced"
 msgid "Lowest other online ask is {ask}p (you: {price}p). Match it to sell first."
 msgstr "O preço de venda online mais baixo de outro vendedor é {ask}p (o seu: {price}p). Iguale-o para vender primeiro."
+
+#. Tooltip sentence after the reason.
+msgctxt "orders.why.ignoredAsk"
+msgid "A {ask}p ask was skipped: it sits under a third of the median, so it is a troll or stale listing rather than a price."
+msgstr ""
 
 #. Tooltip; rule reads like "90-day median sale +1p".
 msgctxt "orders.why.overRule"

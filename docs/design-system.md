@@ -425,8 +425,11 @@ scrolling there. Folding hides the body rather than unmounting it, so a draft
 or a pending save survives. Selling holds the suggested-price rule: a basis
 (lowest ask, average of the 5 or 20 lowest asks, 48-hour average, 90-day
 median) and a whole-platinum adjustment from -50 to +50, with a worked example
-on a 20p figure. My orders judges and reprices sell listings by it, and names
-the rule wherever the default would say "the lowest other ask". Status comes
+on a 20p figure. My orders judges and reprices sell listings by it, the
+listing review prefills and prices live clicks by it, and both name the rule
+wherever the default would say "the lowest other ask". Either reads the live
+book "within reason": an ask under a third of the median is skipped for the
+next one, the shown ask carries a `*`, and its tooltip names the skipped ask. Status comes
 before the controls that change it. Troubleshooting detail and full privacy
 terms sit in disclosures, and diagnostics open with their warning in view when
 enabled. The inbox's settings link opens the page at Notifications. Category

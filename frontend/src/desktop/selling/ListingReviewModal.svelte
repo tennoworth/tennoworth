@@ -10,9 +10,9 @@
   import { busy, focusLater, focusView } from '../../ui/keyboard-actions';
   import Rich from '../../ui/Rich.svelte';
   import { t } from '../../i18n/i18n.svelte';
-  let { open = $bindable(false), rows, transport, onauthrequired, onclose, onsent, onvisible, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel, currentSnapshotId, sessionEpoch = 0 }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose, onsent, onvisible, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel, currentSnapshotId, sessionEpoch = 0, priceRule, market = null }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
 
-  const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get onsent() { return onsent; }, get onvisible() { return onvisible; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
+  const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get sessionEpoch() { return sessionEpoch; }, get priceRule() { return priceRule; }, get market() { return market; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get onsent() { return onsent; }, get onvisible() { return onvisible; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
   onMount(() => controller.start());
   // Escape after editing asks first: many people press it to leave one field,
   // and it used to throw every price and quantity away.
@@ -90,6 +90,7 @@
       {#if controller.phase === 'review'}
         <p class="lead">
           <Rich text={t(controller.hasSession ? 'review.leadSession' : 'review.lead')} />
+          {#if controller.ownRule}{t('review.leadRule', { rule: controller.ownRule })}{/if}
         </p>
 
         {#if controller.hasSession}
@@ -127,7 +128,7 @@
             {/if}
           </button>
           {#if controller.liveTop.phase === 'done' && controller.liveTop.quotes.size > 0}
-            <button class="btn ghost" onclick={controller.useLiveAll} title={t('review.matchAsksTitle')}>{t('review.matchAsks')}</button>
+            <button class="btn ghost" onclick={controller.useLiveAll} title={controller.ownRule ? t('review.matchRuleTitle', { rule: controller.ownRule }) : t('review.matchAsksTitle')}>{t(controller.ownRule ? 'review.matchRule' : 'review.matchAsks')}</button>
           {/if}
           {#if controller.liveTop.phase === 'error' && controller.liveTop.error}
             <span class="live-err">{controller.liveTop.error}</span>
@@ -212,8 +213,9 @@
                       <span class="muted" title={live.error}>{t('review.na')}</span>
                     {:else}
                       {#if live.low_sell != null}
+                        {@const read = controller.liveAsk(row)}
                         <button class="linkish" onclick={() => controller.useLive(i)} disabled={!row.include}
-                          title={t('review.onlineAsks', { asks: live.sells.join(', '), price: live.low_sell })}>{live.low_sell}p</button>
+                          title={[t('review.onlineAsks', { asks: live.sells.join(', '), price: controller.livePrice(row) ?? live.low_sell }), read?.ignored != null ? t('review.ignoredAsk', { ask: read.ignored }) : ''].filter(Boolean).join(' ')}>{read?.ask ?? live.low_sell}p</button>{#if read?.ignored != null}<span class="muted skipped" aria-hidden="true">*</span>{/if}
                       {:else}<span class="muted" title={t('review.noSellers')}>{t('review.noAsk')}</span>{/if}
                       <span class="muted"> / </span>
                       {#if live.top_buy != null}

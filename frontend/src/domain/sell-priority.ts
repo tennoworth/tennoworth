@@ -96,6 +96,11 @@ export function spareQty(count: number, keptLvl: number | null, leveled = 0): nu
 //    keep their ask - there the book is real information.
 // No ask at all → median, then avg, floor 1.
 
+/** An ask this many times under the median is a troll or stale undercut, not
+ *  a price. Shared with the live-ask read in price-rule.ts; the native
+ *  `clearing_price` carries the same 3 under the parity fixture. */
+export const TROLL_UNDERCUT_RATIO = 3;
+
 export function clearingPrice(m: PricedEntry): number {
   const lowSell = Number(m?.low_sell) || 0;
   const median = Number(m?.median_now) || Number(m?.median_90d) || 0;
@@ -103,7 +108,7 @@ export function clearingPrice(m: PricedEntry): number {
   const vol = Number(m?.vol) || 0;
   if (lowSell <= 0) return median > 0 ? median : Math.max(1, avg);
   if (median > 0) {
-    if (lowSell * 3 < median) return median;
+    if (lowSell * TROLL_UNDERCUT_RATIO < median) return median;
     if (vol < LIQUID_VOL && lowSell > median * 1.5) return median * 1.5;
   }
   return lowSell;

@@ -108,6 +108,7 @@ export const ORDERS = {
   'orders.checkLiveLink': m('check live', 'Link.'),
   'orders.forExact': m(' for exact figures.', 'After the "check live" link. Keep the leading space.'),
   'orders.why.overpriced': m('Lowest other online ask is {ask}p (you: {price}p). Match it to sell first.', 'Tooltip.'),
+  'orders.why.ignoredAsk': m('A {ask}p ask was skipped: it sits under a third of the median, so it is a troll or stale listing rather than a price.', 'Tooltip sentence after the reason.'),
   'orders.why.overRule': m('Your price rule ({rule}) puts it at {target}p (you: {price}p).', 'Tooltip; rule reads like "90-day median sale +1p".'),
   'orders.why.underbid': m('An online buyer bids {bid}p - more than your {price}p ask.', 'Tooltip.'),
   'orders.why.notOwned': m('Your last scan found no tradeable copy - the listing can only disappoint a buyer.', 'Tooltip.'),

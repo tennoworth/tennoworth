@@ -11,7 +11,7 @@
 // many any more". Everything is a suggestion; the user clicks.
 
 import type { LiveTop } from '../contracts/desktop';
-import { DEFAULT_PRICE_RULE, priceFromRule, type PriceRule } from './price-rule';
+import { DEFAULT_PRICE_RULE, priceFromRule, reasonableLowestAsk, type PriceRule } from './price-rule';
 
 export type HealthKind =
   /** Your ask is above your price rule's target, by default the lowest OTHER
@@ -36,7 +36,7 @@ export interface HealthInput {
   /** Tradeable copies owned per the latest scan; `null` = unknown (no scan). */
   owned?: number | null;
   /** Snapshot statistics for the rule bases a live check does not report. */
-  stats?: { low5Avg?: number | null; low20Avg?: number | null; avg48h?: number | null; median90d?: number | null };
+  stats?: { low5Avg?: number | null; low20Avg?: number | null; avg48h?: number | null; median90d?: number | null; median?: number | null };
 }
 
 /** What the player asked the health check to flag. The defaults reproduce the
@@ -78,6 +78,8 @@ export interface HealthIssue {
   current: number;
   /** What to change it to. `0` on `not-owned` means "delete". */
   suggested: number;
+  /** `overpriced` only: the cheapest live ask, skipped as an outlier. */
+  ignoredAsk?: number;
 }
 
 /** Only sell listings are assessed - buy orders are the user's own bids and
@@ -88,11 +90,13 @@ export function assessListing(o: HealthInput, prefs: HealthPrefs = DEFAULT_HEALT
 
   const t = o.live;
   if (t && !t.error) {
-    const target = priceFromRule(prefs.rule, { lowestAsk: t.low_sell, ...o.stats });
+    const read = t.sells?.length ? reasonableLowestAsk(t.sells, o.stats?.median) : { ask: t.low_sell, ignored: null };
+    const target = priceFromRule(prefs.rule, { ...o.stats, lowestAsk: read.ask });
     if (target != null && o.platinum > target + prefs.tolerance) {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'overpriced',
         current: o.platinum, suggested: target,
+        ...(read.ignored != null ? { ignoredAsk: read.ignored } : {}),
       });
     } else if (t.top_buy != null && o.platinum < t.top_buy) {
       out.push({

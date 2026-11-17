@@ -17,6 +17,7 @@ import { untrack } from 'svelte';
 import { t } from '../../i18n/i18n.svelte';
 import { isDefaultRule } from '../settings/pricing.svelte';
 import { ruleText } from '../settings/price-rule-text';
+import { snapshotEvidence } from '../../domain/price-rule';
 import { createToastQueue } from '../../ui/toast-queue.svelte';
 
 import type { DesktopServices } from '../../contracts/services';
@@ -336,7 +337,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
             platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN, quantity: o.quantity, type: 'sell' as const,
             live: slug ? liveForOrder(o) : null,
             owned: slug ? ownedEvidence(slug, o.subtype ?? null, input.ownedQty, composedSlugs) : null,
-            stats: stats && { low5Avg: stats.low5_avg, low20Avg: stats.low20_avg, avg48h: stats.avg, median90d: stats.median_90d },
+            stats: stats && snapshotEvidence(stats),
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
@@ -458,9 +459,12 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   let ownRule = $derived(input.healthPrefs && !isDefaultRule(input.healthPrefs.rule) ? ruleText(input.healthPrefs.rule) : null);
   function healthWhy(h: HealthIssue): string {
     switch (h.kind) {
-      case 'overpriced': return ownRule
-        ? t('orders.why.overRule', { rule: ownRule, target: h.suggested, price: h.current })
-        : t('orders.why.overpriced', { ask: h.suggested, price: h.current });
+      case 'overpriced': {
+        const why = ownRule
+          ? t('orders.why.overRule', { rule: ownRule, target: h.suggested, price: h.current })
+          : t('orders.why.overpriced', { ask: h.suggested, price: h.current });
+        return h.ignoredAsk != null ? `${why} ${t('orders.why.ignoredAsk', { ask: h.ignoredAsk })}` : why;
+      }
       case 'underbid': return t('orders.why.underbid', { bid: h.suggested, price: h.current });
       case 'not-owned': return t('orders.why.notOwned');
       case 'excess-qty': return t('orders.why.excess', { listed: h.current, owned: h.suggested });

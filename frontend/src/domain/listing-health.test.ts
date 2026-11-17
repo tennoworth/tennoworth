@@ -146,3 +146,20 @@ describe('health preferences', () => {
     expect(parseHealthPrefs(null, r)).toEqual({ rule: r, tolerance: 0, muted: [] });
   });
 });
+
+describe('a troll undercut on the live book', () => {
+  it('is skipped for the next believable ask and named on the issue', () => {
+    const [i] = assessListing(order({ platinum: 20, stats: { median: 18 }, live: live({ low_sell: 2, sells: [2, 14, 15] }) }));
+    expect(i).toMatchObject({ kind: 'overpriced', suggested: 14, ignoredAsk: 2 });
+  });
+
+  it('does not flag a listing that only sits above the troll', () => {
+    expect(assessListing(order({ platinum: 14, stats: { median: 18 }, live: live({ low_sell: 2, sells: [2, 14] }) }))).toEqual([]);
+  });
+
+  it('applies the price rule to the believable ask', () => {
+    const prefs = { rule: { basis: 'lowest-ask', offset: -1 }, tolerance: 0, muted: [] };
+    const [i] = assessListing(order({ platinum: 20, stats: { median: 18 }, live: live({ low_sell: 2, sells: [2, 14] }) }), prefs);
+    expect(i).toMatchObject({ suggested: 13, ignoredAsk: 2 });
+  });
+});
