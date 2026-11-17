@@ -1,4 +1,5 @@
 use crate::overlay;
+use crate::shell::window_size;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -353,11 +354,8 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
 
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("TennoWorth")
-                .inner_size(1200.0, 800.0)
-                // Half a 1920px screen, so snapping still works. The status
-                // strip fits one line at this width in every state; narrower,
-                // its fullest state would clip.
-                .min_inner_size(1200.0, 480.0);
+                .inner_size(window_size::WIDTH, window_size::HEIGHT)
+                .min_inner_size(window_size::MIN_WIDTH, window_size::MIN_HEIGHT);
             // Without an explicit icon the window (and its taskbar/switcher
             // entry) falls back to a generic WM avatar. The App icon setting's
             // last applied colour, so the window opens in it.
@@ -375,6 +373,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 b = b.additional_browser_args("--disable-gpu --no-first-run --disable-extensions");
             }
             let w = b.build()?;
+            window_size::fit_to_screen(&w);
             // The builder's icon is the small one; Windows' taskbar needs the big one too.
             #[cfg(windows)]
             crate::shell::app_icon::apply_to_window(&w, icon_colour, app.handle());

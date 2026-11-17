@@ -50,6 +50,11 @@
        WebKitGTK draw a page-wide bar that moved nothing. */
     overflow-x: hidden;
     scrollbar-gutter: stable;
+    /* Positioned so absolutely placed content inside it (screen-reader-only
+       labels) is laid out and clipped here. Placed against the page instead,
+       Settings' last section label sat 2,000px below the window and let the
+       whole app scroll up under it. */
+    position: relative;
   }
   /* The workspace scrolls as a whole; flex shrinking can otherwise collapse
      overflow-hidden panels to a border in short windows. */
