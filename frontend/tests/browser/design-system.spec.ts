@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import baroFixture from '../../../tests/fixtures/notifications/baro.json' with { type: 'json' };
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
+import mainWindow from '../../../tests/fixtures/main-window.json' with { type: 'json' };
 
 // The committed snapshot is refreshed at every desktop release, so its own age
 // cannot be what makes the shell show a stale market.
@@ -509,6 +510,52 @@ test('every desktop table fits its pane from the minimum window up', async ({ pa
   await expect(inventory.locator('thead th', { hasText: /^Trend/ })).toHaveCount(0);
   await page.setViewportSize({ width: 1920, height: 800 });
   await expect(inventory).not.toHaveAttribute('data-fit-note', /./);
+});
+
+// Only the workspace scrolls above 900px. Content positioned against the page
+// instead (a screen-reader label in Settings) once let the whole app scroll up
+// and leave an empty band under it.
+test('the desktop page itself never scrolls; only the workspace does', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const sidebar = page.locator('.sidebar');
+  const views = await sidebar.getByRole('button').evaluateAll(buttons => buttons
+    .map(button => button.textContent?.trim().split(/\s+/)[0] ?? '')
+    .filter(Boolean));
+  const failures: string[] = [];
+  for (const [width, height] of [[mainWindow.min_width, mainWindow.min_height], [mainWindow.width, mainWindow.height], [1920, 1080]]) {
+    await page.setViewportSize({ width, height });
+    for (const view of views) {
+      const button = sidebar.getByRole('button', { name: new RegExp(`^${view}`) }).first();
+      if (!(await button.isVisible())) continue;
+      await button.click();
+      await page.waitForTimeout(150);
+      const extra = await page.evaluate(() => {
+        const root = document.scrollingElement!;
+        return { down: root.scrollHeight - root.clientHeight, across: root.scrollWidth - root.clientWidth };
+      });
+      if (extra.down > 0 || extra.across > 0) failures.push(`${width}x${height} ${view}: ${extra.down}px down, ${extra.across}px across`);
+    }
+  }
+  expect(failures).toEqual([]);
+});
+
+// tennoworth-desktop opens its window at this size (shell/window_size.rs).
+test('the opening window shows every view in the sidebar and its foot', async ({ page }) => {
+  await page.setViewportSize({ width: mainWindow.width, height: mainWindow.height });
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const layout = await page.evaluate(() => {
+    const sidebar = document.querySelector('.sidebar')!;
+    const foot = document.querySelector('.sfoot')!.getBoundingClientRect();
+    const scrolled = [sidebar, ...sidebar.querySelectorAll('*')]
+      .filter(element => element.scrollHeight > element.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(element).overflowY)).length;
+    const lastView = [...sidebar.querySelectorAll('button')].at(-1)!.getBoundingClientRect().bottom;
+    return { scrolled, lastView, footTop: foot.top, footBottom: foot.bottom, height: innerHeight };
+  });
+  expect(layout.scrolled, 'no part of the sidebar scrolls').toBe(0);
+  expect(layout.lastView).toBeLessThanOrEqual(layout.footTop);
+  expect(layout.footBottom).toBeLessThanOrEqual(layout.height);
 });
 
 test('every hosted table fits from phone width up', async ({ page }) => {

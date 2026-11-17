@@ -173,6 +173,10 @@ Refresh menu repeats the scan name. The last step stops wrapping and lets the
 status note and the activity message end in an ellipsis, with the full text in
 the tree; when even that would clip (enlarged text), the strip wraps instead.
 This is the one intentional exception to strips growing vertically.
+The desktop window opens 880px tall, so every view in the sidebar and its foot
+show without scrolling, and shrinks to the screen's usable height on a shorter
+screen. Only the workspace scrolls: the page itself never does, so content
+inside the workspace is positioned against it, never against the page.
 The desktop window's minimum width is 1200px: the widest view, Sell, fits
 beside the full sidebar from 1360px and beside the icon rail from 1200px,
 and every other view fits beside the full sidebar at 1200px. The workspace
