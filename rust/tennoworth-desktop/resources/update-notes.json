@@ -2151,7 +2151,7 @@
           "id": "price-rule",
           "kind": "improved",
           "title": "Choose how prices are suggested",
-          "body": "Settings → Selling sets the suggested price: the lowest other ask, the average of the 5 or 20 cheapest asks, the 48-hour average or the 90-day median, plus or minus up to 50 platinum. New listings, live price checks and My orders all follow it and name it.",
+          "body": "Settings → Selling sets the suggested price: the lowest other ask, the average of the 5 or 20 cheapest asks, the 48-hour average or the 90-day median, plus or minus up to 50 platinum. New listings, live price checks and My orders all follow it and name it. Suggested by Lawr on the TennoWorth Discord.",
           "platforms": [
             "windows",
             "linux"
@@ -2217,7 +2217,7 @@
           "id": "routine-picker",
           "kind": "improved",
           "title": "Add Warframe's activities to your lists",
-          "body": "The daily and weekly lists offer the game's activities to add with one click, such as The Icebind, the 1999 Calendar, Palladino's weekly offerings, Netracells and Bird 3's Archon Shard. You can also add your own items or remove any you skip.",
+          "body": "The daily and weekly lists offer the game's activities to add with one click, such as The Icebind, the 1999 Calendar, Palladino's weekly offerings, Netracells and Bird 3's Archon Shard. You can also add your own items or remove any you skip. Suggested by Lawr on the TennoWorth Discord.",
           "platforms": [
             "windows",
             "linux"
