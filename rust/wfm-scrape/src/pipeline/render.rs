@@ -12,7 +12,7 @@ use serde::Serialize;
 
 use crate::clock;
 use crate::pipeline::csv_input;
-use market_domain::math::{clamp_avg, clamp_low5};
+use market_domain::math::{clamp_avg, clamp_low20, clamp_low5};
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct CatalogItemMeta {
@@ -61,13 +61,13 @@ pub fn render_item(row: &csv_input::CsvRow, meta: &CatalogItemMeta) -> ItemEntry
     let avg_raw = parse_f64_or(&row.avg_price_48h, 0.0);
     let med90 = parse_f64_or(&row.median_90d, 0.0);
     let ls = parse_f64_or(&row.low_sell_price, 0.0);
-    let low5_raw = parse_f64_or(&row.low5_avg, 0.0);
+    let low5 = clamp_low5(parse_f64_or(&row.low5_avg, 0.0), med90, ls);
 
     ItemEntry {
         avg: clamp_avg(avg_raw, med90),
         low_sell: ls,
-        low5_avg: clamp_low5(low5_raw, med90, ls),
-        low20_avg: clamp_low5(parse_f64_or(&row.low20_avg, 0.0), med90, ls),
+        low5_avg: low5,
+        low20_avg: clamp_low20(parse_f64_or(&row.low20_avg, 0.0), low5, med90, ls),
         top_buy: parse_f64_or(&row.top_buy_price, 0.0),
         price_basis: (row.price_basis == "unit").then_some("unit"),
         vol: parse_i64_or(&row.volume_48h, 0),
@@ -439,6 +439,16 @@ mod tests {
         row.low_sell_price = "5".into();
         row.low20_avg = "61.0".into();
         assert_eq!(render_item(&row, &test_meta()).low20_avg, 5.0);
+
+        // A deep book clamped to a median below every live ask is floored at
+        // the 5-ask mean instead (Paris Prime Grip, first live sweep).
+        row.median_90d = "3".into();
+        row.low_sell_price = "4".into();
+        row.low5_avg = "5.4".into();
+        row.low20_avg = "11.2".into();
+        let entry = render_item(&row, &test_meta());
+        assert_eq!(entry.low20_avg, 5.4);
+        assert!(entry.low20_avg >= entry.low_sell);
     }
 
     #[test]
