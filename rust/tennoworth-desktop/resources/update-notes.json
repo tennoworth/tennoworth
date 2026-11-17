@@ -1,5 +1,5 @@
 {
-  "version": "0.10.102",
+  "version": "0.10.103",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2135,6 +2135,133 @@
           "kind": "fixed",
           "title": "Network security fixes",
           "body": "A component the app uses for network connections is updated to fix three published security issues, one of which could make it use too much memory.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.103",
+      "date": "2026-11-17",
+      "changes": [
+        {
+          "id": "price-rule",
+          "kind": "improved",
+          "title": "Choose how prices are suggested",
+          "body": "Settings → Selling sets the suggested price: the lowest other ask, the average of the 5 or 20 cheapest asks, the 48-hour average or the 90-day median, plus or minus up to 50 platinum. New listings, live price checks and My orders all follow it and name it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "live-troll-skip",
+          "kind": "improved",
+          "title": "Troll asks are skipped",
+          "body": "A live ask under a third of the item's usual price is skipped for the next one. The price shown is marked with an asterisk, and its tooltip names the ask that was skipped.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "hold-drop-split",
+          "kind": "improved",
+          "title": "Hold or sell-off",
+          "body": "A price near the bottom of its 90-day range on ordinary trading usually recovers within a month, and the advice now says how often. On three times the usual trading it is marked Drop instead, because waiting is then a gamble.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "crowded-tag",
+          "kind": "improved",
+          "title": "Crowded books",
+          "body": "When the 20 cheapest asks sit close together, the row is tagged Crowded: buyers take the cheapest, so match the lowest ask.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "weekend-line",
+          "kind": "improved",
+          "title": "Weekend note",
+          "body": "From Thursday to Sunday a line under Top picks notes that weekends see more trades, so listings tend to sell faster. Prices barely change by weekday, so it promises speed, not a better price.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "watches-bargains",
+          "kind": "improved",
+          "title": "Bargains in Watches",
+          "body": "Watches lists possible bargains from the latest market data: an ask well under the usual price, or a buyer bidding above the cheapest ask. Each reads \"not checked\" until Check live confirms or retires it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "routine-picker",
+          "kind": "improved",
+          "title": "Add Warframe's activities to your lists",
+          "body": "The daily and weekly lists offer the game's activities to add with one click, such as The Icebind, the 1999 Calendar, Palladino's weekly offerings, Netracells and Bird 3's Archon Shard. You can also add your own items or remove any you skip.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "routines-calendar",
+          "kind": "improved",
+          "title": "Routine resets on the Calendar",
+          "body": "Each list with something still open shows its next reset on the Calendar, with what is left and a link back to Routines.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "settings-sections",
+          "kind": "improved",
+          "title": "Settings in foldable sections",
+          "body": "Settings is grouped into titled sections in order of use, each with a Show and Hide toggle that is remembered. Links into Settings open the section they point to.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "plex-math-solid-rules",
+          "kind": "improved",
+          "title": "Cleaner symbols and dividers",
+          "body": "Arrows and markers come from one bundled font instead of whatever the system had, and dividers in the light theme are solid faded lines instead of uneven dots.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "jiff-dates",
+          "kind": "fixed",
+          "title": "Date handling replaced",
+          "body": "The component the app used to read and write dates is no longer maintained, so it is replaced with a maintained one. Dates and times read the same as before.",
           "platforms": [
             "windows",
             "linux"

@@ -54,6 +54,43 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.103 - 2026-11-17
+
+# 💰 TennoWorth Desktop 0.10.103
+
+TennoWorth Desktop 0.10.103 is ready.
+
+This release is for anyone who sells. You can now choose how the app suggests prices, such as one platinum over the 90-day average, and the advice reads more of the market: it tells a dip worth waiting out from a sell-off, flags crowded books, and finds bargains for Watches. Routines are now yours to shape, with Warframe's daily and weekly activities one click away, and Settings is reorganised into foldable sections.
+
+## Changelog (11)
+
+### Selling
+
+- **Choose how prices are suggested** Settings → Selling sets the suggested price: the lowest other ask, the average of the 5 or 20 cheapest asks, the 48-hour average or the 90-day median, plus or minus up to 50 platinum. New listings, live price checks and My orders all follow it and name it. <!-- app-note {"id":"price-rule","kind":"improved"} -->
+- **Troll asks are skipped** A live ask under a third of the item's usual price is skipped for the next one. The price shown is marked with an asterisk, and its tooltip names the ask that was skipped. <!-- app-note {"id":"live-troll-skip","kind":"improved"} -->
+- **Hold or sell-off** A price near the bottom of its 90-day range on ordinary trading usually recovers within a month, and the advice now says how often. On three times the usual trading it is marked Drop instead, because waiting is then a gamble. <!-- app-note {"id":"hold-drop-split","kind":"improved"} -->
+- **Crowded books** When the 20 cheapest asks sit close together, the row is tagged Crowded: buyers take the cheapest, so match the lowest ask. <!-- app-note {"id":"crowded-tag","kind":"improved"} -->
+- **Weekend note** From Thursday to Sunday a line under Top picks notes that weekends see more trades, so listings tend to sell faster. Prices barely change by weekday, so it promises speed, not a better price. <!-- app-note {"id":"weekend-line","kind":"improved"} -->
+- **Bargains in Watches** Watches lists possible bargains from the latest market data: an ask well under the usual price, or a buyer bidding above the cheapest ask. Each reads "not checked" until Check live confirms or retires it. <!-- app-note {"id":"watches-bargains","kind":"improved"} -->
+
+### Routines
+
+- **Add Warframe's activities to your lists** The daily and weekly lists offer the game's activities to add with one click, such as The Icebind, the 1999 Calendar, Palladino's weekly offerings, Netracells and Bird 3's Archon Shard. You can also add your own items or remove any you skip. <!-- app-note {"id":"routine-picker","kind":"improved"} -->
+- **Routine resets on the Calendar** Each list with something still open shows its next reset on the Calendar, with what is left and a link back to Routines. <!-- app-note {"id":"routines-calendar","kind":"improved"} -->
+
+### Appearance
+
+- **Settings in foldable sections** Settings is grouped into titled sections in order of use, each with a Show and Hide toggle that is remembered. Links into Settings open the section they point to. <!-- app-note {"id":"settings-sections","kind":"improved"} -->
+- **Cleaner symbols and dividers** Arrows and markers come from one bundled font instead of whatever the system had, and dividers in the light theme are solid faded lines instead of uneven dots. <!-- app-note {"id":"plex-math-solid-rules","kind":"improved"} -->
+
+### Safety
+
+- **Date handling replaced** The component the app used to read and write dates is no longer maintained, so it is replaced with a maintained one. Dates and times read the same as before. <!-- app-note {"id":"jiff-dates","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.10.102 - 2026-11-15
 
 # 🔒 TennoWorth Desktop 0.10.102
