@@ -24,7 +24,9 @@ fn opening_height(available: f64) -> f64 {
 /// Shrinks a window that opened taller than the screen's usable area (a 768px
 /// laptop, a tall panel), so its foot is not drawn off screen.
 pub(crate) fn fit_to_screen(window: &WebviewWindow) {
-    let Ok(Some(monitor)) = window.current_monitor() else { return };
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return;
+    };
     let scale = monitor.scale_factor();
     let area = monitor.work_area().size.to_logical::<f64>(scale);
     let chrome = match (window.outer_size(), window.inner_size()) {
@@ -44,8 +46,14 @@ mod tests {
     #[test]
     fn sizes_match_the_browser_fixture() {
         let fixture: serde_json::Value =
-            serde_json::from_str(include_str!("../../../../tests/fixtures/main-window.json")).unwrap();
-        for (key, value) in [("width", WIDTH), ("height", HEIGHT), ("min_width", MIN_WIDTH), ("min_height", MIN_HEIGHT)] {
+            serde_json::from_str(include_str!("../../../../tests/fixtures/main-window.json"))
+                .unwrap();
+        for (key, value) in [
+            ("width", WIDTH),
+            ("height", HEIGHT),
+            ("min_width", MIN_WIDTH),
+            ("min_height", MIN_HEIGHT),
+        ] {
             assert_eq!(fixture[key].as_f64(), Some(value), "{key}");
         }
     }
