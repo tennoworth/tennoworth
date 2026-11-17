@@ -17,7 +17,7 @@ pub use paths::{find_root, Dirs};
 use std::collections::HashMap;
 use std::path::Path;
 
-use chrono::Utc;
+use jiff::Timestamp;
 
 use crate::clock;
 
@@ -37,7 +37,7 @@ pub fn build(
 ) -> Result<(), String> {
     let now = now_arg
         .map(|s| clock::parse_stamp(s).ok_or_else(|| format!("invalid --now stamp: {s}")))
-        .unwrap_or_else(|| Ok(Utc::now()))?;
+        .unwrap_or_else(|| Ok(Timestamp::now()))?;
 
     let inputs::BuildInputs {
         http,

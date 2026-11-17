@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::Serialize;
 
 use crate::clock;
@@ -265,7 +265,7 @@ pub struct DeSurface {
 /// through it.
 #[allow(clippy::too_many_arguments)]
 pub fn assemble_snapshot(
-    now: DateTime<Utc>,
+    now: Timestamp,
     catalog: HashMap<String, String>,
     items: HashMap<String, ItemEntry>,
     path_to_info: HashMap<String, serde_json::Value>,

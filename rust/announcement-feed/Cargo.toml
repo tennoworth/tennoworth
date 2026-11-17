@@ -6,7 +6,7 @@ license = "MIT"
 description = "Pure curated announcement feed contract and validation."
 
 [dependencies]
-chrono = { workspace = true }
+jiff = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true }

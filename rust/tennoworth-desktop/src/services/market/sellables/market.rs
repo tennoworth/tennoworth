@@ -68,7 +68,7 @@ impl MarketData {
             Err(_) => return false,
         };
         let parse = |stamp: Option<&String>| {
-            stamp.and_then(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok())
+            stamp.and_then(|stamp| market_domain::stamp::parse_rfc3339(stamp))
         };
         match (
             parse(candidate.updated_at.as_ref()),

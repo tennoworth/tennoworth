@@ -1,7 +1,6 @@
 use super::Http;
 use crate::clock;
-use chrono::DateTime;
-use chrono::Utc;
+use jiff::Timestamp;
 use std::collections::HashMap;
 
 pub const WFM_RIVEN_WEAPONS_URL: &str = "https://api.warframe.market/v2/riven/weapons";
@@ -154,7 +153,7 @@ pub fn fetch_rivens(http: &dyn Http) -> HashMap<String, serde_json::Value> {
 pub fn riven_change_log(
     weapons: &serde_json::Map<String, serde_json::Value>,
     prior: Option<&HashMap<String, serde_json::Value>>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> Vec<serde_json::Value> {
     let prior_weapons = prior
         .and_then(|p| p.get("weapons"))
@@ -188,7 +187,7 @@ pub fn riven_change_log(
     }
     // Carry the prior log forward, dropping entries past retention and any
     // entry for a slug that just changed again (the new row supersedes it).
-    let cutoff = now - chrono::Duration::days(RIVEN_CHANGE_RETENTION_DAYS);
+    let cutoff = now - market_domain::stamp::days(RIVEN_CHANGE_RETENTION_DAYS);
     let changed_now: std::collections::HashSet<String> = changes
         .iter()
         .filter_map(|c| c.get("slug").and_then(|s| s.as_str()).map(String::from))
@@ -205,8 +204,8 @@ pub fn riven_change_log(
             let keep = c
                 .get("seen_at")
                 .and_then(|s| s.as_str())
-                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                .map(|t| t.with_timezone(&Utc) >= cutoff)
+                .and_then(market_domain::stamp::parse_rfc3339)
+                .map(|t| t >= cutoff)
                 .unwrap_or(false);
             if keep {
                 changes.push(c.clone());

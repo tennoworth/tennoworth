@@ -10,7 +10,6 @@ use crate::{
     services::market::sellables::{self, MarketData},
     services::notifications::{self, Candidate},
 };
-use chrono::{DateTime, Local, Timelike};
 use market_domain::{
     baro::{baro_value, BaroRequest},
     math::sell_priority,
@@ -33,7 +32,7 @@ fn field<'a>(v: &'a Value, key: &str) -> &'a Value {
     v.get(key).unwrap_or(&Value::Null)
 }
 fn stamp(s: &str) -> Option<i64> {
-    DateTime::parse_from_rfc3339(s).ok().map(|d| d.timestamp())
+    market_domain::stamp::parse_rfc3339(s).map(|d| d.as_second())
 }
 fn fresh(s: &str, now: i64) -> bool {
     stamp(s).is_some_and(|t| (0..=DAY).contains(&now.saturating_sub(t)))
@@ -448,14 +447,14 @@ fn evaluate(app: &AppHandle) {
     for candidate in scheduled(&raw, &held, owned.as_deref(), now) {
         notifications::send(app, candidate);
     }
-    let local = Local::now();
+    let local = jiff::ZonedDateTime::now();
     if let Some(candidate) = digest(
         &raw,
         &sellables::rank_sellables(&db, &market),
         inventory_at,
         now,
-        &local.format("%Y-%m-%d").to_string(),
-        local.hour(),
+        &local.date().to_string(),
+        u32::from(local.hour().unsigned_abs()),
     ) {
         notifications::send(app, candidate);
     }

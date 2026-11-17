@@ -1,10 +1,12 @@
+use crate::{add_days, rfc3339, utc_date};
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::{header, StatusCode},
     routing::{get, post},
     Json, Router,
 };
-use chrono::{DateTime, Days, Utc};
+use jiff::civil::Date;
+use jiff::Timestamp;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -42,7 +44,7 @@ impl Store {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
         )?)
     }
-    pub fn open(path: &Path, now: DateTime<Utc>) -> anyhow::Result<Self> {
+    pub fn open(path: &Path, now: Timestamp) -> anyhow::Result<Self> {
         let mut store = Self::new(Connection::open(path)?)?;
         store.tick(now, true)?;
         Ok(store)
@@ -55,29 +57,26 @@ impl Store {
             CREATE TABLE IF NOT EXISTS health (id INTEGER PRIMARY KEY CHECK(id=1), last_tick TEXT NOT NULL);")?;
         Ok(Self { conn })
     }
-    pub fn tick(&mut self, now: DateTime<Utc>, restarted: bool) -> anyhow::Result<()> {
-        let day = now.date_naive().to_string();
+    pub fn tick(&mut self, now: Timestamp, restarted: bool) -> anyhow::Result<()> {
+        let day = utc_date(now).to_string();
         let tx = self.conn.transaction()?;
         let last: Option<String> = tx
             .query_row("SELECT last_tick FROM health WHERE id=1", [], |r| r.get(0))
             .optional()?;
-        let last = last
-            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-            .map(|d| d.with_timezone(&Utc));
+        let last = last.and_then(|s| s.parse::<Timestamp>().ok());
         // Do not erase newer deduplication state if the server clock moves back.
         if last.is_some_and(|last| now < last) {
             anyhow::bail!("clock moved backwards");
         }
-        let gap = restarted
-            || last.is_none_or(|last| now.signed_duration_since(last).num_seconds() > 120);
-        let mut date = last.map_or(now.date_naive(), |d| d.date_naive());
-        while date <= now.date_naive() {
+        let gap = restarted || last.is_none_or(|last| now.duration_since(last).as_secs() > 120);
+        let mut date = last.map_or(utc_date(now), utc_date);
+        while date <= utc_date(now) {
             let key = date.to_string();
             tx.execute("INSERT OR IGNORE INTO daily VALUES (?1,0,?2)", (&key, !gap))?;
             if gap {
                 tx.execute("UPDATE daily SET complete=0 WHERE day=?1", [&key])?;
             }
-            let Some(next) = date.checked_add_days(Days::new(1)) else {
+            let Some(next) = add_days(date, 1) else {
                 break;
             };
             date = next;
@@ -86,18 +85,18 @@ impl Store {
         // doing this on every tick meant every check-in - unauthenticated input -
         // scanned and deleted across the whole table, which grows quadratically
         // with the very traffic that triggers it.
-        if last.is_none_or(|last| last.date_naive() != now.date_naive()) {
+        if last.is_none_or(|last| utc_date(last) != utc_date(now)) {
             tx.execute("DELETE FROM seen WHERE day <> ?1", [&day])?;
         }
-        tx.execute("INSERT INTO health VALUES (1,?1) ON CONFLICT(id) DO UPDATE SET last_tick=excluded.last_tick", [now.to_rfc3339()])?;
+        tx.execute("INSERT INTO health VALUES (1,?1) ON CONFLICT(id) DO UPDATE SET last_tick=excluded.last_tick", [rfc3339(now)])?;
         tx.commit()?;
         Ok(())
     }
-    pub fn accept(&mut self, token: &str, now: DateTime<Utc>) -> Result<(), StatusCode> {
+    pub fn accept(&mut self, token: &str, now: Timestamp) -> Result<(), StatusCode> {
         let Some((day, random)) = token.split_once('.') else {
             return Err(StatusCode::BAD_REQUEST);
         };
-        if day != now.date_naive().to_string()
+        if day != utc_date(now).to_string()
             || random.len() != 64
             || !random
                 .bytes()
@@ -121,7 +120,7 @@ impl Store {
         }
         tx.commit().map_err(|_| StatusCode::SERVICE_UNAVAILABLE)
     }
-    pub fn daily(&self, now: DateTime<Utc>, all: bool) -> anyhow::Result<Daily> {
+    pub fn daily(&self, now: Timestamp, all: bool) -> anyhow::Result<Daily> {
         let updated_at: String =
             self.conn
                 .query_row("SELECT last_tick FROM health WHERE id=1", [], |r| r.get(0))?;
@@ -141,32 +140,32 @@ impl Store {
         let days = if all {
             stmt.query_map([], read)?.collect::<Result<Vec<_>, _>>()?
         } else {
-            stmt.query_map([now.date_naive().to_string()], read)?
+            stmt.query_map([utc_date(now).to_string()], read)?
                 .collect::<Result<Vec<_>, _>>()?
         };
         Ok(Daily { updated_at, days })
     }
-    pub fn restore(&mut self, data: Daily, now: DateTime<Utc>) -> anyhow::Result<()> {
-        let exported_at = DateTime::parse_from_rfc3339(&data.updated_at)?.with_timezone(&Utc);
+    pub fn restore(&mut self, data: Daily, now: Timestamp) -> anyhow::Result<()> {
+        let exported_at: Timestamp = data.updated_at.parse()?;
         anyhow::ensure!(exported_at <= now, "invalid export timestamp");
         let tx = self.conn.transaction()?;
         for day in data.days {
-            let date = chrono::NaiveDate::parse_from_str(&day.date, "%Y-%m-%d")?;
+            let date = Date::strptime("%Y-%m-%d", &day.date)?;
             anyhow::ensure!(
-                date <= now.date_naive() && day.count <= i64::MAX as u64,
+                date <= utc_date(now) && day.count <= i64::MAX as u64,
                 "invalid aggregate"
             );
             tx.execute("INSERT INTO daily VALUES (?1,?2,?3) ON CONFLICT(day) DO UPDATE SET count=MAX(count,excluded.count),complete=MIN(complete,excluded.complete)",
-                (&day.date, day.count, day.complete && date < now.date_naive()))?;
+                (&day.date, day.count, day.complete && date < utc_date(now)))?;
         }
         // The export cannot certify coverage after it was captured, even on older days.
-        let mut date = exported_at.date_naive();
-        while date <= now.date_naive() {
+        let mut date = utc_date(exported_at);
+        while date <= utc_date(now) {
             tx.execute(
                 "INSERT INTO daily VALUES (?1,0,0) ON CONFLICT(day) DO UPDATE SET complete=0",
                 [date.to_string()],
             )?;
-            let Some(next) = date.checked_add_days(Days::new(1)) else {
+            let Some(next) = add_days(date, 1) else {
                 break;
             };
             date = next;
@@ -207,7 +206,7 @@ impl Collector {
         self.store
             .lock()
             .map_err(|_| anyhow::anyhow!("store unavailable"))?
-            .tick(Utc::now(), false)
+            .tick(Timestamp::now(), false)
     }
 }
 pub fn router(state: Arc<Collector>) -> Router {
@@ -238,7 +237,7 @@ async fn check_in(
         return StatusCode::SERVICE_UNAVAILABLE;
     };
     store
-        .accept(&payload.token, Utc::now())
+        .accept(&payload.token, Timestamp::now())
         .map_or_else(|s| s, |_| StatusCode::NO_CONTENT)
 }
 async fn daily(
@@ -249,7 +248,7 @@ async fn daily(
         .try_lock()
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     let data = store
-        .daily(Utc::now(), false)
+        .daily(Timestamp::now(), false)
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
     Ok((
         [(header::CACHE_CONTROL, "public, max-age=3600")],
@@ -260,13 +259,13 @@ async fn health(State(state): State<Arc<Collector>>) -> StatusCode {
     let Ok(store) = state.store.try_lock() else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
-    let Ok(data) = store.daily(Utc::now(), false) else {
+    let Ok(data) = store.daily(Timestamp::now(), false) else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
-    let Ok(time) = DateTime::parse_from_rfc3339(&data.updated_at) else {
+    let Ok(time) = data.updated_at.parse::<Timestamp>() else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
-    let age = Utc::now().signed_duration_since(time).num_seconds();
+    let age = Timestamp::now().duration_since(time).as_secs();
     if (0..=120).contains(&age) {
         StatusCode::NO_CONTENT
     } else {
@@ -277,7 +276,7 @@ async fn health(State(state): State<Arc<Collector>>) -> StatusCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn now() -> DateTime<Utc> {
+    fn now() -> Timestamp {
         "2026-09-11T12:00:00Z".parse().unwrap()
     }
     fn store() -> Store {
@@ -320,7 +319,7 @@ mod tests {
         let mut s = store();
         s.accept(&token(), now()).unwrap();
         assert!(s.daily(now(), false).unwrap().days.is_empty());
-        let tomorrow = now() + chrono::Duration::days(1);
+        let tomorrow = now() + jiff::SignedDuration::from_hours(24);
         s.tick(tomorrow, false).unwrap();
         assert_eq!(
             s.conn
@@ -342,7 +341,7 @@ mod tests {
         let mut s = store();
         let mut time = now();
         for _ in 0..2881 {
-            time += chrono::Duration::seconds(30);
+            time += jiff::SignedDuration::from_secs(30);
             s.tick(time, false).unwrap();
         }
         assert!(s
@@ -353,9 +352,9 @@ mod tests {
             .any(|d| d.date == "2026-09-12" && d.count == 0 && d.complete));
         s.restore(
             Daily {
-                updated_at: time.to_rfc3339(),
+                updated_at: rfc3339(time),
                 days: vec![Day {
-                    date: time.date_naive().to_string(),
+                    date: utc_date(time).to_string(),
                     count: 10,
                     complete: true,
                 }],
@@ -370,7 +369,7 @@ mod tests {
         let mut original = store();
         original.accept(&token(), now()).unwrap();
         let exported = original.daily(now(), true).unwrap();
-        let recovered_at = now() + chrono::Duration::days(3);
+        let recovered_at = now() + jiff::SignedDuration::from_hours(3 * 24);
         let mut recovered = Store::new(Connection::open_in_memory().unwrap()).unwrap();
         recovered.tick(recovered_at, true).unwrap();
         recovered.restore(exported, recovered_at).unwrap();
@@ -386,7 +385,8 @@ mod tests {
         s.tick(now(), true).unwrap();
         s.accept(&token(), now()).unwrap();
         assert_eq!(s.daily(now(), true).unwrap().days[0].count, 1);
-        s.tick(now() + chrono::Duration::days(1), true).unwrap();
+        s.tick(now() + jiff::SignedDuration::from_hours(24), true)
+            .unwrap();
         assert_eq!(
             s.conn
                 .query_row("SELECT COUNT(*) FROM seen", [], |r| r.get::<_, u64>(0))
@@ -411,7 +411,7 @@ mod tests {
         state.tick().unwrap();
         let task = tokio::spawn(axum::serve(listener, router(state)).into_future());
         let client = reqwest::Client::new();
-        let token = format!("{}.{}", Utc::now().date_naive(), "c".repeat(64));
+        let token = format!("{}.{}", utc_date(Timestamp::now()), "c".repeat(64));
         for _ in 0..2 {
             assert_eq!(
                 client
@@ -452,7 +452,7 @@ mod tests {
     }
     use std::future::IntoFuture;
 
-    fn at(stamp: &str) -> DateTime<Utc> {
+    fn at(stamp: &str) -> Timestamp {
         stamp.parse().unwrap()
     }
 
@@ -479,7 +479,7 @@ mod tests {
             .conn
             .query_row(
                 "SELECT COUNT(*) FROM seen WHERE day <> ?1",
-                [day.date_naive().to_string()],
+                [utc_date(day).to_string()],
                 |r| r.get(0),
             )
             .unwrap();
@@ -504,7 +504,7 @@ mod tests {
             .conn
             .query_row(
                 "SELECT COUNT(*) FROM seen WHERE day <> ?1",
-                [day2.date_naive().to_string()],
+                [utc_date(day2).to_string()],
                 |r| r.get(0),
             )
             .unwrap();
@@ -537,7 +537,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(limited.status(), 429, "the read lane is saturated");
-        let token = format!("{}.{}", Utc::now().date_naive(), "e".repeat(64));
+        let token = format!("{}.{}", utc_date(Timestamp::now()), "e".repeat(64));
         let check_in = client
             .post(format!("{url}/api/usage/check-in"))
             .json(&serde_json::json!({"token":token}))
@@ -563,7 +563,7 @@ mod tests {
         state.tick().unwrap();
         let task = tokio::spawn(axum::serve(listener, router(state)).into_future());
         let client = reqwest::Client::new();
-        let token = format!("{}.{}", Utc::now().date_naive(), "d".repeat(64));
+        let token = format!("{}.{}", utc_date(Timestamp::now()), "d".repeat(64));
 
         // The first request takes the whole window.
         assert_eq!(

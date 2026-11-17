@@ -766,9 +766,7 @@ fn a_failed_live_endpoint_still_marks_the_surface_incomplete() {
 
 #[test]
 fn the_calendar_takes_vaulted_from_the_fresher_vault_status() {
-    let now = chrono::DateTime::parse_from_rfc3339("2026-10-01T00:00:00Z")
-        .unwrap()
-        .with_timezone(&chrono::Utc);
+    let now: jiff::Timestamp = "2026-10-01T00:00:00Z".parse().unwrap();
     let mut calendar: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
         "primes": {
             "xaku_prime_set": {"name": "Xaku Prime", "released": "2024-11-13", "vaulted": false, "est_vault_date": "2026-08-13"},

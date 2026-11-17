@@ -14,8 +14,10 @@
 use crate::persistence::{Db, TradeRow};
 use crate::services::market::sellables::MarketData;
 use crate::services::telemetry::usage;
-use chrono::{DateTime, Datelike, Days, NaiveDate, Utc};
 use hmac::{Hmac, Mac};
+use jiff::civil::Date;
+use jiff::Timestamp;
+use market_domain::stamp::{days, utc_date};
 use rand::{rngs::SysRng, TryRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -63,8 +65,8 @@ struct SentCount {
     count: u32,
 }
 
-pub(crate) fn iso_week(day: NaiveDate) -> String {
-    let w = day.iso_week();
+pub(crate) fn iso_week(day: Date) -> String {
+    let w = day.iso_week_date();
     format!("{}-W{:02}", w.year(), w.week())
 }
 
@@ -106,7 +108,7 @@ fn sale_ref(key: &[u8; 32], trade_id: i64) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Sale {
     trade_id: i64,
-    day: NaiveDate,
+    day: Date,
     side: &'static str,
     slug: String,
     tiered: bool,
@@ -139,7 +141,7 @@ fn sale_of(trade: &TradeRow, resolve: &dyn Fn(&str) -> Option<(String, bool)>) -
     let (slug, tiered) = resolve(&name)?;
     Some(Sale {
         trade_id: trade.id,
-        day: DateTime::<Utc>::from_timestamp(trade.at, 0)?.date_naive(),
+        day: utc_date(Timestamp::from_second(trade.at).ok()?),
         side,
         slug,
         tiered,
@@ -162,10 +164,10 @@ struct Batch {
 /// trade read, which is the mark when there is nothing to send.
 fn plan(
     trades: &[TradeRow],
-    today: NaiveDate,
+    today: Date,
     resolve: &dyn Fn(&str) -> Option<(String, bool)>,
 ) -> (Vec<Batch>, Option<i64>) {
-    let oldest = today.checked_sub_days(Days::new(MAX_SALE_AGE_DAYS));
+    let oldest = today.checked_sub(days(MAX_SALE_AGE_DAYS as i64)).ok();
     let mut batches: Vec<Batch> = Vec::new();
     for trade in trades {
         let Some(sale) = sale_of(trade, resolve) else {
@@ -280,7 +282,7 @@ fn status(db: &Db, reports: &PriceReports) -> PriceReportStatus {
     PriceReportStatus {
         enabled: *reports.consent.borrow(),
         available: reports.available,
-        sent_this_week: sent_this_week(db, &iso_week(Utc::now().date_naive())),
+        sent_this_week: sent_this_week(db, &iso_week(utc_date(Timestamp::now()))),
     }
 }
 
@@ -360,7 +362,7 @@ async fn erase_recent(
     let through = db.last_trade_id().map_err(|_| unavailable())?;
     db.set_setting(MARK, &through.to_string())
         .map_err(|_| unavailable())?;
-    let today = Utc::now().date_naive();
+    let today = utc_date(Timestamp::now());
     for week in open_weeks(today) {
         let request = serde_json::json!({
             "v": CONTRACT_VERSION,
@@ -377,9 +379,9 @@ async fn erase_recent(
 }
 
 /// The weeks the service still keeps raw: this one and the previous one.
-fn open_weeks(today: NaiveDate) -> Vec<String> {
+fn open_weeks(today: Date) -> Vec<String> {
     let mut weeks = Vec::new();
-    if let Some(previous) = today.checked_sub_days(Days::new(7)) {
+    if let Ok(previous) = today.checked_sub(days(7)) {
         weeks.push(iso_week(previous));
     }
     weeks.push(iso_week(today));
@@ -456,7 +458,7 @@ async fn pass(
     if trades.is_empty() {
         return true;
     }
-    let today = Utc::now().date_naive();
+    let today = utc_date(Timestamp::now());
     let (batches, last_read) = {
         let market = market();
         plan(&trades, today, &|name: &str| market.report_item(name))

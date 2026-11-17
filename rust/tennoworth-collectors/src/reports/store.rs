@@ -4,8 +4,10 @@
 //! outlives the week after it was used.
 
 use super::contract::{iso_week, ValidBatch, ValidErase, ValidShape};
+use crate::{add_days, rfc3339, utc_date};
 use axum::http::StatusCode;
-use chrono::{DateTime, Days, NaiveDate, Utc};
+use jiff::civil::Date;
+use jiff::Timestamp;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -158,7 +160,7 @@ impl Store {
             rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
         )?)
     }
-    pub fn open(path: &Path, now: DateTime<Utc>) -> anyhow::Result<Self> {
+    pub fn open(path: &Path, now: Timestamp) -> anyhow::Result<Self> {
         let mut store = Self::new(Connection::open(path)?)?;
         store.tick(now)?;
         Ok(store)
@@ -190,22 +192,20 @@ impl Store {
     }
 
     /// The oldest week still open: a sale up to seven days old lands in it.
-    fn live_since(today: NaiveDate) -> anyhow::Result<String> {
-        let back = today
-            .checked_sub_days(Days::new(7))
-            .ok_or_else(|| anyhow::anyhow!("date out of range"))?;
+    fn live_since(today: Date) -> anyhow::Result<String> {
+        let back = add_days(today, -7).ok_or_else(|| anyhow::anyhow!("date out of range"))?;
         Ok(iso_week(back))
     }
 
-    pub fn tick(&mut self, now: DateTime<Utc>) -> anyhow::Result<()> {
-        let live = Self::live_since(now.date_naive())?;
+    pub fn tick(&mut self, now: Timestamp) -> anyhow::Result<()> {
+        let live = Self::live_since(utc_date(now))?;
         let tx = self.conn.transaction()?;
         let last: Option<String> = tx
             .query_row("SELECT last_tick FROM health WHERE id=1", [], |r| r.get(0))
             .optional()?;
         // Folding is irreversible; a clock that jumped back must not reopen weeks.
-        if let Some(last) = last.and_then(|s| DateTime::parse_from_rfc3339(&s).ok()) {
-            anyhow::ensure!(now >= last.with_timezone(&Utc), "clock moved backwards");
+        if let Some(last) = last.and_then(|s| s.parse::<Timestamp>().ok()) {
+            anyhow::ensure!(now >= last, "clock moved backwards");
         }
         let closed: Vec<String> = tx
             .prepare("SELECT DISTINCT week FROM sale WHERE week < ?1 UNION SELECT DISTINCT week FROM shape WHERE week < ?1")?
@@ -239,7 +239,7 @@ impl Store {
         }
         tx.execute(
             "INSERT INTO health VALUES (1,?1) ON CONFLICT(id) DO UPDATE SET last_tick=excluded.last_tick",
-            [now.to_rfc3339()],
+            [rfc3339(now)],
         )?;
         tx.commit()?;
         Ok(())
@@ -294,12 +294,12 @@ impl Store {
         tx.commit().map_err(unavailable)
     }
 
-    pub fn add_shape(&mut self, shape: ValidShape, now: DateTime<Utc>) -> Result<(), StatusCode> {
+    pub fn add_shape(&mut self, shape: ValidShape, now: Timestamp) -> Result<(), StatusCode> {
         self.conn
             .execute(
                 "INSERT OR IGNORE INTO shape VALUES (?1,?2,?3,?4)",
                 (
-                    iso_week(now.date_naive()),
+                    iso_week(utc_date(now)),
                     &shape.contributor,
                     &shape.erase,
                     &shape.shape,
@@ -345,7 +345,7 @@ impl Store {
             .collect::<Result<_, _>>()?)
     }
 
-    fn live_weeks(today: NaiveDate) -> anyhow::Result<Vec<String>> {
+    fn live_weeks(today: Date) -> anyhow::Result<Vec<String>> {
         let previous = Self::live_since(today)?;
         let current = iso_week(today);
         Ok(if previous == current {
@@ -355,7 +355,7 @@ impl Store {
         })
     }
 
-    pub fn prices(&self, now: DateTime<Utc>, all: bool) -> anyhow::Result<Prices> {
+    pub fn prices(&self, now: Timestamp, all: bool) -> anyhow::Result<Prices> {
         let mut weeks = Vec::new();
         for week in self.folded_weeks("published_price", all)? {
             let items = self
@@ -383,7 +383,7 @@ impl Store {
                 items,
             });
         }
-        for week in Self::live_weeks(now.date_naive())? {
+        for week in Self::live_weeks(utc_date(now))? {
             let items = aggregate(&Self::raw_sales(&self.conn, &week)?, MIN_CONTRIBUTORS);
             weeks.push(PriceWeek {
                 week,
@@ -398,7 +398,7 @@ impl Store {
         })
     }
 
-    pub fn shapes(&self, now: DateTime<Utc>) -> anyhow::Result<Shapes> {
+    pub fn shapes(&self, now: Timestamp) -> anyhow::Result<Shapes> {
         let read = |r: &rusqlite::Row<'_>| -> rusqlite::Result<(String, u32)> {
             Ok((r.get(0)?, r.get(1)?))
         };
@@ -429,7 +429,7 @@ impl Store {
                 .collect::<Result<_, _>>()?;
             push(week, true, rows);
         }
-        for week in Self::live_weeks(now.date_naive())? {
+        for week in Self::live_weeks(utc_date(now))? {
             let rows = self
                 .conn
                 .prepare(
@@ -446,11 +446,11 @@ impl Store {
         })
     }
 
-    pub fn healthy(&self, now: DateTime<Utc>) -> bool {
+    pub fn healthy(&self, now: Timestamp) -> bool {
         self.updated_at()
             .ok()
-            .and_then(|t| DateTime::parse_from_rfc3339(&t).ok())
-            .is_some_and(|t| (0..=120).contains(&now.signed_duration_since(t).num_seconds()))
+            .and_then(|t| t.parse::<Timestamp>().ok())
+            .is_some_and(|t| (0..=120).contains(&now.duration_since(t).as_secs()))
     }
 
     #[cfg(test)]

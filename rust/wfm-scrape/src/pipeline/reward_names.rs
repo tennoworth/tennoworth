@@ -13,7 +13,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use chrono::{DateTime, Duration, Utc};
+use jiff::{SignedDuration, Timestamp};
 use serde::{Deserialize, Serialize};
 
 use crate::clock;
@@ -66,7 +66,7 @@ fn prior_names(prior: &serde_json::Value) -> RewardNames {
 
 /// Which languages this build fetches: all missing ones, then the stalest
 /// carried language once it is past the refresh age.
-fn due_languages(prior: &RewardNames, now: DateTime<Utc>) -> Vec<&'static str> {
+fn due_languages(prior: &RewardNames, now: Timestamp) -> Vec<&'static str> {
     let mut due: Vec<&'static str> = LANGUAGES
         .iter()
         .copied()
@@ -84,7 +84,9 @@ fn due_languages(prior: &RewardNames, now: DateTime<Utc>) -> Vec<&'static str> {
         // An unreadable stamp sorts first: its age is unknown.
         .min_by_key(|(_, stamp)| *stamp);
     if let Some((language, stamp)) = stalest {
-        let old = stamp.is_none_or(|at| now - at >= Duration::hours(REFRESH_AFTER_HOURS));
+        let old = stamp.is_none_or(|at| {
+            now.duration_since(at) >= SignedDuration::from_hours(REFRESH_AFTER_HOURS)
+        });
         if old {
             due.push(language);
         }
@@ -135,7 +137,7 @@ pub fn refresh(
     prior: &serde_json::Value,
     relic_rewards: &HashMap<String, serde_json::Value>,
     wfm_fresh: bool,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> RewardNames {
     let mut names = prior_names(prior);
     let slugs = reward_slugs(relic_rewards);
@@ -170,7 +172,7 @@ mod tests {
     use crate::ingest::FixtureHttp;
     use serde_json::json;
 
-    fn now() -> DateTime<Utc> {
+    fn now() -> Timestamp {
         clock::parse_stamp("2026-11-07T12:00:00Z").unwrap()
     }
 

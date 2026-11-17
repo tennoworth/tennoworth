@@ -1,5 +1,5 @@
 //! Plain-text, expiring announcement feed shared by publishers and readers.
-use chrono::{DateTime, SecondsFormat};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -90,8 +90,8 @@ pub fn stamp(raw: &str) -> Option<i64> {
     if raw.len() != 20 {
         return None;
     }
-    let value = DateTime::parse_from_rfc3339(raw).ok()?;
-    (value.to_utc().to_rfc3339_opts(SecondsFormat::Secs, true) == raw).then(|| value.timestamp())
+    let value: Timestamp = raw.parse().ok()?;
+    (value.to_string() == raw).then(|| value.as_second())
 }
 
 // Bidirectional controls can make a title or deadline read differently from its stored text.

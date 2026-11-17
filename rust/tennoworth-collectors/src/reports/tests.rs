@@ -1,7 +1,7 @@
 use super::contract::{validate_erase, validate_sales, validate_shape};
 use super::store::{aggregate, RawSale, MAX_SALES_PER_CONTRIBUTOR_WEEK, MIN_CONTRIBUTORS};
 use super::*;
-use chrono::{DateTime, NaiveDate};
+use jiff::civil::Date;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::future::IntoFuture;
@@ -10,15 +10,15 @@ fn fixture() -> Value {
     serde_json::from_str(include_str!("../../../../tests/fixtures/reports.json")).unwrap()
 }
 
-fn fixture_today() -> NaiveDate {
+fn fixture_today() -> Date {
     fixture()["today"].as_str().unwrap().parse().unwrap()
 }
 
-fn at(stamp: &str) -> DateTime<Utc> {
+fn at(stamp: &str) -> Timestamp {
     stamp.parse().unwrap()
 }
 
-fn store_at(now: DateTime<Utc>) -> Store {
+fn store_at(now: Timestamp) -> Store {
     let mut store = Store::new(Connection::open_in_memory().unwrap()).unwrap();
     store.tick(now).unwrap();
     store
@@ -349,7 +349,7 @@ async fn http_accepts_valid_reports_and_refuses_anything_extra() {
     state.tick().unwrap();
     let (url, task) = serve(state).await;
     let client = reqwest::Client::new();
-    let today = Utc::now().date_naive().to_string();
+    let today = crate::utc_date(Timestamp::now()).to_string();
     let post = |path: &str, body: Value| client.post(format!("{url}{path}")).json(&body).send();
 
     let ok = batch(1, "primed_flow", &today, &[40]);
@@ -460,7 +460,7 @@ async fn a_saturated_quota_does_not_take_health_down() {
 #[test]
 fn iso_weeks_match_the_shared_vectors() {
     for v in fixture()["iso_weeks"].as_array().unwrap() {
-        let day: NaiveDate = v["day"].as_str().unwrap().parse().unwrap();
+        let day: Date = v["day"].as_str().unwrap().parse().unwrap();
         assert_eq!(contract::iso_week(day), v["week"].as_str().unwrap());
     }
 }

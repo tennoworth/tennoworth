@@ -19,10 +19,11 @@
 
 use std::collections::HashMap;
 
-use chrono::{Duration, NaiveDate};
+use jiff::civil::Date;
 use market_domain::math::{
     canonical_subtype, drop_poisoned_rows, rank0_rows, subtype_rows, StatsDay,
 };
+use market_domain::stamp::{self, days_between};
 use serde::{Deserialize, Serialize};
 
 use crate::ingest::Http;
@@ -90,7 +91,7 @@ pub struct Series {
 }
 
 impl History {
-    pub fn empty(start: NaiveDate, days: usize, generated_at: &str) -> Self {
+    pub fn empty(start: Date, days: usize, generated_at: &str) -> Self {
         History {
             generated_at: generated_at.into(),
             start: start.to_string(),
@@ -100,18 +101,18 @@ impl History {
             missing_days: Vec::new(),
         }
     }
-    pub fn through_date(&self) -> Option<NaiveDate> {
+    pub fn through_date(&self) -> Option<Date> {
         self.through
             .as_deref()
-            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+            .and_then(|s| Date::strptime("%Y-%m-%d", s).ok())
     }
-    pub fn start_date(&self) -> Option<NaiveDate> {
-        NaiveDate::parse_from_str(&self.start, "%Y-%m-%d").ok()
+    pub fn start_date(&self) -> Option<Date> {
+        Date::strptime("%Y-%m-%d", &self.start).ok()
     }
     /// The last calendar day the window covers (inclusive).
-    pub fn end_date(&self) -> Option<NaiveDate> {
+    pub fn end_date(&self) -> Option<Date> {
         self.start_date()
-            .map(|s| s + Duration::days(self.days as i64 - 1))
+            .map(|s| s + stamp::days(self.days as i64 - 1))
     }
 }
 
@@ -189,7 +190,7 @@ pub fn reduce_day(rows: &[StatsDay], pick: Option<&str>) -> (Option<f64>, u32) {
 /// dates before the start. `picks` is the per-slug subtype decision.
 pub fn apply_day(
     hist: &mut History,
-    date: NaiveDate,
+    date: Date,
     day: &HashMap<String, DayRows>,
     picks: &HashMap<String, Option<String>>,
 ) {
@@ -197,14 +198,14 @@ pub fn apply_day(
         return;
     };
     let days = hist.days;
-    let mut idx = (date - start).num_days();
+    let mut idx = days_between(date, start);
     if idx < 0 {
         return;
     }
     if idx as usize >= days {
         // Shift the window so `date` is the last column.
         let shift = idx as usize + 1 - days;
-        let new_start = start + Duration::days(shift as i64);
+        let new_start = start + stamp::days(shift as i64);
         for s in hist.items.values_mut() {
             if shift >= s.median.len() {
                 s.median.clear();
@@ -220,7 +221,7 @@ pub fn apply_day(
         hist.items
             .retain(|_, s| s.median.iter().any(|m| m.is_some()));
         hist.missing_days.retain(|d| {
-            NaiveDate::parse_from_str(d, "%Y-%m-%d")
+            Date::strptime("%Y-%m-%d", d)
                 .map(|d| d >= new_start)
                 .unwrap_or(false)
         });
@@ -256,9 +257,7 @@ pub fn apply_day(
 /// Which subtype each slug's series should track, decided over EVERY day's
 /// rows we are about to apply (volume-weighted; prefers intact for relics -
 /// `canonical_subtype`'s rule). Items with no subtyped rows get `None`.
-pub fn decide_picks(
-    days: &[(NaiveDate, HashMap<String, DayRows>)],
-) -> HashMap<String, Option<String>> {
+pub fn decide_picks(days: &[(Date, HashMap<String, DayRows>)]) -> HashMap<String, Option<String>> {
     let mut all: HashMap<String, Vec<StatsDay>> = HashMap::new();
     for (_, day) in days {
         for (slug, rows) in day {
@@ -277,28 +276,28 @@ pub fn decide_picks(
 /// a bootstrap window when there is no prior. Never more than `days` dates.
 pub fn dates_to_fetch(
     prior: Option<&History>,
-    yesterday: NaiveDate,
+    yesterday: Date,
     days: usize,
     bootstrap_days: usize,
-) -> Vec<NaiveDate> {
+) -> Vec<Date> {
     let first = match prior.and_then(|p| p.through_date()) {
-        Some(through) => through + Duration::days(1),
-        None => yesterday - Duration::days(bootstrap_days.min(days).saturating_sub(1) as i64),
+        Some(through) => through + stamp::days(1),
+        None => yesterday - stamp::days(bootstrap_days.min(days).saturating_sub(1) as i64),
     };
     let mut out = Vec::new();
     let mut d = first;
-    let floor = yesterday - Duration::days(days as i64 - 1);
+    let floor = yesterday - stamp::days(days as i64 - 1);
     if d < floor {
         d = floor;
     }
     while d <= yesterday {
         out.push(d);
-        d += Duration::days(1);
+        d += stamp::days(1);
     }
     out
 }
 
-pub fn day_url(date: NaiveDate) -> String {
+pub fn day_url(date: Date) -> String {
     format!("{HISTORY_URL_BASE}{date}.json")
 }
 
@@ -318,7 +317,7 @@ pub fn update_history(
     http: &dyn Http,
     prior: Option<History>,
     name_to_slug: &HashMap<String, String>,
-    yesterday: NaiveDate,
+    yesterday: Date,
     generated_at: &str,
     days: usize,
     bootstrap_days: usize,
@@ -334,15 +333,11 @@ pub fn update_history(
             p.generated_at = generated_at.into();
             p
         }
-        None => History::empty(
-            yesterday - Duration::days(days as i64 - 1),
-            days,
-            generated_at,
-        ),
+        None => History::empty(yesterday - stamp::days(days as i64 - 1), days, generated_at),
     };
     let mut summary = HistorySummary::default();
-    let mut fetched_days: Vec<(NaiveDate, HashMap<String, DayRows>)> = Vec::new();
-    let mut failed_dates: Vec<NaiveDate> = Vec::new();
+    let mut fetched_days: Vec<(Date, HashMap<String, DayRows>)> = Vec::new();
+    let mut failed_dates: Vec<Date> = Vec::new();
     for (i, date) in dates.iter().enumerate() {
         if i > 0 {
             sleep(FETCH_SPACING_MS);
@@ -390,8 +385,8 @@ mod tests {
     use super::*;
     use crate::ingest::FixtureHttp;
 
-    fn d(s: &str) -> NaiveDate {
-        NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
+    fn d(s: &str) -> Date {
+        Date::strptime("%Y-%m-%d", s).unwrap()
     }
     fn catalog() -> HashMap<String, String> {
         let mut m = HashMap::new();

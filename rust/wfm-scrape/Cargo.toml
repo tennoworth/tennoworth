@@ -21,7 +21,7 @@ reqwest = { workspace = true }
 # Calendar timestamps use the shared cross-platform clock dependency.
 # Needed for the injected clock: ISO stamps, fromisoformat-style parsing of
 # WFCD vault dates, and the vaulting-soon horizon arithmetic.
-chrono = { workspace = true }
+jiff = { workspace = true }
 lzma-rs = { version = "0.3.0", default-features = false }
 base64.workspace = true
 
