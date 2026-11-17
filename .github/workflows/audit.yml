@@ -315,8 +315,19 @@ jobs:
       - run: bun install --frozen-lockfile
       # Build and test tooling runs on contributor machines and CI; all frontend
       # packages are devDependencies, so --prod would audit an empty graph.
+      # GHSA-fc5q-39xc-vjpf (picomatch ReDoS, <=4.0.7) has no fixed release.
+      # picomatch reaches only build and test tooling (knip, vite, vitest,
+      # svelte-check), never a shipped bundle, and matches globs this
+      # repository writes. The ignore holds only while 4.0.7 is the newest
+      # release; a newer one fails here so it is adopted and the ignore goes.
       - name: Audit all frontend dependencies (moderate+)
-        run: bun audit --audit-level=moderate
+        run: |
+          latest=$(curl -fsS https://registry.npmjs.org/picomatch/latest | jq -r .version)
+          if [ "$latest" != "4.0.7" ]; then
+            echo "::error::picomatch $latest is published; update it and remove the GHSA-fc5q-39xc-vjpf ignore"
+            exit 1
+          fi
+          bun audit --audit-level=moderate --ignore=GHSA-fc5q-39xc-vjpf
       # The website deploy tool, installed only by build-web's deploy step.
       - name: Audit the website deploy tool (moderate+)
         working-directory: deploy/cloudflare-web
