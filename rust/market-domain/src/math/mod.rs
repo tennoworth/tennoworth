@@ -192,6 +192,22 @@ pub fn stat_median(values: &[f64]) -> f64 {
 /// `(median_now, median_90d, medians_7d, donch_top, donch_bot)` from an
 /// already tier-narrowed, poison-filtered 90-day series.
 ///
+/// Days a selling flood is measured against: the 28 daily rows before the
+/// two that `volume_48h` covers, so the flood does not raise its own baseline.
+pub const BASELINE_VOLUME_DAYS: usize = 28;
+
+/// Mean daily volume over [`BASELINE_VOLUME_DAYS`], `0` when fewer than half of
+/// those days exist (a new item has no normal to compare with).
+pub fn baseline_daily_volume(nineties: &[StatsDay]) -> f64 {
+    let end = nineties.len().saturating_sub(2);
+    let start = end.saturating_sub(BASELINE_VOLUME_DAYS);
+    let days = nineties.get(start..end).unwrap_or_default();
+    if days.len() < BASELINE_VOLUME_DAYS / 2 {
+        return 0.0;
+    }
+    days.iter().map(|d| d.volume).sum::<f64>() / days.len() as f64
+}
+
 /// median_now = the latest day's median - "what it trades at today".
 /// median_90d = the median OF the daily medians - the 90-day baseline.
 /// The band is recomputed from the filtered daily medians, not WFM's
@@ -718,6 +734,38 @@ mod tests {
     fn clamp_low20_leaves_an_ordinary_deep_book_alone() {
         assert_eq!(clamp_low20(14.0, 12.0, 9.0, 11.0), 14.0);
         assert_eq!(clamp_low20(0.0, 0.0, 5.0, 0.0), 0.0);
+    }
+
+    fn days(volumes: &[f64]) -> Vec<StatsDay> {
+        volumes
+            .iter()
+            .map(|&volume| StatsDay {
+                volume,
+                ..StatsDay::default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn baseline_volume_excludes_the_two_days_being_judged() {
+        let mut v = vec![10.0; 28];
+        v.extend([500.0, 500.0]);
+        assert_eq!(baseline_daily_volume(&days(&v)), 10.0);
+    }
+
+    #[test]
+    fn baseline_volume_uses_only_the_last_28_days_before_them() {
+        let mut v = vec![1000.0; 40];
+        v.extend(vec![4.0; 28]);
+        v.extend([0.0, 0.0]);
+        assert_eq!(baseline_daily_volume(&days(&v)), 4.0);
+    }
+
+    #[test]
+    fn baseline_volume_is_unknown_for_a_new_item() {
+        assert_eq!(baseline_daily_volume(&days(&[5.0; 15])), 0.0);
+        assert_eq!(baseline_daily_volume(&days(&[5.0; 16])), 5.0);
+        assert_eq!(baseline_daily_volume(&[]), 0.0);
     }
 
     #[test]

@@ -187,6 +187,7 @@ mod tests {
             donch_top_90d: 30.0,
             donch_bot_90d: 20.0,
             avg_price_48h: 26.0,
+            vol_28d: 4.0,
         }
     }
     fn at(hour: i64) -> DateTime<Utc> {

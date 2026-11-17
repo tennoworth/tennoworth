@@ -31,6 +31,7 @@ pub struct CsvRow {
     pub score: String,
     pub price_basis: String,
     pub low20_avg: String,
+    pub vol_28d: String,
 }
 
 impl CsvRow {
@@ -63,6 +64,7 @@ impl CsvRow {
             score: g("score"),
             price_basis: g("price_basis"),
             low20_avg: g("low20_avg"),
+            vol_28d: g("vol_28d"),
         }
     }
 }

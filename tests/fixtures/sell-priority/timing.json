@@ -1,0 +1,17 @@
+{
+  "_comment": "Where a price sits in its 90-day channel, read by market-domain scoring::timing and frontend bandSignal. vol is the 48-hour volume; vol_28d the mean daily volume of the 28 days before it. A Hold-band price on at least flood_ratio x that normal, for an item trading at least flood_min_daily a day, is a drop.",
+  "flood_ratio": 3,
+  "flood_min_daily": 5,
+  "cases": [
+    { "name": "quiet dip", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 20, "vol_28d": 10, "expected": "hold" },
+    { "name": "flooded dip", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 80, "vol_28d": 10, "expected": "drop" },
+    { "name": "exactly three times normal", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 60, "vol_28d": 10, "expected": "drop" },
+    { "name": "just under three times normal", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 59, "vol_28d": 10, "expected": "hold" },
+    { "name": "thin item, a handful of trades", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 30, "vol_28d": 4.9, "expected": "hold" },
+    { "name": "the smallest normal measured", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 30, "vol_28d": 5, "expected": "drop" },
+    { "name": "normal volume unknown", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 400, "vol_28d": 0, "expected": "hold" },
+    { "name": "heavy selling mid-channel is not a signal", "price": 30, "top": 50, "bot": 10, "low_sell": 30, "top_buy": 25, "vol": 400, "vol_28d": 10, "expected": "neutral" },
+    { "name": "peak on heavy volume stays a peak", "price": 48, "top": 50, "bot": 10, "low_sell": 47, "top_buy": 40, "vol": 400, "vol_28d": 10, "expected": "peak" },
+    { "name": "no channel", "price": 12, "top": 0, "bot": 0, "low_sell": 12, "top_buy": 9, "vol": 400, "vol_28d": 10, "expected": "neutral" }
+  ]
+}

@@ -24,9 +24,9 @@ use std::sync::Mutex;
 use serde_json::Value;
 
 use market_domain::math::{
-    avg_lowest_asks, canonical_subtype, clamp_low20, clamp_low5, demand_ratio, drop_poisoned_rows,
-    low_sell, rank0_orders, rank0_rows, round_dp, score, series_stats, spread, subtype_rows,
-    top_buy, weighted_avg_48h, StatsDay,
+    avg_lowest_asks, baseline_daily_volume, canonical_subtype, clamp_low20, clamp_low5,
+    demand_ratio, drop_poisoned_rows, low_sell, rank0_orders, rank0_rows, round_dp, score,
+    series_stats, spread, subtype_rows, top_buy, weighted_avg_48h, StatsDay,
 };
 
 use crate::coerce::{Coercions, DEFAULT_MAX_COERCIONS};
@@ -39,7 +39,7 @@ const API_ROOT: &str = "https://api.warframe.market";
 
 /// The CSV column order - the keys of `analyze_item`'s dict, in insertion
 /// order, which is also what `csv_input::CsvRow` reads back.
-const HEADER: [&str; 21] = [
+const HEADER: [&str; 22] = [
     "url_name",
     "name",
     "tags",
@@ -61,6 +61,7 @@ const HEADER: [&str; 21] = [
     "score",
     "price_basis",
     "low20_avg",
+    "vol_28d",
 ];
 
 /// A master-catalog item - the fields `analyze_item` reads off the raw
@@ -96,6 +97,8 @@ pub struct AnalyzedRow {
     pub donch_bot_90d: f64,
     pub score: f64,
     pub low20_avg: f64,
+    /// Mean daily volume over the 28 days before the last two, `0` when unknown.
+    pub vol_28d: f64,
 }
 
 /// Parse the `/v2/items` master list into [`CatalogItem`]s. Entries without a
@@ -173,6 +176,10 @@ pub struct StatsStage {
     pub donch_top_90d: f64,
     pub donch_bot_90d: f64,
     pub avg_price_48h: f64,
+    /// Entries cached before this field read `0` (unknown) until their next
+    /// scheduled refresh, rather than forcing a full refetch.
+    #[serde(default)]
+    pub vol_28d: f64,
 }
 
 /// Parse the stats payload, or `None` to skip the item (empty payload). A hard coercion error propagates as `Err`.
@@ -198,6 +205,7 @@ pub fn analyze_stats(
     let (median_now, median_90d, medians_7d, donch_top_90d, donch_bot_90d) =
         series_stats(&nineties);
     let avg_price_48h = weighted_avg_48h(&recent, median_90d);
+    let vol_28d = round_dp(baseline_daily_volume(&nineties), 1);
 
     Ok(Some(StatsStage {
         pick,
@@ -208,6 +216,7 @@ pub fn analyze_stats(
         donch_top_90d,
         donch_bot_90d,
         avg_price_48h,
+        vol_28d,
     }))
 }
 
@@ -262,6 +271,7 @@ pub fn analyze_orders(
             donch_bot_90d: stage.donch_bot_90d,
             score: round_dp(sc, 1),
             low20_avg: low20,
+            vol_28d: stage.vol_28d,
         },
     }))
 }
@@ -332,6 +342,7 @@ impl AnalyzedRow {
             fmt_num(self.score),
             "unit".into(),
             fmt_num(self.low20_avg),
+            fmt_num(self.vol_28d),
         ]
     }
 }
@@ -1267,13 +1278,15 @@ mod tests {
             donch_bot_90d: 20.0,
             score: 100.0,
             low20_avg: 44.1,
+            vol_28d: 3.5,
         };
         let f = row.to_fields();
         assert_eq!(f[2], "['mod', 'prime']"); // tags
         assert_eq!(f[3], ""); // ducats None → empty
         assert_eq!(f[7], "35"); // integral float → no trailing .0
         assert_eq!(f[15], "[25, 26]"); // medians_7d
-        assert_eq!(f[20], "44.1"); // low20_avg, last so old readers keep their columns
+        assert_eq!(f[20], "44.1"); // low20_avg
+        assert_eq!(f[21], "3.5"); // vol_28d, appended so old readers keep their columns
     }
 
     fn cached_cfg(out: &Path, cache: &Path, hours: i64) -> ScrapeConfig {

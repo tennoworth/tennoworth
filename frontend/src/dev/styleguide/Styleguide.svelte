@@ -47,7 +47,7 @@
     key: slug, slug, subtype: null, name, owned, sellable: owned, leveled: 0, type: 'Upgrades', kept_lvl: null,
     ducats: null, plat_per_100d: null, avg_price: low + 1, low_sell: low, low5_avg: low, top_buy: low - 2,
     volume_48h: vol, ratio: 1, potential_plat: owned * (low + 1), raw_value: owned * low, sell_score: score,
-    patience: false, timing: 'neutral', medians_7d: [low, low + 1, low], median_90d: low, delta_90d_pct: 0, tags: [],
+    patience: false, crowded: false, timing: 'neutral', medians_7d: [low, low + 1, low], median_90d: low, delta_90d_pct: 0, tags: [],
     is_augment: false, vault_status: 'available',
   });
   const sellSample = [sellRow('Primed Flow', 'primed_flow', 6, 23, 107, 138), sellRow('Arcane Energize', 'arcane_energize', 12, 7, 362, 84), sellRow('Sample long item name for wrapping', 'sample_long', 4, 4, 68, 18)];

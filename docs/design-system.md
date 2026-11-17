@@ -140,8 +140,8 @@ for meaning. Keep feature-specific sizing local. These selectors are opt-in;
 do not globally restyle similarly named legacy component classes by accident.
 Inline status tags use the one `.tag` primitive in `app.css`; components may
 position a tag but never recolour it. The border style carries the kind as well
-as the hue: solid for advice (`peak`, `flip`, `hold`, `deal`, `stale`, advisor
-verdicts, and neutral `patience`/`skip`), dotted for facts (`vaulted`, `soon`, `auto`,
+as the hue: solid for advice (`peak`, `flip`, `hold`, `drop`, `deal`, `stale`, advisor
+verdicts, and neutral `patience`/`crowded`/`cheap`/`skip`), dotted for facts (`vaulted`, `soon`, `auto`,
 `aug`, `thin`, `unpriced`, `relic-tag`). Vaulted uses `--vault`; no tag uses
 `--bad`. Filter chips that select by a tag reuse its class.
 Use `table.tw.fixed` when declaring fixed column proportions; setting only
@@ -432,7 +432,10 @@ scroll back to the banner.
 options, and `.ui-panel-footer` groups actions and supporting details.
 `.ui-summary-strip` presents comparable totals without nested cards.
 These patterns are demonstrated in the living reference’s Aligned preferences
-section. Watches separates creation from monitoring; Ledger separates totals,
+section. Watches separates creation from monitoring, then lists Bargains:
+leads from the snapshot (a flip or a cheap ask) whose Live cell says "not
+checked" until Check live confirms or retires each one, so a stale lead is
+never shown as current. Ledger separates totals,
 listing automation, and trade history. Top picks labels its decision facts
 independently of the inventory’s optional analytical columns. Each pick names
 the trades it needs under the listing lot rule (bulk items six per trade,

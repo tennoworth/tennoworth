@@ -713,6 +713,16 @@ msgctxt "sell.picksExplain"
 msgid "Best sells right now, ranked by priority - patience listings excluded."
 msgstr "Najlepsze do sprzedaży teraz, według priorytetu - bez ofert na cierpliwych."
 
+#. Line under "Top picks" on Thursday and Friday. Measured from a year of trades.
+msgctxt "sell.weekendBefore"
+msgid "Weekends bring about a quarter more buyers than weekdays - list before Saturday to meet them."
+msgstr ""
+
+#. Line under "Top picks" on Saturday and Sunday. Measured from a year of trades.
+msgctxt "sell.weekendDuring"
+msgid "Weekend: about a quarter more buyers than on weekdays, so listings sell sooner. Prices barely change."
+msgstr ""
+
 #. Tooltip on the picks explanation. plat = platinum.
 #, fuzzy
 msgctxt "sell.picksExplainTitle"
@@ -905,6 +915,11 @@ msgstr "Blisko szczytu z 90 dni, wzrost o {pct}% - dobry moment na wystawienie"
 msgctxt "sell.reasonPeak"
 msgid "Near its 90-day high - a good moment to list"
 msgstr "Blisko szczytu z 90 dni - dobry moment na wystawienie"
+
+#. Why a pick is suggested although its price is low.
+msgctxt "sell.reasonDrop"
+msgid "Near its 90-day low on heavy selling - about half of drops like this recover within a month, so waiting is a gamble"
+msgstr ""
 
 #. Why a pick is suggested.
 #, fuzzy
@@ -2002,9 +2017,32 @@ msgstr "trzymaj"
 
 #. Tooltip of the hold filter chip.
 #, fuzzy
+#| msgid "Price near its 90-day low (e.g. Baro just flooded it) - usually recovers, consider waiting"
 msgctxt "table.pill.hold.what"
-msgid "Price near its 90-day low (e.g. Baro just flooded it) - usually recovers, consider waiting"
+msgid "Price near its 90-day low on ordinary volume - about 9 in 10 dips like this recover within a month, consider waiting"
 msgstr "Cena blisko dołka z 90 dni (np. Baro właśnie zalał rynek) - zwykle odbija, rozważ poczekanie"
+
+#. Badge and filter chip: price near its low on heavy selling, waiting may not pay.
+#. Max 10 characters.
+msgctxt "table.pill.drop"
+msgid "drop"
+msgstr ""
+
+#. Tooltip of the drop filter chip.
+msgctxt "table.pill.drop.what"
+msgid "Price near its 90-day low while it sells at 3x its normal pace - only about half of these recover within a month"
+msgstr ""
+
+#. Badge and filter chip: many sellers at almost the same price.
+#. Max 10 characters.
+msgctxt "table.pill.crowded"
+msgid "crowded"
+msgstr ""
+
+#. Tooltip of the crowded filter chip.
+msgctxt "table.pill.crowded.what"
+msgid "20 or more sellers within 10% of each other - buyers take the cheapest, so match the lowest ask to sell first"
+msgstr ""
 
 #. Badge and filter chip: sells slowly.
 #. Max 10 characters.
@@ -2109,9 +2147,20 @@ msgstr "Obrót poniżej 2 wymian/48h - oferta trochę poczeka na sprzedaż."
 
 #. Tooltip of the hold badge.
 #, fuzzy
+#| msgid "Price is near its 90-day low - you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding."
 msgctxt "table.badge.hold"
-msgid "Price is near its 90-day low - you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding."
+msgid "Price is near its 90-day low on ordinary volume - you'd be selling into a trough. Over the past year about 9 in 10 dips like this were back near the usual price within a month, most within days. Consider holding."
 msgstr "Cena blisko dołka z 90 dni - sprzedawałbyś w dołku. Typowe tuż po wizycie Baro, która zalewa rynek tym modem; zwykle odbija w ciągu tygodni. Rozważ trzymanie."
+
+#. Tooltip of the drop badge.
+msgctxt "table.badge.drop"
+msgid "Price is near its 90-day low and selling runs at three times its normal pace: the market is repricing it. Over the past year only about half of drops like this were back near the usual price within a month. Waiting is a gamble; sell if you want the platinum."
+msgstr ""
+
+#. Tooltip of the crowded badge.
+msgctxt "table.badge.crowded"
+msgid "At least 20 sellers ask within 10% of each other. Buyers take the cheapest, so a listing above the lowest ask waits behind the queue; matching it sells first."
+msgstr ""
 
 #. Tooltip of the peak badge.
 #, fuzzy
@@ -7396,6 +7445,158 @@ msgstr "Nie udało się sprawdzić ponownie: {error}"
 msgctxt "offer.copied"
 msgid "Whisper copied"
 msgstr "Szept skopiowany"
+
+#. Panel title in Watches: mispriced items to buy.
+msgctxt "bargains.title"
+msgid "Bargains in the snapshot"
+msgstr ""
+
+#. Line in the panel rail.
+msgctxt "bargains.lede"
+msgid "Leads, not promises: check live before you whisper."
+msgstr ""
+
+#. Button: look up the current asks for every row.
+msgctxt "bargains.check"
+msgid "Check live"
+msgstr ""
+
+#. Button after a live check.
+msgctxt "bargains.recheck"
+msgid "Check again"
+msgstr ""
+
+#. Button while checking.
+msgctxt "bargains.checking"
+msgid "Checking {done}/{total}…"
+msgstr ""
+
+#. Tooltip.
+msgctxt "bargains.checkTitle"
+msgid "Look up the cheapest ask and best bid on warframe.market for every row now."
+msgstr ""
+
+#. Error notice.
+msgctxt "bargains.failed"
+msgid "The live check failed: {error}"
+msgstr ""
+
+#. Empty state.
+msgctxt "bargains.none"
+msgid "Nothing in this snapshot is priced far from its book. Come back after the next update."
+msgstr ""
+
+#. Empty state before the snapshot.
+msgctxt "bargains.noMarket"
+msgid "Bargains appear once market prices have loaded."
+msgstr ""
+
+#. Column.
+msgctxt "bargains.col.item"
+msgid "Item"
+msgstr ""
+
+#. Column: the cheapest ask in the snapshot.
+msgctxt "bargains.col.ask"
+msgid "Ask"
+msgstr ""
+
+#. Column: what it can be sold for again.
+msgctxt "bargains.col.resale"
+msgid "Resale"
+msgstr ""
+
+#. Column: resale minus ask, per item.
+msgctxt "bargains.col.margin"
+msgid "Margin"
+msgstr ""
+
+#. Column: trades in 48 hours.
+msgctxt "bargains.col.vol"
+msgid "Vol 48h"
+msgstr ""
+
+#. Column: result of the live check.
+msgctxt "bargains.col.live"
+msgid "Live"
+msgstr ""
+
+#. Tag: a buyer pays more than a seller asks.
+#. Max 10 characters.
+msgctxt "bargains.flip"
+msgid "flip"
+msgstr ""
+
+#. Tooltip of the flip tag.
+msgctxt "bargains.flipWhat"
+msgid "A buyer bids more than the cheapest seller asks: buy from the seller, sell to the buyer."
+msgstr ""
+
+#. Tag: one seller asks far under the rest.
+#. Max 10 characters.
+msgctxt "bargains.cheap"
+msgid "cheap"
+msgstr ""
+
+#. Tooltip of the cheap tag.
+msgctxt "bargains.cheapWhat"
+msgid "One seller asks 40% or more under the usual price while the next cheapest agree on it."
+msgstr ""
+
+#. After a resale price: it is a live bid.
+msgctxt "bargains.bid"
+msgid "bid"
+msgstr ""
+
+#. After a resale price: it is the 90-day median.
+msgctxt "bargains.usual"
+msgid "usual"
+msgstr ""
+
+#. Tooltip.
+msgctxt "bargains.resaleBid"
+msgid "The best bid in the snapshot"
+msgstr ""
+
+#. Tooltip.
+msgctxt "bargains.resaleUsual"
+msgid "The 90-day median price: what it usually sells for, not a buyer waiting"
+msgstr ""
+
+#. Live column before a check.
+msgctxt "bargains.notChecked"
+msgid "not checked"
+msgstr ""
+
+#. Live column.
+msgctxt "bargains.checkFailed"
+msgid "lookup failed"
+msgstr ""
+
+#. Live column: the cheap ask or the gap has closed.
+msgctxt "bargains.gone"
+msgid "gone · now {price}p"
+msgstr ""
+
+#. Live column.
+msgctxt "bargains.goneNoAsk"
+msgid "gone · no asks online"
+msgstr ""
+
+#. Live column: the deal is still there.
+msgctxt "bargains.holds"
+msgid "still {price}p"
+msgstr ""
+
+#. Live column: price and the seller's in-game name.
+msgctxt "bargains.holdsBy"
+msgid "still {price}p · {seller}"
+msgstr ""
+
+#. Note under the table.
+msgctxt "bargains.foot"
+msgid "From the market snapshot, refreshed every two hours: a bid over the cheapest ask (flip), or one ask far under a book that agrees on the usual price (cheap). Items with under 10 trades in 48 hours are left out, and so are bids far over the usual price."
+msgstr ""
 
 #. Button.
 #, fuzzy

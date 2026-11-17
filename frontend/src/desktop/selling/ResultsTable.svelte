@@ -105,13 +105,15 @@
 
   // Pill filter - the badges rendered next to item names double as filterable
   // facets. Multi-select is OR ("show me peaks and holds"); empty = no filter.
-  type PillKey = 'peak' | 'hold' | 'patience' | 'vaulted' | 'vaulting-soon' | 'aug';
+  type PillKey = 'peak' | 'hold' | 'drop' | 'patience' | 'crowded' | 'vaulted' | 'vaulting-soon' | 'aug';
   // `what` is the badge's meaning, shown in the chip tooltip - the labels
   // alone read as insider shorthand ("aug" was guessed as "August").
   const PILL_DEFS: { key: PillKey; label: MessageKey; cls: string; what: MessageKey }[] = [
     { key: 'peak', label: 'table.pill.peak', cls: 'peak', what: 'table.pill.peak.what' },
     { key: 'hold', label: 'table.pill.hold', cls: 'hold', what: 'table.pill.hold.what' },
+    { key: 'drop', label: 'table.pill.drop', cls: 'drop', what: 'table.pill.drop.what' },
     { key: 'patience', label: 'table.pill.patience', cls: 'patience', what: 'table.pill.patience.what' },
+    { key: 'crowded', label: 'table.pill.crowded', cls: 'crowded', what: 'table.pill.crowded.what' },
     { key: 'vaulted', label: 'table.pill.vaulted', cls: 'vaulted', what: 'table.pill.vaulted.what' },
     { key: 'vaulting-soon', label: 'table.pill.vaulting-soon', cls: 'vaulting-soon', what: 'table.pill.vaulting-soon.what' },
     { key: 'aug', label: 'table.pill.aug', cls: 'augment', what: 'table.pill.aug.what' },
@@ -143,7 +145,9 @@
     const out: PillKey[] = [];
     if (r.timing === 'peak') out.push('peak');
     if (r.timing === 'hold') out.push('hold');
+    if (r.timing === 'drop') out.push('drop');
     if (r.patience) out.push('patience');
+    if (r.crowded) out.push('crowded');
     if (r.vault_status === 'vaulted') out.push('vaulted');
     if (r.vault_status === 'vaulting-soon') out.push('vaulting-soon');
     if (r.is_augment) out.push('aug');
@@ -181,8 +185,13 @@
     if (r.patience) {
       out.push({ cls: 'patience', label: t('table.pill.patience'), title: t('table.badge.patience') });
     }
+    if (r.crowded) {
+      out.push({ cls: 'crowded', label: t('table.pill.crowded'), title: t('table.badge.crowded') });
+    }
     if (r.timing === 'hold') {
       out.push({ cls: 'hold', label: t('table.pill.hold'), title: t('table.badge.hold') });
+    } else if (r.timing === 'drop') {
+      out.push({ cls: 'drop', label: t('table.pill.drop'), title: t('table.badge.drop') });
     } else if (r.timing === 'peak') {
       out.push({ cls: 'peak', label: t('table.pill.peak'), title: t('table.badge.peak') });
     }

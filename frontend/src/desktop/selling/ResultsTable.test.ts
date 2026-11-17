@@ -46,7 +46,7 @@ const ROW: SellRow = {
   type: 'Weapon', kept_lvl: null, ducats: 15, plat_per_100d: 10,
   avg_price: 10, low_sell: 10, low5_avg: 10, top_buy: 8, volume_48h: 20,
   ratio: 1, potential_plat: 20, raw_value: 20, sell_score: 20,
-  advice: 'hold', patience: false, timing: 'neutral', medians_7d: [],
+  advice: 'hold', patience: false, crowded: false, timing: 'neutral', medians_7d: [],
   median_90d: null, delta_90d_pct: null, tags: [], is_augment: false, vault_status: null,
 };
 
