@@ -1,5 +1,5 @@
 {
-  "version": "0.10.103",
+  "version": "0.10.104",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2262,6 +2262,34 @@
           "kind": "fixed",
           "title": "Date handling replaced",
           "body": "The component the app used to read and write dates is no longer maintained, so it is replaced with a maintained one. Dates and times read the same as before.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.104",
+      "date": "2026-11-17",
+      "changes": [
+        {
+          "id": "settings-page-scroll",
+          "kind": "fixed",
+          "title": "Settings no longer slides the app up",
+          "body": "Scrolling far down Settings could move the whole app up and leave an empty space under it until you scrolled back. Only the view scrolls now, and the sidebar stays in place.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "window-opens-full-sidebar",
+          "kind": "improved",
+          "title": "The window opens with the whole sidebar",
+          "body": "TennoWorth now opens tall enough to show every view and the links at the foot of the sidebar. On a shorter screen it opens at the screen's height, and you can still make it smaller.",
           "platforms": [
             "windows",
             "linux"
