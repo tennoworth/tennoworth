@@ -32,6 +32,9 @@ pub struct StatsDay {
     pub volume: f64,
     pub avg_price: f64,
     pub subtype: Option<String>,
+    /// The row's UTC day as days since 1970-01-01, `None` when the payload
+    /// gave no readable date.
+    pub day: Option<i64>,
     /// Tri-state, because absent and null mean different things:
     /// - `None`          - key absent: an untiered item (weapon/set/relic)
     /// - `Some(None)`    - key present but null: counts as rank-0 AND marks
@@ -189,25 +192,40 @@ pub fn stat_median(values: &[f64]) -> f64 {
     }
 }
 
+/// Days a selling flood is measured against: the calendar days before the two
+/// that `volume_48h` covers, so the flood does not raise its own baseline.
+pub const BASELINE_VOLUME_DAYS: i64 = 28;
+
+/// Mean daily volume over the [`BASELINE_VOLUME_DAYS`] calendar days before
+/// yesterday and `today` (UTC day numbers, see [`StatsDay::day`]). WFM leaves
+/// days without trades out of the series, so they count as zero here: a mean
+/// over the rows alone read a relic trading 20 days in 90 as nine times busier
+/// than it is. `0` (unknown) when the rows carry no dates, or when the series
+/// starts too late to cover half the window (a new item has no normal yet).
+pub fn baseline_daily_volume(nineties: &[StatsDay], today: i64) -> f64 {
+    let end = today - 1;
+    let start = end - BASELINE_VOLUME_DAYS;
+    let dated = || {
+        nineties
+            .iter()
+            .filter_map(|d| d.day.map(|day| (day, d.volume)))
+    };
+    let Some(first) = dated().map(|(day, _)| day).min() else {
+        return 0.0;
+    };
+    if first > start + BASELINE_VOLUME_DAYS / 2 {
+        return 0.0;
+    }
+    let sum: f64 = dated()
+        .filter(|(day, _)| (start..end).contains(day))
+        .map(|(_, volume)| volume)
+        .sum();
+    sum / BASELINE_VOLUME_DAYS as f64
+}
+
 /// `(median_now, median_90d, medians_7d, donch_top, donch_bot)` from an
 /// already tier-narrowed, poison-filtered 90-day series.
 ///
-/// Days a selling flood is measured against: the 28 daily rows before the
-/// two that `volume_48h` covers, so the flood does not raise its own baseline.
-pub const BASELINE_VOLUME_DAYS: usize = 28;
-
-/// Mean daily volume over [`BASELINE_VOLUME_DAYS`], `0` when fewer than half of
-/// those days exist (a new item has no normal to compare with).
-pub fn baseline_daily_volume(nineties: &[StatsDay]) -> f64 {
-    let end = nineties.len().saturating_sub(2);
-    let start = end.saturating_sub(BASELINE_VOLUME_DAYS);
-    let days = nineties.get(start..end).unwrap_or_default();
-    if days.len() < BASELINE_VOLUME_DAYS / 2 {
-        return 0.0;
-    }
-    days.iter().map(|d| d.volume).sum::<f64>() / days.len() as f64
-}
-
 /// median_now = the latest day's median - "what it trades at today".
 /// median_90d = the median OF the daily medians - the 90-day baseline.
 /// The band is recomputed from the filtered daily medians, not WFM's
@@ -736,36 +754,57 @@ mod tests {
         assert_eq!(clamp_low20(0.0, 0.0, 5.0, 0.0), 0.0);
     }
 
-    fn days(volumes: &[f64]) -> Vec<StatsDay> {
-        volumes
-            .iter()
-            .map(|&volume| StatsDay {
-                volume,
-                ..StatsDay::default()
-            })
-            .collect()
+    const TODAY: i64 = 20_774; // 2026-11-17
+
+    fn on(day: i64, volume: f64) -> StatsDay {
+        StatsDay {
+            day: Some(day),
+            volume,
+            ..StatsDay::default()
+        }
     }
 
     #[test]
     fn baseline_volume_excludes_the_two_days_being_judged() {
-        let mut v = vec![10.0; 28];
-        v.extend([500.0, 500.0]);
-        assert_eq!(baseline_daily_volume(&days(&v)), 10.0);
+        let mut rows: Vec<StatsDay> = (TODAY - 60..TODAY - 1).map(|d| on(d, 10.0)).collect();
+        rows.extend([on(TODAY - 1, 500.0), on(TODAY, 500.0)]);
+        assert_eq!(baseline_daily_volume(&rows, TODAY), 10.0);
     }
 
     #[test]
-    fn baseline_volume_uses_only_the_last_28_days_before_them() {
-        let mut v = vec![1000.0; 40];
-        v.extend(vec![4.0; 28]);
-        v.extend([0.0, 0.0]);
-        assert_eq!(baseline_daily_volume(&days(&v)), 4.0);
+    fn baseline_volume_counts_days_without_trades_as_zero() {
+        // A relic trading on 7 of the 28 days: 7 x 8 trades over 28 days, not 8 a day.
+        let mut rows = vec![on(TODAY - 80, 1.0)];
+        rows.extend((0..7).map(|i| on(TODAY - 29 + i * 4, 8.0)));
+        assert_eq!(baseline_daily_volume(&rows, TODAY), 2.0);
+    }
+
+    #[test]
+    fn baseline_volume_ignores_days_outside_the_window() {
+        let rows = [
+            on(TODAY - 30, 1000.0),
+            on(TODAY - 29, 28.0),
+            on(TODAY - 2, 28.0),
+            on(TODAY - 1, 1000.0),
+        ];
+        assert_eq!(baseline_daily_volume(&rows, TODAY), 2.0);
     }
 
     #[test]
     fn baseline_volume_is_unknown_for_a_new_item() {
-        assert_eq!(baseline_daily_volume(&days(&[5.0; 15])), 0.0);
-        assert_eq!(baseline_daily_volume(&days(&[5.0; 16])), 5.0);
-        assert_eq!(baseline_daily_volume(&[]), 0.0);
+        // The window is TODAY-29 ..= TODAY-2; a series starting after its midpoint has no normal.
+        assert_eq!(baseline_daily_volume(&[on(TODAY - 14, 5.0)], TODAY), 0.0);
+        assert_eq!(baseline_daily_volume(&[on(TODAY - 15, 28.0)], TODAY), 1.0);
+    }
+
+    #[test]
+    fn baseline_volume_is_unknown_without_dates() {
+        let undated = StatsDay {
+            volume: 9.0,
+            ..StatsDay::default()
+        };
+        assert_eq!(baseline_daily_volume(&[undated], TODAY), 0.0);
+        assert_eq!(baseline_daily_volume(&[], TODAY), 0.0);
     }
 
     #[test]

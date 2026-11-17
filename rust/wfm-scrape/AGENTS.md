@@ -122,7 +122,12 @@ refreshes on the policy that replay validated: first sight, an unusable cached
 entry, a reappearance after an absence, an empty book last time, or age at the
 interval. It caches the derived figures (`StatsStage`), not the daily rows,
 writes the file only after a completed sweep, and treats a missing or foreign
-file as a full refresh, never a failure. Production runs with a 24-hour
+file as a full refresh, never a failure. A figure added to `StatsStage` takes
+`#[serde(default)]` so older entries read it as unknown until their next
+refresh; a figure whose meaning changes takes a new serde key the same way
+(`vol_28d_days`), rather than bumping `FORMAT`, which refetches every item.
+Statistics rows keep their UTC day (`StatsDay::day`) because WFM omits days
+without trades: count a window by date, never by rows. Production runs with a 24-hour
 interval (`deploy/bin/run-scrape.sh`); an empty `STATS_INTERVAL` restores fetching
 everything every sweep.
 

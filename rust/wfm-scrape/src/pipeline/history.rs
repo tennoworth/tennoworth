@@ -155,6 +155,8 @@ pub fn parse_day_file(
                 volume: num("volume"),
                 avg_price: num("avg_price"),
                 subtype: r.get("subtype").and_then(|s| s.as_str()).map(String::from),
+                // The file is one day; the date is its name, not a row field.
+                day: None,
                 mod_rank,
             });
         }

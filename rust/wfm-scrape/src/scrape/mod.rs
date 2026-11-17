@@ -176,9 +176,11 @@ pub struct StatsStage {
     pub donch_top_90d: f64,
     pub donch_bot_90d: f64,
     pub avg_price_48h: f64,
-    /// Entries cached before this field read `0` (unknown) until their next
-    /// scheduled refresh, rather than forcing a full refetch.
-    #[serde(default)]
+    /// Counted over calendar days. Stored under a new key because entries
+    /// cached under the old row-counted rule (key `vol_28d`) overstate thin
+    /// items; they read `0` (unknown) until their next scheduled refresh,
+    /// rather than forcing a full refetch.
+    #[serde(default, rename = "vol_28d_days")]
     pub vol_28d: f64,
 }
 
@@ -186,6 +188,7 @@ pub struct StatsStage {
 pub fn analyze_stats(
     item: &CatalogItem,
     stats: Option<Value>,
+    today: i64,
     co: &mut Coercions,
 ) -> Result<Option<StatsStage>, String> {
     let stats = match stats {
@@ -205,7 +208,7 @@ pub fn analyze_stats(
     let (median_now, median_90d, medians_7d, donch_top_90d, donch_bot_90d) =
         series_stats(&nineties);
     let avg_price_48h = weighted_avg_48h(&recent, median_90d);
-    let vol_28d = round_dp(baseline_daily_volume(&nineties), 1);
+    let vol_28d = round_dp(baseline_daily_volume(&nineties, today), 1);
 
     Ok(Some(StatsStage {
         pick,
@@ -281,6 +284,10 @@ pub fn analyze_orders(
 /// A hard coercion error (object/bool/non-finite field) propagates as `Err`.
 /// Both stages in one call, for tests that hold both payloads; the sweep runs
 /// the stages separately so it can skip the book fetch.
+/// The day the single-call test helper judges volume against (2026-11-17).
+#[cfg(test)]
+const FIXTURE_TODAY: i64 = 20_774;
+
 #[cfg(test)]
 pub fn analyze_item(
     item: &CatalogItem,
@@ -293,7 +300,7 @@ pub fn analyze_item(
     if orders.is_none() {
         return Ok(None);
     }
-    match analyze_stats(item, stats, co)? {
+    match analyze_stats(item, stats, FIXTURE_TODAY, co)? {
         Some(stage) => Ok(analyze_orders(item, &stage, orders, co)?.map(|analyzed| analyzed.row)),
         None => Ok(None),
     }
@@ -509,7 +516,12 @@ fn scan_item(
                 )
             })?;
             stats_cache::Entry {
-                stage: analyze_stats(item, Some(stats), co)?,
+                stage: analyze_stats(
+                    item,
+                    Some(stats),
+                    crate::clock::utc_day(cfg.now.date_naive()),
+                    co,
+                )?,
                 fetched_at: crate::clock::iso_z(cfg.now),
                 empty_book: false,
             }
@@ -1214,6 +1226,43 @@ mod tests {
         let err = run_scrape(&http, &NoopSleeper, &c).unwrap_err();
         assert!(err.contains("coercions exceed the budget"), "{err}");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn volume_baseline_counts_quiet_days_as_zero() {
+        // Neo R3 Relic's shape on 2026-11-17: a trade every few days. Seven
+        // trading days of 8 in the window is 2 a day, not 8.
+        let day = |offset: i64| {
+            let date = chrono::DateTime::UNIX_EPOCH.date_naive()
+                + chrono::Duration::days(FIXTURE_TODAY - offset);
+            format!("{}T00:00:00.000+00:00", date.format("%Y-%m-%d"))
+        };
+        let mut rows: Vec<Value> = (0..7)
+            .map(|i| json!({"datetime": day(29 - i * 4), "volume": 8, "median": 10}))
+            .collect();
+        rows.insert(0, json!({"datetime": day(80), "volume": 1, "median": 10}));
+        let item = CatalogItem {
+            slug: "neo_r3_relic".into(),
+            name: "Neo R3 Relic".into(),
+            tags: vec![],
+            ducats: None,
+        };
+        let stats = json!({"statistics_closed": {"48hours": [], "90days": rows}});
+        let stage = analyze_stats(&item, Some(stats), FIXTURE_TODAY, &mut Coercions::new())
+            .unwrap()
+            .unwrap();
+        assert_eq!(stage.vol_28d, 2.0);
+    }
+
+    #[test]
+    fn a_volume_baseline_cached_under_the_row_rule_reads_unknown() {
+        let old: StatsStage = serde_json::from_value(json!({
+            "pick": null, "volume_48h": 8.0, "median_now": 26.0, "median_90d": 25.0,
+            "medians_7d": [], "donch_top_90d": 30.0, "donch_bot_90d": 20.0,
+            "avg_price_48h": 26.0, "vol_28d": 9.1
+        }))
+        .unwrap();
+        assert_eq!(old.vol_28d, 0.0);
     }
 
     #[test]

@@ -6,6 +6,19 @@
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
+/// A UTC calendar day as days since 1970-01-01, the form
+/// [`market_domain::math::StatsDay::day`] carries.
+pub fn utc_day(date: NaiveDate) -> i64 {
+    (date - DateTime::UNIX_EPOCH.date_naive()).num_days()
+}
+
+/// The day of a WFM statistics `datetime` (`2026-11-16T00:00:00.000+00:00`).
+/// WFM stamps rows in UTC, so the leading date is the row's UTC day.
+pub fn stats_day(datetime: &str) -> Option<i64> {
+    let date = NaiveDate::parse_from_str(datetime.get(..10)?, "%Y-%m-%d").ok()?;
+    Some(utc_day(date))
+}
+
 /// The snapshot's stamp format: UTC, whole seconds, `Z` suffix
 /// (`%Y-%m-%dT%H:%M:%SZ`).
 pub fn iso_z(dt: DateTime<Utc>) -> String {
@@ -58,6 +71,15 @@ mod tests {
 
     fn utc(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(y, mo, d, h, mi, s).unwrap()
+    }
+
+    #[test]
+    fn days_count_from_the_epoch() {
+        assert_eq!(utc_day(NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()), 0);
+        assert_eq!(utc_day(utc(2026, 11, 17, 23, 59, 0).date_naive()), 20_774);
+        assert_eq!(stats_day("2026-11-16T00:00:00.000+00:00"), Some(20_773));
+        assert_eq!(stats_day("2026-11"), None);
+        assert_eq!(stats_day("yesterday at noon"), None);
     }
 
     #[test]
