@@ -345,7 +345,7 @@ describe('editable daily and weekly lists', () => {
 
   it('offers optional daily items on the daily list only', async () => {
     const routine = new RoutineController(memoryStore(), NOW);
-    expect(routine.availableBuiltins.map(task => task.id)).toEqual(['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily']);
+    expect(routine.availableBuiltins.map(task => task.id)).toEqual(['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily', 'simaris-synthesis']);
     await routine.addBuiltinTask('focus-cap');
     expect(routine.state.lists.daily).toEqual([...DAILY, 'focus-cap']);
     routine.select('weekly');

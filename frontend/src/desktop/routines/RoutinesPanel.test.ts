@@ -60,6 +60,40 @@ describe('RoutinesPanel', () => {
     expect(state.getSetting('routine-checklist')).toContain('login-tribute');
   });
 
+  it('adds a game activity to the weekly list and takes it out of the picker', async () => {
+    const state = store();
+    render(RoutinesPanel, { props: { routine: new RoutineController(state, NOW), market: null, owned: new Map(), now: NOW } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add The Icebind' }));
+    expect(await screen.findByRole('checkbox', { name: /The Icebind/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add The Icebind' })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Add 1999 Calendar' })));
+    expect(state.getSetting('routine-checklist')).toContain('icebind');
+  });
+
+  it('removes a daily item, offers it again, and keeps focus on the next remove', async () => {
+    render(RoutinesPanel, { props: { routine: new RoutineController(store(), NOW), market: null, owned: new Map(), now: NOW } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Claim the Daily Tribute' }));
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: /Claim the Daily Tribute/ })).toBeNull());
+    expect(screen.getByRole('button', { name: 'Add Claim the Daily Tribute' })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove Keep the Foundry busy' })));
+    expect(screen.getByText('0 of 4 complete')).toBeTruthy();
+  });
+
+  it('adds a custom item and stops offering adds at the cap', async () => {
+    render(RoutinesPanel, { props: { routine: new RoutineController(store(), NOW), market: null, owned: new Map(), now: NOW } });
+    const field = screen.getByLabelText('Add your own item') as HTMLInputElement;
+    for (let i = 1; i <= 7; i += 1) {
+      await fireEvent.input(field, { target: { value: `Errand ${i}` } });
+      await fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
+    }
+    expect(await screen.findByRole('checkbox', { name: /Errand 7/ })).toBeTruthy();
+    expect(field.value).toBe('');
+    expect(screen.getByText('Up to 12 items. Remove one to add another.')).toBeTruthy();
+    expect(field.disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Add Fill the daily Focus cap' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('offers personal monthly goals without inventing a game reset', async () => {
     await renderMonthly();
     expect(screen.getByText(/not a Warframe reset schedule/)).toBeTruthy();

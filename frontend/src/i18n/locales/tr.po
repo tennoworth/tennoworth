@@ -10772,14 +10772,24 @@ msgctxt "routine.task.acrithis-daily.detail"
 msgid "Check today’s offer in Duviri before it changes."
 msgstr ""
 
+#. Optional daily task. Use the game’s names.
+msgctxt "routine.task.simaris-synthesis"
+msgid "Cephalon Simaris’s Daily Synthesis"
+msgstr ""
+
+#. Task detail.
+msgctxt "routine.task.simaris-synthesis.detail"
+msgid "Scan today’s Synthesis target for Simaris Standing."
+msgstr ""
+
 #. Optional weekly task. Use the game’s name.
 msgctxt "routine.task.elite-temporal-archimedea"
 msgid "Elite Temporal Archimedea"
 msgstr ""
 
-#. Task detail.
+#. Task detail. Use the game’s names.
 msgctxt "routine.task.elite-temporal-archimedea.detail"
-msgid "Run this week’s elite challenge while its modifiers suit your squad."
+msgid "Spend Search Pulses on The Hex’s weekly run. Five Pulses refresh each Monday."
 msgstr ""
 
 #. Optional weekly task. Use the game’s name.
@@ -10787,9 +10797,29 @@ msgctxt "routine.task.elite-deep-archimedea"
 msgid "Elite Deep Archimedea"
 msgstr ""
 
-#. Task detail.
+#. Task detail. Use the game’s names.
 msgctxt "routine.task.elite-deep-archimedea.detail"
-msgid "Run this week’s elite challenge while its modifiers suit your squad."
+msgid "Spend Search Pulses on Cavia’s weekly run. Five Pulses refresh each Monday."
+msgstr ""
+
+#. Optional weekly task. Use the game’s name.
+msgctxt "routine.task.netracells"
+msgid "Netracells"
+msgstr ""
+
+#. Task detail. Use the game’s names.
+msgctxt "routine.task.netracells.detail"
+msgid "Spend the Search Pulses you have left on Netracell runs."
+msgstr ""
+
+#. Optional weekly task. Use the game’s names; Bird 3 is a game character.
+msgctxt "routine.task.bird-3-shard"
+msgid "Bird 3’s Archon Shard"
+msgstr ""
+
+#. Task detail. Use the game’s names.
+msgctxt "routine.task.bird-3-shard.detail"
+msgid "Buy this week’s shard in the Sanctum Anatomica for 30,000 Cavia Standing."
 msgstr ""
 
 #. Optional weekly task. Use the game’s names.
@@ -10797,39 +10827,69 @@ msgctxt "routine.task.teshin-honors"
 msgid "Teshin’s Steel Path Honors"
 msgstr ""
 
-#. Task detail.
+#. Task detail. Use the game’s names.
 msgctxt "routine.task.teshin-honors.detail"
-msgid "Check this week’s Steel Essence offer before it rotates."
+msgid "Buy this week’s featured item and the Veiled Riven Cipher with Steel Essence."
 msgstr ""
 
-#. Optional weekly task. Paladino is a game character.
-msgctxt "routine.task.paladino"
-msgid "Visit Paladino"
+#. Optional weekly task. Palladino is a game character.
+msgctxt "routine.task.palladino"
+msgid "Palladino’s weekly offerings"
 msgstr ""
 
-#. Task detail.
-msgctxt "routine.task.paladino.detail"
-msgid "Check what Paladino offers before the week ends."
+#. Task detail. Use the game’s names.
+msgctxt "routine.task.palladino.detail"
+msgid "Trade Riven Slivers in Iron Wake for Kuva, Endo, Credits and a Riven Mod, each once a week."
 msgstr ""
 
 #. Optional weekly task. Use the game’s name.
 msgctxt "routine.task.icebind"
-msgid "Icebind runs"
+msgid "The Icebind"
 msgstr ""
 
-#. Task detail.
+#. Task detail. Use the game’s names.
 msgctxt "routine.task.icebind.detail"
-msgid "Use this week’s runs with a premade squad."
+msgid "Spend Cryobells with Cephalon Melica on Yuvan Peak. Three regrow each week and you can hold six."
 msgstr ""
 
 #. Optional weekly task. Use the game’s name for the calendar.
 msgctxt "routine.task.calendar-1999"
-msgid "1999 calendar"
+msgid "1999 Calendar"
 msgstr ""
 
-#. Task detail.
+#. Task detail. Use the game’s names.
 msgctxt "routine.task.calendar-1999.detail"
-msgid "Complete this week’s calendar tasks and claim their rewards."
+msgid "Finish this season’s To Dos and claim the prize. A new season starts each week; unfinished To Dos are lost."
+msgstr ""
+
+#. Optional weekly task. Use the game’s name.
+msgctxt "routine.task.kahls-garrison"
+msgid "Kahl’s Garrison"
+msgstr ""
+
+#. Task detail. Use the game’s names.
+msgctxt "routine.task.kahls-garrison.detail"
+msgid "Run this week’s Break Narmer missions with Kahl."
+msgstr ""
+
+#. Optional weekly task. Use the game’s name.
+msgctxt "routine.task.the-circuit"
+msgid "The Circuit"
+msgstr ""
+
+#. Task detail. Use the game’s names.
+msgctxt "routine.task.the-circuit.detail"
+msgid "Climb this week’s Circuit in Duviri for its reward pool."
+msgstr ""
+
+#. Optional weekly task. Use the game’s name.
+msgctxt "routine.task.descendia"
+msgid "The Descendia"
+msgstr ""
+
+#. Task detail. Use the game’s names.
+msgctxt "routine.task.descendia.detail"
+msgid "Make this week’s progress and claim its challenge rewards."
 msgstr ""
 
 #. Detail under an item the player added.
@@ -11035,6 +11095,51 @@ msgstr "Kaldır"
 msgctxt "routine.emptyGoals"
 msgid "Add a monthly goal to build this month’s checklist."
 msgstr "Bu ayın kontrol listesini oluşturmak için aylık bir hedef ekle."
+
+#. Empty state of the daily or weekly list.
+msgctxt "routine.emptyTasks"
+msgid "Nothing on this list. Add an activity from the game or your own item below."
+msgstr ""
+
+#. Label of the add buttons for built-in activities.
+msgctxt "routine.fromGame"
+msgid "From the game"
+msgstr ""
+
+#. Screen reader name of a button that adds a built-in activity.
+msgctxt "routine.addBuiltin"
+msgid "Add {task}"
+msgstr ""
+
+#. Note when nothing is left to add.
+msgctxt "routine.allListed"
+msgid "Every activity TennoWorth knows for this list is on it."
+msgstr ""
+
+#. Field label.
+msgctxt "routine.addTaskLabel"
+msgid "Add your own item"
+msgstr ""
+
+#. Field placeholder. Darvo is a game character.
+msgctxt "routine.taskExample"
+msgid "e.g. Check Darvo’s deal"
+msgstr ""
+
+#. Button.
+msgctxt "routine.addTask"
+msgid "Add item"
+msgstr ""
+
+#. Note.
+msgctxt "routine.taskLimit"
+msgid "Up to {max} items. Remove one to add another."
+msgstr ""
+
+#. Note.
+msgctxt "routine.taskHelp"
+msgid "Items stay on the list; their ticks reset with it."
+msgstr ""
 
 #. Button while busy.
 #, fuzzy

@@ -5,7 +5,7 @@
   import { baroLocation, humanWindow } from '../../ui/format';
   import { formatLocale, t } from '../../i18n/i18n.svelte';
   import TraderCalendar from '../../features/calendar/TraderCalendar.svelte';
-  import { MAX_GOALS, MAX_GOAL_LENGTH, nextRoutinePeriod, type RoutineController, type RoutineCadence, type RoutineTask } from './controller.svelte';
+  import { MAX_GOALS, MAX_GOAL_LENGTH, MAX_TASKS, nextRoutinePeriod, type RoutineController, type RoutineCadence, type RoutineTask } from './controller.svelte';
 
   let {
     routine,
@@ -91,6 +91,35 @@
     else focusIn('#monthly-routine-goal');
   }
 
+  let taskDraft = $state('');
+
+  // Removing a row hands focus to the next row's Remove, or to the add area
+  // when it was the last one, so the keyboard never drops to the page.
+  async function removeTask(id: string): Promise<void> {
+    const ids = routine.tasks.map(task => task.id);
+    const nextId = ids[ids.indexOf(id) + 1] ?? null;
+    await routine.removeTask(id);
+    await tick();
+    if (nextId) focusIn(`[data-remove-task="${nextId}"]`);
+    else focusIn('[data-add-builtin], #routine-task');
+  }
+
+  // An added activity's button leaves the row; the one that slides into its
+  // place takes focus, or the custom field once the row is empty or full.
+  async function addBuiltin(id: string, index: number): Promise<void> {
+    await routine.addBuiltinTask(id);
+    await tick();
+    const left = panel?.querySelectorAll<HTMLElement>('[data-add-builtin]') ?? [];
+    const next = left[Math.min(index, left.length - 1)];
+    if (next && !routine.taskLimitReached) next.focus();
+    else focusIn('#routine-task');
+  }
+
+  async function addTask(): Promise<void> {
+    await routine.addCustomTask(taskDraft);
+    taskDraft = '';
+  }
+
   // Reordering keeps the keyboard on the goal being moved; when a move leaves
   // the pressed direction disabled at an end, the opposite control takes focus
   // so the next press still acts on the same goal.
@@ -104,6 +133,7 @@
 
   function selectCadence(cadence: RoutineCadence): void {
     closeEditor();
+    taskDraft = '';
     routine.select(cadence);
   }
 
@@ -208,7 +238,11 @@
                     <span class="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></span>
                   </label>
                 </div>
-                {#if routine.cadence === 'monthly'}
+                {#if routine.cadence !== 'monthly'}
+                  <div class="row-actions">
+                    <button class="btn ghost xs" type="button" data-remove-task={task.id} aria-label={t('routine.remove', { goal: task.title })} disabled={routine.saving} onclick={() => void removeTask(task.id)}>{t('routine.removeShort')}</button>
+                  </div>
+                {:else}
                   <div class="row-actions">
                     <button class="btn ghost xs" type="button" data-move-up={task.id} aria-label={t('routine.moveUp', { goal: task.title })} disabled={routine.state.monthlyGoals[0]?.id === task.id} onclick={() => void moveGoal(task.id, -1)}>{t('routine.up')}</button>
                     <button class="btn ghost xs" type="button" data-move-down={task.id} aria-label={t('routine.moveDown', { goal: task.title })} disabled={routine.state.monthlyGoals.at(-1)?.id === task.id} onclick={() => void moveGoal(task.id, 1)}>{t('routine.down')}</button>
@@ -222,7 +256,32 @@
         {/each}
       </ul>
     {:else}
-      <p class="empty-goal">{t('routine.emptyGoals')}</p>
+      <p class="empty-goal">{t(routine.cadence === 'monthly' ? 'routine.emptyGoals' : 'routine.emptyTasks')}</p>
+    {/if}
+
+    {#if routine.cadence !== 'monthly'}
+      <div class="add-tasks">
+        <div class="ui-field">
+          <span id="routine-from-game">{t('routine.fromGame')}</span>
+          {#if routine.availableBuiltins.length}
+            <div class="builtins" role="group" aria-labelledby="routine-from-game" use:roving>
+              {#each routine.availableBuiltins as task, index (task.id)}
+                <button class="btn ghost xs add" type="button" data-add-builtin={task.id} title={task.detail} aria-label={t('routine.addBuiltin', { task: task.title })} disabled={routine.taskLimitReached || routine.saving} onclick={() => void addBuiltin(task.id, index)}>+ {task.title}</button>
+              {/each}
+            </div>
+          {:else}
+            <span class="note">{t('routine.allListed')}</span>
+          {/if}
+        </div>
+        <div class="ui-field">
+          <label for="routine-task">{t('routine.addTaskLabel')}</label>
+          <div class="goal-entry">
+            <input id="routine-task" class="ui-input" maxlength={MAX_GOAL_LENGTH} bind:value={taskDraft} placeholder={t('routine.taskExample')} disabled={routine.taskLimitReached} onkeydown={event => { if (event.key === 'Enter' && taskDraft.trim()) void addTask(); }} />
+            <button class="btn ghost" type="button" disabled={!taskDraft.trim() || routine.taskLimitReached || routine.saving} onclick={() => void addTask()}>{t('routine.addTask')}</button>
+          </div>
+          <span class="note">{routine.taskLimitReached ? t('routine.taskLimit', { max: MAX_TASKS }) : t('routine.taskHelp')}</span>
+        </div>
+      </div>
     {/if}
 
     {#if routine.saveError}
@@ -278,6 +337,11 @@
   .period-copy strong { font-family: var(--font-ui); font-size: var(--text-section); }
   .period-copy span, .monthly-goal > span, .save-status, .empty-goal, .advice-body { color: var(--muted); font-size: var(--text-control); line-height: var(--leading-body); }
   .goal-entry { display: flex; gap: var(--s2); align-items: stretch; }
+  .add-tasks { display: flex; flex-direction: column; gap: var(--s4); }
+  .add-tasks .note { color: var(--muted); font-size: var(--text-control); line-height: var(--leading-body); }
+  .builtins { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  /* Dashed is the add action's border (design system: Boundaries). */
+  .builtins .add { border-style: dashed; }
   .goal-entry input { flex: 1 1 20rem; min-width: 0; }
   .goal-row { display: flex; align-items: flex-start; gap: var(--s3); }
   .goal-main { display: flex; align-items: flex-start; gap: var(--s3); flex: 1 1 auto; min-width: 0; }
