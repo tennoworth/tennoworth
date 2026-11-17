@@ -26,15 +26,20 @@
 @font-face { font-family: "IBM Plex Sans Fallback"; src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("Helvetica"), local("Arimo"); size-adjust: 102.7%; ascent-override: 99.8%; descent-override: 26.8%; line-gap-override: 0%; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-mono-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+/* Carets and markers the UI writes as text (▸ ▾ ▲ ▼ △ ◂ ◈). Plex has none,
+   so each OS used to borrow them from a different system font, at different
+   sizes. Built by scripts/shapes-font.py; first in every stack, limited to
+   these code points. */
+@font-face { font-family: "TennoWorth Shapes"; font-style: normal; font-weight: 100 900; font-display: block; src: url(/fonts/tw-shapes.woff2) format("woff2"); unicode-range: U+25B2-25B4, U+25B6, U+25B8, U+25BA, U+25BC, U+25BE, U+25C0, U+25C2, U+25C8; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-mono-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 /* ---------- shared structural tokens (every look inherits, may override) --- */
 :root {
   /* Type. --font-ui carries headings / tracked labels; the fallback here
      points it at the body stack, and the look overrides it. */
-  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-body: "TennoWorth Shapes", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-ui: var(--font-body);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: "TennoWorth Shapes", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --text-caption: 0.8125rem;
   --text-control: 0.875rem;
   --text-body: 0.9375rem;
@@ -62,6 +67,11 @@
   /* Inner-divider style: `1px var(--rule) var(--hairline)`. Outer container
      edges stay solid in every look. */
   --rule: solid;
+  /* The same divider as a 1px-high background, for a free-standing rule.
+     WebKit paints a dotted border at its sub-pixel position, so two dotted
+     rules a fraction of a pixel apart drew one as dots and one as a grey
+     line; a background is snapped to whole pixels. */
+  --rule-line: linear-gradient(var(--border), var(--border));
   /* Popover / toast lift. Paper looks set it to none: depth = ink vs paper. */
   --shadow-pop: 0 12px 28px rgba(0, 0, 0, 0.45);
   /* Button + table-header hover fill, nav-item hover wash. Derived so a look
@@ -148,11 +158,12 @@ html[data-look="yorha"] {
   --grid: rgba(70, 66, 47, 0.07);
   --hatch: rgba(70, 66, 47, 0.035);
   --scrim: rgba(70, 66, 47, 0.45);
-  --font-ui: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", "IBM Plex Sans Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-ui: "TennoWorth Shapes", "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "TennoWorth Shapes", "IBM Plex Sans", "IBM Plex Sans Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "TennoWorth Shapes", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --radius-lg: 0; --radius-panel: 0; --radius-ctl: 0; --radius-input: 0; --radius-tag: 0; --radius-pill: 0;
   --rule: dotted;
+  --rule-line: repeating-linear-gradient(to right, var(--border) 0 1px, transparent 1px 3px);
   /* Windows cast a flat, offset ink shadow: depth without blur or glow. */
   --shadow-offset: rgba(52, 48, 31, 0.16);
   --shadow-pop: 6px 6px 0 var(--shadow-offset);

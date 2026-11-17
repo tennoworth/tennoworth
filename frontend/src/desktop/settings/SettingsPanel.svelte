@@ -507,7 +507,7 @@
   .jump .k, .tier { font: 600 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .jump .k:not(:first-child) { margin-left: var(--s2); padding-left: var(--s4); border-left: 1px var(--rule) var(--border); }
   .tier { display: flex; align-items: center; gap: var(--s3); margin: var(--s2) 0 calc(var(--s2) * -1); }
-  .tier::after { content: ""; flex: 1; border-top: 1px var(--rule) var(--border); }
+  .tier::after { content: ""; flex: 1; height: 1px; background: var(--rule-line); }
 
   /* Detection and Reward cards side by side while each column can still hold
      a label beside its control; they stack with the rows below 760px. */

@@ -60,7 +60,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Surfaces | `--bg`, `--panel`, `--panel-2` | Page, panel, and secondary surface |
 | Text | `--fg`, `--muted` | Primary and supporting readable content |
 | Decoration | `--faint`, `--hairline`, `--dot`, `--grid`, `--hatch` | Nonessential ornament only; `--faint` never colours readable text, missing-data dashes included |
-| Boundaries | `--border`, `--rule` | Solid outer outlines, dotted inner dividers |
+| Boundaries | `--border`, `--rule`, `--rule-line` | Solid outer outlines, dotted inner dividers. A free-standing rule (no box to border) is a 1px `--rule-line` background, not a dotted border: WebKit paints dotted borders at their sub-pixel position, so two such rules can draw one dotted and one solid |
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
 | Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted`, `--rail-edge` | Panel, card, FAQ and dialog title rails. Light: the ink bar. Dark: a raised `--panel-2` band under a 2px rag rule, because the ink fill is reserved for selected state |
 | Row interaction | `--row-selected`, `--row-selected-hover` | Restrained selected-table fills; hover preserves selection, focus adds an outline |
@@ -232,7 +232,7 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Sparklines | `Sparkline.svelte` draws recent medians in ink, a dotted `--faint` rule at the 90-day median, and an endpoint dot coloured by the move against that median. The baseline shares the line's scale, so its distance from the line is honest |
 | Meters | `Meter.svelte` shows a share of a whole: a short label, the value in words ("9 of 14"), and an `--ink-bar` fill on one square `--panel-2` track. The words carry the value; a share with nothing to judge yet keeps an empty track and says why ("too recent"). Used for Ledger listing outcomes and Baro's ducats from spares. Select Meters in the living styleguide's Data state control |
 | Range bars | A spread drawn on a shared scale: a `--muted` hairline from minimum to maximum over a dotted `--faint` track, and a 2px ink tick at the median. Every row in the column uses the same scale (Rivens' DE weekly band: 1p to 10,000p, logarithmic), so rows compare down the column. The values stay as text beside the bar, which is decorative to assistive technology |
-| Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide |
+| Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide. Every caret and marker drawn as text (▸ ▾ ▲ ▼ △ ◂ ◈) comes from the `TennoWorth Shapes` font at the front of each stack (`scripts/shapes-font.py`), since IBM Plex has none; add a new shape there before using it |
 | Dialogs and popovers | Stay within the viewport; provide reachable dismissal and actions, visible focus, and appropriate keyboard behavior |
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
 
