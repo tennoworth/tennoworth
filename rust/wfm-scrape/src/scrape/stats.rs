@@ -66,6 +66,10 @@ fn parse_window(
                 .get("subtype")
                 .and_then(|s| s.as_str())
                 .map(|s| s.to_string()),
+            day: d
+                .get("datetime")
+                .and_then(|s| s.as_str())
+                .and_then(crate::clock::stats_day),
             mod_rank: parse_mod_rank(d.get("mod_rank")),
         });
     }
@@ -99,6 +103,17 @@ mod tests {
     fn parse(payload: &Value) -> (Vec<StatsDay>, Vec<StatsDay>) {
         let mut co = Coercions::new();
         parse_stats(payload, "slug", &mut co).unwrap()
+    }
+
+    #[test]
+    fn keeps_each_rows_utc_day() {
+        let payload = json!({"statistics_closed": {"90days": [
+            {"datetime": "2026-11-16T00:00:00.000+00:00", "volume": 3},
+            {"datetime": "not a date", "volume": 1},
+            {"volume": 2}
+        ]}});
+        let days: Vec<Option<i64>> = parse(&payload).1.iter().map(|d| d.day).collect();
+        assert_eq!(days, [Some(20_773), None, None]);
     }
 
     #[test]
