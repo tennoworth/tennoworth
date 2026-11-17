@@ -16,7 +16,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme} automatic scan settings follow the toggle and survive narrow windows`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme });
     const settings = await openSettings(page);
-    const section = settings.locator('section[aria-labelledby="set-auto-scan"]');
+    const section = settings.locator('section[aria-labelledby="set-scan"]');
     const toggle = section.getByRole('checkbox', { name: /Scan automatically while Warframe is running/ });
 
     await expect(toggle).not.toBeChecked();
@@ -45,7 +45,7 @@ for (const theme of ['light', 'dark'] as const) {
 
 test('a background scan is offered instead of replacing the inventory when adoption is off', async ({ page }) => {
   const settings = await openSettings(page);
-  const section = settings.locator('section[aria-labelledby="set-auto-scan"]');
+  const section = settings.locator('section[aria-labelledby="set-scan"]');
   await section.getByRole('checkbox', { name: /Update the open app automatically/ }).uncheck();
 
   await page.evaluate(() => (globalThis as unknown as { __TENNOWORTH_PREVIEW_EMIT__: (n: string, p: unknown) => void })
