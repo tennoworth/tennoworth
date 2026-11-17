@@ -348,6 +348,20 @@ jobs:
         run: cargo install --locked cargo-audit
       - name: cargo audit
         run: cargo audit --deny warnings
+      # .cargo/audit.toml ignores RUSTSEC-2026-0543 because chrono is only a
+      # lockfile entry that nothing compiles. Hold that premise here.
+      - name: chrono stays out of the build
+        run: |
+          if ! grep -qx 'name = "chrono"' Cargo.lock; then
+            echo "::error::chrono left Cargo.lock; remove RUSTSEC-2026-0543 from rust/.cargo/audit.toml"
+            exit 1
+          fi
+          users=$(cargo tree --locked --workspace --target all -e normal,build,dev -i chrono)
+          if [ -n "$users" ]; then
+            echo "$users"
+            echo "::error::chrono is compiled again; RUSTSEC-2026-0543 is ignored in rust/.cargo/audit.toml on the premise that it is not"
+            exit 1
+          fi
 
   cargo-shear:
     needs: changes
