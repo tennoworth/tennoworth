@@ -565,7 +565,7 @@ mod tests {
             dir.join("market.json"),
             format!(
                 r#"{{"updated_at":"{}","items":{{"current_only":{{"vol":10,"low_sell":12}}}},"catalog":null,"path_to_info":null,"usage":null,"set_to_parts":null}}"#,
-                chrono::Utc::now().to_rfc3339()
+                jiff::Timestamp::now()
             ),
         )
         .unwrap();

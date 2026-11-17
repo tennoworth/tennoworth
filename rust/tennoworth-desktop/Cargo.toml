@@ -71,8 +71,9 @@ tauri-plugin-global-shortcut = "2"
 # background client may own, while native Wayland only lets the focused client
 # set the selection.
 arboard = { version = "3.7", default-features = false }
-# Local-time digest scheduling and RFC3339 schedule parsing on Windows/Linux.
-chrono = { workspace = true }
+# Local-time digest scheduling. tz-system finds the system zone; Linux reads
+# /usr/share/zoneinfo and Windows, which has no zoneinfo, gets a bundled tzdb.
+jiff = { workspace = true, features = ["tz-system", "tzdb-zoneinfo", "tzdb-bundle-platform"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

@@ -49,7 +49,7 @@ impl InGameDelivery {
 }
 
 pub fn now() -> i64 {
-    chrono::Utc::now().timestamp()
+    jiff::Timestamp::now().as_second()
 }
 
 pub fn publish(app: &AppHandle, candidate: Candidate) -> Result<bool, String> {

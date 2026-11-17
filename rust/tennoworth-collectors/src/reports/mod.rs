@@ -13,7 +13,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chrono::Utc;
+use jiff::Timestamp;
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -63,7 +63,7 @@ impl Collector {
         self.store
             .lock()
             .map_err(|_| anyhow::anyhow!("store unavailable"))?
-            .tick(Utc::now())
+            .tick(Timestamp::now())
     }
 }
 
@@ -94,7 +94,7 @@ async fn sales(
     let Ok(Json(batch)) = payload else {
         return StatusCode::BAD_REQUEST;
     };
-    let Ok(batch) = contract::validate_sales(batch, Utc::now().date_naive()) else {
+    let Ok(batch) = contract::validate_sales(batch, crate::utc_date(Timestamp::now())) else {
         return StatusCode::BAD_REQUEST;
     };
     let Ok(mut store) = state.store.try_lock() else {
@@ -119,7 +119,7 @@ async fn riven_shape(
         return StatusCode::SERVICE_UNAVAILABLE;
     };
     store
-        .add_shape(shape, Utc::now())
+        .add_shape(shape, Timestamp::now())
         .map_or_else(|s| s, |_| StatusCode::NO_CONTENT)
 }
 
@@ -183,7 +183,11 @@ async fn prices(State(state): State<Arc<Collector>>) -> Response {
     cached(
         &state,
         |p| &mut p.prices,
-        |store| Ok(serde_json::to_string(&store.prices(Utc::now(), false)?)?),
+        |store| {
+            Ok(serde_json::to_string(
+                &store.prices(Timestamp::now(), false)?,
+            )?)
+        },
     )
 }
 
@@ -191,7 +195,7 @@ async fn riven_shapes(State(state): State<Arc<Collector>>) -> Response {
     cached(
         &state,
         |p| &mut p.shapes,
-        |store| Ok(serde_json::to_string(&store.shapes(Utc::now())?)?),
+        |store| Ok(serde_json::to_string(&store.shapes(Timestamp::now())?)?),
     )
 }
 
@@ -199,7 +203,7 @@ async fn health(State(state): State<Arc<Collector>>) -> StatusCode {
     let Ok(store) = state.store.try_lock() else {
         return StatusCode::SERVICE_UNAVAILABLE;
     };
-    if store.healthy(Utc::now()) {
+    if store.healthy(Timestamp::now()) {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::SERVICE_UNAVAILABLE

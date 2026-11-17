@@ -3,7 +3,7 @@ use crate::clock;
 use crate::ingest::de;
 use crate::ingest::de::extract as de_extract;
 use crate::pipeline::reconcile::{reconcile, Observation, Reconciled};
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use std::collections::{BTreeMap, HashMap};
 
 pub(super) struct WorldSurfaces {
@@ -19,7 +19,7 @@ pub(super) fn reconcile_children(
     de_alias: &HashMap<String, String>,
     prior: &serde_json::Value,
     prior_child_stamps: &BTreeMap<String, String>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> WorldSurfaces {
     let de_world = match de_world_observation {
         Observation::Usable { data, .. } => Some(data),

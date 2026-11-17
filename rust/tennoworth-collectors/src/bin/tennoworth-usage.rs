@@ -1,4 +1,4 @@
-use chrono::Utc;
+use jiff::Timestamp;
 use std::path::PathBuf;
 use tennoworth_collectors::usage::{Collector, Store};
 
@@ -8,7 +8,7 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("TENNOWORTH_USAGE_DB")
             .unwrap_or_else(|_| "/var/lib/tennoworth-usage/usage.db".into()),
     );
-    let now = Utc::now();
+    let now = Timestamp::now();
     let action = std::env::args().nth(1);
     let mut store = if action.as_deref() == Some("export") {
         Store::existing(&path)?

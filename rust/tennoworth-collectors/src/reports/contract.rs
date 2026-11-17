@@ -2,7 +2,8 @@
 //! the store sees it; a batch with one bad row is refused whole, so a client bug
 //! surfaces as a 400 instead of as quietly missing data.
 
-use chrono::{Datelike, Days, NaiveDate};
+use crate::add_days;
+use jiff::civil::Date;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
@@ -63,7 +64,7 @@ impl Side {
 #[derive(Debug)]
 pub struct ValidSale {
     pub reference: String,
-    pub day: NaiveDate,
+    pub day: Date,
     pub side: Side,
     pub slug: String,
     pub tiered: bool,
@@ -79,8 +80,8 @@ pub struct ValidBatch {
     pub sales: Vec<ValidSale>,
 }
 
-pub fn iso_week(day: NaiveDate) -> String {
-    let w = day.iso_week();
+pub fn iso_week(day: Date) -> String {
+    let w = day.iso_week_date();
     format!("{}-W{:02}", w.year(), w.week())
 }
 
@@ -107,23 +108,20 @@ fn check_identity(v: u32, contributor: &str, erase: &str) -> Result<(), Invalid>
     Ok(())
 }
 
-pub fn validate_sales(batch: SalesBatch, today: NaiveDate) -> Result<ValidBatch, Invalid> {
+pub fn validate_sales(batch: SalesBatch, today: Date) -> Result<ValidBatch, Invalid> {
     check_identity(batch.v, &batch.contributor, &batch.erase)?;
     if batch.sales.is_empty() || batch.sales.len() > MAX_SALES_PER_BATCH {
         return Err(Invalid("a batch holds 1 to 50 sales"));
     }
-    let oldest = today
-        .checked_sub_days(Days::new(MAX_SALE_AGE_DAYS))
-        .ok_or(Invalid("date out of range"))?;
+    let oldest =
+        add_days(today, -(MAX_SALE_AGE_DAYS as i64)).ok_or(Invalid("date out of range"))?;
     // A client clock a little ahead of the server's must not lose a sale.
-    let newest = today
-        .checked_add_days(Days::new(1))
-        .ok_or(Invalid("date out of range"))?;
+    let newest = add_days(today, 1).ok_or(Invalid("date out of range"))?;
     let mut week: Option<String> = None;
     let mut sales = Vec::with_capacity(batch.sales.len());
     for sale in batch.sales {
-        let day = NaiveDate::parse_from_str(&sale.day, "%Y-%m-%d")
-            .map_err(|_| Invalid("day must be YYYY-MM-DD"))?;
+        let day =
+            Date::strptime("%Y-%m-%d", &sale.day).map_err(|_| Invalid("day must be YYYY-MM-DD"))?;
         if day < oldest || day > newest {
             return Err(Invalid("day outside the accepted window"));
         }

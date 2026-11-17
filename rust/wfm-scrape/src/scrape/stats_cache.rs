@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::scrape::StatsStage;
@@ -116,8 +116,8 @@ impl Cache {
     pub fn due(
         &self,
         slug: &str,
-        now: DateTime<Utc>,
-        interval: chrono::Duration,
+        now: Timestamp,
+        interval: jiff::SignedDuration,
     ) -> Option<Reason> {
         let Some(entry) = self.entries.get(slug) else {
             return Some(Reason::Bootstrap);
@@ -129,7 +129,7 @@ impl Cache {
         } else if entry.empty_book {
             Some(Reason::EmptyBook)
         } else if crate::clock::parse_stamp(&entry.fetched_at)
-            .is_none_or(|fetched| now.signed_duration_since(fetched) >= interval)
+            .is_none_or(|fetched| now.duration_since(fetched) >= interval)
         {
             Some(Reason::Scheduled)
         } else {
@@ -152,15 +152,15 @@ impl Cache {
 }
 
 /// Parse an interval such as `6h`, `90m` or `1d`.
-pub fn parse_interval(raw: &str) -> Result<chrono::Duration, String> {
+pub fn parse_interval(raw: &str) -> Result<jiff::SignedDuration, String> {
     let (number, unit) = raw.split_at(raw.find(|c: char| !c.is_ascii_digit()).unwrap_or(raw.len()));
     let n: i64 = number
         .parse()
         .map_err(|_| format!("invalid --stats-interval: {raw}"))?;
     let duration = match unit {
-        "m" => chrono::Duration::minutes(n),
-        "h" => chrono::Duration::hours(n),
-        "d" => chrono::Duration::days(n),
+        "m" => jiff::SignedDuration::from_mins(n),
+        "h" => jiff::SignedDuration::from_hours(n),
+        "d" => market_domain::stamp::days(n),
         _ => {
             return Err(format!(
                 "invalid --stats-interval unit in {raw}; use m, h or d"
@@ -190,13 +190,13 @@ mod tests {
             vol_28d: 4.0,
         }
     }
-    fn at(hour: i64) -> DateTime<Utc> {
-        DateTime::UNIX_EPOCH + chrono::Duration::hours(hour)
+    fn at(hour: i64) -> Timestamp {
+        Timestamp::UNIX_EPOCH + jiff::SignedDuration::from_hours(hour)
     }
 
     #[test]
     fn each_trigger_matches_the_validated_policy() {
-        let six = chrono::Duration::hours(6);
+        let six = jiff::SignedDuration::from_hours(6);
         let mut cache = Cache::empty();
         assert_eq!(cache.due("a", at(0), six), Some(Reason::Bootstrap));
         cache.present.insert("a".into());
@@ -254,12 +254,15 @@ mod tests {
 
     #[test]
     fn intervals_parse_in_minutes_hours_and_days() {
-        assert_eq!(parse_interval("6h").unwrap(), chrono::Duration::hours(6));
+        assert_eq!(
+            parse_interval("6h").unwrap(),
+            jiff::SignedDuration::from_hours(6)
+        );
         assert_eq!(
             parse_interval("90m").unwrap(),
-            chrono::Duration::minutes(90)
+            jiff::SignedDuration::from_mins(90)
         );
-        assert_eq!(parse_interval("1d").unwrap(), chrono::Duration::days(1));
+        assert_eq!(parse_interval("1d").unwrap(), market_domain::stamp::days(1));
         for bad in ["", "h", "6", "6x", "0h", "-1h"] {
             assert!(parse_interval(bad).is_err(), "{bad}");
         }

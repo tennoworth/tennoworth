@@ -3,7 +3,7 @@ use crate::ingest::de;
 use crate::ingest::de::extract as de_extract;
 use crate::ingest::{self, Http, RivenChildOutcome};
 use crate::pipeline::reconcile::Disposition;
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use std::collections::{BTreeMap, HashMap};
 
 pub(super) struct RivenSources {
@@ -21,7 +21,7 @@ pub(super) fn fetch(
     prior: &serde_json::Value,
     rivens_old: &Option<HashMap<String, serde_json::Value>>,
     riven_stats_old: &Option<HashMap<String, serde_json::Value>>,
-    now: DateTime<Utc>,
+    now: Timestamp,
 ) -> RivenSources {
     eprintln!("Fetching riven dispositions...");
     let mut rivens = ingest::fetch_rivens(http);

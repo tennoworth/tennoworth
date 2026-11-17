@@ -1,6 +1,7 @@
 //! Consent and daily tokens stay in Rust; this client never shares WFM credentials.
 use crate::persistence::Db;
-use chrono::Utc;
+use jiff::Timestamp;
+use market_domain::stamp::utc_date;
 use rand::{rngs::SysRng, TryRng};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -190,8 +191,8 @@ pub fn start(app: tauri::AppHandle) {
         let Ok(client) = client() else { return };
         loop {
             if *receiver.borrow_and_update() && opted_in(&app.state::<Db>()) {
-                let now = Utc::now();
-                let prepared = prepare(&app.state::<Db>(), &now.date_naive().to_string());
+                let now = Timestamp::now();
+                let prepared = prepare(&app.state::<Db>(), &utc_date(now).to_string());
                 if let Ok(Some(daily)) = prepared {
                     if report_if_enabled(&client, ENDPOINT, &daily.token, &mut receiver).await {
                         confirm(&app.state::<Db>(), &daily.day, &daily.token);

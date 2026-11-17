@@ -267,11 +267,11 @@ fn validated_market_stamp(body: &str) -> Option<String> {
 /// Whether a snapshot stamped `fetched` may replace one stamped `held`, at
 /// `now`. Shared with the webview through
 /// `tests/fixtures/market-contract/ordering.json`.
-fn stamp_replaces(held: Option<&str>, fetched: &str, now: chrono::DateTime<chrono::Utc>) -> bool {
+fn stamp_replaces(held: Option<&str>, fetched: &str, now: jiff::Timestamp) -> bool {
     let Some(held) = held.and_then(stamp_instant) else {
         return true;
     };
-    if held.timestamp().saturating_sub(now.timestamp()) > MAX_FUTURE_SKEW_SECS {
+    if held.as_second().saturating_sub(now.as_second()) > MAX_FUTURE_SKEW_SECS {
         return true;
     }
     stamp_instant(fetched).is_none_or(|fetched| fetched >= held)
@@ -280,8 +280,8 @@ fn stamp_replaces(held: Option<&str>, fetched: &str, now: chrono::DateTime<chron
 /// A stamp as an instant, for ordering two snapshots. A stamp we cannot read is
 /// `None`, and every comparison below treats `None` as "no evidence about
 /// ordering" rather than as an error.
-fn stamp_instant(stamp: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
-    chrono::DateTime::parse_from_rfc3339(stamp).ok()
+fn stamp_instant(stamp: &str) -> Option<jiff::Timestamp> {
+    market_domain::stamp::parse_rfc3339(stamp)
 }
 
 /// Whether a fetched snapshot may replace the one on disk.
@@ -302,7 +302,7 @@ fn stamp_instant(stamp: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
 /// regression.
 fn replaces_cache(dir: &Path, spec: &ArtifactSpec, fetched: &str) -> bool {
     let held = read_cache(dir, spec).and_then(|body| valid_stamp(spec, &body));
-    stamp_replaces(held.as_deref(), fetched, chrono::Utc::now())
+    stamp_replaces(held.as_deref(), fetched, jiff::Timestamp::now())
 }
 
 /// Atomic write (tmp + rename), matching the repo-wide atomic-write rule - a
@@ -985,9 +985,7 @@ mod tests {
         ))
         .unwrap();
         for case in cases.as_array().unwrap() {
-            let now = chrono::DateTime::parse_from_rfc3339(case["now"].as_str().unwrap())
-                .unwrap()
-                .with_timezone(&chrono::Utc);
+            let now = market_domain::stamp::parse_rfc3339(case["now"].as_str().unwrap()).unwrap();
             assert_eq!(
                 stamp_replaces(
                     case["current"].as_str(),

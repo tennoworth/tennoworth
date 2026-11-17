@@ -264,9 +264,9 @@ pub struct Options {
     /// Pause between requests.
     pub pace: Duration,
     /// A stored file is rechecked once this old.
-    pub recheck: chrono::Duration,
+    pub recheck: jiff::SignedDuration,
     /// A missing file is asked for again once this old.
-    pub retry_missing: chrono::Duration,
+    pub retry_missing: jiff::SignedDuration,
 }
 
 impl Default for Options {
@@ -276,8 +276,8 @@ impl Default for Options {
             pace: Duration::from_secs(1),
             // Wiki pictures rarely change; a monthly look keeps steady load near
             // 60 conditional requests a day across ~1,700 files.
-            recheck: chrono::Duration::days(30),
-            retry_missing: chrono::Duration::days(30),
+            recheck: market_domain::stamp::days(30),
+            retry_missing: market_domain::stamp::days(30),
         }
     }
 }
@@ -287,15 +287,15 @@ impl Default for Options {
 pub fn plan(
     wanted: &BTreeMap<String, String>,
     state: &State,
-    now: chrono::DateTime<chrono::Utc>,
+    now: jiff::Timestamp,
     opts: &Options,
 ) -> Vec<String> {
     let mut files: Vec<&String> = wanted.values().collect();
     files.sort();
     files.dedup();
-    let age = |e: &Entry| crate::clock::parse_stamp(&e.checked_at).map(|t| now - t);
+    let age = |e: &Entry| crate::clock::parse_stamp(&e.checked_at).map(|t| now.duration_since(t));
     let mut fresh = Vec::new();
-    let mut due: Vec<(chrono::Duration, u8, &String)> = Vec::new();
+    let mut due: Vec<(jiff::SignedDuration, u8, &String)> = Vec::new();
     for f in files {
         match state.files.get(f) {
             None => fresh.push(f.clone()),
@@ -307,7 +307,7 @@ pub fn plan(
                 };
                 match age(e) {
                     Some(a) if a < limit => {}
-                    a => due.push((a.unwrap_or(chrono::Duration::MAX), rank, f)),
+                    a => due.push((a.unwrap_or(jiff::SignedDuration::MAX), rank, f)),
                 }
             }
         }
@@ -450,7 +450,7 @@ pub fn run(
     state: &mut State,
     fetch: &dyn Fetch,
     publish: &Path,
-    now: chrono::DateTime<chrono::Utc>,
+    now: jiff::Timestamp,
     opts: &Options,
     sleep: &dyn Fn(Duration),
 ) -> Result<Summary, String> {
@@ -687,7 +687,7 @@ mod tests {
         assert!(resolve(&json!({}), &sources()).is_empty());
     }
 
-    fn at(s: &str) -> chrono::DateTime<chrono::Utc> {
+    fn at(s: &str) -> jiff::Timestamp {
         crate::clock::parse_stamp(s).unwrap()
     }
 
