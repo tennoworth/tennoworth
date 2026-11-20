@@ -83,15 +83,47 @@ describe('RoutinesPanel', () => {
   it('adds a custom item and stops offering adds at the cap', async () => {
     render(RoutinesPanel, { props: { routine: new RoutineController(store(), NOW), market: null, owned: new Map(), now: NOW } });
     const field = screen.getByLabelText('Add your own item') as HTMLInputElement;
-    for (let i = 1; i <= 7; i += 1) {
+    for (let i = 1; i <= 15; i += 1) {
       await fireEvent.input(field, { target: { value: `Errand ${i}` } });
       await fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
     }
-    expect(await screen.findByRole('checkbox', { name: /Errand 7/ })).toBeTruthy();
+    expect(await screen.findByRole('checkbox', { name: /Errand 15/ })).toBeTruthy();
     expect(field.value).toBe('');
-    expect(screen.getByText('Up to 12 items. Remove one to add another.')).toBeTruthy();
+    expect(screen.getByText('Up to 20 items. Remove one to add another.')).toBeTruthy();
     expect(field.disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'Add Fill the daily Focus cap' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('moves a daily item with up and down and keeps focus on it', async () => {
+    const state = store();
+    render(RoutinesPanel, { props: { routine: new RoutineController(state, NOW), market: null, owned: new Map(), now: NOW } });
+    expect((screen.getByRole('button', { name: 'Move Claim the Daily Tribute up' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Move Complete the Sortie down' }) as HTMLButtonElement).disabled).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Move Complete the Sortie up' }));
+    await waitFor(() => expect(goalTitles().slice(3)).toEqual(['Complete the Sortie', 'Check Steel Path Incursions']));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move Complete the Sortie up' })));
+    expect(JSON.parse(state.getSetting('routine-checklist')!).lists.daily.at(3)).toBe('sortie');
+  });
+
+  it('drags a weekly item to the top', async () => {
+    render(RoutinesPanel, { props: { routine: new RoutineController(store(), NOW), market: null, owned: new Map(), now: NOW } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Weekly' }));
+    const rows = [...document.querySelectorAll<HTMLElement>('.checklist-items li')];
+    const handles = [...document.querySelectorAll<HTMLElement>('[data-drag-handle]')];
+    stubRowHeight(rows[0], 100);
+    await fireEvent.dragStart(handles[2]);
+    await fireEvent(rows[0], dragAt('drop', 105));
+    await waitFor(() => expect(goalTitles()).toEqual(['Review Nightwave acts', 'Maroo’s Ayatan Treasure Hunt', 'Archon Hunt']));
+  });
+
+  it('edits a built-in daily item into the player\'s own item and returns focus to it', async () => {
+    render(RoutinesPanel, { props: { routine: new RoutineController(store(), NOW), market: null, owned: new Map(), now: NOW } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Keep the Foundry busy' }));
+    await fireEvent.input(screen.getByLabelText('Item text'), { target: { value: 'Build Forma every day' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit Build Forma every day' })));
+    expect(goalTitles()[1]).toBe('Build Forma every day');
+    expect(screen.getByRole('button', { name: 'Add Keep the Foundry busy' })).toBeTruthy();
   });
 
   it('offers personal monthly goals without inventing a game reset', async () => {

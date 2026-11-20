@@ -74,13 +74,16 @@
     focusIn(`[data-edit-goal="${id}"]`);
   }
 
+  // Renaming a built-in daily or weekly item gives it a new id in the same
+  // place, so focus returns by position rather than by id.
   async function saveEdit(): Promise<void> {
     if (!editingId) return;
     const id = editingId;
-    await routine.renameMonthlyGoal(id, editDraft);
+    const index = routine.tasks.findIndex(task => task.id === id);
+    await (routine.cadence === 'monthly' ? routine.renameMonthlyGoal(id, editDraft) : routine.renameTask(id, editDraft));
     closeEditor();
     await tick();
-    focusIn(`[data-edit-goal="${id}"]`);
+    focusIn(`[data-edit-goal="${routine.tasks[index]?.id ?? id}"]`);
   }
 
   async function removeGoal(id: string): Promise<void> {
@@ -124,7 +127,7 @@
   // the pressed direction disabled at an end, the opposite control takes focus
   // so the next press still acts on the same goal.
   async function moveGoal(id: string, direction: -1 | 1): Promise<void> {
-    await routine.moveMonthlyGoal(id, direction);
+    await (routine.cadence === 'monthly' ? routine.moveMonthlyGoal(id, direction) : routine.moveTask(id, direction));
     await tick();
     const pressed = panel?.querySelector<HTMLButtonElement>(`[data-move-${direction === -1 ? 'up' : 'down'}="${id}"]`);
     if (pressed && !pressed.disabled) pressed.focus();
@@ -145,8 +148,8 @@
   function dropTargetFor(event: DragEvent, id: string): string | null {
     const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
     if (event.clientY - bounds.top <= bounds.height / 2) return id;
-    const index = routine.state.monthlyGoals.findIndex(goal => goal.id === id);
-    return routine.state.monthlyGoals[index + 1]?.id ?? null;
+    const ids = routine.tasks.map(task => task.id);
+    return ids[ids.indexOf(id) + 1] ?? null;
   }
 
   function startDrag(event: DragEvent, id: string): void {
@@ -175,7 +178,7 @@
     const dragged = draggingId;
     const target = dropTargetFor(event, id);
     endDrag();
-    await routine.reorderMonthlyGoal(dragged, target);
+    await (routine.cadence === 'monthly' ? routine.reorderMonthlyGoal(dragged, target) : routine.reorderTask(dragged, target));
   }
 
   onMount(() => routine.start());
@@ -223,33 +226,29 @@
           <li class:done={completed.has(task.id)} class:dragging={draggingId === task.id} class:drop-before={dropBefore === task.id} ondragover={event => dragOverRow(event, task.id)} ondrop={event => void dropOnRow(event, task.id)}>
             {#if editingId === task.id}
               <div class="goal-edit">
-                <input class="ui-input" aria-label={t('routine.goalText')} maxlength={MAX_GOAL_LENGTH} bind:value={editDraft} />
-                <button class="btn ghost" type="button" disabled={routine.saving || !editDraft.trim()} onclick={() => void saveEdit()}>{t('routine.saveGoal')}</button>
+                <input class="ui-input" aria-label={t(routine.cadence === 'monthly' ? 'routine.goalText' : 'routine.itemText')} maxlength={MAX_GOAL_LENGTH} bind:value={editDraft} />
+                <button class="btn ghost" type="button" disabled={routine.saving || !editDraft.trim()} onclick={() => void saveEdit()}>{t(routine.cadence === 'monthly' ? 'routine.saveGoal' : 'routine.saveItem')}</button>
                 <button class="btn ghost" type="button" onclick={() => void cancelEdit()}>{t('routine.cancel')}</button>
               </div>
             {:else}
               <div class="goal-row">
                 <div class="goal-main">
-                  {#if routine.cadence === 'monthly'}
-                    <span class="drag-handle" data-drag-handle={task.id} draggable="true" aria-hidden="true" ondragstart={event => startDrag(event, task.id)} ondragend={endDrag}>⠿</span>
-                  {/if}
+                  <span class="drag-handle" data-drag-handle={task.id} draggable="true" aria-hidden="true" ondragstart={event => startDrag(event, task.id)} ondragend={endDrag}>⠿</span>
                   <label>
                     <input type="checkbox" checked={completed.has(task.id)} onchange={event => void routine.toggle(task.id, event.currentTarget.checked)} />
                     <span class="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></span>
                   </label>
                 </div>
-                {#if routine.cadence !== 'monthly'}
-                  <div class="row-actions">
-                    <button class="btn ghost xs" type="button" data-remove-task={task.id} aria-label={t('routine.remove', { goal: task.title })} disabled={routine.saving} onclick={() => void removeTask(task.id)}>{t('routine.removeShort')}</button>
-                  </div>
-                {:else}
-                  <div class="row-actions">
-                    <button class="btn ghost xs" type="button" data-move-up={task.id} aria-label={t('routine.moveUp', { goal: task.title })} disabled={routine.state.monthlyGoals[0]?.id === task.id} onclick={() => void moveGoal(task.id, -1)}>{t('routine.up')}</button>
-                    <button class="btn ghost xs" type="button" data-move-down={task.id} aria-label={t('routine.moveDown', { goal: task.title })} disabled={routine.state.monthlyGoals.at(-1)?.id === task.id} onclick={() => void moveGoal(task.id, 1)}>{t('routine.down')}</button>
-                    <button class="btn ghost xs" type="button" data-edit-goal={task.id} aria-label={t('routine.edit', { goal: task.title })} onclick={() => startEdit(task)}>{t('routine.editShort')}</button>
+                <div class="row-actions">
+                  <button class="btn ghost xs" type="button" data-move-up={task.id} aria-label={t('routine.moveUp', { goal: task.title })} disabled={routine.tasks[0]?.id === task.id} onclick={() => void moveGoal(task.id, -1)}>{t('routine.up')}</button>
+                  <button class="btn ghost xs" type="button" data-move-down={task.id} aria-label={t('routine.moveDown', { goal: task.title })} disabled={routine.tasks.at(-1)?.id === task.id} onclick={() => void moveGoal(task.id, 1)}>{t('routine.down')}</button>
+                  <button class="btn ghost xs" type="button" data-edit-goal={task.id} aria-label={t('routine.edit', { goal: task.title })} onclick={() => startEdit(task)}>{t('routine.editShort')}</button>
+                  {#if routine.cadence === 'monthly'}
                     <button class="btn ghost xs" type="button" data-remove-goal={task.id} aria-label={t('routine.remove', { goal: task.title })} disabled={routine.saving} onclick={() => void removeGoal(task.id)}>{t('routine.removeShort')}</button>
-                  </div>
-                {/if}
+                  {:else}
+                    <button class="btn ghost xs" type="button" data-remove-task={task.id} aria-label={t('routine.remove', { goal: task.title })} disabled={routine.saving} onclick={() => void removeTask(task.id)}>{t('routine.removeShort')}</button>
+                  {/if}
+                </div>
               </div>
             {/if}
           </li>

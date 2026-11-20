@@ -343,6 +343,54 @@ describe('editable daily and weekly lists', () => {
     expect(JSON.parse(store.values.get('routine-checklist')!).lists.weekly).toHaveLength(4);
   });
 
+  it('moves and drags daily items, keeping ticks, and writes nothing for a move that changes nothing', async () => {
+    const store = memoryStore();
+    const routine = new RoutineController(store, NOW);
+    await routine.toggle('sortie', true);
+    const writes = store.writes.length;
+    await routine.moveTask('login-tribute', -1);
+    await routine.moveTask('sortie', 1);
+    await routine.reorderTask('foundry-build', 'syndicate-standing');
+    await routine.reorderTask('missing', null);
+    expect(store.writes).toHaveLength(writes);
+
+    await routine.moveTask('sortie', -1);
+    await routine.reorderTask('login-tribute', null);
+    expect(routine.state.lists.daily).toEqual(['foundry-build', 'syndicate-standing', 'sortie', 'steel-path-incursions', 'login-tribute']);
+    expect(routine.completed.has('sortie')).toBe(true);
+    expect(JSON.parse(store.values.get('routine-checklist')!).lists.daily.at(-1)).toBe('login-tribute');
+    routine.select('weekly');
+    expect(routine.state.lists.weekly).toEqual(['maroo-treasure', 'archon-hunt', 'nightwave-acts']);
+  });
+
+  it('renames a custom item in place and turns a renamed built-in into the player\'s own item', async () => {
+    const store = memoryStore();
+    const routine = new RoutineController(store, NOW);
+    routine.select('weekly');
+    await routine.addCustomTask('Farm Kuva');
+    const custom = routine.state.lists.weekly.at(-1)!;
+    await routine.toggle(custom, true);
+    await routine.toggle('archon-hunt', true);
+
+    await routine.renameTask(custom, 'Farm Kuva');
+    await routine.renameTask('archon-hunt', 'Archon Hunt');
+    await routine.renameTask('archon-hunt', '   ');
+    expect(routine.completed).toEqual(new Set([custom, 'archon-hunt']));
+
+    await routine.renameTask(custom, 'Farm Kuva for rivens');
+    expect(routine.state.custom[custom]).toBe('Farm Kuva for rivens');
+    expect(routine.completed.has(custom)).toBe(false);
+
+    await routine.renameTask('archon-hunt', 'Archon Hunt with the clan');
+    const [, renamed] = routine.state.lists.weekly;
+    expect(renamed).toMatch(/^task-\d+$/);
+    expect(renamed).not.toBe(custom);
+    expect(routine.tasks.map(task => task.title)).toEqual(['Maroo’s Ayatan Treasure Hunt', 'Archon Hunt with the clan', 'Review Nightwave acts', 'Farm Kuva for rivens']);
+    expect(routine.completed.size).toBe(0);
+    expect(routine.availableBuiltins.map(task => task.id)).toContain('archon-hunt');
+    expect(parseRoutineState(store.values.get('routine-checklist')!, NOW).state.lists.weekly).toEqual(routine.state.lists.weekly);
+  });
+
   it('offers optional daily items on the daily list only', async () => {
     const routine = new RoutineController(memoryStore(), NOW);
     expect(routine.availableBuiltins.map(task => task.id)).toEqual(['focus-cap', 'nightwave-daily', 'open-world-standing', 'acrithis-daily', 'simaris-synthesis']);
@@ -358,7 +406,7 @@ describe('editable daily and weekly lists', () => {
     await routine.addBuiltinTask('not-a-task');
     await routine.addBuiltinTask('icebind');
     expect(routine.state.lists.daily).toEqual(DAILY);
-    for (let i = 0; i < 20; i += 1) await routine.addCustomTask(`item ${i}`);
+    for (let i = 0; i < MAX_TASKS + 5; i += 1) await routine.addCustomTask(`item ${i}`);
     expect(routine.state.lists.daily).toHaveLength(MAX_TASKS);
     expect(routine.taskLimitReached).toBe(true);
   });
