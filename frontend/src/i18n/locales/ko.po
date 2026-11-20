@@ -714,14 +714,16 @@ msgid "Best sells right now, ranked by priority - patience listings excluded."
 msgstr "지금 팔기 좋은 아이템을 우선순위대로 보여 줍니다. 오래 기다려야 하는 등록은 제외합니다."
 
 #. Line under "Top picks" on Thursday and Friday. Measured from a year of trades.
+#, fuzzy
 msgctxt "sell.weekendBefore"
 msgid "Weekends bring about a quarter more buyers than weekdays - list before Saturday to meet them."
-msgstr ""
+msgstr "주말에는 평일보다 구매자가 약 4분의 1 더 많습니다. 토요일 전에 등록해 두세요."
 
 #. Line under "Top picks" on Saturday and Sunday. Measured from a year of trades.
+#, fuzzy
 msgctxt "sell.weekendDuring"
 msgid "Weekend: about a quarter more buyers than on weekdays, so listings sell sooner. Prices barely change."
-msgstr ""
+msgstr "주말: 평일보다 구매자가 약 4분의 1 더 많아 등록한 물건이 더 빨리 팔립니다. 가격은 거의 변하지 않습니다."
 
 #. Tooltip on the picks explanation. plat = platinum.
 #, fuzzy
@@ -917,9 +919,10 @@ msgid "Near its 90-day high - a good moment to list"
 msgstr "90일 최고가 근처 - 등록하기 좋은 시점"
 
 #. Why a pick is suggested although its price is low.
+#, fuzzy
 msgctxt "sell.reasonDrop"
 msgid "Near its 90-day low on heavy selling - about half of drops like this recover within a month, so waiting is a gamble"
-msgstr ""
+msgstr "대량 매도로 90일 최저가 근처입니다. 이런 하락의 절반 정도만 한 달 안에 회복하므로 기다리는 건 도박입니다"
 
 #. Why a pick is suggested.
 #, fuzzy
@@ -2024,25 +2027,29 @@ msgstr "가격이 90일 최저가 근처입니다(예: 바로가 막 물량을 �
 
 #. Badge and filter chip: price near its low on heavy selling, waiting may not pay.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "table.pill.drop"
 msgid "drop"
-msgstr ""
+msgstr "하락"
 
 #. Tooltip of the drop filter chip.
+#, fuzzy
 msgctxt "table.pill.drop.what"
 msgid "Price near its 90-day low while it sells at 3x its normal pace - only about half of these recover within a month"
-msgstr ""
+msgstr "가격이 90일 최저가 근처이고 평소의 3배 속도로 팔리는 중입니다. 한 달 안에 회복하는 경우는 절반 정도입니다"
 
 #. Badge and filter chip: many sellers at almost the same price.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "table.pill.crowded"
 msgid "crowded"
-msgstr ""
+msgstr "과밀"
 
 #. Tooltip of the crowded filter chip.
+#, fuzzy
 msgctxt "table.pill.crowded.what"
 msgid "20 or more sellers within 10% of each other - buyers take the cheapest, so match the lowest ask to sell first"
-msgstr ""
+msgstr "판매자 20명 이상이 서로 10% 이내의 가격에 등록했습니다. 구매자는 가장 싼 것을 고르므로 최저 판매가에 맞춰야 먼저 팔립니다"
 
 #. Badge and filter chip: sells slowly.
 #. Max 10 characters.
@@ -2153,14 +2160,16 @@ msgid "Price is near its 90-day low on ordinary volume - you'd be selling into a
 msgstr "가격이 90일 최저가 근처입니다. 바닥에서 파는 셈입니다. 바로 방문으로 모드 물량이 풀린 직후에 흔하며, 보통 몇 주에 걸쳐 회복됩니다. 보유를 고려하세요."
 
 #. Tooltip of the drop badge.
+#, fuzzy
 msgctxt "table.badge.drop"
 msgid "Price is near its 90-day low and selling runs at three times its normal pace: the market is repricing it. Over the past year only about half of drops like this were back near the usual price within a month. Waiting is a gamble; sell if you want the platinum."
-msgstr ""
+msgstr "가격이 90일 최저가 근처이고 평소의 3배 속도로 팔리고 있습니다. 시장이 가격을 다시 매기는 중입니다. 지난 1년간 이런 하락은 절반 정도만 한 달 안에 평소 가격 근처로 돌아왔습니다. 기다리는 건 도박이니, 플래티넘이 필요하면 지금 파세요."
 
 #. Tooltip of the crowded badge.
+#, fuzzy
 msgctxt "table.badge.crowded"
 msgid "At least 20 sellers ask within 10% of each other. Buyers take the cheapest, so a listing above the lowest ask waits behind the queue; matching it sells first."
-msgstr ""
+msgstr "판매자 최소 20명이 서로 10% 이내의 가격에 등록했습니다. 구매자는 가장 싼 것을 고르므로 최저 판매가보다 높은 등록은 줄 뒤에서 기다립니다. 최저 판매가에 맞추면 먼저 팔립니다."
 
 #. Tooltip of the peak badge.
 #, fuzzy
@@ -2636,24 +2645,28 @@ msgid "Set every selected row's price to its live lowest online ask (match it - 
 msgstr "선택한 모든 행의 가격을 실시간 온라인 최저 판매가로 맞춥니다(더 낮추지 않음)."
 
 #. Sentence after the dialog introduction; rule reads like "Lowest ask −1p".
+#, fuzzy
 msgctxt "review.leadRule"
 msgid "Your price rule ({rule}) is applied to that price."
-msgstr ""
+msgstr "그 가격에 가격 규칙({rule})이 적용됩니다."
 
 #. Button; the rule is set in Settings → Selling.
+#, fuzzy
 msgctxt "review.matchRule"
 msgid "Price by my rule"
-msgstr ""
+msgstr "내 규칙대로 가격 설정"
 
 #. Tooltip; rule reads like "Lowest ask −1p".
+#, fuzzy
 msgctxt "review.matchRuleTitle"
 msgid "Set every selected row's price from its live asks by your price rule ({rule}). An ask under a third of the median is skipped as a troll listing."
-msgstr ""
+msgstr "선택한 모든 행의 가격을 실시간 판매가에서 가격 규칙({rule})에 따라 설정합니다. 중앙값의 3분의 1 미만인 판매가는 어뷰징 등록으로 보고 건너뜁니다."
 
 #. Tooltip sentence after the online asks.
+#, fuzzy
 msgctxt "review.ignoredAsk"
 msgid "The {ask}p ask was skipped: it sits under a third of the median."
-msgstr ""
+msgstr "{ask}p 판매가는 중앙값의 3분의 1 미만이어서 건너뛰었습니다."
 
 #. Screen reader name of the checkbox column.
 #, fuzzy
@@ -4242,9 +4255,10 @@ msgid "Resumed."
 msgstr "재개됨."
 
 #. Banner count: listings a resume sent, updated, or found already live.
+#, fuzzy
 msgctxt "listing.resumedListed"
 msgid "{count} listed"
-msgstr ""
+msgstr "{count}개 등록됨"
 
 #. Banner count.
 #, fuzzy
@@ -4314,9 +4328,10 @@ msgid "A listing whose outcome the market never confirmed may already be live. R
 msgstr "시장에서 결과를 확인받지 못한 등록이 이미 올라가 있을 수 있습니다. 다시 등록하기 전에 내 주문을 확인하세요."
 
 #. Banner text after a resume left an outcome unknown.
+#, fuzzy
 msgctxt "listing.stillUnknown"
 msgid "Resume checked your current orders and could not tell whether this listing was applied, so nothing was sent. Check My Orders, then discard this batch."
-msgstr ""
+msgstr "이어서 진행하며 현재 주문을 확인했지만 이 등록이 적용되었는지 알 수 없어 아무것도 보내지 않았습니다. 내 주문을 확인한 뒤 이 묶음을 버리세요."
 
 #. Button.
 #, fuzzy
@@ -4743,24 +4758,28 @@ msgid "inherited from the set"
 msgstr "세트에서 가져옴"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.selling"
 msgid "Settings › Selling"
-msgstr ""
+msgstr "설정 › 판매"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.appearance"
 msgid "Settings › Appearance"
-msgstr ""
+msgstr "설정 › 화면"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.updates"
 msgid "Settings › Updates"
-msgstr ""
+msgstr "설정 › 업데이트"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.privacy"
 msgid "Settings › Privacy & sharing"
-msgstr ""
+msgstr "설정 › 개인정보 및 공유"
 
 #. Command palette entry.
 #, fuzzy
@@ -5848,9 +5867,10 @@ msgid "Reprice every flagged listing: match the lowest other ask, or meet the hi
 msgstr "표시된 모든 등록의 가격을 수정합니다. 다른 최저 판매가에 맞추거나 더 높은 구매가에 맞춥니다. 수량 수정과 삭제는 각각 한 번씩 클릭해야 합니다."
 
 #. Tooltip.
+#, fuzzy
 msgctxt "orders.fixAllTitleRule"
 msgid "Reprice every flagged listing: to your price rule ({rule}), or meet the higher bid. Quantity fixes and deletions stay one click each."
-msgstr ""
+msgstr "표시된 모든 등록의 가격을 수정합니다. 가격 규칙({rule})에 맞추거나 더 높은 구매가에 맞춥니다. 수량 수정과 삭제는 각각 한 번씩 클릭해야 합니다."
 
 #. Button.
 #, fuzzy
@@ -6194,9 +6214,10 @@ msgid "above the lowest other ask"
 msgstr "다른 최저 판매가보다 높음"
 
 #. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
 msgctxt "orders.health.overRule"
 msgid "above your price rule"
-msgstr ""
+msgstr "가격 규칙보다 높음"
 
 #. Health cell.
 #, fuzzy
@@ -6346,14 +6367,16 @@ msgid "Lowest other online ask is {ask}p (you: {price}p). Match it to sell first
 msgstr "다른 온라인 최저 판매가는 {ask}p입니다(내 가격: {price}p). 먼저 팔려면 맞추세요."
 
 #. Tooltip sentence after the reason.
+#, fuzzy
 msgctxt "orders.why.ignoredAsk"
 msgid "A {ask}p ask was skipped: it sits under a third of the median, so it is a troll or stale listing rather than a price."
-msgstr ""
+msgstr "{ask}p 판매가는 건너뛰었습니다. 중앙값의 3분의 1 미만이라 실제 가격이 아니라 장난이나 오래된 등록입니다."
 
 #. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
-msgstr ""
+msgstr "가격 규칙({rule})에 따르면 {target}p입니다(내 가격: {price}p)."
 
 #. Tooltip.
 #, fuzzy
@@ -6428,9 +6451,10 @@ msgid "Price {price}p is above the {cap}p cap."
 msgstr "가격 {price}p가 상한 {cap}p를 넘습니다."
 
 #. Toast.
+#, fuzzy
 msgctxt "orders.priceFloor"
 msgid "Price {price}p is below the {floor}p minimum for this lot."
-msgstr ""
+msgstr "가격 {price}p는 이 묶음의 최소 가격 {floor}p보다 낮습니다."
 
 #. Toast.
 #, fuzzy
@@ -7502,156 +7526,186 @@ msgid "Whisper copied"
 msgstr "귓속말 복사됨"
 
 #. Panel title in Watches: mispriced items to buy.
+#, fuzzy
 msgctxt "bargains.title"
 msgid "Bargains in the snapshot"
-msgstr ""
+msgstr "스냅샷의 저렴한 매물"
 
 #. Line in the panel rail.
+#, fuzzy
 msgctxt "bargains.lede"
 msgid "Leads, not promises: check live before you whisper."
-msgstr ""
+msgstr "확정이 아닌 단서입니다. 귓속말을 보내기 전에 실시간으로 확인하세요."
 
 #. Button: look up the current asks for every row.
+#, fuzzy
 msgctxt "bargains.check"
 msgid "Check live"
-msgstr ""
+msgstr "실시간 확인"
 
 #. Button after a live check.
+#, fuzzy
 msgctxt "bargains.recheck"
 msgid "Check again"
-msgstr ""
+msgstr "다시 확인"
 
 #. Button while checking.
+#, fuzzy
 msgctxt "bargains.checking"
 msgid "Checking {done}/{total}…"
-msgstr ""
+msgstr "확인 중 {done}/{total}…"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.checkTitle"
 msgid "Look up the cheapest ask and best bid on warframe.market for every row now."
-msgstr ""
+msgstr "모든 행의 최저 판매가와 최고 구매가를 지금 warframe.market에서 조회합니다."
 
 #. Error notice.
+#, fuzzy
 msgctxt "bargains.failed"
 msgid "The live check failed: {error}"
-msgstr ""
+msgstr "실시간 확인에 실패했습니다: {error}"
 
 #. Empty state.
+#, fuzzy
 msgctxt "bargains.none"
 msgid "Nothing in this snapshot is priced far from its book. Come back after the next update."
-msgstr ""
+msgstr "이 스냅샷에는 호가와 크게 벗어난 가격의 물건이 없습니다. 다음 업데이트 후에 다시 확인하세요."
 
 #. Empty state before the snapshot.
+#, fuzzy
 msgctxt "bargains.noMarket"
 msgid "Bargains appear once market prices have loaded."
-msgstr ""
+msgstr "시장 가격을 불러오면 저렴한 매물이 표시됩니다."
 
 #. Column.
+#, fuzzy
 msgctxt "bargains.col.item"
 msgid "Item"
-msgstr ""
+msgstr "아이템"
 
 #. Column: the cheapest ask in the snapshot.
+#, fuzzy
 msgctxt "bargains.col.ask"
 msgid "Ask"
-msgstr ""
+msgstr "판매가"
 
 #. Column: what it can be sold for again.
+#, fuzzy
 msgctxt "bargains.col.resale"
 msgid "Resale"
-msgstr ""
+msgstr "되팔기"
 
 #. Column: resale minus ask, per item.
+#, fuzzy
 msgctxt "bargains.col.margin"
 msgid "Margin"
-msgstr ""
+msgstr "차익"
 
 #. Column: trades in 48 hours.
+#, fuzzy
 msgctxt "bargains.col.vol"
 msgid "Vol 48h"
-msgstr ""
+msgstr "48시간 거래량"
 
 #. Column: result of the live check.
+#, fuzzy
 msgctxt "bargains.col.live"
 msgid "Live"
-msgstr ""
+msgstr "실시간"
 
 #. Tag: a buyer pays more than a seller asks.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "bargains.flip"
 msgid "flip"
-msgstr ""
+msgstr "차익"
 
 #. Tooltip of the flip tag.
+#, fuzzy
 msgctxt "bargains.flipWhat"
 msgid "A buyer bids more than the cheapest seller asks: buy from the seller, sell to the buyer."
-msgstr ""
+msgstr "구매자가 최저 판매자보다 높은 가격을 제시합니다. 판매자에게 사서 구매자에게 파세요."
 
 #. Tag: one seller asks far under the rest.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "bargains.cheap"
 msgid "cheap"
-msgstr ""
+msgstr "저가"
 
 #. Tooltip of the cheap tag.
+#, fuzzy
 msgctxt "bargains.cheapWhat"
 msgid "One seller asks 40% or more under the usual price while the next cheapest agree on it."
-msgstr ""
+msgstr "한 판매자가 평소 가격보다 40% 이상 싸게 올렸고, 그다음으로 싼 판매자들은 평소 가격에 동의합니다."
 
 #. After a resale price: it is a live bid.
+#, fuzzy
 msgctxt "bargains.bid"
 msgid "bid"
-msgstr ""
+msgstr "구매가"
 
 #. After a resale price: it is the 90-day median.
+#, fuzzy
 msgctxt "bargains.usual"
 msgid "usual"
-msgstr ""
+msgstr "평소"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.resaleBid"
 msgid "The best bid in the snapshot"
-msgstr ""
+msgstr "스냅샷의 최고 구매가"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.resaleUsual"
 msgid "The 90-day median price: what it usually sells for, not a buyer waiting"
-msgstr ""
+msgstr "90일 중앙값: 보통 팔리는 가격이며 기다리는 구매자가 있다는 뜻은 아닙니다"
 
 #. Live column before a check.
+#, fuzzy
 msgctxt "bargains.notChecked"
 msgid "not checked"
-msgstr ""
+msgstr "미확인"
 
 #. Live column.
+#, fuzzy
 msgctxt "bargains.checkFailed"
 msgid "lookup failed"
-msgstr ""
+msgstr "조회 실패"
 
 #. Live column: the cheap ask or the gap has closed.
+#, fuzzy
 msgctxt "bargains.gone"
 msgid "gone · now {price}p"
-msgstr ""
+msgstr "사라짐 · 현재 {price}p"
 
 #. Live column.
+#, fuzzy
 msgctxt "bargains.goneNoAsk"
 msgid "gone · no asks online"
-msgstr ""
+msgstr "사라짐 · 온라인 판매 없음"
 
 #. Live column: the deal is still there.
+#, fuzzy
 msgctxt "bargains.holds"
 msgid "still {price}p"
-msgstr ""
+msgstr "여전히 {price}p"
 
 #. Live column: price and the seller's in-game name.
+#, fuzzy
 msgctxt "bargains.holdsBy"
 msgid "still {price}p · {seller}"
-msgstr ""
+msgstr "여전히 {price}p · {seller}"
 
 #. Note under the table.
+#, fuzzy
 msgctxt "bargains.foot"
 msgid "From the market snapshot, refreshed every two hours: a bid over the cheapest ask (flip), or one ask far under a book that agrees on the usual price (cheap). Items with under 10 trades in 48 hours are left out, and so are bids far over the usual price."
-msgstr ""
+msgstr "두 시간마다 갱신되는 시장 스냅샷 기준입니다. 최저 판매가보다 높은 구매가(차익), 또는 평소 가격에 동의하는 호가들보다 훨씬 싼 판매가 하나(저가)를 보여줍니다. 48시간 거래가 10건 미만인 아이템과 평소 가격보다 훨씬 높은 구매가는 제외됩니다."
 
 #. Button.
 #, fuzzy
@@ -8239,96 +8293,114 @@ msgid "Updates"
 msgstr "업데이트"
 
 #. Section heading and link: usage statistics and price sharing.
+#, fuzzy
 msgctxt "settings.privacy"
 msgid "Privacy & sharing"
-msgstr ""
+msgstr "개인정보 및 공유"
 
 #. Section heading and link.
+#, fuzzy
 msgctxt "settings.selling"
 msgid "Selling"
-msgstr ""
+msgstr "판매"
 
 #. Button that folds a settings section away.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "settings.hide"
 msgid "Hide"
-msgstr ""
+msgstr "숨기기"
 
 #. Button that unfolds a settings section.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "settings.show"
 msgid "Show"
-msgstr ""
+msgstr "보기"
 
 #. Setting.
+#, fuzzy
 msgctxt "settings.priceRule"
 msgid "Suggested price"
-msgstr ""
+msgstr "권장 가격"
 
 #. Setting help. Reprice is the button name in My orders.
+#, fuzzy
 msgctxt "settings.priceRuleHelp"
 msgid "My orders flags a sell listing priced above this and offers to reprice it here. Start from a market figure, then add or take off platinum. Nothing is repriced until you press Reprice."
-msgstr ""
+msgstr "내 주문에서 이 가격보다 높게 등록된 판매 등록을 표시하고, 여기서 가격 수정을 제안합니다. 시장 수치를 기준으로 삼고 플래티넘을 더하거나 뺄 수 있습니다. 가격 수정을 누르기 전에는 아무것도 바뀌지 않습니다."
 
 #. Worked example under the setting, e.g. "Lowest ask at 20p → suggests 21p."
+#, fuzzy
 msgctxt "settings.priceRuleExample"
 msgid "{basis} at {base}p → suggests {price}p."
-msgstr ""
+msgstr "{basis} {base}p → {price}p 제안."
 
 #. Field label: platinum added to (or taken off) the market figure.
+#, fuzzy
 msgctxt "settings.priceOffset"
 msgid "Adjust by"
-msgstr ""
+msgstr "조정값"
 
 #. Validation.
+#, fuzzy
 msgctxt "settings.priceOffsetRange"
 msgid "Enter a whole number from {min} to {max}."
-msgstr ""
+msgstr "{min}에서 {max} 사이의 정수를 입력하세요."
 
 #. Button that restores the default rule.
+#, fuzzy
 msgctxt "settings.priceRuleReset"
 msgid "Match the lowest ask"
-msgstr ""
+msgstr "최저 판매가에 맞추기"
 
 #. Error.
+#, fuzzy
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
-msgstr ""
+msgstr "가격 규칙을 저장하지 못했습니다: {error}"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.lowest-ask"
 msgid "Lowest ask"
-msgstr ""
+msgstr "최저 판매가"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.low5-avg"
 msgid "Average of the 5 lowest asks"
-msgstr ""
+msgstr "최저 판매가 5개 평균"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.low20-avg"
 msgid "Average of the 20 lowest asks"
-msgstr ""
+msgstr "최저 판매가 20개 평균"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.avg-48h"
 msgid "48-hour average sale"
-msgstr ""
+msgstr "48시간 평균 거래가"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.median-90d"
 msgid "90-day median sale"
-msgstr ""
+msgstr "90일 거래가 중앙값"
 
 #. A price rule in words, e.g. "90-day median sale +1p".
+#, fuzzy
 msgctxt "settings.ruleUp"
 msgid "{basis} +{offset}p"
-msgstr ""
+msgstr "{basis} +{offset}p"
 
 #. A price rule in words, e.g. "Lowest ask −2p".
+#, fuzzy
 msgctxt "settings.ruleDown"
 msgid "{basis} −{offset}p"
-msgstr ""
+msgstr "{basis} −{offset}p"
 
 #. Setting.
 #, fuzzy
@@ -10733,169 +10805,202 @@ msgid "Choose the acts that fit your goals before the week ends."
 msgstr "주가 끝나기 전에 목표에 맞는 과제를 고르세요."
 
 #. Optional daily task. Use the game’s name for Focus.
+#, fuzzy
 msgctxt "routine.task.focus-cap"
 msgid "Fill the daily Focus cap"
-msgstr ""
+msgstr "일일 포커스 한도 채우기"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.focus-cap.detail"
 msgid "Earn Focus up to today’s limit while you play other missions."
-msgstr ""
+msgstr "다른 임무를 하면서 오늘 한도까지 포커스를 얻으세요."
 
 #. Optional daily task. Use the game’s name for Nightwave.
+#, fuzzy
 msgctxt "routine.task.nightwave-daily"
 msgid "Nightwave daily acts"
-msgstr ""
+msgstr "나이트웨이브 일일 임무"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.nightwave-daily.detail"
 msgid "Finish the daily acts that fit today’s session."
-msgstr ""
+msgstr "오늘 플레이에 맞는 일일 임무를 완료하세요."
 
 #. Optional daily task.
+#, fuzzy
 msgctxt "routine.task.open-world-standing"
 msgid "Open-world Syndicate standing"
-msgstr ""
+msgstr "오픈 월드 신디케이트 평판"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.open-world-standing.detail"
 msgid "Turn in bounties or tokens toward today’s standing cap."
-msgstr ""
+msgstr "현상금이나 토큰을 제출해 오늘의 평판 한도를 채우세요."
 
 #. Optional daily task. Acrithis is a game character.
+#, fuzzy
 msgctxt "routine.task.acrithis-daily"
 msgid "Acrithis’s daily special"
-msgstr ""
+msgstr "아크리시스의 일일 특선"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.acrithis-daily.detail"
 msgid "Check today’s offer in Duviri before it changes."
-msgstr ""
+msgstr "바뀌기 전에 두비리에서 오늘의 상품을 확인하세요."
 
 #. Optional daily task. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.simaris-synthesis"
 msgid "Cephalon Simaris’s Daily Synthesis"
-msgstr ""
+msgstr "세팔론 시마리스의 일일 합성"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.simaris-synthesis.detail"
 msgid "Scan today’s Synthesis target for Simaris Standing."
-msgstr ""
+msgstr "오늘의 합성 대상을 스캔해 시마리스 평판을 얻으세요."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.elite-temporal-archimedea"
 msgid "Elite Temporal Archimedea"
-msgstr ""
+msgstr "엘리트 템포럴 아르키메데아"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.elite-temporal-archimedea.detail"
 msgid "Spend Search Pulses on The Hex’s weekly run. Five Pulses refresh each Monday."
-msgstr ""
+msgstr "탐색 펄스를 헥스의 주간 임무에 쓰세요. 펄스 5개가 매주 월요일에 갱신됩니다."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.elite-deep-archimedea"
 msgid "Elite Deep Archimedea"
-msgstr ""
+msgstr "엘리트 딥 아르키메데아"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.elite-deep-archimedea.detail"
 msgid "Spend Search Pulses on Cavia’s weekly run. Five Pulses refresh each Monday."
-msgstr ""
+msgstr "탐색 펄스를 카비아의 주간 임무에 쓰세요. 펄스 5개가 매주 월요일에 갱신됩니다."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.netracells"
 msgid "Netracells"
-msgstr ""
+msgstr "넷라셀"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.netracells.detail"
 msgid "Spend the Search Pulses you have left on Netracell runs."
-msgstr ""
+msgstr "남은 탐색 펄스를 넷라셀 임무에 쓰세요."
 
 #. Optional weekly task. Use the game’s names; Bird 3 is a game character.
+#, fuzzy
 msgctxt "routine.task.bird-3-shard"
 msgid "Bird 3’s Archon Shard"
-msgstr ""
+msgstr "Bird 3의 아콘 샤드"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.bird-3-shard.detail"
 msgid "Buy this week’s shard in the Sanctum Anatomica for 30,000 Cavia Standing."
-msgstr ""
+msgstr "성소 아나토미카에서 카비아 평판 30,000으로 이번 주 샤드를 구매하세요."
 
 #. Optional weekly task. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.teshin-honors"
 msgid "Teshin’s Steel Path Honors"
-msgstr ""
+msgstr "테신의 스틸 패스 영예"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.teshin-honors.detail"
 msgid "Buy this week’s featured item and the Veiled Riven Cipher with Steel Essence."
-msgstr ""
+msgstr "스틸 에센스로 이번 주 추천 아이템과 베일드 리벤 암호를 구매하세요."
 
 #. Optional weekly task. Palladino is a game character.
+#, fuzzy
 msgctxt "routine.task.palladino"
 msgid "Palladino’s weekly offerings"
-msgstr ""
+msgstr "팔라디노의 주간 상품"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.palladino.detail"
 msgid "Trade Riven Slivers in Iron Wake for Kuva, Endo, Credits and a Riven Mod, each once a week."
-msgstr ""
+msgstr "아이언 웨이크에서 리벤 슬리버를 쿠바, 엔도, 크레딧, 리벤 모드와 각각 주 1회 교환하세요."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.icebind"
 msgid "The Icebind"
-msgstr ""
+msgstr "The Icebind"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.icebind.detail"
 msgid "Spend Cryobells with Cephalon Melica on Yuvan Peak. Three regrow each week and you can hold six."
-msgstr ""
+msgstr "유반 피크의 세팔론 멜리카에게 크라이오벨을 사용하세요. 매주 3개가 다시 생기며 최대 6개까지 보유할 수 있습니다."
 
 #. Optional weekly task. Use the game’s name for the calendar.
+#, fuzzy
 msgctxt "routine.task.calendar-1999"
 msgid "1999 Calendar"
-msgstr ""
+msgstr "1999 달력"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.calendar-1999.detail"
 msgid "Finish this season’s To Dos and claim the prize. A new season starts each week; unfinished To Dos are lost."
-msgstr ""
+msgstr "이번 시즌의 할 일을 완료하고 보상을 받으세요. 새 시즌이 매주 시작되며 끝내지 못한 할 일은 사라집니다."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.kahls-garrison"
 msgid "Kahl’s Garrison"
-msgstr ""
+msgstr "칼의 주둔지"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.kahls-garrison.detail"
 msgid "Run this week’s Break Narmer missions with Kahl."
-msgstr ""
+msgstr "칼과 함께 이번 주 나르메르 타파 임무를 진행하세요."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.the-circuit"
 msgid "The Circuit"
-msgstr ""
+msgstr "더 서킷"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.the-circuit.detail"
 msgid "Climb this week’s Circuit in Duviri for its reward pool."
-msgstr ""
+msgstr "두비리에서 이번 주 서킷을 올라 보상 풀을 노리세요."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.descendia"
 msgid "The Descendia"
-msgstr ""
+msgstr "디센디아"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.descendia.detail"
 msgid "Make this week’s progress and claim its challenge rewards."
-msgstr ""
+msgstr "이번 주 진행도를 쌓고 도전 보상을 받으세요."
 
 #. Detail under an item the player added.
+#, fuzzy
 msgctxt "routine.customDetail"
 msgid "Your own item. Its tick resets with the list."
-msgstr ""
+msgstr "직접 추가한 항목입니다. 체크는 목록과 함께 초기화됩니다."
 
 #. Detail under a monthly goal.
 #, fuzzy
@@ -11032,6 +11137,18 @@ msgctxt "routine.saveGoal"
 msgid "Save goal"
 msgstr "목표 저장"
 
+#. Screen reader name of the field that edits a daily or weekly item.
+#, fuzzy
+msgctxt "routine.itemText"
+msgid "Item text"
+msgstr "항목 내용"
+
+#. Button that saves an edited daily or weekly item.
+#, fuzzy
+msgctxt "routine.saveItem"
+msgid "Save item"
+msgstr "항목 저장"
+
 #. Button.
 #, fuzzy
 msgctxt "routine.cancel"
@@ -11097,49 +11214,58 @@ msgid "Add a monthly goal to build this month’s checklist."
 msgstr "월간 목표를 추가해 이번 달 체크리스트를 만드세요."
 
 #. Empty state of the daily or weekly list.
+#, fuzzy
 msgctxt "routine.emptyTasks"
 msgid "Nothing on this list. Add an activity from the game or your own item below."
-msgstr ""
+msgstr "목록이 비어 있습니다. 아래에서 게임 활동이나 직접 만든 항목을 추가하세요."
 
 #. Label of the add buttons for built-in activities.
+#, fuzzy
 msgctxt "routine.fromGame"
 msgid "From the game"
-msgstr ""
+msgstr "게임 활동"
 
 #. Screen reader name of a button that adds a built-in activity.
+#, fuzzy
 msgctxt "routine.addBuiltin"
 msgid "Add {task}"
-msgstr ""
+msgstr "{task} 추가"
 
 #. Note when nothing is left to add.
+#, fuzzy
 msgctxt "routine.allListed"
 msgid "Every activity TennoWorth knows for this list is on it."
-msgstr ""
+msgstr "TennoWorth가 아는 이 목록의 활동이 모두 들어 있습니다."
 
 #. Field label.
+#, fuzzy
 msgctxt "routine.addTaskLabel"
 msgid "Add your own item"
-msgstr ""
+msgstr "직접 항목 추가"
 
 #. Field placeholder. Darvo is a game character.
+#, fuzzy
 msgctxt "routine.taskExample"
 msgid "e.g. Check Darvo’s deal"
-msgstr ""
+msgstr "예: Darvo 특가 확인"
 
 #. Button.
+#, fuzzy
 msgctxt "routine.addTask"
 msgid "Add item"
-msgstr ""
+msgstr "항목 추가"
 
 #. Note.
+#, fuzzy
 msgctxt "routine.taskLimit"
 msgid "Up to {max} items. Remove one to add another."
-msgstr ""
+msgstr "항목은 최대 {max}개입니다. 새로 추가하려면 하나를 제거하세요."
 
 #. Note.
+#, fuzzy
 msgctxt "routine.taskHelp"
 msgid "Items stay on the list; their ticks reset with it."
-msgstr ""
+msgstr "항목은 목록에 남고, 체크는 목록과 함께 초기화됩니다."
 
 #. Button while busy.
 #, fuzzy
@@ -13589,49 +13715,58 @@ msgstr "Darvo 특가"
 
 #. Event kind: the player's own daily/weekly checklist and monthly goals.
 #. Max 20 characters.
+#, fuzzy
 msgctxt "cal.kind.routine"
 msgid "My routines"
-msgstr ""
+msgstr "내 루틴"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.daily"
 msgid "Daily reset"
-msgstr ""
+msgstr "일일 초기화"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.weekly"
 msgid "Weekly reset"
-msgstr ""
+msgstr "주간 초기화"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.monthly"
 msgid "Monthly goals reset"
-msgstr ""
+msgstr "월간 목표 초기화"
 
 #. Event title; reset reads like "Weekly reset".
+#, fuzzy
 msgctxt "cal.routine.title"
 msgid "{reset} · {open} of {total} still open"
-msgstr ""
+msgstr "{reset} · {total}개 중 {open}개 남음"
 
 #. Short event label.
+#, fuzzy
 msgctxt "cal.routine.short"
 msgid "{reset} · {open} open"
-msgstr ""
+msgstr "{reset} · {open}개 남음"
 
 #. Event detail; tasks is a list of routine names.
+#, fuzzy
 msgctxt "cal.routine.openList"
 msgid "Still open: {tasks}."
-msgstr ""
+msgstr "남은 항목: {tasks}."
 
 #. Event detail when more than three are open.
+#, fuzzy
 msgctxt "cal.routine.openMore"
 msgid "Still open: {tasks} and {more} more."
-msgstr ""
+msgstr "남은 항목: {tasks} 외 {more}개."
 
 #. Button in an event's detail.
+#, fuzzy
 msgctxt "cal.routine.open"
 msgid "Open routines"
-msgstr ""
+msgstr "남은 루틴"
 
 #. Countdown: days and hours.
 #. Max 8 characters.
@@ -13920,9 +14055,10 @@ msgid "DE announcement"
 msgstr "DE 공지"
 
 #. Date source: the player's own checklist.
+#, fuzzy
 msgctxt "cal.source.routine"
 msgid "Your routines"
-msgstr ""
+msgstr "내 루틴"
 
 #. Local time beside the UTC time.
 #, fuzzy

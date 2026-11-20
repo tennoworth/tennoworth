@@ -73,6 +73,8 @@ export const ROUTINES = {
   'routine.goalHelp': m('Each goal gets its own checkbox. Goals carry forward; their ticks reset each month.', 'Note.'),
   'routine.goalText': m('Goal text', 'Screen reader name of the field.'),
   'routine.saveGoal': m('Save goal', 'Button.'),
+  'routine.itemText': m('Item text', 'Screen reader name of the field that edits a daily or weekly item.'),
+  'routine.saveItem': m('Save item', 'Button that saves an edited daily or weekly item.'),
   'routine.cancel': m('Cancel', 'Button.'),
   'routine.moveUp': m('Move {goal} up', 'Screen reader name.'),
   'routine.moveDown': m('Move {goal} down', 'Screen reader name.'),
