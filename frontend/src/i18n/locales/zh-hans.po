@@ -5892,6 +5892,12 @@ msgstr "{count} 个低于实时收价"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "{count} 个远低于市场"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "{count} 个数量超出"
@@ -6227,6 +6233,18 @@ msgstr "低于实时收价"
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "远低于其他人的最低卖价"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "低于你的定价规则"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "上架数量多于拥有数量"
@@ -6377,6 +6395,18 @@ msgstr "已跳过一个 {ask}p 的卖价：它低于中位数的三分之一，�
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "你的定价规则（{rule}）定为 {target}p（你：{price}p）。"
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "其他人的最低在线卖价为 {ask}p（你：{price}p）。照样能卖出，但每件大约少赚 {gain}p。"
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "你的定价规则（{rule}）定为 {target}p（你：{price}p）。照样能卖出，但每件大约少赚 {gain}p。"
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "跟进最低卖价"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "无法保存定价规则：{error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "价格容差"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "只有当挂单比你的建议价格高出超过这么多白金时，“我的订单”才会标记为定价过高。设为 0 时，高于建议价的挂单都会被标记。"
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "挂单检查"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "“我的订单”会指出你挂单的哪些问题。取消勾选即可不再显示。在你按下修复之前不会改动任何内容。"
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "无法保存挂单检查设置：{error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "价格高于你的建议价格"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "价格低于买家的收价"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "价格远低于市场"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "挂单数量超过你的持有量"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "挂出了你已不再拥有的物品"
 
 #. Price basis option.
 #, fuzzy

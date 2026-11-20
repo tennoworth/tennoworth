@@ -5892,6 +5892,12 @@ msgstr "{count} unter einem Live-Gebot"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "{count} deutlich unter dem Markt"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "{count} zu hohe Menge"
@@ -6227,6 +6233,18 @@ msgstr "unter einem Live-Gebot"
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "deutlich unter dem niedrigsten anderen Angebot"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "unter deiner Preisregel"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "mehr eingestellt als im Besitz"
@@ -6377,6 +6395,18 @@ msgstr "Ein Angebot über {ask}p wurde übersprungen: Es liegt unter einem Dritt
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "Deine Preisregel ({rule}) ergibt {target}p (du: {price}p)."
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "Das niedrigste andere Online-Angebot liegt bei {ask}p (du: {price}p). Es verkauft sich so oder so, aber dir entgehen etwa {gain}p pro Stück."
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "Deine Preisregel ({rule}) ergibt {target}p (du: {price}p). Es verkauft sich so oder so, aber dir entgehen etwa {gain}p pro Stück."
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "Niedrigstes Verkaufsangebot übernehmen"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "Die Preisregel konnte nicht gespeichert werden: {error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "Preistoleranz"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "Meine Aufträge markiert ein Angebot nur dann als zu teuer, wenn es mehr als so viel Platin über deinem vorgeschlagenen Preis liegt. Bei 0 wird jedes Angebot darüber markiert."
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "Angebotsprüfungen"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "Welche Probleme Meine Aufträge bei deinen Angeboten anzeigt. Entferne den Haken, um eines nicht mehr zu sehen. Nichts wird geändert, bis du eine Korrektur auslöst."
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "Die Angebotsprüfungen konnten nicht gespeichert werden: {error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "Über deinem vorgeschlagenen Preis"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "Unter dem Gebot eines Käufers"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "Deutlich unter dem Markt"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "Mehr Exemplare eingestellt, als du besitzt"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "Etwas eingestellt, das du nicht mehr besitzt"
 
 #. Price basis option.
 #, fuzzy

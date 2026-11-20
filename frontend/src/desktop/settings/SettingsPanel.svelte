@@ -25,6 +25,7 @@
   import type { SettingsStore } from '../../contracts/state-store';
   import SettingsSection from './SettingsSection.svelte';
   import PriceRuleSetting from './PriceRuleSetting.svelte';
+  import ListingHealthSetting from './ListingHealthSetting.svelte';
   import type { PricingController } from './pricing.svelte';
   import { SettingsSections, type SettingsTarget } from './sections.svelte';
 
@@ -344,6 +345,7 @@
   {#if pricing}
     <SettingsSection id="selling" title={t('settings.selling')} {sections}>
       <PriceRuleSetting {pricing} />
+      <ListingHealthSetting {pricing} />
     </SettingsSection>
   {/if}
   <SettingsSection id="overlay" title={t('settings.overlayTitle')} {sections}>

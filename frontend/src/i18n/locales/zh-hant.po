@@ -5892,6 +5892,12 @@ msgstr "{count} 筆低於即時買價"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "{count} 筆遠低於市價"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "{count} 筆數量過多"
@@ -6227,6 +6233,18 @@ msgstr "低於即時買價"
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "遠低於其他人的最低賣價"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "低於你的定價規則"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "上架數多於持有數"
@@ -6377,6 +6395,18 @@ msgstr "已略過一筆 {ask}p 的賣價：它低於中位數的三分之一，�
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "你的定價規則（{rule}）定為 {target}p（你：{price}p）。"
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "其他人的最低線上賣價為 {ask}p（你：{price}p）。照樣賣得出去，但每件大約少賺 {gain}p。"
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "你的定價規則（{rule}）定為 {target}p（你：{price}p）。照樣賣得出去，但每件大約少賺 {gain}p。"
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "對齊最低賣價"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "無法儲存定價規則：{error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "價格容許值"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "只有當出售單高出你的建議價格超過這個白金數時，「我的訂單」才會標示為定價過高。設為 0 時，只要高於建議價格就會標示。"
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "上架檢查"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "「我的訂單」會指出你的上架單有哪些問題。取消勾選即可不再顯示。按下修正之前不會更動任何內容。"
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "無法儲存上架檢查：{error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "價格高於你的建議價格"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "價格低於買家的出價"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "價格遠低於市場"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "上架數量多於你持有的數量"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "上架了你已不再持有的物品"
 
 #. Price basis option.
 #, fuzzy

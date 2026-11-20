@@ -57,7 +57,7 @@ describe('summarize / ownedKey', () => {
       order({ id: 'b', platinum: 5, live: live({ low_sell: 9, top_buy: 7 }) }),
       order({ id: 'c', quantity: 3, owned: 0 }),
     ]);
-    expect(summarize(issues)).toEqual({ overpriced: 1, underbid: 1, excessQty: 0, notOwned: 1, total: 3 });
+    expect(summarize(issues)).toEqual({ overpriced: 1, underbid: 1, underpriced: 0, excessQty: 0, notOwned: 1, total: 3 });
   });
   it('keys owned quantities by slug + refinement, not rank', () => {
     expect(ownedKey('lith_c5_relic', 'intact')).toBe('lith_c5_relic|intact');
@@ -161,5 +161,75 @@ describe('a troll undercut on the live book', () => {
     const prefs = { rule: { basis: 'lowest-ask', offset: -1 }, tolerance: 0, muted: [] };
     const [i] = assessListing(order({ platinum: 20, stats: { median: 18 }, live: live({ low_sell: 2, sells: [2, 14] }) }), prefs);
     expect(i).toMatchObject({ suggested: 13, ignoredAsk: 2 });
+  });
+});
+
+describe('whole-platinum targets', () => {
+  const low5 = { rule: { basis: 'low5-avg', offset: 0 }, tolerance: 0, muted: [] };
+
+  it('does not flag an ask that already sits at the rounded-up target', () => {
+    expect(assessListing(order({ platinum: 16, stats: { low5Avg: 15.4 }, live: live({ low_sell: 15, sells: [15, 16] }) }), low5)).toEqual([]);
+  });
+
+  it('suggests the whole price a reprice will send', () => {
+    const [i] = assessListing(order({ platinum: 17, stats: { low5Avg: 15.4 }, live: live({ low_sell: 15, sells: [15, 16] }) }), low5);
+    expect(i).toMatchObject({ kind: 'overpriced', suggested: 16, suggestedLot: 16 });
+  });
+
+  it('still flags a bulk lot that is one platinum over', () => {
+    const [i] = assessListing(order({ platinum: 40 / 6, perTrade: 6, live: live({ low_sell: 6.5, sells: [6.5] }) }));
+    expect(i).toMatchObject({ kind: 'overpriced', suggestedLot: 39, suggested: 6.5 });
+    expect(assessListing(order({ platinum: 39 / 6, perTrade: 6, live: live({ low_sell: 6.5, sells: [6.5] }) }))).toEqual([]);
+  });
+});
+
+describe('ranked listings', () => {
+  // A rank the snapshot does not describe arrives with only the rank-0 median.
+  const arcane = (over = {}) => order({ platinum: 21, stats: { median: 2 }, live: live({ low_sell: 20, sells: [20, 22, 24] }), ...over });
+
+  it('averages the live asks of a rank the snapshot does not describe', () => {
+    const rule = { basis: 'low5-avg', offset: 0 };
+    expect(assessListing(arcane(), { rule, tolerance: 0, muted: [] })).toEqual([]);
+    const [i] = assessListing(arcane({ platinum: 30 }), { rule, tolerance: 0, muted: [] });
+    expect(i).toMatchObject({ kind: 'overpriced', suggested: 22 });
+  });
+
+  it('gives no rule verdict when the basis exists only for rank 0', () => {
+    expect(assessListing(arcane(), { rule: { basis: 'median-90d', offset: 0 }, tolerance: 0, muted: [] })).toEqual([]);
+  });
+
+  it('prefers the snapshot figures of a rank it does describe', () => {
+    const stats = { low5Avg: 26, median90d: 27, median: 25 };
+    const [i] = assessListing(arcane({ stats }), { rule: { basis: 'low5-avg', offset: 0 }, tolerance: 0, muted: [] });
+    expect(i).toMatchObject({ kind: 'underpriced', suggested: 26 });
+    const [j] = assessListing(arcane({ stats }), { rule: { basis: 'median-90d', offset: 0 }, tolerance: 0, muted: [] });
+    expect(j).toMatchObject({ kind: 'underpriced', suggested: 27 });
+  });
+});
+
+describe('underpriced listings', () => {
+  it('flags an ask well under the target and suggests the target', () => {
+    const [i] = assessListing(order({ platinum: 10, live: live({ low_sell: 25, sells: [25] }) }));
+    expect(i).toMatchObject({ kind: 'underpriced', current: 10, suggested: 25, suggestedLot: 25 });
+    expect(i.thin).toBeUndefined();
+  });
+
+  it('leaves an ordinary undercut alone', () => {
+    expect(assessListing(order({ platinum: 23, live: live({ low_sell: 25, sells: [25] }) }))).toEqual([]);
+    expect(assessListing(order({ platinum: 100, live: live({ low_sell: 110, sells: [110] }) }))).toEqual([]);
+  });
+
+  it('lets a live bid above the ask win', () => {
+    expect(assessListing(order({ platinum: 10, live: live({ low_sell: 25, sells: [25], top_buy: 12 }) })).map(i => i.kind)).toEqual(['underbid']);
+  });
+
+  it('marks a thin book, but not without a volume for that rank', () => {
+    expect(assessListing(order({ platinum: 10, vol: 2, live: live({ low_sell: 25, sells: [25] }) }))[0].thin).toBe(true);
+    expect(assessListing(order({ platinum: 10, vol: null, live: live({ low_sell: 25, sells: [25] }) }))[0].thin).toBeUndefined();
+  });
+
+  it('can be muted', () => {
+    expect(parseHealthPrefs('{"muted":["underpriced"]}', DEFAULT_PRICE_RULE).muted).toEqual(['underpriced']);
+    expect(assessListing(order({ platinum: 10, live: live({ low_sell: 25, sells: [25] }) }), { rule: DEFAULT_PRICE_RULE, tolerance: 0, muted: ['underpriced'] })).toEqual([]);
   });
 });

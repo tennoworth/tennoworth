@@ -9,8 +9,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
 import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop';
   
   import type { ItemResult, SessionConstraint, ReviewedOrder, MarketItemEntry, Market } from '../../contracts/data';
-  import { priceFromRule, reasonableLowestAsk, snapshotEvidence, type LiveAskRead, type PriceRule } from '../../domain/price-rule';
-  import { cachedUnitMarket } from '../../domain/order-prices';
+  import { priceFromRule, rankEvidence, reasonableLowestAsk, type LiveAskRead, type PriceRule } from '../../domain/price-rule';
   import { isDefaultRule } from '../settings/pricing.svelte';
   import { ruleText } from '../settings/price-rule-text';
   import { validSessionLot } from '../../domain/trade-session';
@@ -97,11 +96,10 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
 
   // Trade Session rows are priced by the session's own plan, whose totals
   // assume those prices, so the rule leaves them alone.
-  function evidenceFor(r: { slug: string; bulk?: boolean; market?: MarketItemEntry }) {
-    const entry = r.market ?? input.market?.items?.[r.slug];
-    return snapshotEvidence(entry ? cachedUnitMarket(entry, r.bulk ?? false) : null);
+  function evidenceFor(r: { slug: string; bulk?: boolean; market?: MarketItemEntry; rank?: number }) {
+    return rankEvidence(r.market ?? input.market?.items?.[r.slug], r.rank, r.bulk ?? false);
   }
-  function byRule(lowestAsk: number, r: { slug: string; bulk?: boolean; market?: MarketItemEntry; session?: SessionConstraint }): number {
+  function byRule(lowestAsk: number, r: { slug: string; bulk?: boolean; market?: MarketItemEntry; rank?: number; session?: SessionConstraint }): number {
     if (!input.priceRule || r.session) return lowestAsk;
     return priceFromRule(input.priceRule, { ...evidenceFor(r), lowestAsk }) ?? lowestAsk;
   }

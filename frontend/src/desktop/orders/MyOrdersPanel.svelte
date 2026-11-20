@@ -125,6 +125,7 @@
       <span class="chips">
         {#if controller.healthSummary.overpriced}<span class="chip warn">{t('orders.chip.overpriced', { count: controller.healthSummary.overpriced })}</span>{/if}
         {#if controller.healthSummary.underbid}<span class="chip warn">{t('orders.chip.underbid', { count: controller.healthSummary.underbid })}</span>{/if}
+        {#if controller.healthSummary.underpriced}<span class="chip warn">{t('orders.chip.underpriced', { count: controller.healthSummary.underpriced })}</span>{/if}
         {#if controller.healthSummary.excessQty}<span class="chip">{t('orders.chip.excess', { count: controller.healthSummary.excessQty })}</span>{/if}
         {#if controller.healthSummary.notOwned}<span class="chip bad">{t('orders.chip.notOwned', { count: controller.healthSummary.notOwned })}</span>{/if}
       </span>
@@ -229,10 +230,11 @@
               <td class="l health-cell">
                 {#each issues as q (q.key)}
                   {#if q.kind === 'health'}
-                    <span class="issue" class:warn={q.h.kind === 'overpriced' || q.h.kind === 'underbid'} class:bad={q.h.kind === 'not-owned'} title={controller.healthWhy(q.h)}>
-                      {#if q.h.kind === 'overpriced' || q.h.kind === 'underbid'}
-                        <span class="to">{q.h.current}p → <b>{q.h.suggested}p</b></span>
-                        {q.h.kind === 'overpriced' ? controller.overpricedText : t('orders.health.underbid')}
+                    <span class="issue" class:warn={q.h.kind === 'overpriced' || q.h.kind === 'underbid' || q.h.kind === 'underpriced'} class:bad={q.h.kind === 'not-owned'} title={controller.healthWhy(q.h)}>
+                      {#if q.h.kind === 'overpriced' || q.h.kind === 'underbid' || q.h.kind === 'underpriced'}
+                        <span class="to">{Number(q.h.current.toFixed(2))}p → <b>{Number(q.h.suggested.toFixed(2))}p</b></span>
+                        {q.h.kind === 'overpriced' ? controller.overpricedText : q.h.kind === 'underpriced' ? controller.underpricedText : t('orders.health.underbid')}
+                        {#if q.h.thin}<span class="tag thin" title={t('orders.thinTitle', { volume: LIQUID_VOL })}>{t('orders.thin')}</span>{/if}
                       {:else if q.h.kind === 'excess-qty'}
                         <span class="to">×{q.h.current} → <b>×{q.h.suggested}</b></span>
                         {t('orders.health.excess')}

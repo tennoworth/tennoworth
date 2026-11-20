@@ -5892,6 +5892,12 @@ msgstr "구매가보다 낮음 {count}"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "시세보다 크게 낮음 {count}"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "수량 초과 {count}"
@@ -6227,6 +6233,18 @@ msgstr "실시간 구매가보다 낮음"
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "다른 최저 판매가보다 크게 낮음"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "가격 규칙보다 낮음"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "보유보다 많이 등록됨"
@@ -6377,6 +6395,18 @@ msgstr "{ask}p 판매가는 건너뛰었습니다. 중앙값의 3분의 1 미만
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "가격 규칙({rule})에 따르면 {target}p입니다(내 가격: {price}p)."
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "다른 온라인 최저 판매가는 {ask}p입니다(내 가격: {price}p). 그대로도 팔리지만 개당 약 {gain}p를 덜 받습니다."
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "가격 규칙({rule})에 따르면 {target}p입니다(내 가격: {price}p). 그대로도 팔리지만 개당 약 {gain}p를 덜 받습니다."
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "최저 판매가에 맞추기"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "가격 규칙을 저장하지 못했습니다: {error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "가격 허용 범위"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "내 주문은 등록 가격이 권장 가격보다 이 플래티넘 수치를 넘게 높을 때만 비싸다고 표시합니다. 0이면 권장 가격보다 높은 모든 등록을 표시합니다."
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "등록 점검"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "내 주문이 등록에서 짚어 줄 문제의 종류입니다. 체크를 해제하면 해당 알림이 표시되지 않습니다. 수정 버튼을 누르기 전에는 아무것도 바뀌지 않습니다."
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "등록 점검 설정을 저장하지 못했습니다: {error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "권장 가격보다 높게 등록됨"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "구매자의 구매가보다 낮게 등록됨"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "시장보다 훨씬 낮게 등록됨"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "보유 수량보다 많이 등록됨"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "더 이상 보유하지 않은 물건을 등록함"
 
 #. Price basis option.
 #, fuzzy

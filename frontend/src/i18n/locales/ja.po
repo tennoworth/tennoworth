@@ -5892,6 +5892,12 @@ msgstr "買値を下回る {count} 件"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "相場を大きく下回る {count} 件"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "数量超過 {count} 件"
@@ -6227,6 +6233,18 @@ msgstr "最新の買値を下回る"
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "他者の最安売値を大きく下回る"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "価格ルールより低い"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "所持数より多く出品"
@@ -6377,6 +6395,18 @@ msgstr "{ask}p の売値は除外しました：中央値の3分の1未満のた
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "価格ルール（{rule}）では {target}p です（あなた：{price}p）。"
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "他者のオンライン最安売値は {ask}p です（あなた：{price}p）。このままでも売れますが、1個あたり約 {gain}p 損しています。"
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "価格ルール（{rule}）では {target}p です（あなた：{price}p）。このままでも売れますが、1個あたり約 {gain}p 損しています。"
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "最安売値に合わせる"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "価格ルールを保存できませんでした：{error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "価格の許容幅"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "推奨価格をこのプラチナ額より多く上回る場合にのみ、自分の注文で割高と指摘します。0にすると、上回るすべての出品を指摘します。"
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "出品チェック"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "自分の注文で、出品の問題点として指摘する項目です。チェックを外すと表示されなくなります。修正ボタンを押すまで何も変更されません。"
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "出品チェックを保存できませんでした：{error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "推奨価格より高い"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "購入者の買値より安い"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "相場よりかなり安い"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "所持数より多く出品している"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "所持していないものを出品している"
 
 #. Price basis option.
 #, fuzzy

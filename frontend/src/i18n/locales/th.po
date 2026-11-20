@@ -5892,6 +5892,12 @@ msgstr "ต่ำกว่าราคารับซื้อ {count}"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "ต่ำกว่าตลาดมาก {count}"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "จำนวนเกิน {count}"
@@ -6227,6 +6233,18 @@ msgstr "ต่ำกว่าราคารับซื้อที่ออน
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "ต่ำกว่าราคาขายต่ำสุดของคนอื่นมาก"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "ต่ำกว่ากฎราคาของคุณ"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "ลงขายมากกว่าที่มี"
@@ -6377,6 +6395,18 @@ msgstr "ข้ามราคาขาย {ask}p ไปแล้ว: ต่ำ�
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "กฎราคาของคุณ ({rule}) ให้ราคา {target}p (คุณ: {price}p)"
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "ราคาขายต่ำสุดของคนอื่นที่ออนไลน์คือ {ask}p (คุณ: {price}p) ยังไงก็ขายได้ แต่คุณได้น้อยลงราว {gain}p ต่อชิ้น"
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "กฎราคาของคุณ ({rule}) ให้ราคา {target}p (คุณ: {price}p) ยังไงก็ขายได้ แต่คุณได้น้อยลงราว {gain}p ต่อชิ้น"
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "ตามราคาขายต่ำสุด"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "บันทึกกฎราคาไม่สำเร็จ: {error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "เกณฑ์ราคา"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "ออเดอร์ของฉันจะเตือนว่าตั้งราคาแพงเกินก็ต่อเมื่อรายการสูงกว่าราคาที่แนะนำเกินจำนวนแพลทินัมนี้ ถ้าตั้งเป็น 0 จะเตือนทุกรายการที่สูงกว่า"
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "การตรวจรายการขาย"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "ปัญหาที่ออเดอร์ของฉันจะชี้ให้เห็นในรายการขายของคุณ เอาเครื่องหมายออกเพื่อไม่ให้เห็นอีก จะไม่มีอะไรเปลี่ยนจนกว่าคุณจะกดแก้ไข"
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "บันทึกการตรวจรายการขายไม่สำเร็จ: {error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "ตั้งราคาสูงกว่าราคาที่แนะนำ"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "ตั้งราคาต่ำกว่าราคารับซื้อของผู้ซื้อ"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "ตั้งราคาต่ำกว่าตลาดมาก"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "ลงขายมากกว่าจำนวนที่คุณมี"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "ลงขายของที่คุณไม่มีแล้ว"
 
 #. Price basis option.
 #, fuzzy

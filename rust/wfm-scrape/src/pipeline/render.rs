@@ -57,6 +57,51 @@ pub struct ItemEntry {
     /// Mean daily volume over the 28 days before the two `vol` covers: the
     /// normal a selling flood is measured against. `0` when unknown.
     pub vol_28d: f64,
+    /// The max-rank tier, for a ranked item whose top rank traded in the last
+    /// 90 days. The fields above describe rank 0 only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ranked: Option<RankedEntry>,
+}
+
+/// One rank tier's figures, clamped like the rank-0 fields of [`ItemEntry`].
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct RankedEntry {
+    pub rank: i64,
+    pub avg: f64,
+    pub low_sell: f64,
+    pub low5_avg: f64,
+    pub low20_avg: f64,
+    pub top_buy: f64,
+    pub vol: i64,
+    pub buys: i64,
+    pub sells: i64,
+    pub median_now: f64,
+    pub median_90d: f64,
+}
+
+/// The ranked tier of a row, or `None` for an unranked item or a CSV that
+/// predates the columns.
+fn render_ranked(row: &csv_input::CsvRow) -> Option<RankedEntry> {
+    let rank = parse_i64_or(&row.max_rank, 0);
+    if rank <= 0 {
+        return None;
+    }
+    let med90 = parse_f64_or(&row.ranked_median_90d, 0.0);
+    let ls = parse_f64_or(&row.ranked_low_sell_price, 0.0);
+    let low5 = clamp_low5(parse_f64_or(&row.ranked_low5_avg, 0.0), med90, ls);
+    Some(RankedEntry {
+        rank,
+        avg: clamp_avg(parse_f64_or(&row.ranked_avg_price_48h, 0.0), med90),
+        low_sell: ls,
+        low5_avg: low5,
+        low20_avg: clamp_low20(parse_f64_or(&row.ranked_low20_avg, 0.0), low5, med90, ls),
+        top_buy: parse_f64_or(&row.ranked_top_buy_price, 0.0),
+        vol: parse_i64_or(&row.ranked_volume_48h, 0),
+        buys: parse_i64_or(&row.ranked_live_buys, 0),
+        sells: parse_i64_or(&row.ranked_live_sells, 0),
+        median_now: parse_f64_or(&row.ranked_median_now, 0.0),
+        median_90d: med90,
+    })
 }
 
 /// Render a single CSV row into an [`ItemEntry`].
@@ -94,6 +139,7 @@ pub fn render_item(row: &csv_input::CsvRow, meta: &CatalogItemMeta) -> ItemEntry
         donch_top_90d: parse_i64_or(&row.donch_top_90d, 0),
         donch_bot_90d: parse_i64_or(&row.donch_bot_90d, 0),
         vol_28d: parse_f64_or(&row.vol_28d, 0.0).max(0.0),
+        ranked: render_ranked(row),
     }
 }
 
@@ -479,6 +525,46 @@ mod tests {
         assert_eq!(entry.vol_28d, 0.0); // CSV from before the column
         assert!(entry.tags.is_empty());
         assert_eq!(entry.ducats, None);
+    }
+
+    #[test]
+    fn render_item_carries_and_clamps_the_ranked_tier() {
+        let mut row = test_row();
+        assert_eq!(render_item(&row, &test_meta()).ranked, None);
+        let json = serde_json::to_value(render_item(&row, &test_meta())).unwrap();
+        assert!(
+            json.get("ranked").is_none(),
+            "unranked entries omit the key"
+        );
+
+        row.max_rank = "10".into();
+        row.ranked_low_sell_price = "140".into();
+        row.ranked_low5_avg = "151.2".into();
+        row.ranked_low20_avg = "160".into();
+        row.ranked_top_buy_price = "120".into();
+        row.ranked_avg_price_48h = "900".into();
+        row.ranked_volume_48h = "6".into();
+        row.ranked_live_buys = "4".into();
+        row.ranked_live_sells = "11".into();
+        row.ranked_median_now = "148".into();
+        row.ranked_median_90d = "145".into();
+        let ranked = render_item(&row, &test_meta()).ranked.expect("ranked tier");
+        assert_eq!(ranked.rank, 10);
+        assert_eq!(
+            (ranked.low_sell, ranked.low5_avg, ranked.low20_avg),
+            (140.0, 151.2, 160.0)
+        );
+        assert_eq!(
+            ranked.avg, 145.0,
+            "an outlier average clamps to the tier's own median"
+        );
+        assert_eq!(
+            (ranked.top_buy, ranked.vol, ranked.buys, ranked.sells),
+            (120.0, 6, 4, 11)
+        );
+        assert_eq!((ranked.median_now, ranked.median_90d), (148.0, 145.0));
+        // The rank-0 fields are untouched by the ranked columns.
+        assert_eq!(render_item(&row, &test_meta()).low_sell, 42.0);
     }
 
     #[test]

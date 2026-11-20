@@ -293,16 +293,16 @@ fn scrape_keeps_expected_fixture_rows() {
     // position keep working; quoted list fields hold commas, so read from the end.
     let mut lines = csv.lines();
     assert!(
-        lines
-            .next()
-            .unwrap()
-            .ends_with(",price_basis,low20_avg,vol_28d"),
-        "low20_avg and vol_28d must be the last columns"
+        lines.next().unwrap().ends_with(&format!(
+            ",price_basis,low20_avg,vol_28d,{}",
+            RANKED_COLUMNS.join(",")
+        )),
+        "low20_avg and vol_28d must come before the ranked tier, which is last"
     );
     let tails: Vec<(f64, f64)> = lines
         .filter(|l| !l.trim().is_empty())
         .map(|l| {
-            let mut cells = l.rsplit(',');
+            let mut cells = l.rsplit(',').skip(RANKED_COLUMNS.len());
             let vol_28d = cells.next().unwrap().parse().unwrap();
             (cells.next().unwrap().parse().unwrap(), vol_28d)
         })
@@ -320,6 +320,20 @@ fn scrape_keeps_expected_fixture_rows() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+const RANKED_COLUMNS: [&str; 11] = [
+    "max_rank",
+    "ranked_live_buys",
+    "ranked_live_sells",
+    "ranked_top_buy_price",
+    "ranked_low_sell_price",
+    "ranked_low5_avg",
+    "ranked_low20_avg",
+    "ranked_volume_48h",
+    "ranked_avg_price_48h",
+    "ranked_median_now",
+    "ranked_median_90d",
+];
 
 #[test]
 fn scrape_limit_truncates_after_filter() {

@@ -19,6 +19,17 @@ export class PricingController {
     this.#health = store.getSetting('listing-health');
   }
 
+  async setHealth(next: Pick<HealthPrefs, 'tolerance' | 'muted'>): Promise<void> {
+    const previous = this.#health;
+    this.#health = JSON.stringify({ tolerance: next.tolerance, muted: next.muted });
+    try {
+      await this.store.setSetting('listing-health', this.#health);
+    } catch (error) {
+      this.#health = previous;
+      throw error;
+    }
+  }
+
   async setRule(next: PriceRule): Promise<void> {
     const previous = this.rule;
     this.rule = next;

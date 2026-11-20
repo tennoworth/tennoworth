@@ -5892,6 +5892,12 @@ msgstr "Нижче ціни купівлі: {count}"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "Значно дешевше за ринок: {count}"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "Забагато: {count}"
@@ -6227,6 +6233,18 @@ msgstr "нижче ціни купівлі"
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "значно дешевше за найнижчу чужу ціну продажу"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "нижче за ваше цінове правило"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "виставлено більше, ніж є"
@@ -6377,6 +6395,18 @@ msgstr "Лот за {ask}p пропущено: він дешевший за тр
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "За вашим ціновим правилом ({rule}) ціна {target}p (у вас {price}p)."
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "Найнижча чужа онлайн-ціна продажу - {ask}p (у вас {price}p). Продасться в будь-якому разі, але ви втрачаєте близько {gain}p за штуку."
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "За вашим ціновим правилом ({rule}) ціна {target}p (у вас {price}p). Продасться в будь-якому разі, але ви втрачаєте близько {gain}p за штуку."
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "Зрівнятися з найнижчою ціною"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "Не вдалося зберегти правило ціни: {error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "Допуск ціни"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "«Мої замовлення» позначає лот як завищений, лише якщо він вище за пропоновану ціну більш ніж на стільки платини. При 0 позначається будь-який лот вище за неї."
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "Перевірки лотів"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "Які проблеми ваших лотів показують «Мої замовлення». Зніміть позначку, щоб більше їх не бачити. Нічого не змінюється, доки ви не натиснете виправлення."
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "Не вдалося зберегти перевірки лотів: {error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "Ціна вища за пропоновану"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "Ціна нижча за пропозицію покупця"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "Ціна значно нижча за ринкову"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "Виставлено більше копій, ніж у вас є"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "Виставлено те, чого вже немає"
 
 #. Price basis option.
 #, fuzzy

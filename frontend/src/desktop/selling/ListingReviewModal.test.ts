@@ -263,6 +263,27 @@ describe('ListingReviewModal under a price rule', () => {
     expect(screen.getByRole('button', { name: 'Price by my rule' }).getAttribute('title')).toContain('Lowest ask −1p');
   });
 
+  it('prices a raised rank from its own live asks, not the rank-0 snapshot', async () => {
+    installTauri(vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => cmd === 'wfm_access_status' ? null
+      : args.queries.map((q) => ({ slug: q.slug, rank: q.rank, subtype: q.subtype, sells: q.rank > 0 ? [40, 42, 44] : [15, 16], buys: [], low_sell: q.rank > 0 ? 40 : 15, top_buy: null, error: null }))), undefined);
+    openModal({ rows: ruled, priceRule: { basis: 'low5-avg' as const, offset: 0 } });
+    await fireEvent.input(screen.getByLabelText('Rank for Accelerated Blast'), { target: { value: '3' } });
+    await fireEvent.click(screen.getByRole('button', { name: /Check live prices/ }));
+    await fireEvent.click(await screen.findByRole('button', { name: '40p' }));
+    expect(screen.getByDisplayValue('40')).toBeTruthy();
+  });
+
+  it('prices the max rank from the snapshot max-rank tier', async () => {
+    installTauri(vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => cmd === 'wfm_access_status' ? null
+      : args.queries.map((q) => ({ slug: q.slug, rank: q.rank, subtype: q.subtype, sells: q.rank > 0 ? [40, 42, 44] : [15, 16], buys: [], low_sell: q.rank > 0 ? 40 : 15, top_buy: null, error: null }))), undefined);
+    const ranked = { rank: 5, avg: 46, low_sell: 40, low5_avg: 47, low20_avg: 49, top_buy: 35, vol: 9, buys: 2, sells: 8, median_now: 46, median_90d: 45 };
+    openModal({ rows: [{ ...ruled[0], market: { ...market, ranked } }], priceRule: { basis: 'low5-avg' as const, offset: 0 } });
+    await fireEvent.input(screen.getByLabelText('Rank for Accelerated Blast'), { target: { value: '5' } });
+    await fireEvent.click(screen.getByRole('button', { name: /Check live prices/ }));
+    await fireEvent.click(await screen.findByRole('button', { name: '40p' }));
+    expect(screen.getByDisplayValue('47')).toBeTruthy();
+  });
+
   it('matches the believable ask without a rule of your own', async () => {
     installTauri(vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => cmd === 'wfm_access_status' ? null
       : args.queries.map((q) => ({ slug: q.slug, rank: q.rank, subtype: q.subtype, sells: [2, 14, 15], buys: [], low_sell: 2, top_buy: null, error: null }))), undefined);

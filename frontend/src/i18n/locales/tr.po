@@ -5892,6 +5892,12 @@ msgstr "{count} canlı teklifin altında"
 
 #. Issue chip.
 #, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "{count} pazarın çok altında"
+
+#. Issue chip.
+#, fuzzy
 msgctxt "orders.chip.excess"
 msgid "{count} over-quantity"
 msgstr "{count} fazla miktar"
@@ -6227,6 +6233,18 @@ msgstr "canlı bir alış teklifinin altında"
 
 #. Health cell.
 #, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "diğer en düşük satış fiyatının çok altında"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "fiyat kuralının altında"
+
+#. Health cell.
+#, fuzzy
 msgctxt "orders.health.excess"
 msgid "more listed than owned"
 msgstr "sahip olunandan fazla ilanda"
@@ -6377,6 +6395,18 @@ msgstr "{ask}p’lik bir satış fiyatı atlandı: medyanın üçte birinin alt�
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
 msgstr "Fiyat kuralın ({rule}) bunu {target}p yapıyor (sen: {price}p)."
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "Diğer en düşük çevrimiçi satış fiyatı {ask}p (sen: {price}p). Yine de satılır, ama parça başına yaklaşık {gain}p kaybediyorsun."
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "Fiyat kuralın ({rule}) bunu {target}p yapıyor (sen: {price}p). Yine de satılır, ama parça başına yaklaşık {gain}p kaybediyorsun."
 
 #. Tooltip.
 #, fuzzy
@@ -8359,6 +8389,66 @@ msgstr "En düşük satışa eşitle"
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
 msgstr "Fiyat kuralı kaydedilemedi: {error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "Fiyat toleransı"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "Siparişlerim, bir ilanı yalnızca önerilen fiyatından bu kadar platinden fazla yüksekteyse pahalı diye işaretler. 0 iken onun üstündeki her ilanı işaretler."
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "İlan kontrolleri"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "Siparişlerim ilanlarında hangi sorunları göstersin. Görmek istemediğinin işaretini kaldır. Bir düzeltmeye basana kadar hiçbir şey değişmez."
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "İlan kontrolleri kaydedilemedi: {error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "Önerilen fiyatının üstünde fiyatlanmış"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "Bir alıcının teklifinin altında fiyatlanmış"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "Pazarın çok altında fiyatlanmış"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "Sahip olduğundan fazla kopya ilanda"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "Artık sahip olmadığın bir şey ilanda"
 
 #. Price basis option.
 #, fuzzy

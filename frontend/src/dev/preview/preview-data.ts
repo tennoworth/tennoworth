@@ -21,6 +21,9 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
     owned.set('arcane_energize', { count: sessionSample ? 24 : 12, name: 'Arcane Energize', type: 'Arcanes', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
     owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mods', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
   }
+  if (scenario === 'orders-pricing') {
+    owned.set('arcane_momentum', { count: 2, name: 'Arcane Momentum', type: 'Arcanes', slug: 'arcane_momentum', subtype: null, kept_lvl: null, leveled: 0 });
+  }
   // Seed rows must not survive based on their position in the current snapshot.
   if (scenario === 'large') owned.clear();
   largeSlugs.forEach((slug, i) => {
@@ -77,6 +80,11 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
   // real issue to report) beside one composed set it cannot report at all: a
   // scan holds set parts, never the assembled set.
   const unownedSample = scenario === 'orders-unowned';
+  // `orders-pricing`: a 5-lowest-asks rule against a whole-platinum ask that
+  // only a fractional target would flag, a maxed arcane whose rank-0 snapshot
+  // price is a fifth of its own, and a set listed far under the market.
+  const pricingSample = scenario === 'orders-pricing';
+  if (pricingSample) settings.set('price-rule', JSON.stringify({ basis: 'low5-avg', offset: 0 }));
   if (sessionSample) settings.set('view', 'session');
   let notifications: NotificationEntry[] = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
   if (scenario === 'announcements' && announcementFeed?.messages[0]) {
@@ -113,7 +121,11 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
     seen_at: now - 120, rechecked_at: null, still_listed: null,
   } : null;
   const responses: Record<string, unknown> = {
-    fetch_orders: empty || scenario.startsWith('buyers') ? [] : [
+    fetch_orders: empty || scenario.startsWith('buyers') ? [] : pricingSample ? [
+      { id: 'preview-flow', platinum: 25, visible: true, quantity: 1, rank: 0, name: 'Primed Flow', slug: 'primed_flow', item_id: 'primed_flow', side: 'sell' as const, per_trade: null, subtype: null },
+      { id: 'preview-momentum', platinum: 21, visible: true, quantity: 1, rank: 5, name: 'Arcane Momentum', slug: 'arcane_momentum', item_id: 'arcane_momentum', side: 'sell' as const, per_trade: null, subtype: null },
+      { id: 'preview-pyrana', platinum: 45, visible: true, quantity: 1, name: 'Pyrana Prime Set', slug: 'pyrana_prime_set', item_id: 'pyrana_prime_set', side: 'sell' as const, per_trade: null, subtype: null },
+    ] : [
       { id: 'preview-order', platinum: 90, visible: true, quantity: 2, name: 'Pyrana Prime Set', slug: 'pyrana_prime_set', item_id: 'pyrana_prime_set', side: 'sell' as const, per_trade: null, subtype: null },
       ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, name: 'Primed Flow', slug: 'primed_flow', item_id: 'primed_flow', side: 'sell' as const, per_trade: null, subtype: null }] : []),
       ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, visible: false, quantity: 12, rank: 0, name: 'Arcane Energize', slug: 'arcane_energize', item_id: 'arcane_energize', side: 'sell' as const, per_trade: 6, subtype: null }] : []),
@@ -238,6 +250,13 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       return structuredClone(responses[command]);
     }
     if (command === 'live_top_prices') {
+      if (pricingSample) {
+        const books: Record<string, number[]> = { primed_flow: [24, 25, 26, 27, 28], arcane_momentum: [20, 22, 24], pyrana_prime_set: [60, 64, 66, 68, 70] };
+        return (args?.queries as Array<{ slug: string; rank?: number; subtype?: string }>).map(query => {
+          const sells = books[query.slug] ?? [];
+          return { ...query, sells, buys: [], low_sell: sells[0] ?? null, top_buy: null };
+        });
+      }
       if (!scenario.startsWith('buyers')) return [];
       if (scenario === 'buyers-error') throw new Error('Sample buyer lookup failed.');
       return (args?.queries as Array<{ slug: string; rank?: number; subtype?: string }>).map(query => ({
