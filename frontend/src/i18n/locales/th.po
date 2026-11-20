@@ -11227,6 +11227,18 @@ msgctxt "routine.saveGoal"
 msgid "Save goal"
 msgstr "บันทึกเป้าหมาย"
 
+#. Screen reader name of the field that edits a daily or weekly item.
+#, fuzzy
+msgctxt "routine.itemText"
+msgid "Item text"
+msgstr "ข้อความรายการ"
+
+#. Button that saves an edited daily or weekly item.
+#, fuzzy
+msgctxt "routine.saveItem"
+msgid "Save item"
+msgstr "บันทึกรายการ"
+
 #. Button.
 #, fuzzy
 msgctxt "routine.cancel"

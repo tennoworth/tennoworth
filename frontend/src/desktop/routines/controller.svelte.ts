@@ -64,7 +64,7 @@ interface PersistedRoutineState {
 
 export const MAX_GOAL_LENGTH = 120;
 export const MAX_GOALS = 8;
-export const MAX_TASKS = 12;
+export const MAX_TASKS = 20;
 
 const NUMBERED_GOAL_ID = /^goal-(\d+)$/;
 const CUSTOM_TASK_ID = /^task-(\d+)$/;
@@ -132,6 +132,29 @@ function normalizeLists(rawLists: unknown, rawCustom: unknown): { lists: Record<
     }
   }
   return { lists, custom, highest };
+}
+
+// Both reorder helpers return null when the move cannot change the order, so
+// a no-op writes nothing.
+function movedIds(ids: string[], id: string, direction: -1 | 1): string[] | null {
+  const index = ids.indexOf(id);
+  const target = index + direction;
+  if (index === -1 || target < 0 || target >= ids.length) return null;
+  const next = ids.filter(entry => entry !== id);
+  next.splice(target, 0, id);
+  return next;
+}
+
+// `beforeId` names the row the item should land in front of; null means the
+// end of the list. Building the result first makes "already there" a
+// comparison rather than index arithmetic.
+function reorderedIds(ids: string[], id: string, beforeId: string | null): string[] | null {
+  if (!ids.includes(id) || beforeId === id) return null;
+  const next = ids.filter(entry => entry !== id);
+  const at = beforeId === null ? next.length : next.indexOf(beforeId);
+  if (at === -1) return null;
+  next.splice(at, 0, id);
+  return next.every((entry, index) => entry === ids[index]) ? null : next;
 }
 
 function goalText(value: unknown): string {
@@ -269,6 +292,44 @@ export class RoutineController {
     return this.#save();
   }
 
+  moveTask(id: string, direction: -1 | 1): Promise<void> {
+    if (this.cadence === 'monthly') return Promise.resolve();
+    return this.#setList(this.cadence, movedIds(this.state.lists[this.cadence], id, direction));
+  }
+
+  reorderTask(id: string, beforeId: string | null): Promise<void> {
+    if (this.cadence === 'monthly') return Promise.resolve();
+    return this.#setList(this.cadence, reorderedIds(this.state.lists[this.cadence], id, beforeId));
+  }
+
+  /** Renames a daily/weekly item. A renamed built-in becomes the player's own
+   *  item in the same place, so the built-in returns to the picker; either way
+   *  changed text clears the tick, as a renamed monthly goal does. */
+  renameTask(id: string, value: string): Promise<void> {
+    if (this.cadence === 'monthly') return Promise.resolve();
+    const cadence = this.cadence;
+    const list = this.state.lists[cadence];
+    const index = list.indexOf(id);
+    const text = goalText(value);
+    if (index === -1 || !text || text === this.#task(id).title) return Promise.resolve();
+    this.#forgetCompletion(cadence, id);
+    if (this.state.custom[id]) {
+      this.state.custom[id] = text;
+    } else {
+      const custom = `task-${this.state.nextGoalId}`;
+      this.state.nextGoalId += 1;
+      this.state.custom[custom] = text;
+      this.state.lists[cadence] = list.map(entry => entry === id ? custom : entry);
+    }
+    return this.#save();
+  }
+
+  #setList(cadence: ListCadence, next: string[] | null): Promise<void> {
+    if (!next) return Promise.resolve();
+    this.state.lists[cadence] = next;
+    return this.#save();
+  }
+
   /** Puts back every default the player removed, after what is already listed. */
   restoreDefaults(): Promise<void> {
     if (this.cadence === 'monthly') return Promise.resolve();
@@ -371,27 +432,17 @@ export class RoutineController {
   }
 
   moveMonthlyGoal(id: string, direction: -1 | 1): Promise<void> {
-    const index = this.state.monthlyGoals.findIndex(entry => entry.id === id);
-    const target = index + direction;
-    if (index === -1 || target < 0 || target >= this.state.monthlyGoals.length) return Promise.resolve();
-    const [goal] = this.state.monthlyGoals.splice(index, 1);
-    this.state.monthlyGoals.splice(target, 0, goal);
-    return this.#save();
+    return this.#setGoalOrder(movedIds(this.state.monthlyGoals.map(goal => goal.id), id, direction));
   }
 
-  // `beforeGoalId` names the row the goal should land in front of; null means
-  // the end of the list. Building the result first makes "already there" a
-  // comparison rather than index arithmetic, so a drop in place writes nothing.
   reorderMonthlyGoal(id: string, beforeGoalId: string | null): Promise<void> {
-    const goals = this.state.monthlyGoals;
-    const goal = goals.find(entry => entry.id === id);
-    if (!goal || beforeGoalId === id) return Promise.resolve();
-    const next = goals.filter(entry => entry.id !== id);
-    const at = beforeGoalId === null ? next.length : next.findIndex(entry => entry.id === beforeGoalId);
-    if (at === -1) return Promise.resolve();
-    next.splice(at, 0, goal);
-    if (next.every((entry, index) => entry.id === goals[index].id)) return Promise.resolve();
-    this.state.monthlyGoals = next;
+    return this.#setGoalOrder(reorderedIds(this.state.monthlyGoals.map(goal => goal.id), id, beforeGoalId));
+  }
+
+  #setGoalOrder(ids: string[] | null): Promise<void> {
+    if (!ids) return Promise.resolve();
+    const byId = new Map(this.state.monthlyGoals.map(goal => [goal.id, goal]));
+    this.state.monthlyGoals = ids.map(id => byId.get(id)!);
     return this.#save();
   }
 
