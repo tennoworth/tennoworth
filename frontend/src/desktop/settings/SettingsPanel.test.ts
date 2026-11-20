@@ -673,6 +673,25 @@ describe('Suggested price rule', () => {
     await waitFor(() => expect(saved()).toBe('{"basis":"lowest-ask","offset":0}'));
   });
 
+  it('saves a price tolerance and the listing checks to show', async () => {
+    const { pricing } = setup();
+    const tolerance = screen.getByRole('spinbutton', { name: 'Price tolerance' }) as HTMLInputElement;
+    expect(tolerance.value).toBe('0');
+    tolerance.value = '3';
+    await fireEvent.change(tolerance);
+    await waitFor(() => expect(localStorage.getItem(LOCAL_SETTING_KEYS['listing-health'])).toBe('{"tolerance":3,"muted":[]}'));
+    const underpriced = screen.getByRole('checkbox', { name: 'Priced well below the market' }) as HTMLInputElement;
+    expect(underpriced.checked).toBe(true);
+    await fireEvent.click(underpriced);
+    await waitFor(() => expect(pricing.healthPrefs).toMatchObject({ tolerance: 3, muted: ['underpriced'] }));
+    expect(underpriced.checked).toBe(false);
+    expect(screen.getByRole('group', { name: 'Listing checks' })).toBeTruthy();
+    tolerance.value = '101';
+    await fireEvent.change(tolerance);
+    expect(screen.getByRole('alert').textContent).toBe('Enter a whole number from 0 to 100.');
+    expect(tolerance.value).toBe('3');
+  });
+
   it('refuses an offset outside the range and keeps the saved one', async () => {
     const { offset } = setup();
     offset.value = '51';

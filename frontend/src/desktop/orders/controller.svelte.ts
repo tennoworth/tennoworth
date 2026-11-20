@@ -8,8 +8,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import { humanError } from '../../contracts/errors';
   import { selectDrifted, type DriftRow } from '../../domain/order-drift';
   import { assessListings, summarize, ownedEvidence, type HealthIssue, type HealthPrefs } from '../../domain/listing-health';
-  import type { Market } from '../../contracts/data';
-  import { orderUnitPrice, orderLotPrice, cachedUnitMarket } from '../../domain/order-prices';
+  import type { Market, MarketItemEntry } from '../../contracts/data';
+  import { orderUnitPrice, orderLotPrice, cachedUnitMarket, marketAtRank } from '../../domain/order-prices';
 
   import type { OwnOrder } from '../../contracts/generated/desktop';
 
@@ -17,7 +17,12 @@ import { untrack } from 'svelte';
 import { t } from '../../i18n/i18n.svelte';
 import { isDefaultRule } from '../settings/pricing.svelte';
 import { ruleText } from '../settings/price-rule-text';
-import { snapshotEvidence } from '../../domain/price-rule';
+import { rankEvidence } from '../../domain/price-rule';
+
+// Bulk lots give fractional unit prices; two decimal places are enough to read.
+function plat(value: number): number {
+  return Number(value.toFixed(2));
+}
 import { createToastQueue } from '../../ui/toast-queue.svelte';
 
 import type { DesktopServices } from '../../contracts/services';
@@ -262,6 +267,13 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
 
   // Orders whose price has drifted from the input.market. Recomputed whenever the
   // orders list or the snapshot changes - repricing one row drops it out.
+  // A rank the snapshot does not describe has no reference and waits for
+  // Check live.
+  function tierMarket(entry: MarketItemEntry, o: OwnOrder): MarketItemEntry | null {
+    const tier = marketAtRank(entry, o.rank);
+    return tier && cachedUnitMarket(tier, (o.per_trade ?? 1) > 1);
+  }
+
   let drifted = $derived.by((): DriftRow[] => {
     const market = input.market;
     if (!market?.items) return [];
@@ -276,7 +288,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
             name: itemName(o),
             platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN,
             type: o.side,
-            m: slug && market.items[slug] ? cachedUnitMarket(market.items[slug], (o.per_trade ?? 1) > 1) : null,
+            m: slug && market.items[slug] ? tierMarket(market.items[slug], o) : null,
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
@@ -331,13 +343,13 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
         .map((o) => {
           const slug = itemSlug(o);
           const entry = slug ? input.market?.items?.[slug] : undefined;
-          const stats = entry && cachedUnitMarket(entry, (o.per_trade ?? 1) > 1);
           return {
             id: o.id, slug, name: itemName(o),
             platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN, quantity: o.quantity, type: 'sell' as const,
+            perTrade: o.per_trade, vol: entry ? marketAtRank(entry, o.rank)?.vol : null,
             live: slug ? liveForOrder(o) : null,
             owned: slug ? ownedEvidence(slug, o.subtype ?? null, input.ownedQty, composedSlugs) : null,
-            stats: stats && snapshotEvidence(stats),
+            stats: entry && rankEvidence(entry, o.rank, (o.per_trade ?? 1) > 1),
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
@@ -354,8 +366,8 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     if (!o) return;
     markBusy(issue.id, true);
     try {
-      if (issue.kind === 'overpriced' || issue.kind === 'underbid') {
-        const p = orderLotPrice(Math.max(MIN_PLATINUM, issue.suggested), o.per_trade);
+      if (issue.kind === 'overpriced' || issue.kind === 'underbid' || issue.kind === 'underpriced') {
+        const p = issue.suggestedLot ?? orderLotPrice(Math.max(MIN_PLATINUM, issue.suggested), o.per_trade);
         if (p == null || p > MAX_PLATINUM) throw new Error(t('orders.lotTooHigh'));
         assertOrderOk(await input.transport.updateOrder(issue.id, { platinum: p }));
         o.platinum = p;
@@ -380,7 +392,9 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   }
 
   /** Apply every PRICE fix (match lowest ask / meet the bid). Quantity and
-   *  delete fixes stay one-click-each - those change what's for sale. */
+   *  delete fixes stay one-click-each - those change what's for sale - and so
+   *  does raising an underpriced ask: a raise slows a sale the player may have
+   *  priced low on purpose. */
   async function fixAllPrices(): Promise<void> {
     if (fixAllBusy) return;
     fixAllBusy = true;
@@ -466,6 +480,13 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
         return h.ignoredAsk != null ? `${why} ${t('orders.why.ignoredAsk', { ask: h.ignoredAsk })}` : why;
       }
       case 'underbid': return t('orders.why.underbid', { bid: h.suggested, price: h.current });
+      case 'underpriced': {
+        const target = plat(h.suggested);
+        const gain = plat(h.suggested - h.current);
+        return ownRule
+          ? t('orders.why.underRule', { rule: ownRule, target, price: plat(h.current), gain })
+          : t('orders.why.underpriced', { ask: target, price: plat(h.current), gain });
+      }
       case 'not-owned': return t('orders.why.notOwned');
       case 'excess-qty': return t('orders.why.excess', { listed: h.current, owned: h.suggested });
     }
@@ -537,6 +558,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     get health() { return health; },
     get healthSummary() { return healthSummary; },
     get overpricedText() { return t(ownRule ? 'orders.health.overRule' : 'orders.health.overpriced'); },
+    get underpricedText() { return t(ownRule ? 'orders.health.underRule' : 'orders.health.underpriced'); },
     get fixAllTitle() { return ownRule ? t('orders.fixAllTitleRule', { rule: ownRule }) : t('orders.fixAllTitle'); },
     get show() { return show; },
     set show(value: typeof show) { show = value; },

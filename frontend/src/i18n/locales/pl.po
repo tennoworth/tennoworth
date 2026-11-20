@@ -714,14 +714,16 @@ msgid "Best sells right now, ranked by priority - patience listings excluded."
 msgstr "Najlepsze do sprzedaży teraz, według priorytetu - bez ofert na cierpliwych."
 
 #. Line under "Top picks" on Thursday and Friday. Measured from a year of trades.
+#, fuzzy
 msgctxt "sell.weekendBefore"
 msgid "Weekends bring about a quarter more buyers than weekdays - list before Saturday to meet them."
-msgstr ""
+msgstr "W weekendy kupujących jest około jedną czwartą więcej niż w tygodniu - wystaw przed sobotą, żeby ich złapać."
 
 #. Line under "Top picks" on Saturday and Sunday. Measured from a year of trades.
+#, fuzzy
 msgctxt "sell.weekendDuring"
 msgid "Weekend: about a quarter more buyers than on weekdays, so listings sell sooner. Prices barely change."
-msgstr ""
+msgstr "Weekend: około jedną czwartą więcej kupujących niż w tygodniu, więc oferty schodzą szybciej. Ceny prawie się nie zmieniają."
 
 #. Tooltip on the picks explanation. plat = platinum.
 #, fuzzy
@@ -917,9 +919,10 @@ msgid "Near its 90-day high - a good moment to list"
 msgstr "Blisko szczytu z 90 dni - dobry moment na wystawienie"
 
 #. Why a pick is suggested although its price is low.
+#, fuzzy
 msgctxt "sell.reasonDrop"
 msgid "Near its 90-day low on heavy selling - about half of drops like this recover within a month, so waiting is a gamble"
-msgstr ""
+msgstr "Blisko dołka z 90 dni przy dużej sprzedaży - około połowa takich spadków odbija w ciągu miesiąca, więc czekanie to hazard"
 
 #. Why a pick is suggested.
 #, fuzzy
@@ -2024,25 +2027,29 @@ msgstr "Cena blisko dołka z 90 dni (np. Baro właśnie zalał rynek) - zwykle o
 
 #. Badge and filter chip: price near its low on heavy selling, waiting may not pay.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "table.pill.drop"
 msgid "drop"
-msgstr ""
+msgstr "spadek"
 
 #. Tooltip of the drop filter chip.
+#, fuzzy
 msgctxt "table.pill.drop.what"
 msgid "Price near its 90-day low while it sells at 3x its normal pace - only about half of these recover within a month"
-msgstr ""
+msgstr "Cena blisko dołka z 90 dni, a sprzedaje się 3 razy szybciej niż zwykle - tylko około połowa takich spadków odbija w ciągu miesiąca"
 
 #. Badge and filter chip: many sellers at almost the same price.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "table.pill.crowded"
 msgid "crowded"
-msgstr ""
+msgstr "tłok"
 
 #. Tooltip of the crowded filter chip.
+#, fuzzy
 msgctxt "table.pill.crowded.what"
 msgid "20 or more sellers within 10% of each other - buyers take the cheapest, so match the lowest ask to sell first"
-msgstr ""
+msgstr "20 lub więcej sprzedających w granicach 10% od siebie - kupujący biorą najtańsze, więc wyrównaj do najniższej oferty sprzedaży, by sprzedać pierwszy"
 
 #. Badge and filter chip: sells slowly.
 #. Max 10 characters.
@@ -2153,14 +2160,16 @@ msgid "Price is near its 90-day low on ordinary volume - you'd be selling into a
 msgstr "Cena blisko dołka z 90 dni - sprzedawałbyś w dołku. Typowe tuż po wizycie Baro, która zalewa rynek tym modem; zwykle odbija w ciągu tygodni. Rozważ trzymanie."
 
 #. Tooltip of the drop badge.
+#, fuzzy
 msgctxt "table.badge.drop"
 msgid "Price is near its 90-day low and selling runs at three times its normal pace: the market is repricing it. Over the past year only about half of drops like this were back near the usual price within a month. Waiting is a gamble; sell if you want the platinum."
-msgstr ""
+msgstr "Cena jest blisko dołka z 90 dni, a sprzedaż idzie w trzykrotnym tempie: rynek wycenia go na nowo. W ostatnim roku tylko około połowa takich spadków wracała w ciągu miesiąca w okolice zwykłej ceny. Czekanie to hazard; sprzedaj, jeśli chcesz platynę."
 
 #. Tooltip of the crowded badge.
+#, fuzzy
 msgctxt "table.badge.crowded"
 msgid "At least 20 sellers ask within 10% of each other. Buyers take the cheapest, so a listing above the lowest ask waits behind the queue; matching it sells first."
-msgstr ""
+msgstr "Co najmniej 20 sprzedających ustawia ceny w granicach 10% od siebie. Kupujący biorą najtańsze, więc oferta powyżej najniższej czeka w kolejce; wyrównanie do niej sprzedaje się pierwsze."
 
 #. Tooltip of the peak badge.
 #, fuzzy
@@ -2636,24 +2645,28 @@ msgid "Set every selected row's price to its live lowest online ask (match it - 
 msgstr "Ustaw cenę każdego zaznaczonego wiersza na najniższą aktualną ofertę online (wyrównanie - bez podcinania)."
 
 #. Sentence after the dialog introduction; rule reads like "Lowest ask −1p".
+#, fuzzy
 msgctxt "review.leadRule"
 msgid "Your price rule ({rule}) is applied to that price."
-msgstr ""
+msgstr "Do tej ceny stosowana jest twoja reguła cenowa ({rule})."
 
 #. Button; the rule is set in Settings → Selling.
+#, fuzzy
 msgctxt "review.matchRule"
 msgid "Price by my rule"
-msgstr ""
+msgstr "Cena wg mojej reguły"
 
 #. Tooltip; rule reads like "Lowest ask −1p".
+#, fuzzy
 msgctxt "review.matchRuleTitle"
 msgid "Set every selected row's price from its live asks by your price rule ({rule}). An ask under a third of the median is skipped as a troll listing."
-msgstr ""
+msgstr "Ustaw cenę każdego zaznaczonego wiersza z aktualnych ofert sprzedaży według twojej reguły cenowej ({rule}). Oferta poniżej jednej trzeciej mediany jest pomijana jako podejrzanie tania."
 
 #. Tooltip sentence after the online asks.
+#, fuzzy
 msgctxt "review.ignoredAsk"
 msgid "The {ask}p ask was skipped: it sits under a third of the median."
-msgstr ""
+msgstr "Oferta sprzedaży za {ask}p została pominięta: jest poniżej jednej trzeciej mediany."
 
 #. Screen reader name of the checkbox column.
 #, fuzzy
@@ -4242,9 +4255,10 @@ msgid "Resumed."
 msgstr "Wznowiono."
 
 #. Banner count: listings a resume sent, updated, or found already live.
+#, fuzzy
 msgctxt "listing.resumedListed"
 msgid "{count} listed"
-msgstr ""
+msgstr "wystawiono: {count}"
 
 #. Banner count.
 #, fuzzy
@@ -4314,9 +4328,10 @@ msgid "A listing whose outcome the market never confirmed may already be live. R
 msgstr "Oferta, której wyniku rynek nie potwierdził, może już być aktywna. Sprawdź Moje zlecenia, zanim wystawisz ją ponownie."
 
 #. Banner text after a resume left an outcome unknown.
+#, fuzzy
 msgctxt "listing.stillUnknown"
 msgid "Resume checked your current orders and could not tell whether this listing was applied, so nothing was sent. Check My Orders, then discard this batch."
-msgstr ""
+msgstr "Wznowienie sprawdziło twoje aktualne zlecenia i nie mogło ustalić, czy ta oferta została zastosowana, więc nic nie wysłano. Sprawdź Moje zlecenia, a potem odrzuć tę partię."
 
 #. Button.
 #, fuzzy
@@ -4743,24 +4758,28 @@ msgid "inherited from the set"
 msgstr "przejęte z zestawu"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.selling"
 msgid "Settings › Selling"
-msgstr ""
+msgstr "Ustawienia › Sprzedaż"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.appearance"
 msgid "Settings › Appearance"
-msgstr ""
+msgstr "Ustawienia › Wygląd"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.updates"
 msgid "Settings › Updates"
-msgstr ""
+msgstr "Ustawienia › Aktualizacje"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.privacy"
 msgid "Settings › Privacy & sharing"
-msgstr ""
+msgstr "Ustawienia › Prywatność i udostępnianie"
 
 #. Command palette entry.
 #, fuzzy
@@ -5848,9 +5867,10 @@ msgid "Reprice every flagged listing: match the lowest other ask, or meet the hi
 msgstr "Zmień cenę każdej oznaczonej oferty: wyrównaj do najniższej innej oferty lub do wyższej oferty kupna. Poprawki ilości i usunięcia pozostają pojedynczymi kliknięciami."
 
 #. Tooltip.
+#, fuzzy
 msgctxt "orders.fixAllTitleRule"
 msgid "Reprice every flagged listing: to your price rule ({rule}), or meet the higher bid. Quantity fixes and deletions stay one click each."
-msgstr ""
+msgstr "Zmień cenę każdej oznaczonej oferty: według twojej reguły cenowej ({rule}) lub do wyższej oferty kupna. Poprawki ilości i usunięcia pozostają pojedynczymi kliknięciami."
 
 #. Button.
 #, fuzzy
@@ -5869,6 +5889,12 @@ msgstr "powyżej rynku: {count}"
 msgctxt "orders.chip.underbid"
 msgid "{count} under a live bid"
 msgstr "poniżej oferty kupna: {count}"
+
+#. Issue chip.
+#, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "znacznie poniżej rynku: {count}"
 
 #. Issue chip.
 #, fuzzy
@@ -6194,15 +6220,28 @@ msgid "above the lowest other ask"
 msgstr "powyżej najniższej innej oferty"
 
 #. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
 msgctxt "orders.health.overRule"
 msgid "above your price rule"
-msgstr ""
+msgstr "powyżej twojej reguły cenowej"
 
 #. Health cell.
 #, fuzzy
 msgctxt "orders.health.underbid"
 msgid "under a live bid"
 msgstr "poniżej aktywnej oferty kupna"
+
+#. Health cell.
+#, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "znacznie poniżej najniższej innej oferty"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "poniżej twojej reguły cenowej"
 
 #. Health cell.
 #, fuzzy
@@ -6346,14 +6385,28 @@ msgid "Lowest other online ask is {ask}p (you: {price}p). Match it to sell first
 msgstr "Najniższa inna oferta online to {ask}p (ty: {price}p). Wyrównaj, aby sprzedać pierwszy."
 
 #. Tooltip sentence after the reason.
+#, fuzzy
 msgctxt "orders.why.ignoredAsk"
 msgid "A {ask}p ask was skipped: it sits under a third of the median, so it is a troll or stale listing rather than a price."
-msgstr ""
+msgstr "Pominięto ofertę za {ask}p: jest poniżej jednej trzeciej mediany, więc to troll albo nieaktualna oferta, a nie cena."
 
 #. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
-msgstr ""
+msgstr "Twoja reguła cenowa ({rule}) daje {target}p (ty: {price}p)."
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "Najniższa inna oferta online to {ask}p (ty: {price}p). I tak się sprzeda, ale tracisz około {gain}p na sztuce."
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "Twoja reguła cenowa ({rule}) daje {target}p (ty: {price}p). I tak się sprzeda, ale tracisz około {gain}p na sztuce."
 
 #. Tooltip.
 #, fuzzy
@@ -6428,9 +6481,10 @@ msgid "Price {price}p is above the {cap}p cap."
 msgstr "Cena {price}p przekracza limit {cap}p."
 
 #. Toast.
+#, fuzzy
 msgctxt "orders.priceFloor"
 msgid "Price {price}p is below the {floor}p minimum for this lot."
-msgstr ""
+msgstr "Cena {price}p jest poniżej minimum {floor}p dla tej partii."
 
 #. Toast.
 #, fuzzy
@@ -7502,156 +7556,186 @@ msgid "Whisper copied"
 msgstr "Szept skopiowany"
 
 #. Panel title in Watches: mispriced items to buy.
+#, fuzzy
 msgctxt "bargains.title"
 msgid "Bargains in the snapshot"
-msgstr ""
+msgstr "Okazje w migawce"
 
 #. Line in the panel rail.
+#, fuzzy
 msgctxt "bargains.lede"
 msgid "Leads, not promises: check live before you whisper."
-msgstr ""
+msgstr "Tropy, nie obietnice: sprawdź aktualne ceny, zanim napiszesz."
 
 #. Button: look up the current asks for every row.
+#, fuzzy
 msgctxt "bargains.check"
 msgid "Check live"
-msgstr ""
+msgstr "Sprawdź aktualne"
 
 #. Button after a live check.
+#, fuzzy
 msgctxt "bargains.recheck"
 msgid "Check again"
-msgstr ""
+msgstr "Sprawdź ponownie"
 
 #. Button while checking.
+#, fuzzy
 msgctxt "bargains.checking"
 msgid "Checking {done}/{total}…"
-msgstr ""
+msgstr "Sprawdzanie {done}/{total}…"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.checkTitle"
 msgid "Look up the cheapest ask and best bid on warframe.market for every row now."
-msgstr ""
+msgstr "Sprawdź teraz na warframe.market najtańszą ofertę sprzedaży i najlepszą ofertę kupna dla każdego wiersza."
 
 #. Error notice.
+#, fuzzy
 msgctxt "bargains.failed"
 msgid "The live check failed: {error}"
-msgstr ""
+msgstr "Sprawdzenie na żywo nie powiodło się: {error}"
 
 #. Empty state.
+#, fuzzy
 msgctxt "bargains.none"
 msgid "Nothing in this snapshot is priced far from its book. Come back after the next update."
-msgstr ""
+msgstr "Nic w tej migawce nie jest wycenione daleko od rynku. Wróć po następnej aktualizacji."
 
 #. Empty state before the snapshot.
+#, fuzzy
 msgctxt "bargains.noMarket"
 msgid "Bargains appear once market prices have loaded."
-msgstr ""
+msgstr "Okazje pojawią się po wczytaniu cen rynkowych."
 
 #. Column.
+#, fuzzy
 msgctxt "bargains.col.item"
 msgid "Item"
-msgstr ""
+msgstr "Przedmiot"
 
 #. Column: the cheapest ask in the snapshot.
+#, fuzzy
 msgctxt "bargains.col.ask"
 msgid "Ask"
-msgstr ""
+msgstr "Sprzedaż"
 
 #. Column: what it can be sold for again.
+#, fuzzy
 msgctxt "bargains.col.resale"
 msgid "Resale"
-msgstr ""
+msgstr "Odsprzedaż"
 
 #. Column: resale minus ask, per item.
+#, fuzzy
 msgctxt "bargains.col.margin"
 msgid "Margin"
-msgstr ""
+msgstr "Marża"
 
 #. Column: trades in 48 hours.
+#, fuzzy
 msgctxt "bargains.col.vol"
 msgid "Vol 48h"
-msgstr ""
+msgstr "Obr 48h"
 
 #. Column: result of the live check.
+#, fuzzy
 msgctxt "bargains.col.live"
 msgid "Live"
-msgstr ""
+msgstr "Na żywo"
 
 #. Tag: a buyer pays more than a seller asks.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "bargains.flip"
 msgid "flip"
-msgstr ""
+msgstr "flip"
 
 #. Tooltip of the flip tag.
+#, fuzzy
 msgctxt "bargains.flipWhat"
 msgid "A buyer bids more than the cheapest seller asks: buy from the seller, sell to the buyer."
-msgstr ""
+msgstr "Kupujący oferuje więcej, niż wynosi najtańsza oferta sprzedaży: kup od sprzedającego, sprzedaj kupującemu."
 
 #. Tag: one seller asks far under the rest.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "bargains.cheap"
 msgid "cheap"
-msgstr ""
+msgstr "tanio"
 
 #. Tooltip of the cheap tag.
+#, fuzzy
 msgctxt "bargains.cheapWhat"
 msgid "One seller asks 40% or more under the usual price while the next cheapest agree on it."
-msgstr ""
+msgstr "Jeden sprzedający wystawia o 40% lub więcej poniżej zwykłej ceny, a kolejne najtańsze oferty się z nią zgadzają."
 
 #. After a resale price: it is a live bid.
+#, fuzzy
 msgctxt "bargains.bid"
 msgid "bid"
-msgstr ""
+msgstr "kupno"
 
 #. After a resale price: it is the 90-day median.
+#, fuzzy
 msgctxt "bargains.usual"
 msgid "usual"
-msgstr ""
+msgstr "zwykle"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.resaleBid"
 msgid "The best bid in the snapshot"
-msgstr ""
+msgstr "Najlepsza oferta kupna w migawce"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.resaleUsual"
 msgid "The 90-day median price: what it usually sells for, not a buyer waiting"
-msgstr ""
+msgstr "Mediana cen z 90 dni: za ile zwykle się sprzedaje, a nie kupujący czekający z ofertą"
 
 #. Live column before a check.
+#, fuzzy
 msgctxt "bargains.notChecked"
 msgid "not checked"
-msgstr ""
+msgstr "niesprawdzone"
 
 #. Live column.
+#, fuzzy
 msgctxt "bargains.checkFailed"
 msgid "lookup failed"
-msgstr ""
+msgstr "sprawdzenie nie powiodło się"
 
 #. Live column: the cheap ask or the gap has closed.
+#, fuzzy
 msgctxt "bargains.gone"
 msgid "gone · now {price}p"
-msgstr ""
+msgstr "zniknęło · teraz {price}p"
 
 #. Live column.
+#, fuzzy
 msgctxt "bargains.goneNoAsk"
 msgid "gone · no asks online"
-msgstr ""
+msgstr "zniknęło · brak ofert online"
 
 #. Live column: the deal is still there.
+#, fuzzy
 msgctxt "bargains.holds"
 msgid "still {price}p"
-msgstr ""
+msgstr "nadal {price}p"
 
 #. Live column: price and the seller's in-game name.
+#, fuzzy
 msgctxt "bargains.holdsBy"
 msgid "still {price}p · {seller}"
-msgstr ""
+msgstr "nadal {price}p · {seller}"
 
 #. Note under the table.
+#, fuzzy
 msgctxt "bargains.foot"
 msgid "From the market snapshot, refreshed every two hours: a bid over the cheapest ask (flip), or one ask far under a book that agrees on the usual price (cheap). Items with under 10 trades in 48 hours are left out, and so are bids far over the usual price."
-msgstr ""
+msgstr "Z migawki rynku, odświeżanej co dwie godziny: oferta kupna powyżej najtańszej oferty sprzedaży (flip) albo jedna oferta sprzedaży daleko poniżej rynku, który zgadza się co do zwykłej ceny (tanio). Pominięto przedmioty z mniej niż 10 wymianami w 48 godzin oraz oferty kupna daleko powyżej zwykłej ceny."
 
 #. Button.
 #, fuzzy
@@ -8239,96 +8323,174 @@ msgid "Updates"
 msgstr "Aktualizacje"
 
 #. Section heading and link: usage statistics and price sharing.
+#, fuzzy
 msgctxt "settings.privacy"
 msgid "Privacy & sharing"
-msgstr ""
+msgstr "Prywatność i udostępnianie"
 
 #. Section heading and link.
+#, fuzzy
 msgctxt "settings.selling"
 msgid "Selling"
-msgstr ""
+msgstr "Sprzedaż"
 
 #. Button that folds a settings section away.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "settings.hide"
 msgid "Hide"
-msgstr ""
+msgstr "Ukryj"
 
 #. Button that unfolds a settings section.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "settings.show"
 msgid "Show"
-msgstr ""
+msgstr "Pokaż"
 
 #. Setting.
+#, fuzzy
 msgctxt "settings.priceRule"
 msgid "Suggested price"
-msgstr ""
+msgstr "Sugerowana cena"
 
 #. Setting help. Reprice is the button name in My orders.
+#, fuzzy
 msgctxt "settings.priceRuleHelp"
 msgid "My orders flags a sell listing priced above this and offers to reprice it here. Start from a market figure, then add or take off platinum. Nothing is repriced until you press Reprice."
-msgstr ""
+msgstr "Moje zlecenia oznacza oferty sprzedaży wycenione powyżej tej ceny i proponuje zmianę ceny tutaj. Zacznij od wartości rynkowej, potem dodaj lub odejmij platynę. Nic nie zmieni ceny, dopóki nie klikniesz Zmień cenę."
 
 #. Worked example under the setting, e.g. "Lowest ask at 20p → suggests 21p."
+#, fuzzy
 msgctxt "settings.priceRuleExample"
 msgid "{basis} at {base}p → suggests {price}p."
-msgstr ""
+msgstr "{basis} przy {base}p → sugeruje {price}p."
 
 #. Field label: platinum added to (or taken off) the market figure.
+#, fuzzy
 msgctxt "settings.priceOffset"
 msgid "Adjust by"
-msgstr ""
+msgstr "Korekta o"
 
 #. Validation.
+#, fuzzy
 msgctxt "settings.priceOffsetRange"
 msgid "Enter a whole number from {min} to {max}."
-msgstr ""
+msgstr "Wpisz liczbę całkowitą od {min} do {max}."
 
 #. Button that restores the default rule.
+#, fuzzy
 msgctxt "settings.priceRuleReset"
 msgid "Match the lowest ask"
-msgstr ""
+msgstr "Wyrównaj do najniższej oferty"
 
 #. Error.
+#, fuzzy
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
-msgstr ""
+msgstr "Nie udało się zapisać reguły cenowej: {error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "Tolerancja ceny"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "Moje zlecenia oznacza ofertę jako zbyt drogą tylko wtedy, gdy jest o więcej niż tyle platyny powyżej twojej sugerowanej ceny. Przy 0 oznacza każdą ofertę powyżej niej."
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "Kontrole ofert"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "Które problemy z twoimi ofertami wskazuje Moje zlecenia. Odznacz któryś, by przestać go widzieć. Nic się nie zmieni, dopóki nie klikniesz poprawki."
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "Nie udało się zapisać kontroli ofert: {error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "Cena powyżej sugerowanej"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "Cena poniżej oferty kupna"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "Cena znacznie poniżej rynku"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "Wystawiono więcej kopii, niż posiadasz"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "Wystawiono coś, czego już nie posiadasz"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.lowest-ask"
 msgid "Lowest ask"
-msgstr ""
+msgstr "Najniższa oferta"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.low5-avg"
 msgid "Average of the 5 lowest asks"
-msgstr ""
+msgstr "Średnia z 5 najniższych ofert"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.low20-avg"
 msgid "Average of the 20 lowest asks"
-msgstr ""
+msgstr "Średnia z 20 najniższych ofert"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.avg-48h"
 msgid "48-hour average sale"
-msgstr ""
+msgstr "Średnia sprzedaż z 48 godzin"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.median-90d"
 msgid "90-day median sale"
-msgstr ""
+msgstr "Mediana sprzedaży z 90 dni"
 
 #. A price rule in words, e.g. "90-day median sale +1p".
+#, fuzzy
 msgctxt "settings.ruleUp"
 msgid "{basis} +{offset}p"
-msgstr ""
+msgstr "{basis} +{offset}p"
 
 #. A price rule in words, e.g. "Lowest ask −2p".
+#, fuzzy
 msgctxt "settings.ruleDown"
 msgid "{basis} −{offset}p"
-msgstr ""
+msgstr "{basis} −{offset}p"
 
 #. Setting.
 #, fuzzy
@@ -10733,169 +10895,202 @@ msgid "Choose the acts that fit your goals before the week ends."
 msgstr "Wybierz akty pasujące do twoich celów przed końcem tygodnia."
 
 #. Optional daily task. Use the game’s name for Focus.
+#, fuzzy
 msgctxt "routine.task.focus-cap"
 msgid "Fill the daily Focus cap"
-msgstr ""
+msgstr "Wypełnij dzienny limit Focus"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.focus-cap.detail"
 msgid "Earn Focus up to today’s limit while you play other missions."
-msgstr ""
+msgstr "Zdobywaj Focus do dzisiejszego limitu podczas grania w inne misje."
 
 #. Optional daily task. Use the game’s name for Nightwave.
+#, fuzzy
 msgctxt "routine.task.nightwave-daily"
 msgid "Nightwave daily acts"
-msgstr ""
+msgstr "Dzienne akty Nightwave"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.nightwave-daily.detail"
 msgid "Finish the daily acts that fit today’s session."
-msgstr ""
+msgstr "Ukończ dzienne akty pasujące do dzisiejszej sesji."
 
 #. Optional daily task.
+#, fuzzy
 msgctxt "routine.task.open-world-standing"
 msgid "Open-world Syndicate standing"
-msgstr ""
+msgstr "Reputacja syndykatów w otwartych światach"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.open-world-standing.detail"
 msgid "Turn in bounties or tokens toward today’s standing cap."
-msgstr ""
+msgstr "Oddawaj zlecenia lub żetony do dzisiejszego limitu reputacji."
 
 #. Optional daily task. Acrithis is a game character.
+#, fuzzy
 msgctxt "routine.task.acrithis-daily"
 msgid "Acrithis’s daily special"
-msgstr ""
+msgstr "Dzienna oferta Acrithis"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.acrithis-daily.detail"
 msgid "Check today’s offer in Duviri before it changes."
-msgstr ""
+msgstr "Sprawdź dzisiejszą ofertę w Duviri, zanim się zmieni."
 
 #. Optional daily task. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.simaris-synthesis"
 msgid "Cephalon Simaris’s Daily Synthesis"
-msgstr ""
+msgstr "Dzienna synteza Cephalon Simaris"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.simaris-synthesis.detail"
 msgid "Scan today’s Synthesis target for Simaris Standing."
-msgstr ""
+msgstr "Zeskanuj dzisiejszy cel syntezy, by zdobyć reputację Simaris."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.elite-temporal-archimedea"
 msgid "Elite Temporal Archimedea"
-msgstr ""
+msgstr "Elite Temporal Archimedea"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.elite-temporal-archimedea.detail"
 msgid "Spend Search Pulses on The Hex’s weekly run. Five Pulses refresh each Monday."
-msgstr ""
+msgstr "Wydaj Search Pulses na cotygodniowy bieg The Hex. Pięć Pulses odnawia się w każdy poniedziałek."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.elite-deep-archimedea"
 msgid "Elite Deep Archimedea"
-msgstr ""
+msgstr "Elite Deep Archimedea"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.elite-deep-archimedea.detail"
 msgid "Spend Search Pulses on Cavia’s weekly run. Five Pulses refresh each Monday."
-msgstr ""
+msgstr "Wydaj Search Pulses na cotygodniowy bieg Cavii. Pięć Pulses odnawia się w każdy poniedziałek."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.netracells"
 msgid "Netracells"
-msgstr ""
+msgstr "Netracells"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.netracells.detail"
 msgid "Spend the Search Pulses you have left on Netracell runs."
-msgstr ""
+msgstr "Wydaj pozostałe Search Pulses na przebiegi Netracells."
 
 #. Optional weekly task. Use the game’s names; Bird 3 is a game character.
+#, fuzzy
 msgctxt "routine.task.bird-3-shard"
 msgid "Bird 3’s Archon Shard"
-msgstr ""
+msgstr "Archon Shard od Bird 3"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.bird-3-shard.detail"
 msgid "Buy this week’s shard in the Sanctum Anatomica for 30,000 Cavia Standing."
-msgstr ""
+msgstr "Kup shard z tego tygodnia w Sanctum Anatomica za 30 000 reputacji Cavii."
 
 #. Optional weekly task. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.teshin-honors"
 msgid "Teshin’s Steel Path Honors"
-msgstr ""
+msgstr "Steel Path Honors u Teshina"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.teshin-honors.detail"
 msgid "Buy this week’s featured item and the Veiled Riven Cipher with Steel Essence."
-msgstr ""
+msgstr "Kup za Steel Essence przedmiot tygodnia oraz Veiled Riven Cipher."
 
 #. Optional weekly task. Palladino is a game character.
+#, fuzzy
 msgctxt "routine.task.palladino"
 msgid "Palladino’s weekly offerings"
-msgstr ""
+msgstr "Cotygodniowa oferta Palladino"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.palladino.detail"
 msgid "Trade Riven Slivers in Iron Wake for Kuva, Endo, Credits and a Riven Mod, each once a week."
-msgstr ""
+msgstr "Wymień Riven Slivers w Iron Wake na Kuvę, Endo, kredyty i mod Riven, każde raz w tygodniu."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.icebind"
 msgid "The Icebind"
-msgstr ""
+msgstr "Icebind"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.icebind.detail"
 msgid "Spend Cryobells with Cephalon Melica on Yuvan Peak. Three regrow each week and you can hold six."
-msgstr ""
+msgstr "Wydaj Cryobells u Cephalon Melica na Yuvan Peak. Trzy odrastają co tydzień, a zmieścisz sześć."
 
 #. Optional weekly task. Use the game’s name for the calendar.
+#, fuzzy
 msgctxt "routine.task.calendar-1999"
 msgid "1999 Calendar"
-msgstr ""
+msgstr "Kalendarz 1999"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.calendar-1999.detail"
 msgid "Finish this season’s To Dos and claim the prize. A new season starts each week; unfinished To Dos are lost."
-msgstr ""
+msgstr "Ukończ To Dos tego sezonu i odbierz nagrodę. Nowy sezon zaczyna się co tydzień; nieukończone To Dos przepadają."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.kahls-garrison"
 msgid "Kahl’s Garrison"
-msgstr ""
+msgstr "Garnizon Kahl"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.kahls-garrison.detail"
 msgid "Run this week’s Break Narmer missions with Kahl."
-msgstr ""
+msgstr "Wykonaj tegotygodniowe misje Break Narmer z Kahlem."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.the-circuit"
 msgid "The Circuit"
-msgstr ""
+msgstr "The Circuit"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.the-circuit.detail"
 msgid "Climb this week’s Circuit in Duviri for its reward pool."
-msgstr ""
+msgstr "Wspinaj się po tegotygodniowym Circuit w Duviri po pulę nagród."
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.descendia"
 msgid "The Descendia"
-msgstr ""
+msgstr "The Descendia"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.descendia.detail"
 msgid "Make this week’s progress and claim its challenge rewards."
-msgstr ""
+msgstr "Poczyń postępy w tym tygodniu i odbierz nagrody za wyzwania."
 
 #. Detail under an item the player added.
+#, fuzzy
 msgctxt "routine.customDetail"
 msgid "Your own item. Its tick resets with the list."
-msgstr ""
+msgstr "Twoja własna pozycja. Jej odznaczenie resetuje się razem z listą."
 
 #. Detail under a monthly goal.
 #, fuzzy
@@ -11097,49 +11292,58 @@ msgid "Add a monthly goal to build this month’s checklist."
 msgstr "Dodaj cel miesięczny, aby zbudować listę na ten miesiąc."
 
 #. Empty state of the daily or weekly list.
+#, fuzzy
 msgctxt "routine.emptyTasks"
 msgid "Nothing on this list. Add an activity from the game or your own item below."
-msgstr ""
+msgstr "Ta lista jest pusta. Dodaj poniżej aktywność z gry albo własną pozycję."
 
 #. Label of the add buttons for built-in activities.
+#, fuzzy
 msgctxt "routine.fromGame"
 msgid "From the game"
-msgstr ""
+msgstr "Z gry"
 
 #. Screen reader name of a button that adds a built-in activity.
+#, fuzzy
 msgctxt "routine.addBuiltin"
 msgid "Add {task}"
-msgstr ""
+msgstr "Dodaj: {task}"
 
 #. Note when nothing is left to add.
+#, fuzzy
 msgctxt "routine.allListed"
 msgid "Every activity TennoWorth knows for this list is on it."
-msgstr ""
+msgstr "Wszystkie aktywności, które TennoWorth zna dla tej listy, już na niej są."
 
 #. Field label.
+#, fuzzy
 msgctxt "routine.addTaskLabel"
 msgid "Add your own item"
-msgstr ""
+msgstr "Dodaj własną pozycję"
 
 #. Field placeholder. Darvo is a game character.
+#, fuzzy
 msgctxt "routine.taskExample"
 msgid "e.g. Check Darvo’s deal"
-msgstr ""
+msgstr "np. Sprawdź ofertę Darvo"
 
 #. Button.
+#, fuzzy
 msgctxt "routine.addTask"
 msgid "Add item"
-msgstr ""
+msgstr "Dodaj pozycję"
 
 #. Note.
+#, fuzzy
 msgctxt "routine.taskLimit"
 msgid "Up to {max} items. Remove one to add another."
-msgstr ""
+msgstr "Maksymalnie {max} pozycji. Usuń jedną, aby dodać kolejną."
 
 #. Note.
+#, fuzzy
 msgctxt "routine.taskHelp"
 msgid "Items stay on the list; their ticks reset with it."
-msgstr ""
+msgstr "Pozycje zostają na liście; ich odznaczenia resetują się razem z nią."
 
 #. Button while busy.
 #, fuzzy
@@ -13589,49 +13793,58 @@ msgstr "Okazje Darvo"
 
 #. Event kind: the player's own daily/weekly checklist and monthly goals.
 #. Max 20 characters.
+#, fuzzy
 msgctxt "cal.kind.routine"
 msgid "My routines"
-msgstr ""
+msgstr "Moje rutyny"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.daily"
 msgid "Daily reset"
-msgstr ""
+msgstr "Reset dzienny"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.weekly"
 msgid "Weekly reset"
-msgstr ""
+msgstr "Reset tygodniowy"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.monthly"
 msgid "Monthly goals reset"
-msgstr ""
+msgstr "Reset celów miesięcznych"
 
 #. Event title; reset reads like "Weekly reset".
+#, fuzzy
 msgctxt "cal.routine.title"
 msgid "{reset} · {open} of {total} still open"
-msgstr ""
+msgstr "{reset} · otwarte: {open} z {total}"
 
 #. Short event label.
+#, fuzzy
 msgctxt "cal.routine.short"
 msgid "{reset} · {open} open"
-msgstr ""
+msgstr "{reset} · otwarte: {open}"
 
 #. Event detail; tasks is a list of routine names.
+#, fuzzy
 msgctxt "cal.routine.openList"
 msgid "Still open: {tasks}."
-msgstr ""
+msgstr "Nadal otwarte: {tasks}."
 
 #. Event detail when more than three are open.
+#, fuzzy
 msgctxt "cal.routine.openMore"
 msgid "Still open: {tasks} and {more} more."
-msgstr ""
+msgstr "Nadal otwarte: {tasks} i {more} więcej."
 
 #. Button in an event's detail.
+#, fuzzy
 msgctxt "cal.routine.open"
 msgid "Open routines"
-msgstr ""
+msgstr "Otwarte rutyny"
 
 #. Countdown: days and hours.
 #. Max 8 characters.
@@ -13920,9 +14133,10 @@ msgid "DE announcement"
 msgstr "Ogłoszenie DE"
 
 #. Date source: the player's own checklist.
+#, fuzzy
 msgctxt "cal.source.routine"
 msgid "Your routines"
-msgstr ""
+msgstr "Twoje rutyny"
 
 #. Local time beside the UTC time.
 #, fuzzy

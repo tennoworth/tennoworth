@@ -25,8 +25,9 @@ use serde_json::Value;
 
 use market_domain::math::{
     avg_lowest_asks, baseline_daily_volume, canonical_subtype, clamp_low20, clamp_low5,
-    demand_ratio, drop_poisoned_rows, low_sell, rank0_orders, rank0_rows, round_dp, score,
-    series_stats, spread, subtype_rows, top_buy, weighted_avg_48h, StatsDay,
+    demand_ratio, drop_poisoned_rows, low_sell, rank0_orders, rank0_rows, rank_orders, rank_rows,
+    round_dp, score, series_stats, spread, subtype_rows, top_buy, weighted_avg_48h, LiveOrder,
+    StatsDay,
 };
 
 use crate::coerce::{Coercions, DEFAULT_MAX_COERCIONS};
@@ -39,7 +40,7 @@ const API_ROOT: &str = "https://api.warframe.market";
 
 /// The CSV column order - the keys of `analyze_item`'s dict, in insertion
 /// order, which is also what `csv_input::CsvRow` reads back.
-const HEADER: [&str; 22] = [
+const HEADER: [&str; 33] = [
     "url_name",
     "name",
     "tags",
@@ -62,6 +63,17 @@ const HEADER: [&str; 22] = [
     "price_basis",
     "low20_avg",
     "vol_28d",
+    "max_rank",
+    "ranked_live_buys",
+    "ranked_live_sells",
+    "ranked_top_buy_price",
+    "ranked_low_sell_price",
+    "ranked_low5_avg",
+    "ranked_low20_avg",
+    "ranked_volume_48h",
+    "ranked_avg_price_48h",
+    "ranked_median_now",
+    "ranked_median_90d",
 ];
 
 /// A master-catalog item - the fields `analyze_item` reads off the raw
@@ -72,6 +84,8 @@ pub struct CatalogItem {
     pub name: String,
     pub tags: Vec<String>,
     pub ducats: Option<i64>,
+    /// WFM's `maxRank`, kept only when the item has ranks to sell.
+    pub max_rank: Option<i64>,
 }
 
 /// One analyzed row, in the exact shape `analyze_item` returns.
@@ -99,6 +113,25 @@ pub struct AnalyzedRow {
     pub low20_avg: f64,
     /// Mean daily volume over the 28 days before the last two, `0` when unknown.
     pub vol_28d: f64,
+    pub ranked: Option<RankedRow>,
+}
+
+/// The max-rank tier of a ranked item, analyzed apart from rank 0: a maxed
+/// arcane sells for several times an unranked one, so neither tier can price
+/// the other.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RankedRow {
+    pub rank: i64,
+    pub live_buys: i64,
+    pub live_sells: i64,
+    pub top_buy_price: f64,
+    pub low_sell_price: f64,
+    pub low5_avg: f64,
+    pub low20_avg: f64,
+    pub volume_48h: f64,
+    pub avg_price_48h: f64,
+    pub median_now: f64,
+    pub median_90d: f64,
 }
 
 /// Parse the `/v2/items` master list into [`CatalogItem`]s. Entries without a
@@ -127,6 +160,10 @@ pub fn parse_items(items: &Value) -> Vec<CatalogItem> {
                 })
                 .unwrap_or_default(),
             ducats: it.get("ducats").and_then(|d| d.as_i64()),
+            max_rank: it
+                .get("maxRank")
+                .and_then(|r| r.as_i64())
+                .filter(|r| *r > 0),
         });
     }
     out
@@ -182,6 +219,65 @@ pub struct StatsStage {
     /// rather than forcing a full refetch.
     #[serde(default, rename = "vol_28d_days")]
     pub vol_28d: f64,
+    /// Absent on entries cached before ranked tiers were read; they gain it at
+    /// their next scheduled refresh.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ranked: Option<RankedStats>,
+}
+
+/// The statistics half of [`RankedRow`].
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RankedStats {
+    pub rank: i64,
+    pub volume_48h: f64,
+    pub median_now: f64,
+    pub median_90d: f64,
+    pub avg_price_48h: f64,
+}
+
+/// The max-rank tier's statistics, or `None` for an unranked item or a tier
+/// that never traded in the window.
+fn ranked_stats(
+    item: &CatalogItem,
+    recent_all: &[StatsDay],
+    nineties_all: &[StatsDay],
+    pick: Option<&str>,
+) -> Option<RankedStats> {
+    let rank = item.max_rank?;
+    let nineties = drop_poisoned_rows(&subtype_rows(&rank_rows(nineties_all, rank), pick));
+    if nineties.is_empty() {
+        return None;
+    }
+    let recent = drop_poisoned_rows(&subtype_rows(&rank_rows(recent_all, rank), pick));
+    let (median_now, median_90d, _, _, _) = series_stats(&nineties);
+    Some(RankedStats {
+        rank,
+        volume_48h: recent.iter().map(|d| d.volume).sum(),
+        median_now,
+        median_90d,
+        avg_price_48h: weighted_avg_48h(&recent, median_90d),
+    })
+}
+
+/// Join the max-rank tier's live book onto its statistics.
+fn ranked_row(stats: &RankedStats, buys: &[LiveOrder], sells: &[LiveOrder]) -> RankedRow {
+    let buys = rank_orders(buys, stats.rank);
+    let sells = rank_orders(sells, stats.rank);
+    let low = low_sell(&sells);
+    let low5 = clamp_low5(avg_lowest_asks(&sells, 5), stats.median_90d, low);
+    RankedRow {
+        rank: stats.rank,
+        live_buys: buys.len() as i64,
+        live_sells: sells.len() as i64,
+        top_buy_price: top_buy(&buys),
+        low_sell_price: low,
+        low5_avg: low5,
+        low20_avg: clamp_low20(avg_lowest_asks(&sells, 20), low5, stats.median_90d, low),
+        volume_48h: stats.volume_48h,
+        avg_price_48h: round_dp(stats.avg_price_48h, 1),
+        median_now: round_dp(stats.median_now, 1),
+        median_90d: round_dp(stats.median_90d, 1),
+    }
 }
 
 /// Parse the stats payload, or `None` to skip the item (empty payload). A hard coercion error propagates as `Err`.
@@ -209,6 +305,7 @@ pub fn analyze_stats(
         series_stats(&nineties);
     let avg_price_48h = weighted_avg_48h(&recent, median_90d);
     let vol_28d = round_dp(baseline_daily_volume(&nineties, today), 1);
+    let ranked = ranked_stats(item, &recent_all, &nineties_all, pick.as_deref());
 
     Ok(Some(StatsStage {
         pick,
@@ -220,6 +317,7 @@ pub fn analyze_stats(
         donch_bot_90d,
         avg_price_48h,
         vol_28d,
+        ranked,
     }))
 }
 
@@ -238,8 +336,14 @@ pub fn analyze_orders(
     let pick = stage.pick.as_deref();
 
     let parsed = parse_orders(&orders, &item.slug, co)?;
-    let live_buys = rank0_orders(&subtype_rows(&live_orders(&parsed, "buy"), pick));
-    let live_sells = rank0_orders(&subtype_rows(&live_orders(&parsed, "sell"), pick));
+    let tier_buys = subtype_rows(&live_orders(&parsed, "buy"), pick);
+    let tier_sells = subtype_rows(&live_orders(&parsed, "sell"), pick);
+    let ranked = stage
+        .ranked
+        .as_ref()
+        .map(|stats| ranked_row(stats, &tier_buys, &tier_sells));
+    let live_buys = rank0_orders(&tier_buys);
+    let live_sells = rank0_orders(&tier_sells);
 
     let volume_48h = stage.volume_48h;
     let avg_price_48h = stage.avg_price_48h;
@@ -275,6 +379,7 @@ pub fn analyze_orders(
             score: round_dp(sc, 1),
             low20_avg: low20,
             vol_28d: stage.vol_28d,
+            ranked,
         },
     }))
 }
@@ -327,7 +432,7 @@ fn fmt_num_list(items: &[f64]) -> String {
 
 impl AnalyzedRow {
     fn to_fields(&self) -> Vec<String> {
-        vec![
+        let mut fields = vec![
             self.url_name.clone(),
             self.name.clone(),
             fmt_str_list(&self.tags),
@@ -350,7 +455,24 @@ impl AnalyzedRow {
             "unit".into(),
             fmt_num(self.low20_avg),
             fmt_num(self.vol_28d),
-        ]
+        ];
+        fields.extend(match &self.ranked {
+            Some(r) => vec![
+                r.rank.to_string(),
+                r.live_buys.to_string(),
+                r.live_sells.to_string(),
+                fmt_num(r.top_buy_price),
+                fmt_num(r.low_sell_price),
+                fmt_num(r.low5_avg),
+                fmt_num(r.low20_avg),
+                fmt_num(r.volume_48h),
+                fmt_num(r.avg_price_48h),
+                fmt_num(r.median_now),
+                fmt_num(r.median_90d),
+            ],
+            None => vec![String::new(); HEADER.len() - fields.len()],
+        });
+        fields
     }
 }
 
@@ -1246,6 +1368,7 @@ mod tests {
             name: "Neo R3 Relic".into(),
             tags: vec![],
             ducats: None,
+            max_rank: None,
         };
         let stats = json!({"statistics_closed": {"48hours": [], "90days": rows}});
         let stage = analyze_stats(&item, Some(stats), FIXTURE_TODAY, &mut Coercions::new())
@@ -1272,6 +1395,7 @@ mod tests {
             name: "Goopolla".into(),
             tags: vec![],
             ducats: None,
+            max_rank: None,
         };
         // analyze_item receives the already-unwrapped payload (fetch_json strips
         // the `payload` envelope before handing it over).
@@ -1288,6 +1412,7 @@ mod tests {
             name: "S".into(),
             tags: vec![],
             ducats: None,
+            max_rank: None,
         };
         let mut co = Coercions::new();
         // orders None
@@ -1302,6 +1427,75 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_ranked_item_carries_its_max_rank_tier_apart_from_rank_0() {
+        let item = CatalogItem {
+            slug: "arcane_momentum".into(),
+            name: "Arcane Momentum".into(),
+            tags: vec!["arcane_enhancement".into()],
+            ducats: None,
+            max_rank: Some(5),
+        };
+        let stats = json!({"statistics_closed": {
+            "48hours": [
+                {"median": 4, "volume": 8, "avg_price": 4.0, "mod_rank": 0},
+                {"median": 60, "volume": 3, "avg_price": 60.0, "mod_rank": 5}
+            ],
+            "90days": [
+                {"median": 4, "volume": 40, "avg_price": 4.0, "mod_rank": 0},
+                {"median": 60, "volume": 9, "avg_price": 60.0, "mod_rank": 5},
+                {"median": 20, "volume": 2, "avg_price": 20.0, "mod_rank": 3}
+            ]
+        }});
+        let ask = |plat: i64, rank: i64| json!({"type": "sell", "platinum": plat, "rank": rank, "visible": true, "user": {"status": "ingame"}});
+        let orders = json!([
+            ask(5, 0), ask(6, 0), ask(58, 5), ask(62, 5), ask(65, 5), ask(30, 3),
+            {"type": "buy", "platinum": 50, "rank": 5, "visible": true, "user": {"status": "ingame"}},
+            {"type": "buy", "platinum": 3, "rank": 0, "visible": true, "user": {"status": "ingame"}}
+        ]);
+        let row = analyze_item(
+            &item,
+            Some(orders.clone()),
+            Some(stats.clone()),
+            &mut Coercions::new(),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            (row.low_sell_price, row.top_buy_price, row.median_90d),
+            (5.0, 3.0, 4.0)
+        );
+        let ranked = row.ranked.clone().expect("max-rank tier");
+        assert_eq!(ranked.rank, 5);
+        assert_eq!((ranked.low_sell_price, ranked.top_buy_price), (58.0, 50.0));
+        assert_eq!((ranked.live_sells, ranked.live_buys), (3, 1));
+        assert_eq!((ranked.median_90d, ranked.volume_48h), (60.0, 3.0));
+        assert_eq!(ranked.low5_avg, 61.7);
+        let f = row.to_fields();
+        assert_eq!(f.len(), HEADER.len());
+        assert_eq!((f[22].as_str(), f[26].as_str()), ("5", "58"));
+        // Through the CSV and back: the build reads the columns the scrape wrote.
+        let csv = rows_to_csv(std::slice::from_ref(&row)).unwrap();
+        let parsed =
+            crate::pipeline::csv_input::read_csv(std::str::from_utf8(&csv).unwrap()).unwrap();
+        let entry = crate::pipeline::render::render_item(&parsed[0], &Default::default());
+        let tier = entry.ranked.expect("ranked tier survives the CSV");
+        assert_eq!(
+            (tier.rank, tier.low_sell, tier.top_buy, tier.sells),
+            (5, 58.0, 50.0, 3)
+        );
+        assert_eq!((tier.median_90d, tier.vol), (60.0, 3));
+
+        let unranked = CatalogItem {
+            max_rank: None,
+            ..item
+        };
+        let row = analyze_item(&unranked, Some(orders), Some(stats), &mut Coercions::new())
+            .unwrap()
+            .unwrap();
+        assert_eq!(row.ranked, None);
     }
 
     #[test]
@@ -1328,8 +1522,14 @@ mod tests {
             score: 100.0,
             low20_avg: 44.1,
             vol_28d: 3.5,
+            ranked: None,
         };
         let f = row.to_fields();
+        assert_eq!(f.len(), HEADER.len());
+        assert!(
+            f[22..].iter().all(|cell| cell.is_empty()),
+            "unranked rows leave the ranked cells blank"
+        );
         assert_eq!(f[2], "['mod', 'prime']"); // tags
         assert_eq!(f[3], ""); // ducats None → empty
         assert_eq!(f[7], "35"); // integral float → no trailing .0

@@ -7,6 +7,7 @@
 // A rule only changes what is suggested. Nothing reprices on its own.
 
 import type { MarketItemEntry } from '../contracts/data';
+import { cachedUnitMarket, marketAtRank } from './order-prices';
 import { TROLL_UNDERCUT_RATIO } from './sell-priority';
 
 export type PriceBasis = 'lowest-ask' | 'low5-avg' | 'low20-avg' | 'avg-48h' | 'median-90d';
@@ -73,6 +74,16 @@ export function snapshotEvidence(m: MarketItemEntry | null | undefined): PriceEv
     low5Avg: m.low5_avg, low20Avg: m.low20_avg, avg48h: m.avg, median90d: m.median_90d,
     median: known(m.median_now) ?? known(m.median_90d),
   };
+}
+
+/** The rule evidence for one rank of an item. A rank the snapshot does not
+ *  describe keeps only the rank-0 median, which still judges troll asks on its
+ *  tier - an ask under a third of the unranked price is no ranked price
+ *  either - so its rule falls back to that rank's live asks. */
+export function rankEvidence(m: MarketItemEntry | null | undefined, rank: number | null | undefined, bulk: boolean): PriceEvidence & { median: number | null } {
+  if (!m) return { median: null };
+  const tier = marketAtRank(m, rank);
+  return tier ? snapshotEvidence(cachedUnitMarket(tier, bulk)) : { median: snapshotEvidence(m).median };
 }
 
 export interface LiveAskRead {

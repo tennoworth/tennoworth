@@ -24,6 +24,24 @@ export interface MarketItemEntry {
   medians_7d?: number[];
   donch_top_90d?: number;
   donch_bot_90d?: number;
+  /** The max-rank tier of a ranked mod or arcane, which trades as its own
+   *  product. Every field above describes rank 0. Absent on unranked items, on
+   *  a top rank that has not traded in 90 days, and on older snapshots. */
+  ranked?: RankedMarketEntry;
+}
+
+export interface RankedMarketEntry {
+  rank: number;
+  avg: number;
+  low_sell: number;
+  low5_avg: number;
+  low20_avg: number;
+  top_buy: number;
+  vol: number;
+  buys: number;
+  sells: number;
+  median_now: number;
+  median_90d: number;
 }
 
 /** `market-public.json`: the fields the site's prerendered pages read, listed

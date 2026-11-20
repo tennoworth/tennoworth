@@ -188,6 +188,7 @@ mod tests {
             donch_bot_90d: 20.0,
             avg_price_48h: 26.0,
             vol_28d: 4.0,
+            ranked: None,
         }
     }
     fn at(hour: i64) -> Timestamp {

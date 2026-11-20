@@ -171,3 +171,75 @@ it.each([
   expect(updateOrder).toHaveBeenCalledTimes(sent ? 1 : 0);
   if (!sent) expect(c.toasts).toEqual([expect.objectContaining({ kind: 'error', text: expect.stringContaining('minimum for this lot') })]);
 });
+
+function priced(orders: OwnOrder[], quotes: unknown[], market: unknown, rule = { basis: 'low5-avg' as const, offset: 0 }) {
+  const updateOrder = vi.fn().mockResolvedValue({ status: 'ok' });
+  let controller!: ReturnType<typeof createOrdersController>;
+  const stop = controllerTestRoot(() => {
+    controller = createOrdersController({
+      transport: { fetchOrders: vi.fn().mockResolvedValue(orders), updateOrder } as unknown as DesktopCapabilities,
+      market: market as never,
+      healthPrefs: { rule, tolerance: 0, muted: [] },
+    }, { desktopLiveTopPrices: vi.fn().mockResolvedValue(quotes), listenForTauriEvent: vi.fn(() => () => {}) } as never);
+  });
+  cleanups.push(() => { controller.dispose(); stop(); });
+  flushSync();
+  return { controller, updateOrder };
+}
+
+it('reprices to a whole-platinum target and the flag clears', async () => {
+  const market = { items: { primed_flow: { price_basis: 'unit', low5_avg: 15.4, avg: 16, low_sell: 15, top_buy: 0, vol: 40, ratio: 1, buys: 0, sells: 0 } } };
+  const quote = { slug: 'primed_flow', rank: 0, low_sell: 15, top_buy: null, sells: [15, 16], buys: [] };
+  const { controller: c, updateOrder } = priced([{ ...order, platinum: 18 }], [quote], market);
+  await settle();
+  await c.checkLive();
+  flushSync();
+  expect(c.health).toEqual([expect.objectContaining({ kind: 'overpriced', suggestedLot: 16 })]);
+  await c.applyFix(c.health[0]);
+  flushSync();
+  expect(updateOrder).toHaveBeenCalledWith('one', { platinum: 16 });
+  expect(c.health).toEqual([]);
+});
+
+it('judges a ranked listing by its own tier, before and after a live check', async () => {
+  const market = { items: { arcane_momentum: { price_basis: 'unit', low5_avg: 3.2, avg: 3, low_sell: 1, top_buy: 0, vol: 6, ratio: 1, buys: 0, sells: 0, median_90d: 2, median_now: 2 } } };
+  const momentum: OwnOrder = { ...order, id: 'momentum', slug: 'arcane_momentum', name: 'Arcane Momentum', platinum: 21, rank: 5 };
+  const quote = { slug: 'arcane_momentum', rank: 5, low_sell: 20, top_buy: null, sells: [20, 22, 24], buys: [] };
+  const { controller: c } = priced([momentum], [quote], market);
+  await settle();
+  expect(c.drifted).toEqual([]);
+  await c.checkLive();
+  flushSync();
+  expect(c.health).toEqual([]);
+});
+
+it('prices a maxed listing from the snapshot max-rank tier, and no other rank', async () => {
+  const ranked = { rank: 5, avg: 25, low_sell: 24, low5_avg: 26, low20_avg: 28, top_buy: 15, vol: 12, buys: 3, sells: 9, median_now: 25, median_90d: 25 };
+  const market = { items: { arcane_momentum: { price_basis: 'unit', low5_avg: 3.2, avg: 3, low_sell: 1, top_buy: 0, vol: 6, ratio: 1, buys: 0, sells: 0, median_90d: 2, median_now: 2, ranked } } };
+  const maxed: OwnOrder = { ...order, id: 'maxed', slug: 'arcane_momentum', name: 'Arcane Momentum', platinum: 18, rank: 5 };
+  const partial: OwnOrder = { ...maxed, id: 'partial', platinum: 11, rank: 3 };
+  const quotes = [
+    { slug: 'arcane_momentum', rank: 5, low_sell: 20, top_buy: null, sells: [20, 22, 24], buys: [] },
+    { slug: 'arcane_momentum', rank: 3, low_sell: 10, top_buy: null, sells: [10, 11, 12], buys: [] },
+  ];
+  const { controller: c } = priced([maxed, partial], quotes, market);
+  await settle();
+  expect(c.drifted.map((row) => row.id)).toEqual(['maxed']);
+  await c.checkLive();
+  flushSync();
+  expect(c.health).toEqual([expect.objectContaining({ id: 'maxed', kind: 'underpriced', suggestedLot: 26 })]);
+});
+
+it('leaves raising an underpriced listing out of Fix all prices', async () => {
+  const market = { items: { primed_flow: { price_basis: 'unit', low5_avg: 25, avg: 25, low_sell: 25, top_buy: 0, vol: 40, ratio: 1, buys: 0, sells: 0 } } };
+  const quote = { slug: 'primed_flow', rank: 0, low_sell: 25, top_buy: null, sells: [25], buys: [] };
+  const { controller: c, updateOrder } = priced([{ ...order, platinum: 10 }], [quote], market);
+  await settle();
+  await c.checkLive();
+  flushSync();
+  expect(c.health).toEqual([expect.objectContaining({ kind: 'underpriced', suggestedLot: 25 })]);
+  await c.fixAllPrices();
+  expect(updateOrder).not.toHaveBeenCalled();
+  await c.applyFix(c.health[0]);
+  expect(updateOrder).toHaveBeenCalledWith('one', { platinum: 25 });
+});

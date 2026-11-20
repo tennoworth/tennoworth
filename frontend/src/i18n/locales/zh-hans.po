@@ -714,14 +714,16 @@ msgid "Best sells right now, ranked by priority - patience listings excluded."
 msgstr "当前最好卖的物品，按优先级排序——不含需要耐心等待的挂单。"
 
 #. Line under "Top picks" on Thursday and Friday. Measured from a year of trades.
+#, fuzzy
 msgctxt "sell.weekendBefore"
 msgid "Weekends bring about a quarter more buyers than weekdays - list before Saturday to meet them."
-msgstr ""
+msgstr "周末的买家比工作日多约四分之一——周六前上架就能赶上。"
 
 #. Line under "Top picks" on Saturday and Sunday. Measured from a year of trades.
+#, fuzzy
 msgctxt "sell.weekendDuring"
 msgid "Weekend: about a quarter more buyers than on weekdays, so listings sell sooner. Prices barely change."
-msgstr ""
+msgstr "周末：买家比工作日多约四分之一，挂单卖得更快，价格几乎不变。"
 
 #. Tooltip on the picks explanation. plat = platinum.
 #, fuzzy
@@ -917,9 +919,10 @@ msgid "Near its 90-day high - a good moment to list"
 msgstr "接近 90 天高点——是上架的好时机"
 
 #. Why a pick is suggested although its price is low.
+#, fuzzy
 msgctxt "sell.reasonDrop"
 msgid "Near its 90-day low on heavy selling - about half of drops like this recover within a month, so waiting is a gamble"
-msgstr ""
+msgstr "接近 90 天低点且抛售量大——这类下跌约有一半会在一个月内回升，所以等待是一场赌博"
 
 #. Why a pick is suggested.
 #, fuzzy
@@ -2024,25 +2027,29 @@ msgstr "价格接近 90 天低点（例如 Baro 刚大量供货）——通常�
 
 #. Badge and filter chip: price near its low on heavy selling, waiting may not pay.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "table.pill.drop"
 msgid "drop"
-msgstr ""
+msgstr "下跌"
 
 #. Tooltip of the drop filter chip.
+#, fuzzy
 msgctxt "table.pill.drop.what"
 msgid "Price near its 90-day low while it sells at 3x its normal pace - only about half of these recover within a month"
-msgstr ""
+msgstr "价格接近 90 天低点，且成交速度达到平时的 3 倍——这类情况只有约一半会在一个月内回升"
 
 #. Badge and filter chip: many sellers at almost the same price.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "table.pill.crowded"
 msgid "crowded"
-msgstr ""
+msgstr "拥挤"
 
 #. Tooltip of the crowded filter chip.
+#, fuzzy
 msgctxt "table.pill.crowded.what"
 msgid "20 or more sellers within 10% of each other - buyers take the cheapest, so match the lowest ask to sell first"
-msgstr ""
+msgstr "20 个或以上卖家的报价相差不到 10%——买家会选最便宜的，想先卖出就跟进最低卖价"
 
 #. Badge and filter chip: sells slowly.
 #. Max 10 characters.
@@ -2153,14 +2160,16 @@ msgid "Price is near its 90-day low on ordinary volume - you'd be selling into a
 msgstr "价格接近 90 天低点——现在卖等于在谷底出手。常见于 Baro 来访大量供应该 Mod 之后；通常会在几周内回升。可以考虑持有。"
 
 #. Tooltip of the drop badge.
+#, fuzzy
 msgctxt "table.badge.drop"
 msgid "Price is near its 90-day low and selling runs at three times its normal pace: the market is repricing it. Over the past year only about half of drops like this were back near the usual price within a month. Waiting is a gamble; sell if you want the platinum."
-msgstr ""
+msgstr "价格接近 90 天低点，成交速度达到平时的三倍：市场正在重新定价。过去一年里，这类下跌只有约一半在一个月内回到常规价格附近。等待是一场赌博；想要白金就卖吧。"
 
 #. Tooltip of the crowded badge.
+#, fuzzy
 msgctxt "table.badge.crowded"
 msgid "At least 20 sellers ask within 10% of each other. Buyers take the cheapest, so a listing above the lowest ask waits behind the queue; matching it sells first."
-msgstr ""
+msgstr "至少 20 个卖家的卖价相差不到 10%。买家会选最便宜的，高于最低卖价的挂单只能排在队伍后面；跟进最低卖价才会先卖出。"
 
 #. Tooltip of the peak badge.
 #, fuzzy
@@ -2636,24 +2645,28 @@ msgid "Set every selected row's price to its live lowest online ask (match it - 
 msgstr "将每个所选行的价格设为其实时最低在线卖价（持平——不压价）。"
 
 #. Sentence after the dialog introduction; rule reads like "Lowest ask −1p".
+#, fuzzy
 msgctxt "review.leadRule"
 msgid "Your price rule ({rule}) is applied to that price."
-msgstr ""
+msgstr "你的定价规则（{rule}）会应用到该价格上。"
 
 #. Button; the rule is set in Settings → Selling.
+#, fuzzy
 msgctxt "review.matchRule"
 msgid "Price by my rule"
-msgstr ""
+msgstr "按我的规则定价"
 
 #. Tooltip; rule reads like "Lowest ask −1p".
+#, fuzzy
 msgctxt "review.matchRuleTitle"
 msgid "Set every selected row's price from its live asks by your price rule ({rule}). An ask under a third of the median is skipped as a troll listing."
-msgstr ""
+msgstr "按你的定价规则（{rule}），根据实时卖价设置每个所选行的价格。低于中位价三分之一的卖价会被当作恶意挂单而跳过。"
 
 #. Tooltip sentence after the online asks.
+#, fuzzy
 msgctxt "review.ignoredAsk"
 msgid "The {ask}p ask was skipped: it sits under a third of the median."
-msgstr ""
+msgstr "已跳过 {ask}p 的卖价：它低于中位价的三分之一。"
 
 #. Screen reader name of the checkbox column.
 #, fuzzy
@@ -4242,9 +4255,10 @@ msgid "Resumed."
 msgstr "已继续。"
 
 #. Banner count: listings a resume sent, updated, or found already live.
+#, fuzzy
 msgctxt "listing.resumedListed"
 msgid "{count} listed"
-msgstr ""
+msgstr "已上架 {count} 项"
 
 #. Banner count.
 #, fuzzy
@@ -4314,9 +4328,10 @@ msgid "A listing whose outcome the market never confirmed may already be live. R
 msgstr "市场未确认结果的挂单可能已经生效。再次上架前请先查看“我的订单”。"
 
 #. Banner text after a resume left an outcome unknown.
+#, fuzzy
 msgctxt "listing.stillUnknown"
 msgid "Resume checked your current orders and could not tell whether this listing was applied, so nothing was sent. Check My Orders, then discard this batch."
-msgstr ""
+msgstr "继续操作时检查了你当前的订单，但无法确定这条挂单是否已生效，因此没有发送任何内容。请查看“我的订单”，然后放弃此批次。"
 
 #. Button.
 #, fuzzy
@@ -4743,24 +4758,28 @@ msgid "inherited from the set"
 msgstr "继承自套装"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.selling"
 msgid "Settings › Selling"
-msgstr ""
+msgstr "设置 › 出售"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.appearance"
 msgid "Settings › Appearance"
-msgstr ""
+msgstr "设置 › 外观"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.updates"
 msgid "Settings › Updates"
-msgstr ""
+msgstr "设置 › 更新"
 
 #. Command palette entry.
+#, fuzzy
 msgctxt "shell.go.privacy"
 msgid "Settings › Privacy & sharing"
-msgstr ""
+msgstr "设置 › 隐私与共享"
 
 #. Command palette entry.
 #, fuzzy
@@ -5848,9 +5867,10 @@ msgid "Reprice every flagged listing: match the lowest other ask, or meet the hi
 msgstr "重新为所有被标记的挂单定价：匹配其他人的最低卖价，或达到更高的收价。数量修正和删除仍需逐个点击。"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "orders.fixAllTitleRule"
 msgid "Reprice every flagged listing: to your price rule ({rule}), or meet the higher bid. Quantity fixes and deletions stay one click each."
-msgstr ""
+msgstr "重新为所有被标记的挂单定价：按你的定价规则（{rule}），或达到更高的收价。数量修正和删除仍需逐个点击。"
 
 #. Button.
 #, fuzzy
@@ -5869,6 +5889,12 @@ msgstr "{count} 个高于市场"
 msgctxt "orders.chip.underbid"
 msgid "{count} under a live bid"
 msgstr "{count} 个低于实时收价"
+
+#. Issue chip.
+#, fuzzy
+msgctxt "orders.chip.underpriced"
+msgid "{count} priced well below the market"
+msgstr "{count} 个远低于市场"
 
 #. Issue chip.
 #, fuzzy
@@ -6194,15 +6220,28 @@ msgid "above the lowest other ask"
 msgstr "高于其他人的最低卖价"
 
 #. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
 msgctxt "orders.health.overRule"
 msgid "above your price rule"
-msgstr ""
+msgstr "高于你的定价规则"
 
 #. Health cell.
 #, fuzzy
 msgctxt "orders.health.underbid"
 msgid "under a live bid"
 msgstr "低于实时收价"
+
+#. Health cell.
+#, fuzzy
+msgctxt "orders.health.underpriced"
+msgid "well below the lowest other ask"
+msgstr "远低于其他人的最低卖价"
+
+#. Health cell, when the player set their own price rule in Settings.
+#, fuzzy
+msgctxt "orders.health.underRule"
+msgid "below your price rule"
+msgstr "低于你的定价规则"
 
 #. Health cell.
 #, fuzzy
@@ -6346,14 +6385,28 @@ msgid "Lowest other online ask is {ask}p (you: {price}p). Match it to sell first
 msgstr "其他人的最低在线卖价为 {ask}p（你：{price}p）。匹配它即可最先卖出。"
 
 #. Tooltip sentence after the reason.
+#, fuzzy
 msgctxt "orders.why.ignoredAsk"
 msgid "A {ask}p ask was skipped: it sits under a third of the median, so it is a troll or stale listing rather than a price."
-msgstr ""
+msgstr "已跳过一个 {ask}p 的卖价：它低于中位数的三分之一，是恶意或过时的挂单，而不是真实价格。"
 
 #. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
 msgctxt "orders.why.overRule"
 msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p)."
-msgstr ""
+msgstr "你的定价规则（{rule}）定为 {target}p（你：{price}p）。"
+
+#. Tooltip.
+#, fuzzy
+msgctxt "orders.why.underpriced"
+msgid "The lowest other online ask is {ask}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "其他人的最低在线卖价为 {ask}p（你：{price}p）。照样能卖出，但每件大约少赚 {gain}p。"
+
+#. Tooltip; rule reads like "90-day median sale +1p".
+#, fuzzy
+msgctxt "orders.why.underRule"
+msgid "Your price rule ({rule}) puts it at {target}p (you: {price}p). It sells either way, but this leaves about {gain}p per item."
+msgstr "你的定价规则（{rule}）定为 {target}p（你：{price}p）。照样能卖出，但每件大约少赚 {gain}p。"
 
 #. Tooltip.
 #, fuzzy
@@ -6428,9 +6481,10 @@ msgid "Price {price}p is above the {cap}p cap."
 msgstr "价格 {price}p 超过了 {cap}p 的上限。"
 
 #. Toast.
+#, fuzzy
 msgctxt "orders.priceFloor"
 msgid "Price {price}p is below the {floor}p minimum for this lot."
-msgstr ""
+msgstr "价格 {price}p 低于此批次的最低价 {floor}p。"
 
 #. Toast.
 #, fuzzy
@@ -7502,156 +7556,186 @@ msgid "Whisper copied"
 msgstr "私聊已复制"
 
 #. Panel title in Watches: mispriced items to buy.
+#, fuzzy
 msgctxt "bargains.title"
 msgid "Bargains in the snapshot"
-msgstr ""
+msgstr "快照中的捡漏机会"
 
 #. Line in the panel rail.
+#, fuzzy
 msgctxt "bargains.lede"
 msgid "Leads, not promises: check live before you whisper."
-msgstr ""
+msgstr "仅供参考，不作保证：密语前请先检查实时价格。"
 
 #. Button: look up the current asks for every row.
+#, fuzzy
 msgctxt "bargains.check"
 msgid "Check live"
-msgstr ""
+msgstr "检查实时"
 
 #. Button after a live check.
+#, fuzzy
 msgctxt "bargains.recheck"
 msgid "Check again"
-msgstr ""
+msgstr "重新检查"
 
 #. Button while checking.
+#, fuzzy
 msgctxt "bargains.checking"
 msgid "Checking {done}/{total}…"
-msgstr ""
+msgstr "正在检查 {done}/{total}…"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.checkTitle"
 msgid "Look up the cheapest ask and best bid on warframe.market for every row now."
-msgstr ""
+msgstr "立即在 warframe.market 上查询每一行的最低卖价和最高收价。"
 
 #. Error notice.
+#, fuzzy
 msgctxt "bargains.failed"
 msgid "The live check failed: {error}"
-msgstr ""
+msgstr "实时检查失败：{error}"
 
 #. Empty state.
+#, fuzzy
 msgctxt "bargains.none"
 msgid "Nothing in this snapshot is priced far from its book. Come back after the next update."
-msgstr ""
+msgstr "快照中没有价格明显偏离盘口的物品。请在下次更新后再来。"
 
 #. Empty state before the snapshot.
+#, fuzzy
 msgctxt "bargains.noMarket"
 msgid "Bargains appear once market prices have loaded."
-msgstr ""
+msgstr "市场价格加载完成后会显示捡漏机会。"
 
 #. Column.
+#, fuzzy
 msgctxt "bargains.col.item"
 msgid "Item"
-msgstr ""
+msgstr "物品"
 
 #. Column: the cheapest ask in the snapshot.
+#, fuzzy
 msgctxt "bargains.col.ask"
 msgid "Ask"
-msgstr ""
+msgstr "卖价"
 
 #. Column: what it can be sold for again.
+#, fuzzy
 msgctxt "bargains.col.resale"
 msgid "Resale"
-msgstr ""
+msgstr "转售价"
 
 #. Column: resale minus ask, per item.
+#, fuzzy
 msgctxt "bargains.col.margin"
 msgid "Margin"
-msgstr ""
+msgstr "差价"
 
 #. Column: trades in 48 hours.
+#, fuzzy
 msgctxt "bargains.col.vol"
 msgid "Vol 48h"
-msgstr ""
+msgstr "48h成交"
 
 #. Column: result of the live check.
+#, fuzzy
 msgctxt "bargains.col.live"
 msgid "Live"
-msgstr ""
+msgstr "实时"
 
 #. Tag: a buyer pays more than a seller asks.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "bargains.flip"
 msgid "flip"
-msgstr ""
+msgstr "倒卖"
 
 #. Tooltip of the flip tag.
+#, fuzzy
 msgctxt "bargains.flipWhat"
 msgid "A buyer bids more than the cheapest seller asks: buy from the seller, sell to the buyer."
-msgstr ""
+msgstr "买家的收价高于最低卖家的卖价：向卖家买入，再卖给买家。"
 
 #. Tag: one seller asks far under the rest.
 #. Max 10 characters.
+#, fuzzy
 msgctxt "bargains.cheap"
 msgid "cheap"
-msgstr ""
+msgstr "低价"
 
 #. Tooltip of the cheap tag.
+#, fuzzy
 msgctxt "bargains.cheapWhat"
 msgid "One seller asks 40% or more under the usual price while the next cheapest agree on it."
-msgstr ""
+msgstr "有卖家的卖价比常规价格低 40% 或更多，而其余最便宜的卖价都认同常规价格。"
 
 #. After a resale price: it is a live bid.
+#, fuzzy
 msgctxt "bargains.bid"
 msgid "bid"
-msgstr ""
+msgstr "收价"
 
 #. After a resale price: it is the 90-day median.
+#, fuzzy
 msgctxt "bargains.usual"
 msgid "usual"
-msgstr ""
+msgstr "常规"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.resaleBid"
 msgid "The best bid in the snapshot"
-msgstr ""
+msgstr "快照中的最高收价"
 
 #. Tooltip.
+#, fuzzy
 msgctxt "bargains.resaleUsual"
 msgid "The 90-day median price: what it usually sells for, not a buyer waiting"
-msgstr ""
+msgstr "90 天中位价：通常的成交价，并非有买家在等"
 
 #. Live column before a check.
+#, fuzzy
 msgctxt "bargains.notChecked"
 msgid "not checked"
-msgstr ""
+msgstr "未检查"
 
 #. Live column.
+#, fuzzy
 msgctxt "bargains.checkFailed"
 msgid "lookup failed"
-msgstr ""
+msgstr "查询失败"
 
 #. Live column: the cheap ask or the gap has closed.
+#, fuzzy
 msgctxt "bargains.gone"
 msgid "gone · now {price}p"
-msgstr ""
+msgstr "已消失 · 现价 {price}p"
 
 #. Live column.
+#, fuzzy
 msgctxt "bargains.goneNoAsk"
 msgid "gone · no asks online"
-msgstr ""
+msgstr "已消失 · 无在线卖价"
 
 #. Live column: the deal is still there.
+#, fuzzy
 msgctxt "bargains.holds"
 msgid "still {price}p"
-msgstr ""
+msgstr "仍为 {price}p"
 
 #. Live column: price and the seller's in-game name.
+#, fuzzy
 msgctxt "bargains.holdsBy"
 msgid "still {price}p · {seller}"
-msgstr ""
+msgstr "仍为 {price}p · {seller}"
 
 #. Note under the table.
+#, fuzzy
 msgctxt "bargains.foot"
 msgid "From the market snapshot, refreshed every two hours: a bid over the cheapest ask (flip), or one ask far under a book that agrees on the usual price (cheap). Items with under 10 trades in 48 hours are left out, and so are bids far over the usual price."
-msgstr ""
+msgstr "来自每两小时刷新一次的市场快照：收价高于最低卖价（倒卖），或某个卖价远低于对常规价格有共识的盘口（低价）。48 小时内成交少于 10 笔的物品已排除，收价远高于常规价格的也已排除。"
 
 #. Button.
 #, fuzzy
@@ -8239,96 +8323,174 @@ msgid "Updates"
 msgstr "更新"
 
 #. Section heading and link: usage statistics and price sharing.
+#, fuzzy
 msgctxt "settings.privacy"
 msgid "Privacy & sharing"
-msgstr ""
+msgstr "隐私与共享"
 
 #. Section heading and link.
+#, fuzzy
 msgctxt "settings.selling"
 msgid "Selling"
-msgstr ""
+msgstr "出售"
 
 #. Button that folds a settings section away.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "settings.hide"
 msgid "Hide"
-msgstr ""
+msgstr "收起"
 
 #. Button that unfolds a settings section.
 #. Max 8 characters.
+#, fuzzy
 msgctxt "settings.show"
 msgid "Show"
-msgstr ""
+msgstr "展开"
 
 #. Setting.
+#, fuzzy
 msgctxt "settings.priceRule"
 msgid "Suggested price"
-msgstr ""
+msgstr "建议价格"
 
 #. Setting help. Reprice is the button name in My orders.
+#, fuzzy
 msgctxt "settings.priceRuleHelp"
 msgid "My orders flags a sell listing priced above this and offers to reprice it here. Start from a market figure, then add or take off platinum. Nothing is repriced until you press Reprice."
-msgstr ""
+msgstr "“我的订单”会标出高于此价格的出售挂单，并提供在此处调价。以某个市场价格为起点，再加减若干白金。在你按下“调价”之前不会改动任何价格。"
 
 #. Worked example under the setting, e.g. "Lowest ask at 20p → suggests 21p."
+#, fuzzy
 msgctxt "settings.priceRuleExample"
 msgid "{basis} at {base}p → suggests {price}p."
-msgstr ""
+msgstr "{basis}为 {base}p → 建议 {price}p。"
 
 #. Field label: platinum added to (or taken off) the market figure.
+#, fuzzy
 msgctxt "settings.priceOffset"
 msgid "Adjust by"
-msgstr ""
+msgstr "调整幅度"
 
 #. Validation.
+#, fuzzy
 msgctxt "settings.priceOffsetRange"
 msgid "Enter a whole number from {min} to {max}."
-msgstr ""
+msgstr "请输入 {min} 到 {max} 之间的整数。"
 
 #. Button that restores the default rule.
+#, fuzzy
 msgctxt "settings.priceRuleReset"
 msgid "Match the lowest ask"
-msgstr ""
+msgstr "跟进最低卖价"
 
 #. Error.
+#, fuzzy
 msgctxt "settings.priceRuleFailed"
 msgid "Couldn’t save the price rule: {error}"
-msgstr ""
+msgstr "无法保存定价规则：{error}"
+
+#. Setting: platinum a listing may sit above the suggested price before My orders flags it.
+#, fuzzy
+msgctxt "settings.healthTolerance"
+msgid "Price tolerance"
+msgstr "价格容差"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthToleranceHelp"
+msgid "My orders flags a listing as overpriced only when it sits more than this many platinum above your suggested price. At 0 it flags any listing above it."
+msgstr "只有当挂单比你的建议价格高出超过这么多白金时，“我的订单”才会标记为定价过高。设为 0 时，高于建议价的挂单都会被标记。"
+
+#. Setting: which problems My orders points out on your listings.
+#, fuzzy
+msgctxt "settings.healthChecks"
+msgid "Listing checks"
+msgstr "挂单检查"
+
+#. Setting help.
+#, fuzzy
+msgctxt "settings.healthChecksHelp"
+msgid "Which problems My orders points out on your listings. Untick one to stop seeing it. Nothing is changed until you press a fix."
+msgstr "“我的订单”会指出你挂单的哪些问题。取消勾选即可不再显示。在你按下修复之前不会改动任何内容。"
+
+#. Error.
+#, fuzzy
+msgctxt "settings.healthFailed"
+msgid "Couldn’t save the listing checks: {error}"
+msgstr "无法保存挂单检查设置：{error}"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.overpriced"
+msgid "Priced above your suggested price"
+msgstr "价格高于你的建议价格"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underbid"
+msgid "Priced under a buyer’s bid"
+msgstr "价格低于买家的收价"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.underpriced"
+msgid "Priced well below the market"
+msgstr "价格远低于市场"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.excess-qty"
+msgid "Listing more copies than you own"
+msgstr "挂单数量超过你的持有量"
+
+#. Checkbox: a listing problem My orders can point out.
+#, fuzzy
+msgctxt "settings.health.not-owned"
+msgid "Listing something you no longer own"
+msgstr "挂出了你已不再拥有的物品"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.lowest-ask"
 msgid "Lowest ask"
-msgstr ""
+msgstr "最低卖价"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.low5-avg"
 msgid "Average of the 5 lowest asks"
-msgstr ""
+msgstr "最低 5 个卖价的平均值"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.low20-avg"
 msgid "Average of the 20 lowest asks"
-msgstr ""
+msgstr "最低 20 个卖价的平均值"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.avg-48h"
 msgid "48-hour average sale"
-msgstr ""
+msgstr "48 小时平均成交价"
 
 #. Price basis option.
+#, fuzzy
 msgctxt "settings.basis.median-90d"
 msgid "90-day median sale"
-msgstr ""
+msgstr "90 天成交价中位数"
 
 #. A price rule in words, e.g. "90-day median sale +1p".
+#, fuzzy
 msgctxt "settings.ruleUp"
 msgid "{basis} +{offset}p"
-msgstr ""
+msgstr "{basis} +{offset}p"
 
 #. A price rule in words, e.g. "Lowest ask −2p".
+#, fuzzy
 msgctxt "settings.ruleDown"
 msgid "{basis} −{offset}p"
-msgstr ""
+msgstr "{basis} −{offset}p"
 
 #. Setting.
 #, fuzzy
@@ -10733,169 +10895,202 @@ msgid "Choose the acts that fit your goals before the week ends."
 msgstr "在本周结束前选择符合你目标的任务。"
 
 #. Optional daily task. Use the game’s name for Focus.
+#, fuzzy
 msgctxt "routine.task.focus-cap"
 msgid "Fill the daily Focus cap"
-msgstr ""
+msgstr "达成每日专精上限"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.focus-cap.detail"
 msgid "Earn Focus up to today’s limit while you play other missions."
-msgstr ""
+msgstr "在玩其他任务的同时获取专精，直到今日上限。"
 
 #. Optional daily task. Use the game’s name for Nightwave.
+#, fuzzy
 msgctxt "routine.task.nightwave-daily"
 msgid "Nightwave daily acts"
-msgstr ""
+msgstr "夜波每日任务"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.nightwave-daily.detail"
 msgid "Finish the daily acts that fit today’s session."
-msgstr ""
+msgstr "完成适合今日游玩时长的每日任务。"
 
 #. Optional daily task.
+#, fuzzy
 msgctxt "routine.task.open-world-standing"
 msgid "Open-world Syndicate standing"
-msgstr ""
+msgstr "开放世界集团声望"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.open-world-standing.detail"
 msgid "Turn in bounties or tokens toward today’s standing cap."
-msgstr ""
+msgstr "提交赏金或代币，直到今日声望上限。"
 
 #. Optional daily task. Acrithis is a game character.
+#, fuzzy
 msgctxt "routine.task.acrithis-daily"
 msgid "Acrithis’s daily special"
-msgstr ""
+msgstr "Acrithis 每日特供"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.acrithis-daily.detail"
 msgid "Check today’s offer in Duviri before it changes."
-msgstr ""
+msgstr "在双衍王境查看今日商品，过期即换。"
 
 #. Optional daily task. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.simaris-synthesis"
 msgid "Cephalon Simaris’s Daily Synthesis"
-msgstr ""
+msgstr "Cephalon Simaris 每日合成"
 
 #. Task detail.
+#, fuzzy
 msgctxt "routine.task.simaris-synthesis.detail"
 msgid "Scan today’s Synthesis target for Simaris Standing."
-msgstr ""
+msgstr "扫描今日合成目标，获取 Simaris 声望。"
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.elite-temporal-archimedea"
 msgid "Elite Temporal Archimedea"
-msgstr ""
+msgstr "精英 Temporal Archimedea"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.elite-temporal-archimedea.detail"
 msgid "Spend Search Pulses on The Hex’s weekly run. Five Pulses refresh each Monday."
-msgstr ""
+msgstr "用搜索脉冲挑战 The Hex 的每周任务。每周一刷新五个脉冲。"
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.elite-deep-archimedea"
 msgid "Elite Deep Archimedea"
-msgstr ""
+msgstr "精英 Deep Archimedea"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.elite-deep-archimedea.detail"
 msgid "Spend Search Pulses on Cavia’s weekly run. Five Pulses refresh each Monday."
-msgstr ""
+msgstr "用搜索脉冲挑战 Cavia 的每周任务。每周一刷新五个脉冲。"
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.netracells"
 msgid "Netracells"
-msgstr ""
+msgstr "Netracells"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.netracells.detail"
 msgid "Spend the Search Pulses you have left on Netracell runs."
-msgstr ""
+msgstr "把剩余的搜索脉冲花在 Netracell 任务上。"
 
 #. Optional weekly task. Use the game’s names; Bird 3 is a game character.
+#, fuzzy
 msgctxt "routine.task.bird-3-shard"
 msgid "Bird 3’s Archon Shard"
-msgstr ""
+msgstr "Bird 3 的执政官源力石"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.bird-3-shard.detail"
 msgid "Buy this week’s shard in the Sanctum Anatomica for 30,000 Cavia Standing."
-msgstr ""
+msgstr "在 Sanctum Anatomica 用 30,000 Cavia 声望购买本周的源力石。"
 
 #. Optional weekly task. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.teshin-honors"
 msgid "Teshin’s Steel Path Honors"
-msgstr ""
+msgstr "Teshin 的钢铁之路荣誉"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.teshin-honors.detail"
 msgid "Buy this week’s featured item and the Veiled Riven Cipher with Steel Essence."
-msgstr ""
+msgstr "用钢铁精华购买本周的精选物品和 Veiled Riven Cipher。"
 
 #. Optional weekly task. Palladino is a game character.
+#, fuzzy
 msgctxt "routine.task.palladino"
 msgid "Palladino’s weekly offerings"
-msgstr ""
+msgstr "Palladino 每周商品"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.palladino.detail"
 msgid "Trade Riven Slivers in Iron Wake for Kuva, Endo, Credits and a Riven Mod, each once a week."
-msgstr ""
+msgstr "在 Iron Wake 用裂罅碎片换取 Kuva、Endo、现金和一张裂罅 Mod，每项每周一次。"
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.icebind"
 msgid "The Icebind"
-msgstr ""
+msgstr "The Icebind"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.icebind.detail"
 msgid "Spend Cryobells with Cephalon Melica on Yuvan Peak. Three regrow each week and you can hold six."
-msgstr ""
+msgstr "在 Yuvan Peak 向 Cephalon Melica 花费 Cryobell。每周再生三个，最多持有六个。"
 
 #. Optional weekly task. Use the game’s name for the calendar.
+#, fuzzy
 msgctxt "routine.task.calendar-1999"
 msgid "1999 Calendar"
-msgstr ""
+msgstr "1999 日历"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.calendar-1999.detail"
 msgid "Finish this season’s To Dos and claim the prize. A new season starts each week; unfinished To Dos are lost."
-msgstr ""
+msgstr "完成本季的待办事项并领取奖励。每周开启新的一季；未完成的待办会作废。"
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.kahls-garrison"
 msgid "Kahl’s Garrison"
-msgstr ""
+msgstr "Kahl 的驻军"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.kahls-garrison.detail"
 msgid "Run this week’s Break Narmer missions with Kahl."
-msgstr ""
+msgstr "与 Kahl 一起完成本周的 Break Narmer 任务。"
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.the-circuit"
 msgid "The Circuit"
-msgstr ""
+msgstr "The Circuit"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.the-circuit.detail"
 msgid "Climb this week’s Circuit in Duviri for its reward pool."
-msgstr ""
+msgstr "在双衍王境攀登本周的 Circuit，获取奖励池中的奖励。"
 
 #. Optional weekly task. Use the game’s name.
+#, fuzzy
 msgctxt "routine.task.descendia"
 msgid "The Descendia"
-msgstr ""
+msgstr "The Descendia"
 
 #. Task detail. Use the game’s names.
+#, fuzzy
 msgctxt "routine.task.descendia.detail"
 msgid "Make this week’s progress and claim its challenge rewards."
-msgstr ""
+msgstr "推进本周进度并领取挑战奖励。"
 
 #. Detail under an item the player added.
+#, fuzzy
 msgctxt "routine.customDetail"
 msgid "Your own item. Its tick resets with the list."
-msgstr ""
+msgstr "你自己添加的条目。勾选状态随清单一起重置。"
 
 #. Detail under a monthly goal.
 #, fuzzy
@@ -11097,49 +11292,58 @@ msgid "Add a monthly goal to build this month’s checklist."
 msgstr "添加月度目标，建立本月的清单。"
 
 #. Empty state of the daily or weekly list.
+#, fuzzy
 msgctxt "routine.emptyTasks"
 msgid "Nothing on this list. Add an activity from the game or your own item below."
-msgstr ""
+msgstr "此清单为空。请在下方添加游戏中的活动或你自己的条目。"
 
 #. Label of the add buttons for built-in activities.
+#, fuzzy
 msgctxt "routine.fromGame"
 msgid "From the game"
-msgstr ""
+msgstr "来自游戏"
 
 #. Screen reader name of a button that adds a built-in activity.
+#, fuzzy
 msgctxt "routine.addBuiltin"
 msgid "Add {task}"
-msgstr ""
+msgstr "添加 {task}"
 
 #. Note when nothing is left to add.
+#, fuzzy
 msgctxt "routine.allListed"
 msgid "Every activity TennoWorth knows for this list is on it."
-msgstr ""
+msgstr "TennoWorth 已知的此清单活动都已在清单中。"
 
 #. Field label.
+#, fuzzy
 msgctxt "routine.addTaskLabel"
 msgid "Add your own item"
-msgstr ""
+msgstr "添加你自己的条目"
 
 #. Field placeholder. Darvo is a game character.
+#, fuzzy
 msgctxt "routine.taskExample"
 msgid "e.g. Check Darvo’s deal"
-msgstr ""
+msgstr "例如：查看 Darvo 的特惠"
 
 #. Button.
+#, fuzzy
 msgctxt "routine.addTask"
 msgid "Add item"
-msgstr ""
+msgstr "添加条目"
 
 #. Note.
+#, fuzzy
 msgctxt "routine.taskLimit"
 msgid "Up to {max} items. Remove one to add another."
-msgstr ""
+msgstr "最多 {max} 个条目。请移除一个后再添加。"
 
 #. Note.
+#, fuzzy
 msgctxt "routine.taskHelp"
 msgid "Items stay on the list; their ticks reset with it."
-msgstr ""
+msgstr "条目会保留在清单中；勾选状态随清单一起重置。"
 
 #. Button while busy.
 #, fuzzy
@@ -13589,49 +13793,58 @@ msgstr "Darvo 特惠"
 
 #. Event kind: the player's own daily/weekly checklist and monthly goals.
 #. Max 20 characters.
+#, fuzzy
 msgctxt "cal.kind.routine"
 msgid "My routines"
-msgstr ""
+msgstr "我的例行任务"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.daily"
 msgid "Daily reset"
-msgstr ""
+msgstr "每日重置"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.weekly"
 msgid "Weekly reset"
-msgstr ""
+msgstr "每周重置"
 
 #. Routine reset name.
+#, fuzzy
 msgctxt "cal.routine.monthly"
 msgid "Monthly goals reset"
-msgstr ""
+msgstr "每月目标重置"
 
 #. Event title; reset reads like "Weekly reset".
+#, fuzzy
 msgctxt "cal.routine.title"
 msgid "{reset} · {open} of {total} still open"
-msgstr ""
+msgstr "{reset} · 共 {total} 项，{open} 项未完成"
 
 #. Short event label.
+#, fuzzy
 msgctxt "cal.routine.short"
 msgid "{reset} · {open} open"
-msgstr ""
+msgstr "{reset} · {open} 项未完成"
 
 #. Event detail; tasks is a list of routine names.
+#, fuzzy
 msgctxt "cal.routine.openList"
 msgid "Still open: {tasks}."
-msgstr ""
+msgstr "未完成：{tasks}。"
 
 #. Event detail when more than three are open.
+#, fuzzy
 msgctxt "cal.routine.openMore"
 msgid "Still open: {tasks} and {more} more."
-msgstr ""
+msgstr "未完成：{tasks} 等另外 {more} 项。"
 
 #. Button in an event's detail.
+#, fuzzy
 msgctxt "cal.routine.open"
 msgid "Open routines"
-msgstr ""
+msgstr "打开例行任务"
 
 #. Countdown: days and hours.
 #. Max 8 characters.
@@ -13920,9 +14133,10 @@ msgid "DE announcement"
 msgstr "DE 公告"
 
 #. Date source: the player's own checklist.
+#, fuzzy
 msgctxt "cal.source.routine"
 msgid "Your routines"
-msgstr ""
+msgstr "你的例行任务"
 
 #. Local time beside the UTC time.
 #, fuzzy

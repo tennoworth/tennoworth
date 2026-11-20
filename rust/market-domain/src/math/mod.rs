@@ -103,6 +103,25 @@ pub fn rank0_orders(orders: &[LiveOrder]) -> Vec<LiveOrder> {
         .collect()
 }
 
+/// Exactly one ranked tier of a stats series - the max-rank counterpart of
+/// [`rank0_rows`]. Players sell maxed mods and arcanes as a separate product,
+/// so those rows are never blended with rank 0.
+pub fn rank_rows(rows: &[StatsDay], rank: i64) -> Vec<StatsDay> {
+    rows.iter()
+        .filter(|d| d.mod_rank == Some(Some(rank)))
+        .cloned()
+        .collect()
+}
+
+/// Exactly one ranked tier of a live order list; see [`rank_rows`].
+pub fn rank_orders(orders: &[LiveOrder], rank: i64) -> Vec<LiveOrder> {
+    orders
+        .iter()
+        .filter(|o| o.rank == Some(rank))
+        .cloned()
+        .collect()
+}
+
 /// The single subtype tier this item's stats should describe, or `None`.
 ///
 /// Relics have the same per-(day, subtype) duality mods have with rank: one
@@ -533,6 +552,24 @@ mod tests {
     }
 
     // ---- rank0_orders --------------------------------------------------
+    #[test]
+    fn rank_tiers_keep_only_the_named_rank() {
+        let book = [
+            ask_rank(30.0, Some(3)),
+            ask_rank(35.0, Some(0)),
+            ask_rank(120.0, Some(5)),
+            ask(9.0),
+        ];
+        assert_eq!(rank_orders(&book, 5), vec![ask_rank(120.0, Some(5))]);
+        let days = [
+            day_rank(40.0, Some(Some(5))),
+            day_rank(8.0, Some(None)),
+            day_rank(8.0, None),
+            day_rank(20.0, Some(Some(3))),
+        ];
+        assert_eq!(rank_rows(&days, 5), vec![day_rank(40.0, Some(Some(5)))]);
+    }
+
     #[test]
     fn rank0_orders_drops_ranked_tiers() {
         let book = [

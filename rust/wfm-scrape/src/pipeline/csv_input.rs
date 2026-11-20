@@ -32,6 +32,17 @@ pub struct CsvRow {
     pub price_basis: String,
     pub low20_avg: String,
     pub vol_28d: String,
+    pub max_rank: String,
+    pub ranked_live_buys: String,
+    pub ranked_live_sells: String,
+    pub ranked_top_buy_price: String,
+    pub ranked_low_sell_price: String,
+    pub ranked_low5_avg: String,
+    pub ranked_low20_avg: String,
+    pub ranked_volume_48h: String,
+    pub ranked_avg_price_48h: String,
+    pub ranked_median_now: String,
+    pub ranked_median_90d: String,
 }
 
 impl CsvRow {
@@ -65,6 +76,17 @@ impl CsvRow {
             price_basis: g("price_basis"),
             low20_avg: g("low20_avg"),
             vol_28d: g("vol_28d"),
+            max_rank: g("max_rank"),
+            ranked_live_buys: g("ranked_live_buys"),
+            ranked_live_sells: g("ranked_live_sells"),
+            ranked_top_buy_price: g("ranked_top_buy_price"),
+            ranked_low_sell_price: g("ranked_low_sell_price"),
+            ranked_low5_avg: g("ranked_low5_avg"),
+            ranked_low20_avg: g("ranked_low20_avg"),
+            ranked_volume_48h: g("ranked_volume_48h"),
+            ranked_avg_price_48h: g("ranked_avg_price_48h"),
+            ranked_median_now: g("ranked_median_now"),
+            ranked_median_90d: g("ranked_median_90d"),
         }
     }
 }
