@@ -104,7 +104,11 @@ test('in-game notice is a passive, transparent card whose lines stay inside it',
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} migrated screens retain content and shared control targets`, async ({ page }, testInfo) => {
     await page.emulateMedia({ colorScheme: theme });
-    const market = { ...baseMarket, updated_at: new Date(Date.now() - 4 * 86_400_000).toISOString() };
+    // A Tuesday: from Thursday to Sunday the Sell view adds a weekend line under
+    // Top picks, which would fail the compact-rail check below on those days only.
+    const tuesday = new Date('2026-11-17T12:00:00Z');
+    await page.clock.setFixedTime(tuesday);
+    const market = { ...baseMarket, updated_at: new Date(tuesday.getTime() - 4 * 86_400_000).toISOString() };
     await page.route('**/market.json', route => route.fulfill({ json: market }));
     await page.goto('/?preview-desktop&sample');
     await expect(page.locator('.shell')).toBeVisible();
