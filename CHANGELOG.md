@@ -54,6 +54,35 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.105 - 2026-11-20
+
+# 📈 TennoWorth Desktop 0.10.105
+
+TennoWorth Desktop 0.10.105 is ready.
+
+This release is for anyone who sells ranked mods and arcanes or keeps a long routine. My orders no longer compares a maxed listing with rank-0 prices, so it stops calling good listings overpriced, and it now also points out listings priced well below the market. You choose which of these checks it shows. Daily and weekly routine items can be edited and moved, and every screen is now translated into all 15 languages. Thanks to Lawr on the TennoWorth Discord, who reported the ranked pricing and suggested editing routine items.
+
+## Changelog (6)
+
+### Selling
+
+- **Ranked listings are judged at their own rank** A maxed mod or arcane in My orders was compared with rank-0 prices and flagged as far overpriced. It is now compared with asks at its own rank, and with the market's max-rank figures as they arrive. Reported by Lawr on the TennoWorth Discord. <!-- app-note {"id":"ranked-order-health","kind":"fixed"} -->
+- **Listings priced too low are flagged** My orders now marks a listing priced well below the lowest other ask, or below your own price rule, and says about how much platinum each one leaves on the table. Suggested by Lawr on the TennoWorth Discord. <!-- app-note {"id":"underpriced-check","kind":"improved"} -->
+- **Whole-platinum price targets** Prices suggested by your price rule are rounded to whole platinum, the only prices warframe.market accepts. <!-- app-note {"id":"rule-whole-plat","kind":"fixed"} -->
+- **Choose which listing checks to see** Settings → Selling sets how many platinum a listing may sit above your suggested price before it is called overpriced, and which problems My orders points out. <!-- app-note {"id":"listing-check-settings","kind":"improved"} -->
+
+### Routines
+
+- **Edit and move daily and weekly items** Each daily or weekly item can be renamed in place and moved up or down, and each list now holds up to 20 items. Suggested by Lawr on the TennoWorth Discord. <!-- app-note {"id":"routine-edit-move","kind":"improved"} -->
+
+### Languages
+
+- **Every screen translated** The screens that still showed English in other languages are now translated in all 15 languages. Corrections from native speakers are welcome. <!-- app-note {"id":"translations-complete","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.10.104 - 2026-11-17
 
 # 🎨 TennoWorth Desktop 0.10.104

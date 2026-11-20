@@ -1,5 +1,5 @@
 {
-  "version": "0.10.104",
+  "version": "0.10.105",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2290,6 +2290,78 @@
           "kind": "improved",
           "title": "The window opens with the whole sidebar",
           "body": "TennoWorth now opens tall enough to show every view and the links at the foot of the sidebar. On a shorter screen it opens at the screen's height, and you can still make it smaller.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.105",
+      "date": "2026-11-20",
+      "changes": [
+        {
+          "id": "ranked-order-health",
+          "kind": "fixed",
+          "title": "Ranked listings are judged at their own rank",
+          "body": "A maxed mod or arcane in My orders was compared with rank-0 prices and flagged as far overpriced. It is now compared with asks at its own rank, and with the market's max-rank figures as they arrive. Reported by Lawr on the TennoWorth Discord.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "underpriced-check",
+          "kind": "improved",
+          "title": "Listings priced too low are flagged",
+          "body": "My orders now marks a listing priced well below the lowest other ask, or below your own price rule, and says about how much platinum each one leaves on the table. Suggested by Lawr on the TennoWorth Discord.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "rule-whole-plat",
+          "kind": "fixed",
+          "title": "Whole-platinum price targets",
+          "body": "Prices suggested by your price rule are rounded to whole platinum, the only prices warframe.market accepts.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "listing-check-settings",
+          "kind": "improved",
+          "title": "Choose which listing checks to see",
+          "body": "Settings → Selling sets how many platinum a listing may sit above your suggested price before it is called overpriced, and which problems My orders points out.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "routine-edit-move",
+          "kind": "improved",
+          "title": "Edit and move daily and weekly items",
+          "body": "Each daily or weekly item can be renamed in place and moved up or down, and each list now holds up to 20 items. Suggested by Lawr on the TennoWorth Discord.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "translations-complete",
+          "kind": "improved",
+          "title": "Every screen translated",
+          "body": "The screens that still showed English in other languages are now translated in all 15 languages. Corrections from native speakers are welcome.",
           "platforms": [
             "windows",
             "linux"
