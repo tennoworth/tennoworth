@@ -57,8 +57,10 @@
     onsectionshown?: () => void;
     /** Desktop only: switches and saves the app language. */
     onlanguage?: (code: LanguageCode) => Promise<void>;
+    /** Steam Gaming Mode only: switches back to the controller layout. */
+    ongaminglayout?: () => void;
   }
-  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true, onlanguage, store, pricing }: Props = $props();
+  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true, onlanguage, ongaminglayout, store, pricing }: Props = $props();
   const display = useDisplay();
   const sections = untrack(() => new SettingsSections(store));
 
@@ -414,6 +416,12 @@
     {#if presence}<PresenceSettings {presence} />{/if}
   </SettingsSection>
   <SettingsSection id="appearance" title={t('settings.appearance')} {sections}>
+    {#if ongaminglayout}
+      <div class="ui-setting-row">
+        <div class="ui-setting-copy"><strong>{t('gaming.gamingLayout')}</strong><p>{t('gaming.gamingLayoutHelp')}</p></div>
+        <div class="ui-setting-control"><button type="button" class="btn" onclick={ongaminglayout}>{t('gaming.useGamingLayout')}</button></div>
+      </div>
+    {/if}
     {#if onlanguage}
       <div class="ui-setting-row">
         <div class="ui-setting-copy"><strong id="app-language-label">{t('settings.appLanguage')}</strong><p>{t('settings.appLanguageHelp')}</p>

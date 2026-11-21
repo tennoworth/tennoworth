@@ -131,7 +131,17 @@ static CLIENT: LazyLock<Mutex<Option<ClientHandle>>> = LazyLock::new(|| Mutex::n
 static NOTICE_CLIENT: LazyLock<Mutex<Option<ClientHandle>>> = LazyLock::new(|| Mutex::new(None));
 
 pub fn available() -> bool {
-    std::env::var_os("WAYLAND_DISPLAY").is_some() && ensure_client(Slot::Relic).is_ok()
+    crate::gamescope::overlay_wayland_display().is_some() && ensure_client(Slot::Relic).is_ok()
+}
+
+/// The session's compositor through libwayland's own lookup; in Gaming Mode,
+/// gamescope's socket, which apps are not pointed at but which offers layer-shell.
+fn connect() -> Result<Connection, String> {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        return Connection::connect_to_env()
+            .map_err(|error| format!("connecting to the Wayland compositor: {error}"));
+    }
+    crate::gamescope::connect_wayland()
 }
 
 pub fn show(geometry: OverlayGeometry, result: &RelicOverlayResult) -> Result<(), String> {
@@ -266,6 +276,20 @@ impl OutputInfo {
     fn ready(&self) -> bool {
         self.logical_width > 0 && self.logical_height > 0
     }
+
+    /// gamescope (Steam Gaming Mode) has no xdg-output; its one output's
+    /// logical size is then the current mode over the integer scale.
+    fn fill_logical_size_from_mode(&mut self) {
+        if !self.ready() {
+            (self.logical_width, self.logical_height) =
+                logical_size_from_mode(self.mode_width, self.mode_height, self.scale);
+        }
+    }
+}
+
+fn logical_size_from_mode(mode_width: u32, mode_height: u32, scale: i32) -> (u32, u32) {
+    let scale = u32::try_from(scale.max(1)).unwrap_or(1);
+    (mode_width / scale, mode_height / scale)
 }
 
 struct BufferSlot {
@@ -281,6 +305,11 @@ struct SurfaceState {
     fractional_scale: Option<WpFractionalScaleV1>,
     logical_width: i32,
     logical_height: i32,
+    /// Where the card's rectangle sits inside the surface: the whole surface,
+    /// except under gamescope, which ignores layer-shell margins and draws
+    /// every layer surface at the output's corner. There the surface covers
+    /// the output and the card is drawn at its offset instead.
+    inset: (i32, i32, i32, i32),
     scale_120: u32,
     configured: bool,
     content: Content,
@@ -305,8 +334,7 @@ fn run_worker(
     active: Arc<AtomicBool>,
     ready_tx: &mpsc::SyncSender<Result<(), String>>,
 ) -> Result<(), String> {
-    let connection = Connection::connect_to_env()
-        .map_err(|error| format!("connecting to the Wayland compositor: {error}"))?;
+    let connection = connect()?;
     let (globals, mut event_queue) = registry_queue_init::<WaylandState>(&connection)
         .map_err(|error| format!("reading Wayland globals: {error}"))?;
     let qh = event_queue.handle();
@@ -366,6 +394,11 @@ fn run_worker(
     event_queue
         .roundtrip(&mut state)
         .map_err(|error| format!("reading Wayland output geometry: {error}"))?;
+    if xdg_output_manager.is_none() {
+        for output in &mut state.outputs {
+            output.fill_logical_size_from_mode();
+        }
+    }
     if state.outputs.iter().all(|output| !output.ready()) {
         let error = "Wayland compositor did not provide usable output geometry".to_string();
         let _ = ready_tx.send(Err(error.clone()));
@@ -423,9 +456,14 @@ fn run_worker(
                 tv_nsec: 20_000_000,
             };
             if poll(&mut fds, Some(&timeout)).is_ok_and(|ready| ready > 0) {
-                read_guard
-                    .read()
-                    .map_err(|error| format!("reading Wayland overlay events: {error}"))?;
+                match read_guard.read() {
+                    Ok(_) => {}
+                    // Readable can still mean nothing to read yet; gamescope's
+                    // socket wakes the poll like this, and it is not a failure.
+                    Err(wayland_client::backend::WaylandError::Io(error))
+                        if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(error) => return Err(format!("reading Wayland overlay events: {error}")),
+                }
             }
         }
     }
@@ -441,7 +479,7 @@ fn map_surface(
 ) -> Result<(), String> {
     unmap_surface(state);
     let (output_index, local_x, local_y, logical_width, logical_height) =
-        map_geometry_to_output(&state.outputs, geometry, x_output)?;
+        map_geometry_to_output(&state.outputs, geometry, x_output, game_space())?;
     let output = state
         .outputs
         .get(output_index)
@@ -460,11 +498,26 @@ fn map_surface(
         &qh,
         (),
     );
+    let full_output = crate::gamescope::active();
+    let (surface_width, surface_height) = if full_output {
+        (output.logical_width as i32, output.logical_height as i32)
+    } else {
+        (logical_width, logical_height)
+    };
+    let inset = if full_output {
+        (local_x, local_y, logical_width, logical_height)
+    } else {
+        (0, 0, logical_width, logical_height)
+    };
     layer_surface.set_anchor(Anchor::Top | Anchor::Left);
     layer_surface.set_exclusive_zone(-1);
     layer_surface.set_keyboard_interactivity(KeyboardInteractivity::None);
-    layer_surface.set_margin(local_y, 0, 0, local_x);
-    layer_surface.set_size(logical_width as u32, logical_height as u32);
+    if full_output {
+        layer_surface.set_margin(0, 0, 0, 0);
+    } else {
+        layer_surface.set_margin(local_y, 0, 0, local_x);
+    }
+    layer_surface.set_size(surface_width as u32, surface_height as u32);
     let viewport = state
         .viewporter
         .as_ref()
@@ -478,8 +531,9 @@ fn map_surface(
         layer_surface,
         viewport,
         fractional_scale,
-        logical_width,
-        logical_height,
+        logical_width: surface_width,
+        logical_height: surface_height,
+        inset,
         scale_120: initial_scale_120(&output),
         configured: false,
         content,
@@ -547,20 +601,8 @@ fn render_current_surface(state: &mut WaylandState) -> Result<(), String> {
         .find(|slot| !slot.busy)
         .ok_or_else(|| "Wayland overlay buffers are still in use".to_string())?;
     match &surface.content {
-        Content::Relic(result) => draw_overlay(
-            &slot.image,
-            result,
-            surface.logical_width,
-            surface.logical_height,
-            scale,
-        )?,
-        Content::Notice(notice) => draw_notice(
-            &slot.image,
-            notice,
-            surface.logical_width,
-            surface.logical_height,
-            scale,
-        )?,
+        Content::Relic(result) => draw_overlay(&slot.image, result, surface.inset, scale)?,
+        Content::Notice(notice) => draw_notice(&slot.image, notice, surface.inset, scale)?,
     }
     slot.busy = true;
     if let Some(viewport) = surface.viewport.as_ref() {
@@ -644,10 +686,41 @@ fn initial_scale_120(output: &OutputInfo) -> u32 {
     }
 }
 
+/// Under gamescope, overlay geometry is in the game's own pixels: the
+/// resolution set in the game, which gamescope scales to fit its output.
+fn game_space() -> Option<(u32, u32)> {
+    if !crate::gamescope::active() {
+        return None;
+    }
+    crate::vision::capture::warframe_window_size()
+        .filter(|&(width, height)| width > 0 && height > 0)
+}
+
+/// Places a rectangle given in game pixels on an output the game is scaled
+/// to fit, keeping its aspect ratio and centring it, as gamescope does.
+fn fit_game_space(
+    geometry: OverlayGeometry,
+    (game_width, game_height): (u32, u32),
+    output_width: u32,
+    output_height: u32,
+) -> (i32, i32, i32, i32) {
+    let scale = (f64::from(output_width) / f64::from(game_width))
+        .min(f64::from(output_height) / f64::from(game_height));
+    let offset_x = (f64::from(output_width) - f64::from(game_width) * scale) / 2.0;
+    let offset_y = (f64::from(output_height) - f64::from(game_height) * scale) / 2.0;
+    (
+        (offset_x + f64::from(geometry.x) * scale).round() as i32,
+        (offset_y + f64::from(geometry.y) * scale).round() as i32,
+        (f64::from(geometry.width) * scale).round().max(1.0) as i32,
+        (f64::from(geometry.height) * scale).round().max(1.0) as i32,
+    )
+}
+
 fn map_geometry_to_output(
     outputs: &[OutputInfo],
     geometry: OverlayGeometry,
     x_output: Option<&XOutput>,
+    game_space: Option<(u32, u32)>,
 ) -> Result<(usize, i32, i32, i32, i32), String> {
     let index = x_output
         .and_then(|x_output| {
@@ -671,14 +744,17 @@ fn map_geometry_to_output(
     let output = outputs
         .get(index)
         .ok_or_else(|| "selected Wayland output is unavailable".to_string())?;
-    let (mut x, mut y, mut width, mut height) = logical_geometry(
-        geometry,
-        x_output.filter(|x_output| x_output.name == output.name),
-        output.logical_x,
-        output.logical_y,
-        output.logical_width,
-        output.logical_height,
-    );
+    let (mut x, mut y, mut width, mut height) = match game_space {
+        Some(game) => fit_game_space(geometry, game, output.logical_width, output.logical_height),
+        None => logical_geometry(
+            geometry,
+            x_output.filter(|x_output| x_output.name == output.name),
+            output.logical_x,
+            output.logical_y,
+            output.logical_width,
+            output.logical_height,
+        ),
+    };
     width = width.clamp(1, output.logical_width as i32);
     height = height.clamp(1, output.logical_height as i32);
     x = x.clamp(0, output.logical_width as i32 - width);
@@ -791,8 +867,7 @@ fn intersection_area(a: OverlayGeometry, b: OverlayGeometry) -> u64 {
 fn draw_overlay(
     image: &ImageSurface,
     result: &RelicOverlayResult,
-    logical_width: i32,
-    logical_height: i32,
+    (inset_x, inset_y, logical_width, logical_height): (i32, i32, i32, i32),
     buffer_scale: f64,
 ) -> Result<(), String> {
     let context =
@@ -803,6 +878,7 @@ fn draw_overlay(
     context
         .paint()
         .map_err(|error| format!("clearing Cairo overlay surface: {error}"))?;
+    context.translate(f64::from(inset_x), f64::from(inset_y));
     context.set_operator(Operator::Over);
     for slot in &result.slots {
         let box_x = slot.box_.x * logical_width as f64;
@@ -929,8 +1005,7 @@ fn draw_overlay(
 fn draw_notice(
     image: &ImageSurface,
     notice: &GameNotice,
-    logical_width: i32,
-    logical_height: i32,
+    (inset_x, inset_y, logical_width, logical_height): (i32, i32, i32, i32),
     buffer_scale: f64,
 ) -> Result<(), String> {
     let context =
@@ -938,7 +1013,9 @@ fn draw_notice(
     // Laid out on a card NOTICE_HEIGHT units tall, scaled to the surface the
     // compositor gave us, so a large game window gets a proportionally larger card.
     let units = (f64::from(logical_height) / crate::overlay::notice::NOTICE_HEIGHT).max(0.5);
-    context.scale(buffer_scale * units, buffer_scale * units);
+    context.scale(buffer_scale, buffer_scale);
+    context.translate(f64::from(inset_x), f64::from(inset_y));
+    context.scale(units, units);
     context.set_operator(Operator::Source);
     context.set_source_rgba(0.0, 0.0, 0.0, 0.0);
     context
@@ -1140,6 +1217,11 @@ impl Dispatch<WlOutput, usize> for WaylandState {
         };
         match event {
             wl_output::Event::Name { name } => output.name = name,
+            // Overridden by xdg-output's logical position where it exists.
+            wl_output::Event::Geometry { x, y, .. } => {
+                output.logical_x = x;
+                output.logical_y = y;
+            }
             wl_output::Event::Mode {
                 flags: WEnum::Value(flags),
                 width,
@@ -1255,6 +1337,14 @@ delegate_noop!(WaylandState: ignore WpFractionalScaleManagerV1);
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_output_without_xdg_output_takes_its_logical_size_from_the_mode() {
+        assert_eq!(super::logical_size_from_mode(1280, 800, 1), (1280, 800));
+        assert_eq!(super::logical_size_from_mode(2560, 1600, 2), (1280, 800));
+        assert_eq!(super::logical_size_from_mode(1280, 800, 0), (1280, 800));
+        assert_eq!(super::logical_size_from_mode(0, 0, 1), (0, 0));
+    }
+
     use super::*;
 
     #[test]
@@ -1356,10 +1446,70 @@ mod tests {
         .expect("shared overlay result fixture should deserialize");
         let mut image = ImageSurface::create(Format::ARgb32, 1000, 150)
             .expect("test image surface should be created");
-        draw_overlay(&image, &result, 1000, 150, 1.0)
+        draw_overlay(&image, &result, (0, 0, 1000, 150), 1.0)
             .expect("shared overlay fixture should render");
         let pixels = image.data().expect("rendered pixels should be readable");
         assert!(pixels.iter().any(|channel| *channel != 0));
         assert_eq!(&pixels[..4], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn game_pixels_fit_the_output_like_gamescope_scales_the_game() {
+        let band = OverlayGeometry {
+            x: 100,
+            y: 200,
+            width: 400,
+            height: 100,
+        };
+        // Same aspect: a plain scale.
+        assert_eq!(
+            fit_game_space(band, (640, 400), 1280, 800),
+            (200, 400, 800, 200)
+        );
+        // 16:9 game on a 16:10 output: letterboxed, bars of 40 at the top and bottom.
+        assert_eq!(
+            fit_game_space(band, (1280, 720), 1280, 800),
+            (100, 240, 400, 100)
+        );
+        // 4:3 game: pillarboxed, bars of 106.67 at the sides.
+        assert_eq!(
+            fit_game_space(band, (1024, 768), 1280, 800),
+            (211, 208, 417, 104)
+        );
+    }
+
+    /// Smallest x and y of any drawn pixel.
+    fn drawn_origin(image: &mut ImageSurface) -> (usize, usize) {
+        let stride = image.stride() as usize;
+        let width = image.width() as usize;
+        let pixels = image.data().expect("rendered pixels should be readable");
+        let mut origin = (usize::MAX, usize::MAX);
+        for (row, line) in pixels.chunks(stride).enumerate() {
+            for column in 0..width {
+                if line[column * 4..column * 4 + 4]
+                    .iter()
+                    .any(|channel| *channel != 0)
+                {
+                    origin = (origin.0.min(column), origin.1.min(row));
+                }
+            }
+        }
+        origin
+    }
+
+    #[test]
+    fn a_full_output_surface_draws_the_cards_at_their_offset() {
+        // gamescope draws layer surfaces at the output's corner whatever the
+        // margins say, so there the card is drawn at its offset instead.
+        let result: RelicOverlayResult = serde_json::from_str(include_str!(
+            "../../../../../tests/fixtures/relic-ocr/result.json"
+        ))
+        .expect("shared overlay result fixture should deserialize");
+        let mut alone = ImageSurface::create(Format::ARgb32, 1000, 150).expect("surface");
+        draw_overlay(&alone, &result, (0, 0, 1000, 150), 1.0).expect("render");
+        let mut inset = ImageSurface::create(Format::ARgb32, 1600, 400).expect("surface");
+        draw_overlay(&inset, &result, (300, 200, 1000, 150), 1.0).expect("render");
+        let (x, y) = drawn_origin(&mut alone);
+        assert_eq!(drawn_origin(&mut inset), (x + 300, y + 200));
     }
 }

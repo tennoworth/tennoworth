@@ -419,15 +419,29 @@ fn preview_monitor(app: &AppHandle) -> Result<tauri::Monitor, String> {
         .ok_or_else(|| "no monitor is available".to_string())
 }
 
+/// Where the preview is laid out. Under gamescope that is the game's own
+/// resolution, the space the overlay is placed in there.
+/// The area as x, y, width and height.
+fn preview_area(app: &AppHandle) -> Result<(i32, i32, u32, u32), String> {
+    #[cfg(target_os = "linux")]
+    if crate::gamescope::active() {
+        if let Some(size) = crate::vision::capture::warframe_window_size() {
+            return Ok((0, 0, size.0, size.1));
+        }
+    }
+    let monitor = preview_monitor(app)?;
+    let size = monitor.size();
+    let position = monitor.position();
+    Ok((position.x, position.y, size.width, size.height))
+}
+
 #[tauri::command]
 pub fn preview_relic_overlay(app: AppHandle, state: State<'_, OverlayState>) -> Result<(), String> {
-    let monitor = preview_monitor(&app)?;
-    let monitor_size = monitor.size();
-    let monitor_position = monitor.position();
-    let width = (monitor_size.width as f64 * 0.52).round().max(720.0) as u32;
+    let (area_x, area_y, area_width, area_height) = preview_area(&app)?;
+    let width = (area_width as f64 * 0.52).round().max(720.0) as u32;
     let height = 150u32;
-    let x = monitor_position.x + (monitor_size.width.saturating_sub(width) / 2) as i32;
-    let y = monitor_position.y + (monitor_size.height as f64 * 0.48).round() as i32;
+    let x = area_x + (area_width.saturating_sub(width) / 2) as i32;
+    let y = area_y + (area_height as f64 * 0.48).round() as i32;
     let names = [
         ("Forma Blueprint", None, None, true, false),
         (
@@ -581,13 +595,53 @@ pub fn scan_overlay_now(app: AppHandle) -> Result<(), String> {
     // The settings button is a hand-off to the game: leaving the dashboard in
     // front makes a correctly positioned transparent overlay look embedded in
     // Tennoworth instead. A global-shortcut capture already has Warframe in
-    // front and does not take this path.
+    // front and does not take this path. Gaming Mode has no tray and does not
+    // bring the game forward, so hiding there leaves a black screen and an app
+    // that cannot be reached again. It shows one app at a time and captures
+    // only what is in front, so wait for the player to switch to the game.
+    if crate::gamescope::active() {
+        return capture_after_switching_to_the_game(app);
+    }
     if let Some(window) = app.get_webview_window("main") {
         window
             .hide()
             .map_err(|e| format!("hiding Tennoworth before capture: {e}"))?;
     }
     trigger_capture(&app, "settings button")
+}
+
+/// How long the settings button waits, in Gaming Mode, for the game in front.
+const GAME_SWITCH_WAIT: Duration = Duration::from_secs(15);
+
+fn capture_after_switching_to_the_game(app: AppHandle) -> Result<(), String> {
+    std::thread::Builder::new()
+        .name("relic-capture-wait".into())
+        .spawn(move || {
+            let deadline = Instant::now() + GAME_SWITCH_WAIT;
+            while Instant::now() < deadline {
+                if matches!(
+                    crate::vision::focus::game_focus(),
+                    crate::vision::focus::GameFocus::Focused(_)
+                ) {
+                    // gamescope swaps the visible app on its next frames.
+                    std::thread::sleep(Duration::from_millis(400));
+                    if let Err(error) = trigger_capture(&app, "settings button") {
+                        app.state::<OverlayState>().set_status("error", Some(error));
+                    }
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            app.state::<OverlayState>().set_status(
+                "error",
+                Some(
+                    "capture_failed: Warframe was not brought to the front within 15 seconds"
+                        .into(),
+                ),
+            );
+        })
+        .map(|_| ())
+        .map_err(|e| format!("starting capture wait: {e}"))
 }
 
 pub fn register_configured_shortcut(app: &AppHandle) {

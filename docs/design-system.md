@@ -722,6 +722,37 @@ transforming, so increasing scale does not widen a card beyond its reward slot.
 The separately native-rendered overlay backend is not styled by CSS: changing
 these tokens does not certify that renderer or live capture/game placement.
 
+### Gaming Mode layout
+
+Under gamescope (Steam Gaming Mode) the desktop app opens a controller-first
+layout instead of the sidebar workspace (`desktop/gaming/`). It is a layout of
+the same app: the same controllers, review dialog, sign-in dialogs and
+settings store, so nothing done in one layout is lost in the other. The
+desktop layout stays one choice away in its Setup section, and the choice
+persists (`layout`).
+
+- One fixed 1280 by 800 screen, read from arm's length: the root is 18px
+  (`html[data-layout="gaming"]`) and every control is at least 48px tall.
+  Text roles and tokens are the shared ones; only the root grows.
+- Four sections in a title rail, in a fixed order: Sell now, Rewards, Orders,
+  Setup. LB and RB step through them; Menu opens Setup.
+- Exactly one focused control, drawn as the ink inversion with the row cursor's
+  square, whether focus came from the pad, a key or the pointer. Focus moves by
+  direction to the nearest control (`spatial.ts`), and within an open dialog
+  only. A, B, X and Y always mean select, back, the section's own action and
+  scan; a legend along the foot names them for the section on screen.
+- Up and down only ever move focus. Left and right step a focused number field,
+  so passing through a price on the way to Send cannot change it. The desktop
+  dialogs this layout opens draw any focus as an outline, since focus moved by
+  the pad is not `:focus-visible`.
+- The window takes the whole screen: gamescope letterboxes a smaller one.
+- Lists are rows, not tables: name, the decision fact, and one action. Detail
+  that needs a table stays in the desktop layout.
+- Text entry is avoided. Where it is unavoidable (warframe.market sign-in) the
+  shared dialog opens and Steam's on-screen keyboard does the typing.
+- The relic overlay is zero-touch here: no placement settings, and nothing in
+  this layout has to be pressed during a reward screen.
+
 ### In-game notice
 
 A notification the player chose to see In game appears as one card over the

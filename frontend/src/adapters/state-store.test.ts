@@ -57,6 +57,7 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     ['relic-crack-anyway', 'wfminv:relic-crack-anyway-v1', '["meso_o2_relic"]'],
     ['app-language', 'wfminv:app-language-v1', 'fr'],
     ['settings-collapsed', 'wfminv:settings-collapsed-v1', '["overlay"]'],
+    ['layout', 'wfminv:layout-v1', 'gaming'],
   ];
 
   // Drift-proof gate: the fixture and LOCAL_SETTING_KEYS must agree, or the

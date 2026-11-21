@@ -18,7 +18,7 @@ pub(super) fn present_overlay(
     // A reward screen outranks any in-game notice.
     super::notice::hide(app);
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+    if crate::gamescope::overlay_wayland_display().is_some() {
         let geometry = wayland::OverlayGeometry {
             x,
             y,
@@ -166,7 +166,7 @@ pub(super) fn push_tauri_overlay_result(
 
 pub(crate) fn prewarm_overlay_window(app: &AppHandle) {
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+    if crate::gamescope::overlay_wayland_display().is_some() {
         if wayland::available() {
             return;
         }
@@ -217,7 +217,7 @@ pub(super) fn hide_overlay(app: &AppHandle) {
 
 pub(super) fn preferred_presentation_backend() -> &'static str {
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+    if crate::gamescope::overlay_wayland_display().is_some() {
         return "wayland-layer-shell";
     }
     "tauri-window"

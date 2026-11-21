@@ -443,6 +443,8 @@ export interface PingResponse {
   ok: boolean;
   platform?: string;
   app_version?: string;
+  /** Running under gamescope (Steam Gaming Mode). */
+  gaming_mode?: boolean;
 }
 
 export interface OverlaySettings {
@@ -482,7 +484,7 @@ export interface OverlayLastRun {
 
 export interface OverlayStatus {
   state: 'disabled' | 'waiting-for-game' | 'needs-permission' | 'watching' | 'recognizing' | 'showing' | 'error';
-  backend: 'windows-window' | 'x11-window' | 'wayland-xwayland' | 'unsupported';
+  backend: 'windows-window' | 'x11-window' | 'wayland-xwayland' | 'gamescope-screenshot' | 'unsupported';
   presentationBackend: 'wayland-layer-shell' | 'tauri-window';
   placement: 'anchored' | 'side-panel';
   ocrReady: boolean;

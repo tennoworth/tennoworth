@@ -48,7 +48,10 @@ export type SettingKey =
   /** Desktop app language: a code from i18n/languages.ts. Missing means English. */
   | 'app-language'
   /** Desktop Settings sections the user collapsed (JSON list of section ids). */
-  | 'settings-collapsed';
+  | 'settings-collapsed'
+  /** Desktop layout: 'gaming' (controller layout) or 'desktop'. Missing means
+   *  the controller layout under Steam Gaming Mode and desktop elsewhere. */
+  | 'layout';
 
 
 /** The scalar settings every build persists. */

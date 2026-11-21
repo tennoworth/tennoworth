@@ -1,77 +1,86 @@
 use super::CapturedFrame;
 use image::RgbaImage;
 
-#[allow(
-    clippy::indexing_slicing,
-    reason = "the reply length is checked against expected and chunks_exact guarantees each pixel has the validated 2, 3, or 4-byte width"
-)]
-pub(crate) fn capture_warframe() -> Result<CapturedFrame, String> {
-    use xcb::{
-        x::{
-            Atom, Drawable, GetGeometry, GetImage, GetProperty, ImageFormat, ImageOrder,
-            InternAtom, TranslateCoordinates, Window, ATOM_CARDINAL, ATOM_NONE, ATOM_STRING,
-            ATOM_WM_NAME,
-        },
-        Connection,
-    };
+use xcb::{
+    x::{
+        Atom, Drawable, GetGeometry, GetImage, GetProperty, ImageFormat, ImageOrder, InternAtom,
+        QueryTree, TranslateCoordinates, Window, ATOM_CARDINAL, ATOM_NONE, ATOM_STRING,
+        ATOM_WM_NAME,
+    },
+    Connection,
+};
 
-    pub(crate) fn atom(connection: &Connection, name: &[u8]) -> Result<Atom, String> {
-        let cookie = connection.send_request(&InternAtom {
-            only_if_exists: false,
-            name,
-        });
-        connection
-            .wait_for_reply(cookie)
-            .map(|reply| reply.atom())
-            .map_err(|error| format!("capture_failed: resolving X11 atom: {error}"))
-    }
+fn atom(connection: &Connection, name: &[u8]) -> Result<Atom, String> {
+    let cookie = connection.send_request(&InternAtom {
+        only_if_exists: false,
+        name,
+    });
+    connection
+        .wait_for_reply(cookie)
+        .map(|reply| reply.atom())
+        .map_err(|error| format!("capture_failed: resolving X11 atom: {error}"))
+}
 
-    pub(crate) fn property(
-        connection: &Connection,
-        window: Window,
-        property: Atom,
-        property_type: Atom,
-    ) -> Result<xcb::x::GetPropertyReply, String> {
-        let cookie = connection.send_request(&GetProperty {
-            delete: false,
-            window,
-            property,
-            r#type: property_type,
-            long_offset: 0,
-            long_length: 4096,
-        });
-        connection
-            .wait_for_reply(cookie)
-            .map_err(|error| format!("capture_failed: reading X11 window property: {error}"))
-    }
+fn property(
+    connection: &Connection,
+    window: Window,
+    property: Atom,
+    property_type: Atom,
+) -> Result<xcb::x::GetPropertyReply, String> {
+    let cookie = connection.send_request(&GetProperty {
+        delete: false,
+        window,
+        property,
+        r#type: property_type,
+        long_offset: 0,
+        long_length: 4096,
+    });
+    connection
+        .wait_for_reply(cookie)
+        .map_err(|error| format!("capture_failed: reading X11 window property: {error}"))
+}
 
-    let (connection, _) = Connection::connect(None)
-        .map_err(|error| format!("capture_failed: connecting to X11/XWayland: {error}"))?;
-    let client_list = atom(&connection, b"_NET_CLIENT_LIST_STACKING")?;
-    let net_wm_name = atom(&connection, b"_NET_WM_NAME")?;
-    let utf8_string = atom(&connection, b"UTF8_STRING")?;
-    let net_wm_pid = atom(&connection, b"_NET_WM_PID")?;
+/// The game's window among the top-level windows.
+fn find_warframe_window(connection: &Connection) -> Result<Window, String> {
+    let client_list = atom(connection, b"_NET_CLIENT_LIST_STACKING")?;
+    let net_wm_name = atom(connection, b"_NET_WM_NAME")?;
+    let utf8_string = atom(connection, b"UTF8_STRING")?;
+    let net_wm_pid = atom(connection, b"_NET_WM_PID")?;
 
     let mut windows = Vec::new();
     let mut candidates = Vec::new();
     for screen in connection.get_setup().roots() {
-        let reply = match property(&connection, screen.root(), client_list, ATOM_NONE) {
-            Ok(reply) => reply,
-            Err(_) => continue,
+        // `value` asserts the reply's format, and a client may set this
+        // property with any format it likes.
+        let stacking: Vec<Window> = property(connection, screen.root(), client_list, ATOM_NONE)
+            .ok()
+            .filter(|reply| reply.format() == 32)
+            .map(|reply| reply.value::<Window>().to_vec())
+            .unwrap_or_default();
+        // gamescope's window manager (Steam Gaming Mode) publishes no client
+        // list; it does not reparent, so the top-level windows are the root's
+        // children, bottom to top like the stacking list.
+        let toplevels = if stacking.is_empty() {
+            connection
+                .wait_for_reply(connection.send_request(&QueryTree {
+                    window: screen.root(),
+                }))
+                .map(|reply| reply.children().to_vec())
+                .unwrap_or_default()
+        } else {
+            stacking
         };
-        for &window in reply.value::<Window>().iter().rev() {
-            // `value` asserts the reply's format, and a client may set this
-            // property with any format it likes.
-            let pid = property(&connection, window, net_wm_pid, ATOM_CARDINAL)
+        for &window in toplevels.iter().rev() {
+            let pid = property(connection, window, net_wm_pid, ATOM_CARDINAL)
                 .ok()
                 .filter(|reply| reply.format() == 32)
                 .and_then(|reply| reply.value::<u32>().first().copied());
-            let mut title = property(&connection, window, net_wm_name, utf8_string)
+            let mut title = property(connection, window, net_wm_name, utf8_string)
                 .ok()
                 .map(|reply| String::from_utf8_lossy(reply.value()).into_owned())
                 .unwrap_or_default();
             if title.is_empty() {
-                title = property(&connection, window, ATOM_WM_NAME, ATOM_STRING)
+                title = property(connection, window, ATOM_WM_NAME, ATOM_STRING)
                     .ok()
                     .map(|reply| String::from_utf8_lossy(reply.value()).into_owned())
                     .unwrap_or_default();
@@ -99,6 +108,33 @@ pub(crate) fn capture_warframe() -> Result<CapturedFrame, String> {
             "window_not_found: Warframe window not found; use borderless or windowed mode".to_string()
         }
     })?;
+    Ok(window)
+}
+
+/// The size the game renders at: its window. Under gamescope that is the
+/// game's own resolution, which gamescope then scales to its output.
+pub(crate) fn warframe_window_size() -> Option<(u32, u32)> {
+    let (connection, _) = Connection::connect(None).ok()?;
+    let window = find_warframe_window(&connection).ok()?;
+    let geometry = connection
+        .wait_for_reply(connection.send_request(&GetGeometry {
+            drawable: Drawable::Window(window),
+        }))
+        .ok()?;
+    Some((u32::from(geometry.width()), u32::from(geometry.height())))
+}
+
+#[allow(
+    clippy::indexing_slicing,
+    reason = "the reply length is checked against expected and chunks_exact guarantees each pixel has the validated 2, 3, or 4-byte width"
+)]
+pub(crate) fn capture_warframe() -> Result<CapturedFrame, String> {
+    if crate::gamescope::active() {
+        return super::gamescope::capture_game();
+    }
+    let (connection, _) = Connection::connect(None)
+        .map_err(|error| format!("capture_failed: connecting to X11/XWayland: {error}"))?;
+    let window = find_warframe_window(&connection)?;
 
     let geometry_cookie = connection.send_request(&GetGeometry {
         drawable: Drawable::Window(window),

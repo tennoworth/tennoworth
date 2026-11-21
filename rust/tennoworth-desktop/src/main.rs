@@ -3,6 +3,7 @@
 mod commands;
 mod contracts;
 mod game_events;
+mod gamescope;
 mod overlay;
 mod persistence;
 mod poison;
