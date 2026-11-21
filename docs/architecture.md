@@ -162,7 +162,7 @@ its own migration for data already on users' machines or the host.
 
 | Identifier | Where it lives |
 |---|---|
-| `wfminv` | `~/.config/wfminv/` (JWT envelope, pending-plan journal) on both platforms; the browser storage namespace `wfminv:<key>-vN` and IndexedDB `wfminv`; the encrypted export format `wfminv-encrypted-v1`. New keys use the same namespace. |
+| `wfminv` | `~/.config/wfminv/` (JWT envelope `wfm-jwt.enc` with its formats `wfminv-jwt-v1`/`-v2`, the key file `wfm-jwt.key` used where no keyring answers, pending-plan journal) on both platforms; the browser storage namespace `wfminv:<key>-vN` and IndexedDB `wfminv`; the encrypted export format `wfminv-encrypted-v1`. New keys use the same namespace. |
 | `app.tennoworth.desktop` | Tauri identifier, which names the app data directory holding the SQLite database |
 | IPC command and event names | `tauri::generate_handler!` registrations and the generated event constants |
 | `desktop-v*`, `*-latest` | release tags and rolling artifacts the updater and host pullers fetch |

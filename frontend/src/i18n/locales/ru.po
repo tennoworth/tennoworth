@@ -9514,12 +9514,6 @@ msgstr "Switch"
 
 #. Error.
 #, fuzzy
-msgctxt "auth.mismatch"
-msgid "Passphrases don’t match."
-msgstr "Пароли не совпадают."
-
-#. Error.
-#, fuzzy
 msgctxt "auth.windowClosed"
 msgid "The warframe.market window was closed before you signed in."
 msgstr "Окно warframe.market закрыто до входа."
@@ -9532,8 +9526,9 @@ msgstr "Вход в warframe.market"
 
 #. Dialog text. WFM = warframe.market.
 #, fuzzy
+#| msgid "You sign in on warframe.market’s own page - your WFM password never passes through TennoWorth. The sign-in token is encrypted on this PC with a passphrase you choose."
 msgctxt "auth.loginLede"
-msgid "You sign in on warframe.market’s own page - your WFM password never passes through TennoWorth. The sign-in token is encrypted on this PC with a passphrase you choose."
+msgid "You sign in on warframe.market’s own page - your WFM password never passes through TennoWorth. The sign-in is saved encrypted on this device, so you stay signed in."
 msgstr "Вы входите на собственной странице warframe.market - ваш пароль WFM никогда не проходит через TennoWorth. Токен входа шифруется на этом ПК паролем, который вы выберете."
 
 #. Field label; the token guide refers to it.
@@ -9571,54 +9566,6 @@ msgstr "из браузера."
 msgctxt "auth.platform"
 msgid "Platform"
 msgstr "Платформа"
-
-#. Field label.
-#, fuzzy
-msgctxt "auth.passphrase"
-msgid "Encryption passphrase"
-msgstr "Пароль шифрования"
-
-#. Field placeholder.
-#, fuzzy
-msgctxt "auth.passphraseHint"
-msgid "12+ characters - you may need it again after a restart"
-msgstr "от 12 символов - может понадобиться после перезапуска"
-
-#. Field help.
-#, fuzzy
-msgctxt "auth.passphraseHelp"
-msgid "Locks your WFM sign-in token to this PC, so the app can list and manage your orders all session without signing in to WFM again."
-msgstr "Привязывает ваш токен входа WFM к этому ПК, чтобы приложение весь сеанс могло выставлять ваши заказы и управлять ими без повторного входа в WFM."
-
-#. Field label.
-#, fuzzy
-msgctxt "auth.confirm"
-msgid "Confirm passphrase"
-msgstr "Повторите пароль"
-
-#. Field help.
-#, fuzzy
-msgctxt "auth.confirmHelp"
-msgid "Forgot it? No problem - just log in again and set a new one. Your WFM account is never locked out."
-msgstr "Забыли? Не страшно - просто войдите снова и задайте новый. Ваш аккаунт WFM никогда не блокируется."
-
-#. Checkbox. Keep the product names.
-#, fuzzy
-msgctxt "auth.rememberLong"
-msgid "Remember on this device - stores the unlock key in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager) so you’re not asked each launch. Never the passphrase itself."
-msgstr "Запомнить на этом устройстве - ключ разблокировки хранится в связке ключей ОС (KWallet, GNOME Keyring, Windows Credential Manager), чтобы не спрашивать при каждом запуске. Сам пароль никогда не сохраняется."
-
-#. Checkbox.
-#, fuzzy
-msgctxt "auth.remember"
-msgid "Remember on this device - stores the unlock key in your OS keyring so you’re not asked each launch. Never the passphrase itself."
-msgstr "Запомнить на этом устройстве - ключ разблокировки хранится в связке ключей ОС, чтобы не спрашивать при каждом запуске. Сам пароль никогда не сохраняется."
-
-#. Note.
-#, fuzzy
-msgctxt "auth.noKeyring"
-msgid "Your system’s keyring isn’t available, so TennoWorth can’t remember this device and will ask for your passphrase each launch. On KDE, turn on KDE Wallet in System Settings."
-msgstr "Связка ключей системы недоступна, поэтому TennoWorth не может запомнить это устройство и будет спрашивать пароль при каждом запуске. В KDE включите KDE Wallet в параметрах системы."
 
 #. Status.
 #, fuzzy
@@ -9670,51 +9617,35 @@ msgstr "Перейти на warframe.market"
 
 #. Dialog heading.
 #, fuzzy
+#| msgid "Unlock warframe.market listing"
 msgctxt "auth.unlockTitle"
-msgid "Unlock warframe.market listing"
+msgid "Couldn’t open your saved sign-in"
 msgstr "Разблокировать выставление на warframe.market"
 
 #. Dialog text.
 #, fuzzy
+#| msgid "Enter the passphrase you set at login to decrypt your WFM token for this session. It stays in the app’s memory - never on disk, never in this window."
 msgctxt "auth.unlockLede"
-msgid "Enter the passphrase you set at login to decrypt your WFM token for this session. It stays in the app’s memory - never on disk, never in this window."
+msgid "TennoWorth keeps your warframe.market sign-in on this device and couldn’t open it just now. Try again, or sign in again."
 msgstr "Введите пароль, заданный при входе, чтобы расшифровать токен WFM на этот сеанс. Он хранится в памяти приложения - никогда на диске и никогда в этом окне."
 
-#. Field label.
+#. Button.
 #, fuzzy
-msgctxt "auth.passphraseLabel"
-msgid "Passphrase"
-msgstr "Пароль"
-
-#. Text before a link button.
-#, fuzzy
-msgctxt "auth.forgot"
-msgid "Forgot it?"
-msgstr "Забыли?"
-
-#. Link button.
-#, fuzzy
+#| msgid "Log in again"
 msgctxt "auth.loginAgain"
-msgid "Log in again"
+msgid "Sign in again"
 msgstr "Войдите снова"
 
-#. Text after "Log in again". Keep the leading space.
-#, fuzzy
-msgctxt "auth.forgotAfter"
-msgid " to set a new passphrase."
-msgstr ", чтобы задать новый пароль."
+#. Button.
+msgctxt "auth.retry"
+msgid "Try again"
+msgstr ""
 
 #. Button while busy.
 #, fuzzy
 msgctxt "auth.unlocking"
 msgid "Unlocking…"
 msgstr "Разблокировка…"
-
-#. Button.
-#, fuzzy
-msgctxt "auth.unlock"
-msgid "Unlock"
-msgstr "Разблокировать"
 
 #. Screen reader name of the browser choice.
 #, fuzzy
@@ -13388,8 +13319,9 @@ msgstr "Что никогда не покидает ваш компьютер"
 
 #. FAQ answer. Keep the tags and the technical names in <code>.
 #, fuzzy
+#| msgid "There are no TennoWorth accounts and no inventory upload: the site only downloads the public market snapshot, and the desktop app computes every item, price join, and ranking on your machine. If you log in to warframe.market to post listings, that login token is <b>encrypted on disk</b> (AES-256-GCM) at <code>~/.config/wfminv/</code> (or the Windows equivalent), and the webview never sees it - it stays in the Rust process. The desktop app can optionally remember the unlock key in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager) - never the passphrase itself; details in SECURITY.md."
 msgctxt "faq.local.a1"
-msgid "There are no TennoWorth accounts and no inventory upload: the site only downloads the public market snapshot, and the desktop app computes every item, price join, and ranking on your machine. If you log in to warframe.market to post listings, that login token is <b>encrypted on disk</b> (AES-256-GCM) at <code>~/.config/wfminv/</code> (or the Windows equivalent), and the webview never sees it - it stays in the Rust process. The desktop app can optionally remember the unlock key in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager) - never the passphrase itself; details in SECURITY.md."
+msgid "There are no TennoWorth accounts and no inventory upload: the site only downloads the public market snapshot, and the desktop app computes every item, price join, and ranking on your machine. If you log in to warframe.market to post listings, that login token is <b>encrypted on disk</b> (AES-256-GCM) at <code>~/.config/wfminv/</code> (or the Windows equivalent), and the webview never sees it - it stays in the Rust process. The key that opens it is kept in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager), or in a file only your user can read where there is no keyring; details in SECURITY.md."
 msgstr "Аккаунтов TennoWorth нет, и инвентарь никуда не загружается: сайт только скачивает публичный снимок рынка, а приложение для ПК рассчитывает все предметы, сопоставление цен и рейтинг на вашем компьютере. Если вы входите в warframe.market для размещения лотов, токен входа <b>шифруется на диске</b> (AES-256-GCM) в <code>~/.config/wfminv/</code> (или аналогичной папке в Windows), а webview никогда его не видит - он остаётся в процессе Rust. Приложение может по желанию запомнить ключ разблокировки в связке ключей ОС (KWallet, GNOME Keyring, Windows Credential Manager) - но никогда сам пароль; подробности в SECURITY.md."
 
 #. FAQ answer. Keep the tags and the technical names in <code>.
@@ -13514,8 +13446,9 @@ msgstr "Как выставить предметы на WFM?"
 
 #. FAQ answer. Keep the tags and the technical names in <code>. Use the translated button and view names.
 #, fuzzy
+#| msgid "Listing is a <b>desktop app</b> feature. Install the desktop app (Windows + Linux), scan your account, and use <b>List on WFM</b> from the Sell view. The first time, you sign in on warframe.market’s own page in a separate window, so TennoWorth never sees your password. The resulting sign-in token is encrypted behind a passphrase you choose and never leaves your machine; the app can remember the unlock in your OS keyring so later launches don’t ask again."
 msgctxt "faq.list.a1"
-msgid "Listing is a <b>desktop app</b> feature. Install the desktop app (Windows + Linux), scan your account, and use <b>List on WFM</b> from the Sell view. The first time, you sign in on warframe.market’s own page in a separate window, so TennoWorth never sees your password. The resulting sign-in token is encrypted behind a passphrase you choose and never leaves your machine; the app can remember the unlock in your OS keyring so later launches don’t ask again."
+msgid "Listing is a <b>desktop app</b> feature. Install the desktop app (Windows + Linux), scan your account, and use <b>List on WFM</b> from the Sell view. The first time, you sign in on warframe.market’s own page in a separate window, so TennoWorth never sees your password. The resulting sign-in token is saved encrypted and never leaves your machine, so later launches don’t ask again."
 msgstr "Выставление - функция <b>приложения для ПК</b>. Установите приложение (Windows + Linux), отсканируйте аккаунт и нажмите <b>Выставить на WFM</b> в разделе «Продажа». В первый раз вы входите на собственной странице warframe.market в отдельном окне, поэтому TennoWorth никогда не видит ваш пароль. Полученный токен входа шифруется паролем, который вы выберете, и никогда не покидает ваш компьютер; приложение может запомнить разблокировку в связке ключей ОС, чтобы при следующих запусках не спрашивать снова."
 
 #. FAQ answer. Keep the tags and the technical names in <code>.

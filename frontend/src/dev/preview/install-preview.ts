@@ -55,8 +55,6 @@ export async function installPreview() {
     fetch_orders: [], list_watches: [], list_trades: [], list_notifications: [],
     get_notification_preferences: { popups: true, copy_whisper: false, categories: Object.fromEntries(NOTIFICATION_CATEGORIES.map(k => [k, { enabled: true, native: true, in_game: false }])) },
     latest_watch_offer: null, current_game_notice: null,
-    try_silent_unlock: false,
-    wfm_remember_available: true,
     get_usage_preferences: { enabled: false, available: false },
     get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false, ocrLanguage: 'auto' },
     overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true, ocrLanguage: 'en' },
@@ -130,6 +128,12 @@ export async function installPreview() {
     if (args?.key === 'routine-checklist') {
       if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem('routine-checklist'));
       if (cmd === 'set_setting') { localStorage.setItem('routine-checklist', String(args.value)); return Promise.resolve(null); }
+    }
+    // `keyring-unavailable`: a saved sign-in whose keyring does not answer.
+    if (scenario === 'keyring-unavailable') {
+      if (cmd === 'wfm_auth_status') return Promise.resolve({ logged_in: true, unlocked: false });
+      if (cmd === 'fetch_orders') return Promise.reject({ code: 'needs_unlock', message: 'Opening your saved warframe.market sign-in.' });
+      if (cmd === 'unlock_jwt') return Promise.reject({ code: 'keyring_unavailable', message: 'Your system keyring didn’t answer (org.freedesktop.secrets was not provided by any .service files).' });
     }
     if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'fetch_orders', 'list_watches', 'list_trades', 'listing_outcomes', 'set_listing_outcomes', 'get_pending_plan', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'bulk_visibility', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification', 'latest_watch_offer', 'dismiss_watch_offer', 'copy_watch_whisper', 'recheck_watch_offer'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }

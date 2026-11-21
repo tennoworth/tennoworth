@@ -1,6 +1,6 @@
 # TennoWorth desktop shell. One window loading the built SPA via Tauri's asset protocol; the SPA's Transport
 # drives game-acquisition and wfm-trading through thin commands: health / scan_inventory, the WFM
-# session (login / unlock - passphrase from the webview, see wfm_session.rs),
+# session (sign-in and unlock, see services/wfm/session.rs),
 # the listing/order surface.
 [package]
 name = "tennoworth-desktop"
@@ -98,8 +98,8 @@ reqwest = { workspace = true }
 # Scrub the plaintext JWT from memory on logout (best-effort). Already vendored
 # transitively via aes-gcm, so this pins no new build.
 zeroize = "1"
-# "Remember on this device": the PBKDF2-derived unlock key (never the
-# passphrase - users reuse those) goes in the OS keyring. v3 needs explicit
+# The random key to the saved warframe.market sign-in goes in the OS keyring
+# (a user-only file where none answers). v3 needs explicit
 # per-platform store features or you silently get the mock store; this is the
 # crate README's cross-platform set. Linux talks Secret Service over DBus
 # (GNOME Keyring, KWallet via org.kde.secretservicecompat); crypto-rust avoids

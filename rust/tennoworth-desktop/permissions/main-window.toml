@@ -68,8 +68,6 @@ permissions = [
   "allow-wfm-login-cancel",
   "allow-wfm-login-with-token",
   "allow-unlock-jwt",
-  "allow-try-silent-unlock",
-  "allow-wfm-remember-available",
   "allow-wfm-logout",
   "allow-submit-plan",
   "allow-cancel-plan",

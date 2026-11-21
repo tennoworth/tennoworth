@@ -184,15 +184,15 @@ live in `src/contracts/generated/`; follow ../docs/architecture.md when changing
 native request/response shapes. Browser previews do not verify native registration.
 
 Listing/order commands reject with a typed `{code, message}` CmdError that
-surfaces as `DesktopCmdError` - `needs_login` / `needs_unlock` drive the
-SPA's login and passphrase dialogs.
+surfaces as `DesktopCmdError` - `needs_login` opens the sign-in dialog and
+`needs_unlock` opens the saved sign-in (`unlock_jwt`, no input asked).
 
 An auth-gated surface that fetches on mount (MyOrdersPanel) must route a
 `needs_login` / `needs_unlock` rejection to the auth dialogs via an
 `onauthrequired` prop and refetch when the session unlocks (`sessionEpoch`)
-- never render `humanError(e)` for those codes. That routing is what lets
-the OS-keyring silent unlock fire for the surface; without it a keyring
-unlock that should "just work" becomes an error banner.
+- never render `humanError(e)` for those codes. That routing is what opens
+the saved sign-in for the surface; without it an unlock that should "just
+work" becomes an error banner.
 
 Rust→SPA push events (the tray hint, the update check) go through the
 shared no-op-safe `listenForTauriEvent` in `desktop-update.ts` - not a
@@ -265,9 +265,9 @@ are in the root instruction file. These are frontend-specific:
 - **Listing-visibility copy says "hidden", never "invisible"**. The WFM field/API name stays `visible`; only user-facing copy
   uses "hidden". The rule is about listings: the user's own warframe.market
   status keeps the website's word, Invisible, beside Online and Online in game.
-- **The unlock dialog always offers "Forgot it? Log in again"** - a
-  forgotten passphrase is unrecoverable by design; re-login is the only
-  reset, so the escape hatch must never be removed.
+- **The unlock failure dialog always offers "Sign in again"** - a saved
+  sign-in the keyring will not give up is otherwise a dead end; signing in
+  again replaces it, so the escape hatch must never be removed.
 - **Verify in the browser, and A/B the fix**: revert it, rerun the same
   script, watch it fail, restore.
   The app stays on the onboarding view until an inventory is loaded, so anything gated on a desktop session (the bulk

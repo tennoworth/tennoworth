@@ -34,8 +34,8 @@ import type { DesktopServices } from '../../contracts/services';
     /** Bumped by the parent when the WFM session unlocks - re-fetches so a
      *  fetch gated on needs_login/needs_unlock retries automatically. */
     sessionEpoch?: number;
-    /** Desktop lock-state rejection → parent raises the auth dialog (which
-     *  tries the OS-keyring silent unlock before showing the passphrase). */
+    /** Desktop lock-state rejection → parent opens the saved sign-in, or the
+     *  sign-in dialog when there is none. */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
     /** Tradeable copies owned per the latest scan, keyed by `ownedKey(slug,
      *  subtype)`. Null when there is no scan - the quantity checks stay off. */
@@ -103,7 +103,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
       .catch((e: unknown) => {
         if (gen !== loadGen) return;
         // A locked/no-login session is an auth hand-off, not a load error: the
-        // parent opens the dialog (silent keyring unlock first), and the
+        // parent opens the saved sign-in (or the sign-in dialog), and the
         // input.sessionEpoch bump re-fires this fetch on success. Kept distinct from
         // 'error' so a cancelled dialog leaves an actionable "unlock required"
         // state instead of a stale failure.

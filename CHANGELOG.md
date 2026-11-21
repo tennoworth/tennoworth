@@ -1325,6 +1325,10 @@ Finish or discard pending Trade Session listing batches before downgrading; olde
 
 *Fold this into the next version's section when you run `release.ts prepare`.*
 
+### Selling
+
+- **No more sign-in passphrase** Signing in to warframe.market no longer asks you to choose a passphrase, and later launches never ask for one. The saved sign-in is encrypted with a key kept in your system keyring, or in a file only your user can read where there is no keyring, as in Steam Deck Gaming Mode. If you signed in with "Remember on this device", you stay signed in; otherwise sign in once more. <!-- app-note {"id":"no-signin-passphrase","kind":"improved"} -->
+
 ## 0.6.0 - 2026-08-22
 
 **Linux is now distributed as an AppImage, and only as an AppImage.** If you

@@ -28,8 +28,9 @@ The product crosses the following trust boundaries:
    it again, and GTK still loads modules the user's own settings name. Scans are
    performed in-process over Tauri IPC - there is no loopback HTTP server,
    no session token, and the app's webview never receives the WFM JWT, which
-   stays in the Rust process and is encrypted at rest (AES-256-GCM,
-   PBKDF2-600k passphrase). Sign-in happens on warframe.market's own page in
+   stays in the Rust process and is encrypted at rest (AES-256-GCM under a
+   random key kept in the OS keyring, or in a user-only file where no keyring
+   answers). Sign-in happens on warframe.market's own page in
    a separate window with no IPC access, so the WFM password never reaches
    the app. The one path that passes a JWT through the webview is the
    paste-token fallback, which sends a token the user copied from their own
@@ -307,24 +308,26 @@ The encrypted export feature (`Export inventory`) uses:
 - All via the desktop webview's native WebCrypto API. No third-party crypto
   libraries.
 
-The desktop app's on-disk JWT (`wfm-jwt.enc`) uses the same parameters
-so one person can audit both.
+Source: `frontend/src/adapters/encrypted-snapshot.ts`.
 
-**Desktop "Remember on this device" (opt-out, default on):** the
-desktop app can store the PBKDF2-*derived* unlock key - never the
-passphrase itself - in the OS keyring (Secret Service / KWallet /
-GNOME Keyring on Linux, Credential Manager on Windows) so listing
-unlocks silently after launch, the same protection class your browser
-gives the warframe.market cookie. The stored key is salt-bound to the
-current `wfm-jwt.enc` (a re-login invalidates it) and useless without
-that file. Untick the box, log out, or remove the `tennoworth` entry
-in your keyring manager to revert to passphrase-per-session. Trade-off
-stated plainly: anything running in your unlocked desktop session that
-can read your keyring can combine the two - at-rest offline protection
-of the file itself is unchanged.
+**The desktop app's saved warframe.market sign-in (`wfm-jwt.enc`)** is
+encrypted with AES-256-GCM under a random key created for each sign-in.
+There is no passphrase. The key is stored in the OS keyring (Secret Service
+/ KWallet / GNOME Keyring on Linux, Credential Manager on Windows), where your
+login session protects it. Where no keyring answers - Steam Deck Gaming Mode
+starts none - the key is kept in `wfm-jwt.key` beside the sign-in file,
+readable by your user account only: the protection a browser without a
+keyring gives its cookies. Trade-off stated plainly: anything running as your
+user can read that file, or ask your unlocked keyring, and use the sign-in to
+manage your warframe.market listings - the same reach it has over the
+warframe.market cookie in your browser. Logging out removes the sign-in file
+and its key. Sign-ins saved by earlier versions under a passphrase open with
+the key "remember on this device" kept and are re-encrypted under a fresh
+key; without that key they ask you to sign in again.
 
-Source: `frontend/src/adapters/encrypted-snapshot.ts`, `rust/wfm-trading/src/auth.rs`,
-and `rust/tennoworth-desktop/src/persistence/keyring_store.rs`.
+Source: `rust/wfm-trading/src/auth.rs`,
+`rust/tennoworth-desktop/src/services/wfm/session.rs` and
+`rust/tennoworth-desktop/src/persistence/keyring_store.rs`.
 
 ## Reporting a vulnerability
 
@@ -345,5 +348,4 @@ expires.
   project.
 - **Recovering a forgotten passphrase.** An encrypted export uses a
   passphrase you choose; if you forget it, that export is unrecoverable,
-  by design - we have no way to assist. A forgotten WFM unlock passphrase
-  is reset by logging in to warframe.market again.
+  by design - we have no way to assist.
