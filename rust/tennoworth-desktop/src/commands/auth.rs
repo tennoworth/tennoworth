@@ -13,8 +13,8 @@ use crate::services::wfm::{session::WfmSession, signin as wfm_signin};
 
 #[derive(serde::Serialize)]
 pub struct WfmAuthStatus {
-    /// A login envelope exists on disk (encrypted; says nothing about the
-    /// passphrase being known).
+    /// A sign-in file exists on disk (encrypted; says nothing about whether
+    /// its saved key still opens it).
     logged_in: bool,
     /// This process holds the decrypted JWT in memory.
     unlocked: bool,
@@ -30,30 +30,22 @@ pub fn wfm_auth_status(session: State<'_, Arc<WfmSession>>) -> WfmAuthStatus {
 }
 
 /// Open the warframe.market sign-in window, wait for the user to sign in
-/// there, then persist the encrypted JWT (unchanged envelope format) and unlock
-/// the session. The WFM password is typed into warframe.market's own page and
+/// there, then save the encrypted JWT and its key and unlock the session. The WFM password is typed into warframe.market's own page and
 /// never reaches the app. Async by necessity: reading webview cookies from a
 /// synchronous command deadlocks on Windows.
 #[tauri::command]
 pub async fn wfm_login(
     app: tauri::AppHandle,
     session: State<'_, Arc<WfmSession>>,
-    passphrase: String,
     platform: String,
-    remember: bool,
 ) -> Result<(), CmdError> {
-    // Zeroizing scrubs OUR copy of the passphrase when this ends - best-effort
-    // (the IPC deserializer made its own transient copies).
-    let passphrase = Zeroizing::new(passphrase);
-    WfmSession::validate_login(&passphrase, &platform)?;
+    WfmSession::validate_login(&platform)?;
     let generation = session.session_generation();
     let jwt = wfm_signin::capture_signed_in_jwt(&app, &platform).await?;
     let s = Arc::clone(&session);
-    tauri::async_runtime::spawn_blocking(move || {
-        s.login(generation, jwt, &passphrase, &platform, remember)
-    })
-    .await
-    .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
+    tauri::async_runtime::spawn_blocking(move || s.login(generation, jwt, &platform))
+        .await
+        .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
 }
 
 /// The fallback sign-in: a `JWT` cookie value the user copied from their own
@@ -64,13 +56,10 @@ pub async fn wfm_login(
 pub async fn wfm_login_with_token(
     session: State<'_, Arc<WfmSession>>,
     token: String,
-    passphrase: String,
     platform: String,
-    remember: bool,
 ) -> Result<(), CmdError> {
     let token = Zeroizing::new(token);
-    let passphrase = Zeroizing::new(passphrase);
-    WfmSession::validate_login(&passphrase, &platform)?;
+    WfmSession::validate_login(&platform)?;
     let jwt = wfm_signin::normalize_pasted_jwt(&token)?;
     let generation = session.session_generation();
     let s = Arc::clone(&session);
@@ -85,7 +74,7 @@ pub async fn wfm_login_with_token(
             }
             Err(e) => return Err(CmdError::wfm(e)),
         }
-        s.login(generation, jwt, &passphrase, &platform, remember)
+        s.login(generation, jwt, &platform)
     })
     .await
     .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
@@ -98,44 +87,16 @@ pub fn wfm_login_cancel(app: tauri::AppHandle) {
     wfm_signin::cancel(&app);
 }
 
-/// Decrypt the stored JWT with the passphrase from the SPA's unlock dialog and
-/// warm the WFM catalog. Missing file → `needs_login`; wrong passphrase →
-/// `bad_passphrase`; catalog/me failure → `wfm` (transient, retryable).
+/// Open the saved sign-in with the key this device kept and warm the WFM
+/// catalog. Missing or unopenable file → `needs_login`; key store not
+/// answering → `keyring_unavailable`; catalog/me failure → `wfm` (retryable).
+/// Network on success - spawn_blocking.
 #[tauri::command]
-pub async fn unlock_jwt(
-    session: State<'_, Arc<WfmSession>>,
-    passphrase: String,
-    remember: bool,
-) -> Result<(), CmdError> {
+pub async fn unlock_jwt(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
     let s = Arc::clone(&session);
-    tauri::async_runtime::spawn_blocking(move || {
-        let passphrase = Zeroizing::new(passphrase);
-        s.unlock(&passphrase, remember)
-    })
-    .await
-    .map_err(|e| CmdError::internal(format!("unlock task failed to run: {e}")))?
-}
-
-/// Try the OS-keyring "remember on this device" key before the SPA raises the
-/// passphrase modal. Infallible by contract: any miss (no entry, no keyring
-/// daemon, stale key, network warm failure) returns false and the modal opens
-/// exactly as before. Network on success (catalog warm) - spawn_blocking.
-#[tauri::command]
-pub async fn try_silent_unlock(session: State<'_, Arc<WfmSession>>) -> Result<bool, CmdError> {
-    let s = Arc::clone(&session);
-    tauri::async_runtime::spawn_blocking(move || s.try_silent_unlock())
+    tauri::async_runtime::spawn_blocking(move || s.unlock())
         .await
-        .map_err(|e| CmdError::internal(format!("silent-unlock task failed to run: {e}")))
-}
-
-/// Whether "remember on this device" can work here: a keyring service has to
-/// answer. Asked when a sign-in or unlock dialog opens. Blocking DBus I/O, so
-/// spawn_blocking.
-#[tauri::command]
-pub async fn wfm_remember_available() -> bool {
-    tauri::async_runtime::spawn_blocking(crate::persistence::keyring_store::available)
-        .await
-        .unwrap_or(false)
+        .map_err(|e| CmdError::internal(format!("unlock task failed to run: {e}")))?
 }
 
 /// Log out and remove both the live session and its encrypted on-disk login.

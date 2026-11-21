@@ -260,23 +260,18 @@ export async function desktopWfmLogout(): Promise<void> {
  * once the user has signed in there; the WFM password never passes through
  * the app. Rejects with code `cancelled` when that window is closed.
  */
-export async function desktopWfmLogin(passphrase: string, platform: string, remember: boolean): Promise<void> {
+export async function desktopWfmLogin(platform: string): Promise<void> {
   try {
-    await resolveInvoke()<null>('wfm_login', { passphrase, platform, remember });
+    await resolveInvoke()<null>('wfm_login', { platform });
   } catch (e) {
     rethrowInvoke(e);
   }
 }
 
 /** Fallback sign-in: the JWT cookie value copied from the user's own browser. */
-export async function desktopWfmLoginWithToken(
-  token: string,
-  passphrase: string,
-  platform: string,
-  remember: boolean,
-): Promise<void> {
+export async function desktopWfmLoginWithToken(token: string, platform: string): Promise<void> {
   try {
-    await resolveInvoke()<null>('wfm_login_with_token', { token, passphrase, platform, remember });
+    await resolveInvoke()<null>('wfm_login_with_token', { token, platform });
   } catch (e) {
     rethrowInvoke(e);
   }
@@ -290,36 +285,14 @@ export async function desktopWfmLoginCancel(): Promise<void> {
   }
 }
 
-export async function desktopWfmUnlock(passphrase: string, remember: boolean): Promise<void> {
-  try {
-    await resolveInvoke()<null>('unlock_jwt', { passphrase, remember });
-  } catch (e) {
-    rethrowInvoke(e);
-  }
-}
-
 /**
- * Try the OS-keyring "remember on this device" key before showing the
- * passphrase modal. Never throws for a miss - false just means "ask the
- * human"; a genuine IPC fault still rethrows so the caller's fallback
- * (open the modal) runs.
+ * Opens the saved sign-in with the key this device kept. Rejects with
+ * `needs_login` when it can no longer open, `keyring_unavailable` when the
+ * key store did not answer.
  */
-export async function desktopTrySilentUnlock(): Promise<boolean> {
+export async function desktopWfmUnlock(): Promise<void> {
   try {
-    return await resolveInvoke()<boolean>('try_silent_unlock');
-  } catch (e) {
-    rethrowInvoke(e);
-  }
-}
-
-/**
- * Whether the OS keyring answers, so "remember on this device" can work. A
- * failed check reads as unavailable: the dialog then explains why the
- * passphrase will be asked again rather than promising otherwise.
- */
-export async function desktopRememberAvailable(): Promise<boolean> {
-  try {
-    return await resolveInvoke()<boolean>('wfm_remember_available');
+    await resolveInvoke()<null>('unlock_jwt');
   } catch (e) {
     rethrowInvoke(e);
   }

@@ -71,8 +71,6 @@ const COMMANDS: &[&str] = &[
     "wfm_login_cancel",
     "wfm_login_with_token",
     "unlock_jwt",
-    "try_silent_unlock",
-    "wfm_remember_available",
     "wfm_logout",
     "submit_plan",
     "cancel_plan",

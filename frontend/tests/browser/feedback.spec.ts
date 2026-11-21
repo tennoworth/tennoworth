@@ -149,17 +149,7 @@ test('a sign-in failure offers a bug report that carries its code, not its text'
   });
   await page.getByTestId('wfm-auth-link').click();
   const login = page.getByTestId('wfm-login-dialog');
-  const passphrase = login.locator('input[type="password"]').nth(0);
-  const confirm = login.locator('input[type="password"]').nth(1);
   const submit = login.getByRole('button', { name: 'Continue to warframe.market' });
-  await passphrase.fill('a-long-enough-passphrase');
-  await confirm.fill('a-different-passphrase!');
-  await submit.click();
-  await expect(login.getByTestId('wfm-auth-error')).toContainText('don’t match');
-  await expect(login.getByRole('button', { name: 'Report a bug' })).toHaveCount(0);
-
-  await passphrase.fill('a-long-enough-passphrase');
-  await confirm.fill('a-long-enough-passphrase');
   await submit.click();
   await expect(login.getByTestId('wfm-auth-error')).toContainText('/v2/me returned 403');
   await login.getByRole('button', { name: 'Report a bug' }).click();

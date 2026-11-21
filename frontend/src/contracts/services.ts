@@ -49,12 +49,10 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopNotificationPreferences(): Promise<NotificationPreferences>;
   desktopSaveNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences>;
   desktopTestNotification(): Promise<string>;
-  desktopWfmLogin(passphrase: string, platform: string, remember: boolean): Promise<void>;
+  desktopWfmLogin(platform: string): Promise<void>;
   desktopWfmLoginCancel(): Promise<void>;
-  desktopWfmLoginWithToken(token: string, passphrase: string, platform: string, remember: boolean): Promise<void>;
-  desktopWfmUnlock(passphrase: string, remember: boolean): Promise<void>;
-  desktopTrySilentUnlock(): Promise<boolean>;
-  desktopRememberAvailable(): Promise<boolean>;
+  desktopWfmLoginWithToken(token: string, platform: string): Promise<void>;
+  desktopWfmUnlock(): Promise<void>;
   desktopReadNotifications(id?: number | null): Promise<void>;
   desktopClearNotifications(): Promise<void>;
   /** `requestId` tags this call's progress events; omit it when no counter is shown. */

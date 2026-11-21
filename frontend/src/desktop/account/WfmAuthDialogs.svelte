@@ -1,6 +1,6 @@
 <script lang="ts">
   import { useDesktopServices } from '../shell/desktop-context';
-  const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock, desktopRememberAvailable } = useDesktopServices();
+  const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
   import WfmTokenGuide from './WfmTokenGuide.svelte';
   import Select from '../../ui/Select.svelte';
@@ -20,46 +20,29 @@ import { DesktopCmdError } from '../../contracts/errors';
   } = $props();
 
   let wfmLoginDialog = $state<HTMLDialogElement>();
+  // Shown only when the saved sign-in could not be opened; a working one opens
+  // with nothing on screen.
   let wfmUnlockDialog = $state<HTMLDialogElement>();
-  let wfmLoginPassphrase = $state('');
-  let wfmLoginConfirm = $state('');
   let wfmLoginPlatform = $state('pc');
   // 'token' is the fallback for when the sign-in window cannot work (it
   // crashes under some Linux WebKitGTK builds): the user signs in with their
   // own browser and pastes its JWT cookie.
   let wfmLoginMode = $state<'window' | 'token'>('window');
+  let wfmLoginSubmit = $state<HTMLButtonElement>();
   let wfmLoginToken = $state('');
-  let wfmUnlockPassphrase = $state('');
-  // "Remember on this device" (OS keyring). One preference shared by the
-  // login and unlock dialogs; default on - the browser-cookie parity call.
-  let wfmRemember = $state(true);
-  // null until asked. A desktop without a keyring service (KDE Wallet switched
-  // off, no Secret Service) used to accept the tick and silently ask for the
-  // passphrase again next launch.
-  let rememberAvailable = $state<boolean | null>(null);
-
-  async function checkRemember() {
-    try {
-      rememberAvailable = await desktopRememberAvailable();
-    } catch {
-      rememberAvailable = false;
-    }
-  }
   let wfmAuthBusy = $state(false);
   let wfmAuthError = $state<string | null>(null);
-  // Wrong or mismatched passphrases and a closed window are the user's to fix, not a bug.
+  // A closed window or a keyring that did not answer is the user's to fix, not a bug.
   let wfmAuthReportable = $state(false);
   // What to do once the session unlocks: 'list' re-opens the listing flow the
   // CTA started; null (the Resume path) leaves the caller where it was.
   // Threaded through to `onunlocked` rather than acted on here - App.svelte
-  // owns what 'list' means (opening its own listingOpen state).
+  // owns what 'list' means (opening its own listing state).
   let authNext: string | null = null;
-  let wfmLoginPassInput: HTMLInputElement | undefined;
-  let wfmUnlockPassInput: HTMLInputElement | undefined;
 
   function failed(err: unknown) {
     wfmAuthError = humanError(err);
-    wfmAuthReportable = !(err instanceof DesktopCmdError && err.code === 'bad_passphrase');
+    wfmAuthReportable = !(err instanceof DesktopCmdError && err.code === 'keyring_unavailable');
     if (wfmAuthReportable) onautherror?.(err);
   }
 
@@ -67,27 +50,13 @@ import { DesktopCmdError } from '../../contracts/errors';
     wfmAuthError = null;
     wfmAuthReportable = false;
     authNext = next;
-    void checkRemember();
     if (code === 'needs_login') {
-      wfmLoginPassphrase = '';
-      wfmLoginConfirm = '';
       wfmLoginDialog?.showModal();
-      wfmLoginPassInput?.focus();
+      // The dialog would focus its first control, the paste-a-token link: one
+      // more press of A on a controller would then ask for a keyboard.
+      if (wfmLoginMode === 'window') wfmLoginSubmit?.focus();
     } else {
-      // A remembered device key (OS keyring) unlocks without the modal. Any
-      // miss - no entry, no keyring daemon, stale key - falls through to the
-      // passphrase prompt exactly as before.
-      try {
-        if (await desktopTrySilentUnlock()) {
-          unlocked();
-          return;
-        }
-      } catch (e) {
-        console.error('silent unlock failed', e);
-      }
-      wfmUnlockPassphrase = '';
-      wfmUnlockDialog?.showModal();
-      wfmUnlockPassInput?.focus();
+      await performWfmUnlock();
     }
   }
 
@@ -97,8 +66,6 @@ import { DesktopCmdError } from '../../contracts/errors';
     authNext = null;
   }
 
-  // Forgot the passphrase? The token can't be recovered, but re-login mints a
-  // fresh one with a new passphrase - the WFM account is never locked out.
   function goToLogin() {
     wfmUnlockDialog?.close();
     open('needs_login', authNext);
@@ -108,16 +75,12 @@ import { DesktopCmdError } from '../../contracts/errors';
     e?.preventDefault();
     wfmAuthError = null;
     wfmAuthReportable = false;
-    if (wfmLoginPassphrase !== wfmLoginConfirm) {
-      wfmAuthError = t('auth.mismatch');
-      return;
-    }
     wfmAuthBusy = true;
     try {
       if (wfmLoginMode === 'token') {
-        await desktopWfmLoginWithToken(wfmLoginToken, wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+        await desktopWfmLoginWithToken(wfmLoginToken, wfmLoginPlatform);
       } else {
-        await desktopWfmLogin(wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+        await desktopWfmLogin(wfmLoginPlatform);
       }
       wfmLoginDialog?.close();
       unlocked();
@@ -135,8 +98,6 @@ import { DesktopCmdError } from '../../contracts/errors';
       }
     } finally {
       wfmLoginToken = '';
-      wfmLoginPassphrase = '';
-      wfmLoginConfirm = '';
       wfmAuthBusy = false;
     }
   }
@@ -148,28 +109,28 @@ import { DesktopCmdError } from '../../contracts/errors';
     }
   }
 
-  async function performWfmUnlock(e: SubmitEvent) {
+  // Opens the saved sign-in with the key this device kept. Only a failure puts
+  // anything on screen: a sign-in that can no longer open goes straight to the
+  // sign-in dialog, anything else (a keyring that did not answer, a network
+  // failure) to a dialog that can retry.
+  async function performWfmUnlock(e?: SubmitEvent) {
     e?.preventDefault();
     wfmAuthError = null;
     wfmAuthReportable = false;
     wfmAuthBusy = true;
     try {
-      await desktopWfmUnlock(wfmUnlockPassphrase, wfmRemember);
+      await desktopWfmUnlock();
       wfmUnlockDialog?.close();
       unlocked();
     } catch (err) {
-      // The login file vanished between the check and the unlock - switch to
-      // the login dialog instead of asking for a passphrase that can't work.
       if (err instanceof DesktopCmdError && err.code === 'needs_login') {
         wfmUnlockDialog?.close();
         open('needs_login', authNext);
       } else {
-        // bad_passphrase and transient WFM failures stay in the dialog with
-        // their message - retry is a re-type away.
         failed(err);
+        if (!wfmUnlockDialog?.open) wfmUnlockDialog?.showModal();
       }
     } finally {
-      wfmUnlockPassphrase = '';
       wfmAuthBusy = false;
     }
   }
@@ -210,37 +171,6 @@ import { DesktopCmdError } from '../../contracts/errors';
       <span>{t('auth.platform')}</span>
       <Select label={t('auth.platform')} value={wfmLoginPlatform} options={platformOptions} onchange={(next) => (wfmLoginPlatform = next)} />
     </div>
-    <label>
-      {t('auth.passphrase')}
-      <input
-        type="password"
-        autocomplete="new-password"
-        bind:value={wfmLoginPassphrase}
-        bind:this={wfmLoginPassInput}
-        placeholder={t('auth.passphraseHint')}
-        required
-        minlength="12"
-      />
-    </label>
-    <p class="muted">
-      {t('auth.passphraseHelp')}
-    </p>
-    <label>
-      {t('auth.confirm')}
-      <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12"
-        aria-describedby="wfm-confirm-hint{wfmAuthError ? ' wfm-login-error' : ''}"
-        aria-invalid={wfmAuthError === t('auth.mismatch') ? 'true' : undefined} />
-      <span class="muted" id="wfm-confirm-hint">{t('auth.confirmHelp')}</span>
-    </label>
-    <label class="remember">
-      <input type="checkbox" bind:checked={wfmRemember} />
-      {t('auth.rememberLong')}
-    </label>
-    {#if rememberAvailable === false}
-      <p class="muted" data-testid="wfm-remember-unavailable">
-        {t('auth.noKeyring')}
-      </p>
-    {/if}
     {#if wfmAuthBusy && wfmLoginMode === 'window'}
       <p class="muted" role="status" data-testid="wfm-login-waiting">
         {t('auth.waiting')}
@@ -256,7 +186,7 @@ import { DesktopCmdError } from '../../contracts/errors';
     {/if}
     <footer>
       <button type="button" class="ghost" onclick={cancelWfmLogin}>{t('auth.cancel')}</button>
-      <button type="submit" disabled={wfmAuthBusy}>
+      <button type="submit" disabled={wfmAuthBusy} bind:this={wfmLoginSubmit}>
         {#if wfmLoginMode === 'token'}
           {t(wfmAuthBusy ? 'auth.checkingToken' : 'auth.saveToken')}
         {:else}
@@ -275,28 +205,6 @@ import { DesktopCmdError } from '../../contracts/errors';
         {t('auth.unlockLede')}
       </p>
     </header>
-    <label>
-      {t('auth.passphraseLabel')}
-      <input
-        type="password"
-        autocomplete="current-password"
-        data-testid="wfm-unlock-pass"
-        aria-describedby={wfmAuthError ? 'wfm-unlock-error' : undefined}
-        aria-invalid={wfmAuthError ? 'true' : undefined}
-        bind:value={wfmUnlockPassphrase}
-        required
-        bind:this={wfmUnlockPassInput}
-      />
-    </label>
-    <label class="remember">
-      <input type="checkbox" bind:checked={wfmRemember} />
-      {t('auth.remember')}
-    </label>
-    {#if rememberAvailable === false}
-      <p class="muted" data-testid="wfm-remember-unavailable">
-        {t('auth.noKeyring')}
-      </p>
-    {/if}
     {#if wfmAuthError}
       <div class="err" id="wfm-unlock-error" role="alert" data-testid="wfm-auth-error">
         {wfmAuthError}
@@ -305,30 +213,17 @@ import { DesktopCmdError } from '../../contracts/errors';
         {/if}
       </div>
     {/if}
-    <p class="forgot-row muted">
-      {t('auth.forgot')} <button type="button" class="forgot" onclick={goToLogin}>{t('auth.loginAgain')}</button>{t('auth.forgotAfter')}
-    </p>
     <footer>
       <button type="button" class="ghost" onclick={() => wfmUnlockDialog?.close()}>{t('auth.cancel')}</button>
-      <button type="submit" disabled={wfmAuthBusy}>{t(wfmAuthBusy ? 'auth.unlocking' : 'auth.unlock')}</button>
+      <button type="button" class="ghost" onclick={goToLogin}>{t('auth.loginAgain')}</button>
+      <button type="submit" disabled={wfmAuthBusy}>{t(wfmAuthBusy ? 'auth.unlocking' : 'auth.retry')}</button>
     </footer>
   </form>
 </dialog>
 
 <style>
-  /* The dialog.cryptobox shell now lives in app.css - this component and
-     ExportImportDialogs render the same chrome and had drifted apart. Only
-     the remember-me row, which exists in no other dialog, stays here. */
-  dialog.cryptobox label.remember {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-    text-transform: none;
-    letter-spacing: normal;
-    font-size: var(--text-caption);
-    line-height: 1.45;
-  }
-  dialog.cryptobox label.remember input { margin-top: 2px; }
+  /* The dialog.cryptobox shell lives in app.css, shared with
+     ExportImportDialogs. */
   .forgot-row { display: flex; align-items: baseline; gap: 4px; margin: 0; }
   .forgot {
     background: none;

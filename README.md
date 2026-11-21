@@ -217,8 +217,8 @@ DE public data  ── drop tables + world state ►      └── optional WFM
 - Scanning and public market browsing do not require a warframe.market login.
   Verified selling availability and buyer comparisons do. The bearer token is
   encrypted at rest
-  with AES-256-GCM using a PBKDF2-derived key. Remember-on-device stores the
-  derived unlock key, rather than the passphrase, in the operating system keyring.
+  with AES-256-GCM under a random key kept in the operating system keyring, or
+  in a file readable only by your user where no keyring is available.
 - Reward captures stay in memory unless the user explicitly enables local
   diagnostics, which writes recent captures under the app cache directory.
   Nothing is uploaded automatically. Optional live overlay pricing sends
