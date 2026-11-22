@@ -8,7 +8,9 @@
 // sells tonight; the second sits in your listings for a month.
 //
 // DE publishes per-Mastery-Rank usage share for 694 frames and weapons and has
-// done for six years. This module turns that into a liquidity signal.
+// done for six years. Native scoring (market_domain::scoring) turns that into
+// the liquidity read on every Sell row; this module holds its shapes and the
+// Mastery-Rank band the demand cell draws.
 //
 // TWO HONESTIES the UI must carry:
 //   - Usage is measured on the PARENT (the weapon or frame), so a part
@@ -16,8 +18,6 @@
 //     telemetry.
 //   - The data is annual and published in arrears. The year is part of the
 //     record so a reader knows how fresh it is.
-
-import type { Market } from '../contracts/data';
 
 export interface UsageEntry {
   name: string;
@@ -30,76 +30,6 @@ export interface UsageEntry {
   /** Usage share at MR 0 … 33. */
   by_mr: number[];
 }
-
-export type UsageSurface = Record<string, UsageEntry>;
-
-export type UsageParentIndex = Map<string, string | null>;
-
-function validUsage(value: unknown): value is UsageEntry {
-  if (!value || typeof value !== 'object') return false;
-  const row = value as Partial<UsageEntry>;
-  return typeof row.name === 'string' && row.name.length > 0
-    && typeof row.category === 'string' && row.category.length > 0
-    && Number.isInteger(row.year) && (row.year ?? 0) > 0
-    && typeof row.share === 'number' && Number.isFinite(row.share) && row.share >= 0
-    && typeof row.peak_mr === 'number' && Number.isFinite(row.peak_mr) && row.peak_mr >= 0
-    && Array.isArray(row.by_mr) && row.by_mr.length > 0
-    && row.by_mr.every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
-}
-
-export function buildUsageParentIndex(market: Market | null | undefined): UsageParentIndex {
-  const index: UsageParentIndex = new Map();
-  for (const [parent, set] of Object.entries(market?.set_to_parts ?? {})) {
-    for (const part of set?.parts ?? []) {
-      if (!part?.slug) continue;
-      if (!index.has(part.slug)) index.set(part.slug, parent);
-      else if (index.get(part.slug) !== parent) index.set(part.slug, null);
-    }
-  }
-  return index;
-}
-
-const parentIndexCache = new WeakMap<Market, UsageParentIndex>();
-
-function parentIndexFor(market: Market): UsageParentIndex {
-  let index = parentIndexCache.get(market);
-  if (!index) {
-    index = buildUsageParentIndex(market);
-    parentIndexCache.set(market, index);
-  }
-  return index;
-}
-
-/**
- * Usage for a slug, following a part up to its parent set when needed.
- *
- * `inherited` is not decoration - a part showing its parent's number without
- * saying so would imply per-part telemetry that does not exist.
- */
-export function usageFor(
-  slug: string,
-  market: Market | null | undefined,
-): { entry: UsageEntry; inherited: boolean } | null {
-  if (!market) return null;
-  const usage = market.usage as UsageSurface | undefined | null;
-  if (!usage) return null;
-
-  if (Object.hasOwn(usage, slug)) {
-    const direct = usage[slug];
-    return validUsage(direct) ? { entry: direct, inherited: false } : null;
-  }
-
-  const parentSlug = parentIndexFor(market).get(slug);
-  if (parentSlug) {
-    const parent = usage[parentSlug];
-    if (validUsage(parent)) return { entry: parent, inherited: true };
-  }
-  return null;
-}
-
-/** Share at or above which an item counts as genuinely popular within its
- *  category. Categories hold 113–233 items, so an even split would be well
- *  under 1% - a whole percent is a real signal. */
 
 export type Liquidity =
   | 'sells-today' //   played and trading - list at market and it moves

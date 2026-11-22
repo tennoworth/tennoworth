@@ -1,19 +1,16 @@
 //! Sell-priority scoring - the "what to sell right now" ranking.
 //!
-//! Canonical arithmetic for desktop inventory, tray and planning consumers.
-//! The hosted browser keeps a TypeScript counterpart in
-//! `frontend/src/domain/sell-priority.ts`; shared fixtures prevent drift across
-//! that remaining runtime boundary.
-//!
-//! A shared-fixture parity test (`tests/fixtures/sell-priority/cases.json`,
-//! checked from BOTH the Rust consumer and Vitest) guards against silent
-//! divergence: change the score in one language and the golden order in the
-//! fixture must change too, which then fails the other side until it matches.
+//! The only implementation of the score: the desktop table, tray and planners
+//! read it, and the host pipeline scores the homepage's hand-off sample with it.
+//! `frontend/src/domain/sell-priority.ts` keeps only what the views apply
+//! synchronously - the clearing price, sellable quantity and the thresholds -
+//! pinned to the values here by shared fixtures.
 //!
 //! Purity is preserved (no I/O, no deps, no clocks) like everything here. The
-//! one subtlety is JS truthiness: `sell-priority.ts` reads every field as
-//! `Number(x) || 0`, so `0`, `NaN`, and a missing key all collapse to `0` and
-//! fall through to the next fallback. [`truthy`] mirrors that exactly.
+//! one subtlety is JS truthiness: `clearingPrice` in sell-priority.ts reads
+//! every field as `Number(x) || 0`, so `0`, `NaN`, and a missing key all
+//! collapse to `0` and fall through to the next fallback. [`truthy`] mirrors
+//! that exactly.
 
 /// Below this many closed trades / 48 h the book is too thin to trust its ask
 /// as a forecast - the ask clamp, the trend badges and the thin liquidity
@@ -26,7 +23,7 @@ pub const LIQUID_VOL: f64 = 5.0;
 /// sell-priority.ts by `tests/fixtures/sell-priority/pick-floor.json`.
 pub const MIN_PICK_SCORE: f64 = 20.0;
 /// At/under this 48 h volume a listing barely moves - flagged `patience`.
-/// Mirrors `PATIENCE_VOL` in sell-priority.ts.
+/// The patience bar has no TypeScript copy: the score that carries it is native.
 const PATIENCE_VOL: f64 = 3.0;
 pub const DEAD_SHARE: f64 = 0.15;
 pub const POPULAR_SHARE: f64 = 1.0;
@@ -135,9 +132,8 @@ pub fn clearing_price(m: &PricedEntry) -> f64 {
 
 /// The neutral sell score for one owned row. `score_row_weighted` applies the
 /// bounded usage multiplier used by product ranking. `owned` is the sellable
-/// quantity (post-reserve). 1:1
-/// with `scoreRow` in sell-priority.ts - the no-market-entry case (TS `!m`
-/// → `{0, false}`) is the caller's job here (callers skip unresolvable rows).
+/// quantity (post-reserve). A row with no market entry is the caller's to
+/// skip.
 pub fn score_row(owned: f64, m: &PricedEntry) -> SellScore {
     score_row_weighted(owned, m, None)
 }
@@ -228,7 +224,7 @@ mod tests {
 
     #[test]
     fn score_missing_fields_default_to_zero() {
-        // TS `scoreRow({owned:0, m:{}})` → {0, patience:true}
+        // owned 0 on an empty entry: no score, and a barely-moving book
         let r = score_row(0.0, &PricedEntry::default());
         assert_eq!(r.sell_score, 0.0);
         assert!(r.patience);

@@ -1,24 +1,8 @@
-// Sell-priority scoring.
-//
-// The naive "potential plat" column (owned × avg) overstates: it assumes
-// every copy you own clears at the average price, instantly. This module
-// produces a prioritization score from price, likely sell-through, and a
-// deliberately bounded usage signal. It is not a plat/day forecast.
-//
-// Formula:
-//   price        = clearingPrice(m)                        // clamped, see below
-//   daily_sales  = max(0.05, vol_48h / 2)                  // floor so dead items still rank, just low
-//   units_today  = min(owned, daily_sales)                 // can't realise more than the market absorbs
-//   base_score   = units_today × price
-//   sell_score   = base_score × usage weight               // bounded 0.75× … 1.25×
-//
-// `patience` flag = true when vol_48h < 3 - these listings exist for the
-// item but it barely moves. The flag is the ONLY mitigation for dead
-// items: the volume floor (0.05) deliberately keeps them ranked, so a
-// dead item with a sane clearing price can still appear high when you
-// own many copies. That's why clearingPrice() must never trust a lone
-// aspirational ask (see below) - before the clamp, a vol-1 item with a
-// 2,999p fantasy ask ranked #2 of 2,623.
+// What the views need synchronously from the sell-priority rules: the
+// clamped clearing price, listable and spare quantities, the thin-book line,
+// the timing states and the Top-picks bar. The priority score itself is native
+// (market_domain::math::sell_priority): the desktop gets it from
+// score_inventory and the homepage from the pipeline's handoff_sample.
 
 import type { MarketItemEntry } from '../contracts/data';
 
@@ -27,33 +11,12 @@ type PricedEntry = Pick<
   'vol' | 'low_sell' | 'avg' | 'median_now' | 'median_90d'
 > | null | undefined;
 
-export interface SellScoreInput {
-  owned: number;
-  m: PricedEntry;
-  usageShare?: unknown;
-}
-
-export interface SellScoreOutput {
-  sell_score: number;
-  patience: boolean;
-}
-
 // Below this many closed trades / 48 h the book is too thin to trust its ask
 // as a forecast, and too thin to certify a trend. The one TypeScript home for
-// the threshold: the ask clamp, the trend badges, the demand signal and the
-// Baro board all read it, and tests/fixtures/sell-priority/liquidity-boundary.json
-// pins it against the native copy.
+// the threshold: the ask clamp and the thin-book tags read it, and
+// tests/fixtures/sell-priority/liquidity-boundary.json pins it against the
+// native copy.
 export const LIQUID_VOL = 5;
-const PATIENCE_VOL = 3;
-export const DEAD_SHARE = 0.15;
-export const POPULAR_SHARE = 1.0;
-
-export function usageWeight(share: unknown): number {
-  if (typeof share !== 'number' || !Number.isFinite(share) || share < 0) return 1;
-  if (share < DEAD_SHARE) return 0.75;
-  if (share >= POPULAR_SHARE) return 1.25;
-  return 0.75 + ((share - DEAD_SHARE) / (POPULAR_SHARE - DEAD_SHARE)) * 0.5;
-}
 
 // "Keep copies" reserve - N copies of every owned item held back from ever
 // being listed, so the user can't sell their only copy of something by
@@ -112,19 +75,6 @@ export function clearingPrice(m: PricedEntry): number {
     if (vol < LIQUID_VOL && lowSell > median * 1.5) return median * 1.5;
   }
   return lowSell;
-}
-
-export function scoreRow({ owned, m, usageShare }: SellScoreInput): SellScoreOutput {
-  if (!m) return { sell_score: 0, patience: false };
-  const vol = Number(m.vol) || 0;
-  const price = clearingPrice(m);
-  const dailySales = Math.max(0.05, vol / 2);
-  const unitsToday = Math.min(owned, dailySales);
-  return {
-    sell_score: unitsToday * price * usageWeight(usageShare),
-    // Was vol < 2, which vol-2 items dodged while still barely moving.
-    patience: vol < PATIENCE_VOL,
-  };
 }
 
 // Where today's median sits in its 90-day channel: native scoring::timing

@@ -2,6 +2,7 @@
 
 mod catalog;
 pub mod csv_input;
+mod handoff;
 pub mod history;
 mod inputs;
 mod paths;
@@ -827,6 +828,7 @@ pub fn build(
         surface_fetched_at,
     );
     snapshot.de = Some(de_surface);
+    snapshot.handoff_sample = handoff::sample(&snapshot);
     snapshot.surface_provenance = surface_provenance;
     snapshot.surface_key_fetched_at = key_stamps;
     snapshot.event_rewards = render::EventRewardsSurface {

@@ -428,7 +428,7 @@ mod tests {
 
         assert_eq!(
             order, fx.expected_order,
-            "Rust ranking diverged from the golden order (and thus sell-priority.ts)"
+            "ranking diverged from the golden order"
         );
     }
 

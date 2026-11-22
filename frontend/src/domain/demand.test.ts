@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  masteryBand,
-  usageFor,
-  type UsageEntry,
-} from './demand';
-import type { Market } from '../contracts/data';
+import { masteryBand } from './demand';
 
 /** A usage curve peaking at `peak`, with a little mass either side. */
 function curve(peak: number, height = 9): number[] {
@@ -14,63 +9,6 @@ function curve(peak: number, height = 9): number[] {
     return Math.max(0, height - d * 1.2);
   });
 }
-
-function usage(over: Partial<UsageEntry> = {}): UsageEntry {
-  return {
-    name: 'Braton Prime',
-    category: 'Primary',
-    year: 2025,
-    share: 3.42,
-    peak_mr: 10,
-    by_mr: curve(10),
-    ...over,
-  };
-}
-
-const MARKET: Market = {
-  usage: {
-    braton_prime_set: usage(),
-    torid: usage({ name: 'Torid', share: 9.62, peak_mr: 22, by_mr: curve(22) }),
-    ancient_thing_set: usage({ name: 'Ancient Thing', share: 0.04, by_mr: curve(3) }),
-  },
-  set_to_parts: {
-    braton_prime_set: {
-      name: 'Braton Prime',
-      parts: [
-        { slug: 'braton_prime_receiver', component_name: 'Receiver' },
-        { slug: 'braton_prime_stock', component_name: 'Stock' },
-      ],
-    },
-    ancient_thing_set: {
-      name: 'Ancient Thing',
-      parts: [{ slug: 'ancient_thing_barrel', component_name: 'Barrel' }],
-    },
-  },
-} as unknown as Market;
-
-describe('usageFor', () => {
-  it('reads a direct hit without claiming inheritance', () => {
-    const hit = usageFor('torid', MARKET)!;
-    expect(hit.entry.name).toBe('Torid');
-    expect(hit.inherited).toBe(false);
-  });
-
-  it('walks a part up to its parent set and says that it did', () => {
-    // A part showing its parent's number without saying so would imply
-    // per-part telemetry that does not exist.
-    const hit = usageFor('braton_prime_receiver', MARKET)!;
-    expect(hit.entry.name).toBe('Braton Prime');
-    expect(hit.inherited).toBe(true);
-  });
-
-  it('is null for something with no usage anywhere', () => {
-    expect(usageFor('mystery_item', MARKET)).toBeNull();
-  });
-
-  it('is null on a snapshot with no usage surface at all', () => {
-    expect(usageFor('torid', { items: {} } as unknown as Market)).toBeNull();
-  });
-});
 
 describe('masteryBand', () => {
   it('brackets the peak rather than reporting a single spike', () => {

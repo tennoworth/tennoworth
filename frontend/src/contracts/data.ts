@@ -212,6 +212,15 @@ export interface CalendarSurface {
   resurgence?: ResurgenceRotation[];
 }
 
+/** One row of the homepage's hand-off strip, picked and scored by the
+ *  pipeline with the desktop's sell priority (`pipeline::handoff`). `owned`
+ *  is a sample count. */
+export interface HandoffPick {
+  slug: string;
+  owned: number;
+  score: number;
+}
+
 export interface Market {
   updated_at: string;
   platform: string;
@@ -261,6 +270,8 @@ export interface Market {
     data_fetched_at: string;
     source?: string;
   }>;
+  /** Absent on snapshots built before the pipeline published it. */
+  handoff_sample?: HandoffPick[] | null;
 }
 
 export interface EventRewardItem {

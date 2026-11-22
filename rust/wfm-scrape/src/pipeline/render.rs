@@ -223,6 +223,9 @@ pub struct Snapshot {
     /// Digital Extremes provenance + the worldState-only surfaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub de: Option<DeSurface>,
+    /// The homepage's three scored sample rows - see `pipeline::handoff`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub handoff_sample: Vec<crate::pipeline::handoff::HandoffPick>,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -364,6 +367,7 @@ pub fn assemble_snapshot(
         surface_key_fetched_at: HashMap::new(),
         event_rewards: EventRewardsSurface::default(),
         reward_names: Default::default(),
+        handoff_sample: Vec::new(),
     }
 }
 

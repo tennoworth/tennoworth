@@ -11,8 +11,6 @@ import {
   handoffSample,
 } from './market-browse.js';
 import type { Market } from '../contracts/data';
-import { usageFor } from './demand';
-import { scoreRow } from './sell-priority';
 
 // Minimal snapshot: catalog (name→slug), items (stats), vault_status.
 function fixture() {
@@ -224,26 +222,35 @@ describe('vaultedTop', () => {
 describe('handoffSample', () => {
   const m = fixture();
   const idx = buildBrowseIndex(m);
+  const picks = [
+    { slug: 'rare_thing', owned: 3, score: 75 },
+    { slug: 'primed_continuity', owned: 1, score: 42 },
+    { slug: 'mag_prime_set', owned: 2, score: 38 },
+  ];
 
-  it('picks three distinct liquid rows - one vaulted first - with sample owned counts and derived score/potential', () => {
-    const rows = handoffSample(m, idx);
-    expect(rows.length).toBe(3);
-    expect(new Set(rows.map((r) => r.slug)).size).toBe(3);
-    expect(rows[0].slug).toBe('rare_thing'); // highest-avg vaulted row
-    expect(rows.map((r) => r.owned)).toEqual([3, 1, 2]);
-    for (const r of rows) {
-      expect(r.vol).toBeGreaterThanOrEqual(10);
-      expect(r.score).toBe(Math.round(scoreRow({
-        owned: r.owned,
-        m: m.items[r.slug],
-        usageShare: usageFor(r.slug, m)?.entry.share,
-      }).sell_score));
-      expect(r.potential).toBe(Math.round(r.owned * r.avg));
-    }
+  it('renders the published picks in order with their native score and the stack value', () => {
+    const rows = handoffSample({ ...m, handoff_sample: picks }, idx);
+    expect(rows.map((r) => [r.slug, r.owned, r.score])).toEqual(picks.map((p) => [p.slug, p.owned, p.score]));
+    for (const r of rows) expect(r.potential).toBe(Math.round(r.owned * m.items[r.slug].avg));
+    expect(rows[0]).toMatchObject({ name: 'Rare Thing', vault: m.vault_status.rare_thing });
   });
 
-  it('is deterministic and returns [] without items', () => {
-    expect(handoffSample(m, idx).map((r) => r.slug)).toEqual(handoffSample(m, idx).map((r) => r.slug));
+  it('leaves out a pick it cannot back rather than inventing numbers', () => {
+    const rows = handoffSample({ ...m, handoff_sample: [
+      { slug: 'not_priced', owned: 1, score: 10 },
+      { slug: 'rare_thing', owned: 0, score: 10 },
+      { slug: 'rare_thing', owned: 1.5, score: 10 },
+      { slug: 'primed_continuity', owned: 1, score: Number.NaN },
+      { slug: 'primed_continuity', owned: 1, score: -1 },
+      null,
+      { slug: 'mag_prime_set', owned: 2, score: 0 },
+    ] }, idx);
+    expect(rows.map((r) => r.slug)).toEqual(['mag_prime_set']);
+  });
+
+  it('is empty on a snapshot without picks', () => {
+    expect(handoffSample(m, idx)).toEqual([]);
+    expect(handoffSample({ ...m, handoff_sample: null }, idx)).toEqual([]);
     expect(handoffSample(null, buildBrowseIndex(null))).toEqual([]);
   });
 });

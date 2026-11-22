@@ -3,8 +3,6 @@
 // DOM - so the search / movers / vault joins stay unit-testable in isolation.
 
 import type { Market, MarketItemEntry, RivenDispoChange, VaultStatus } from '../contracts/data';
-import { usageFor } from './demand';
-import { scoreRow } from './sell-priority';
 
 /** A single item row rendered by the browser (search, movers, vaulted). */
 export interface BrowseRow {
@@ -202,57 +200,28 @@ export function dispositionChanges(market: Market | null | undefined, limit = 12
 
 /** A hand-off row: a market row plus the three numbers only the desktop app can
  *  fill (owned · priority · stack value), with SAMPLE owned counts so the
- *  landing can show what a completed row looks like. Priority follows the app's
- *  bounded price × turnover × usage weighting; stack value remains owned × avg. */
+ *  landing can show what a completed row looks like. The pipeline picks the
+ *  rows and scores them with the desktop's priority (`handoff_sample`); stack
+ *  value remains owned × avg. */
 export interface HandoffRow extends BrowseRow {
   owned: number;
   score: number;
   potential: number;
 }
 
-// Deterministic picks so the strip reads the same on every load: the three
-// highest-priced liquid rows (≥ 10 trades / 48h) - one vaulted set if there is
-// one, then the best risers - with owned counts 3 · 1 · 2. Everything is
-// derived from the snapshot except the owned counts, which the caption labels
-// as sample values.
+// A pick the page cannot back with a priced row, or whose numbers are not a
+// count and a score, is left out rather than shown as a plausible zero.
 export function handoffSample(
   market: Market | null | undefined,
   index: BrowseIndex,
 ): HandoffRow[] {
   const items = market?.items;
-  if (!items) return [];
-  const liquid = (r: BrowseRow) => r.vol >= 10 && r.avg >= 10;
-  const picks: BrowseRow[] = [];
-  const seen = new Set<string>();
-  const take = (rows: BrowseRow[], n: number) => {
-    for (const r of rows) {
-      if (picks.length >= 3 || n <= 0) return;
-      if (seen.has(r.slug) || !liquid(r)) continue;
-      seen.add(r.slug); picks.push(r); n -= 1;
-    }
-  };
-  take(vaultedTop(market, index, 24), 1);
-  take(topMovers(market, index, { minVol: 10, minPrice: 10, limit: 40 }).risers.sort((a, b) => b.avg - a.avg), 3);
-  if (picks.length < 3) {
-    // Thin snapshot (or a test fixture): fall back to the most-traded rows.
-    const rest = Object.entries(items)
-      .map(([slug, e]) => toRow(index, slug, e, market?.vault_status?.[slug]))
-      .sort((a, b) => b.vol - a.vol);
-    take(rest, 3 - picks.length);
-  }
-  const OWNED = [3, 1, 2];
-  return picks.map((r, i) => {
-    const owned = OWNED[i] ?? 1;
-    const usage = usageFor(r.slug, market);
-    return {
-      ...r,
-      owned,
-      score: Math.round(scoreRow({
-        owned,
-        m: items[r.slug],
-        usageShare: usage?.entry.share,
-      }).sell_score),
-      potential: Math.round(owned * r.avg),
-    };
+  const picks = market?.handoff_sample;
+  if (!items || !Array.isArray(picks)) return [];
+  return picks.flatMap((pick) => {
+    const e = pick && typeof pick.slug === 'string' ? items[pick.slug] : undefined;
+    if (!e || !Number.isSafeInteger(pick.owned) || pick.owned <= 0 || !Number.isFinite(pick.score) || pick.score < 0) return [];
+    const row = toRow(index, pick.slug, e, market?.vault_status?.[pick.slug]);
+    return [{ ...row, owned: pick.owned, score: pick.score, potential: Math.round(pick.owned * row.avg) }];
   });
 }

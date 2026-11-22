@@ -133,6 +133,39 @@ pub fn valid_usage(value: &Value) -> Option<UsageEntry> {
     .then_some(row)
 }
 
+/// Usage rows and the set each part inherits from: a part listed by exactly one
+/// set takes that set's row; a part two sets claim takes none.
+pub struct UsageIndex<'a> {
+    usage: &'a BTreeMap<String, Value>,
+    parents: BTreeMap<String, Option<String>>,
+}
+
+impl<'a> UsageIndex<'a> {
+    pub fn new(usage: &'a BTreeMap<String, Value>, sets: &BTreeMap<String, UsageSet>) -> Self {
+        Self {
+            usage,
+            parents: parent_index(sets),
+        }
+    }
+
+    /// The usage `slug` is scored with, and whether it came from its set. A
+    /// row of its own that is invalid stops inheritance rather than falling
+    /// through to the set's.
+    pub fn resolve(&self, slug: &str) -> (Option<UsageEntry>, bool) {
+        if let Some(value) = self.usage.get(slug) {
+            return (valid_usage(value), false);
+        }
+        let usage = self
+            .parents
+            .get(slug)
+            .and_then(|p| p.as_ref())
+            .and_then(|parent| self.usage.get(parent))
+            .and_then(valid_usage);
+        let inherited = usage.is_some();
+        (usage, inherited)
+    }
+}
+
 fn parent_index(sets: &BTreeMap<String, UsageSet>) -> BTreeMap<String, Option<String>> {
     let mut index = BTreeMap::<String, Option<String>>::new();
     for (parent, set) in sets {
@@ -230,7 +263,7 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
     if !request.reserve_copies.is_finite() || request.reserve_copies < 0.0 {
         return Err("Reserve must be a nonnegative number".into());
     }
-    let parents = parent_index(&request.market.set_to_parts);
+    let usage_index = UsageIndex::new(&request.market.usage, &request.market.set_to_parts);
     let mut out = Vec::new();
     for (key, owned) in request.owned {
         if !owned.count.is_finite()
@@ -276,17 +309,7 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
             available
         };
         let clearing_price = sell_priority::clearing_price(&priced);
-        let (usage, inherited) = if let Some(value) = request.market.usage.get(&owned.slug) {
-            (valid_usage(value), false)
-        } else {
-            let usage = parents
-                .get(&owned.slug)
-                .and_then(|p| p.as_ref())
-                .and_then(|parent| request.market.usage.get(parent))
-                .and_then(valid_usage);
-            let inherited = usage.is_some();
-            (usage, inherited)
-        };
+        let (usage, inherited) = usage_index.resolve(&owned.slug);
         let liquidity = if priced.vol < sell_priority::LIQUID_VOL {
             Liquidity::Thin
         } else if let Some(usage) = &usage {

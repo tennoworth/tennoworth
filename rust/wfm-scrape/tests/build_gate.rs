@@ -61,6 +61,20 @@ fn build_produces_full_shape_market_json() {
             .collect::<Vec<_>>()
     );
 
+    // The homepage's hand-off strip renders these as they are, so they ship in
+    // its copy and name priced rows.
+    assert_eq!(home["handoff_sample"], snap["handoff_sample"]);
+    assert!(public.get("handoff_sample").is_none());
+    // The vaulted chassis first, then the rising mod, then the most traded
+    // row left; each scored at its clearing price for the sample count.
+    assert_eq!(
+        snap["handoff_sample"],
+        serde_json::json!([
+            { "slug": "volt_prime_chassis", "owned": 3, "score": 75 },
+            { "slug": "primed_continuity", "owned": 1, "score": 42 },
+            { "slug": "volt_prime_chassis_blueprint", "owned": 2, "score": 38 },
+        ])
+    );
     let obj = snap.as_object().expect("market.json is an object");
     for key in [
         "updated_at",
