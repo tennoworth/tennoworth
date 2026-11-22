@@ -1325,6 +1325,10 @@ Finish or discard pending Trade Session listing batches before downgrading; olde
 
 *Fold this into the next version's section when you run `release.ts prepare`.*
 
+### Selling
+
+- **The sign-in window works on more Linux systems** On systems without GStreamer's audio plugins, including SteamOS, the warframe.market sign-in page crashed a few seconds after opening and the app fell back to asking for a pasted session token. The AppImage now carries those plugins. <!-- app-note {"id":"signin-window-audio-crash","kind":"fixed"} -->
+
 ## 0.6.0 - 2026-08-22
 
 **Linux is now distributed as an AppImage, and only as an AppImage.** If you

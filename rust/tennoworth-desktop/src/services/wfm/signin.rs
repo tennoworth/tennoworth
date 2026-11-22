@@ -93,10 +93,12 @@ async fn wait_for_sign_in(app: &AppHandle, platform: &str) -> Result<String, Cmd
             ));
         }
         let page = window.url().ok().map(|u| page_label(&u));
-        // A crashed page leaves the webview without a URL. WebKitGTK 2.52 aborts
-        // this way a few seconds into every warframe.market page (2026-09), so
-        // report it instead of leaving a blank window "waiting for sign-in".
-        // The cookies were still checked on the polls before this fires.
+        // A crashed page leaves the webview without a URL. WebKitGTK aborts
+        // this way a few seconds into every warframe.market page when GStreamer
+        // has no autoaudiosink (gst-plugins-good missing): the page's bot check
+        // touches audio. Report it instead of leaving a blank window "waiting
+        // for sign-in". The cookies were still checked on the polls before this
+        // fires.
         match (&page, page_lost_since) {
             (None, None) => page_lost_since = Some(Instant::now()),
             (None, Some(at)) if at.elapsed() > PAGE_LOST_LIMIT => {
