@@ -5,9 +5,9 @@
 //! order stream (`presence`), and anonymous market reads (`market`). The
 //! Tauri desktop shell drives this crate over IPC.
 //!
-//! Design rule: **no interactive terminal I/O in this crate.** Where the
-//! desktop shell needs a passphrase, it collects it in the webview and hands
-//! the plaintext over as a parameter. (A few best-effort, non-interactive
+//! Design rule: **no interactive terminal I/O in this crate.** Anything the
+//! user supplies arrives from the desktop shell as a parameter. (A few
+//! best-effort, non-interactive
 //! `eprintln!` diagnostics - pending-plan write warnings, a loose-key-perms
 //! warning - remain.)
 

@@ -1,19 +1,18 @@
 //! Desktop warframe.market session - the in-memory decrypted-JWT credential
-//! lifecycle, mirroring serve's `ServeState` listing auth minus the terminal.
+//! lifecycle.
 //!
-//! The passphrase arrives from the webview (the `unlock_jwt` / `wfm_login`
-//! commands) instead of a TTY prompt; wfm-trading takes it as a parameter, exactly
-//! as designed for this second adapter. The plaintext JWT lives ONLY inside this
-//! process's memory for the session - never on disk (only the AES-GCM envelope,
-//! whose format is unchanged), never in a log line, and never in a value handed
-//! back to the SPA. `CmdError` carries a `code` + a human message and nothing
-//! else; the raw password and the JWT never appear in it.
+//! The JWT is saved encrypted under a random key the device keeps (the OS
+//! keyring, else a file only the user can read; see `keyring_store`). There is
+//! no passphrase, so unlocking needs nothing from the user: `unlock` opens the
+//! file with the saved key. The plaintext JWT lives ONLY inside this process's
+//! memory for the session - never on disk unencrypted, never in a log line, and
+//! never in a value handed back to the SPA. `CmdError` carries a `code` + a
+//! human message and nothing else.
 //!
-//! Unlock is lazy and terminal-free: a listing command with no unlocked session
-//! does NOT try to prompt (there is nowhere to prompt). It returns a typed
-//! `needs_login` (no login file on this machine) or `needs_unlock` (login file
-//! present, session locked) so the SPA can raise the login or passphrase modal -
-//! the desktop analogue of serve's 401 `needs_login:true` vs 503 split.
+//! A listing command with no unlocked session does not unlock on its own. It
+//! returns a typed `needs_login` (no sign-in file on this machine) or
+//! `needs_unlock` (a sign-in file is present, the session is not open yet), and
+//! the SPA calls `unlock_jwt` or opens the sign-in dialog.
 use crate::poison::guard;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,8 +20,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use wfm_trading::auth::{
-    decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, validate_passphrase, validate_platform,
-    EncryptedJwt,
+    decrypt_jwt_with_key, encrypt_jwt, new_jwt_key, validate_platform, EncryptedJwt, JWT_FORMAT_V1,
 };
 use wfm_trading::orders::listing::{warm_unlocked, Unlocked};
 use wfm_trading::orders::pending::{journal_state, JournalState};
@@ -50,20 +48,26 @@ struct SessionState {
 #[cfg(test)]
 type WarmHook = fn(&WfmSession, String, String) -> Result<Unlocked, CmdError>;
 
-/// Which persisted trace a keyring change would leave: the derived key stored
-/// for silent unlock, or the entry removed.
+/// Which persisted trace a device-key change would leave: the key saved (in the
+/// keyring, else the key file), or every saved copy removed.
 #[derive(Clone, Copy)]
 enum KeyringIntent<'a> {
     Remember(&'a [u8; 32]),
     Forget,
 }
 
-/// One keyring decision, recorded instead of performed so a test can observe the
-/// ordering rule without a Secret Service daemon.
+/// The saved keys that might open the sign-in file, and why a store gave none.
+struct KeyRead {
+    keys: Vec<[u8; 32]>,
+    unavailable: Option<String>,
+}
+
+/// One device-key decision, recorded instead of performed so a test can observe
+/// the ordering rule without a Secret Service daemon.
 #[cfg(test)]
 type KeyringHook = fn(KeyringIntent<'_>, bool);
 
-/// Stands in for reading the keyring entry, so a test can change what it holds
+/// Stands in for reading the saved keys, so a test can change what they hold
 /// between two reads.
 #[cfg(test)]
 type KeyReadHook = fn() -> Option<[u8; 32]>;
@@ -97,10 +101,13 @@ pub struct WfmSession {
     /// `resume_pending_plan` gets `busy` instead of racing on the pending file.
     plan_running: AtomicBool,
     plan_requests: Arc<Mutex<PlanRequests>>,
-    /// "Remember on this device" is only offered against the REAL login file:
-    /// any `TENNOWORTH_JWT_PATH` override (the probe/test seam) turns the OS
-    /// keyring off entirely, so hermetic runs can never pollute - or unlock
-    /// via - the user's actual keyring entry.
+    /// The key file, used when no keyring answers. Beside the sign-in file, so
+    /// a relocated sign-in (the probe/test seam) relocates its key too.
+    key_path: PathBuf,
+    /// The OS keyring is used only for the REAL sign-in file: any
+    /// `TENNOWORTH_JWT_PATH` override (the probe/test seam) keeps the key in
+    /// the key file, so hermetic runs can never pollute - or unlock via - the
+    /// user's actual keyring entry.
     use_keyring: bool,
     /// Replaces the network warm in tests only. A release build has no such
     /// field, so no shipping path can bypass authentication.
@@ -160,6 +167,7 @@ impl WfmSession {
             .map(PathBuf::from)
             .unwrap_or_else(|| key_dir.join("pending_plan.json"));
         Self {
+            key_path: jwt_path.with_extension("key"),
             jwt_path,
             pending_path,
             inner: Mutex::new(SessionState::default()),
@@ -187,6 +195,7 @@ impl WfmSession {
     pub(crate) fn for_test(jwt_path: PathBuf) -> Self {
         let key_dir = config_dir_for(&jwt_path);
         Self {
+            key_path: jwt_path.with_extension("key"),
             jwt_path,
             pending_path: key_dir.join("pending_plan.json"),
             inner: Mutex::new(SessionState::default()),
@@ -240,29 +249,18 @@ impl WfmSession {
         (self.jwt_path.exists(), self.is_unlocked())
     }
 
-    /// Apply a keyring change that belongs to the session `generation`, unless a
-    /// logout has superseded it.
+    /// Apply a device-key change that belongs to the session `generation`,
+    /// unless a logout has superseded it. Returns whether the key is now saved
+    /// (for `Remember`) or the change was made (for `Forget`).
     ///
-    /// The persisted traces are the second half of "logout wins": an unlock or
-    /// login publishes its session and then reaches for the OS keyring, and a
-    /// logout landing in that gap would clear the session and forget the key only
-    /// for the straggler to store it again - leaving the next launch able to
-    /// silently re-unlock a session the user discarded. A logout advances the
-    /// generation, so a mismatched generation means the decision is void.
-    ///
-    /// This is a check-then-write, not a transaction. Making it atomic would mean
-    /// holding the session lock across Secret Service I/O, which on a locked or
-    /// absent wallet blocks every command behind a timeout - worse than the
-    /// window it closes. The residual window is the store call itself, and what
-    /// it leaves is a stale keyring entry rather than a stale session: the entry
-    /// is salt-bound to the login file logout deletes, so a later silent unlock
-    /// finds no file and falls back to the passphrase modal.
-    fn apply_keyring(&self, generation: u64, intent: KeyringIntent) {
-        if !self.use_keyring {
-            return;
-        }
-        // The hook stands in for the two OS calls below, not for this decision:
-        // it receives the intent even when the decision refuses it, so a test
+    /// The saved key is the persisted half of a session. Sign-in and the
+    /// conversion of a passphrase-era file call this inside the credential
+    /// section, so a logout either removed everything first (and this sees its
+    /// generation) or runs after and removes what this saved. A logout advances
+    /// the generation, so a mismatched generation means the decision is void.
+    fn apply_device_key(&self, generation: u64, intent: KeyringIntent) -> bool {
+        // The hook stands in for the OS calls below, not for this decision: it
+        // receives the intent even when the decision refuses it, so a test
         // observes what would have been attempted.
         #[cfg(test)]
         let hook = self.keyring_hook;
@@ -271,25 +269,79 @@ impl WfmSession {
             if let Some(hook) = hook {
                 hook(intent, false);
             }
-            return;
+            return false;
         }
         #[cfg(test)]
         if let Some(hook) = hook {
             hook(intent, true);
-            return;
+            return true;
         }
+        use crate::persistence::keyring_store as store;
         match intent {
-            KeyringIntent::Remember(key) => crate::persistence::keyring_store::store_key(key),
-            KeyringIntent::Forget => crate::persistence::keyring_store::forget_key(),
+            KeyringIntent::Remember(key) => {
+                if self.use_keyring {
+                    match store::store_key(key) {
+                        Ok(()) => {
+                            store::remove_key_file(&self.key_path);
+                            return true;
+                        }
+                        Err(e) => eprintln!(
+                            "tennoworth: keyring unavailable, keeping the sign-in key in a file: {e}"
+                        ),
+                    }
+                }
+                match store::write_key_file(&self.key_path, key) {
+                    Ok(()) => {
+                        // An older keyring entry would be tried first and fail;
+                        // it is harmless, but it is also no longer anyone's key.
+                        if self.use_keyring {
+                            store::forget_key();
+                        }
+                        true
+                    }
+                    Err(e) => {
+                        eprintln!("tennoworth: saving the sign-in key failed: {e}");
+                        false
+                    }
+                }
+            }
+            KeyringIntent::Forget => {
+                if self.use_keyring {
+                    store::forget_key();
+                }
+                store::remove_key_file(&self.key_path);
+                true
+            }
         }
     }
 
-    fn load_keyring_key(&self) -> Option<[u8; 32]> {
+    /// Every saved key that might open the sign-in file, keyring first, and
+    /// whether a store failed to answer. A store that did not answer is not
+    /// "no key": the caller must not discard a sign-in over a locked wallet.
+    fn load_keys(&self) -> KeyRead {
         #[cfg(test)]
         if let Some(hook) = self.key_read_hook {
-            return hook();
+            return KeyRead {
+                keys: hook().into_iter().collect(),
+                unavailable: None,
+            };
         }
-        crate::persistence::keyring_store::load_key()
+        use crate::persistence::keyring_store as store;
+        let mut read = KeyRead {
+            keys: Vec::new(),
+            unavailable: None,
+        };
+        if self.use_keyring {
+            match store::load_key() {
+                Ok(key) => read.keys.extend(key),
+                Err(e) => read.unavailable = Some(e),
+            }
+        }
+        match store::read_key_file(&self.key_path) {
+            Ok(key) => read.keys.extend(key),
+            Err(e) => read.unavailable = Some(e),
+        }
+        read
     }
 
     /// Log out, scrub the in-memory JWT, and remove the encrypted login saved on
@@ -355,15 +407,15 @@ impl WfmSession {
         }
         // The generation this logout established, so the forget is keyed to the
         // session state it created rather than the one it replaced.
-        self.apply_keyring(generation, KeyringIntent::Forget);
+        self.apply_device_key(generation, KeyringIntent::Forget);
         Ok(())
     }
 
     /// The unlocked credentials, or a typed error WITHOUT attempting an unlock -
-    /// there is no passphrase at a listing call site (no terminal), so the SPA
-    /// must drive `unlock_jwt` first. `needs_login` vs `needs_unlock` is decided
-    /// by whether a login file exists (serve's `NeedsLogin` vs a present-but-
-    /// locked blob).
+    /// the unlock warms the catalog over the network, which a listing call
+    /// site should not start on its own, so the SPA drives `unlock_jwt` first.
+    /// `needs_login` vs `needs_unlock` is decided by whether a sign-in file
+    /// exists.
     pub fn require_unlocked(&self) -> Result<Arc<Unlocked>, CmdError> {
         if let Some(u) = guard(&self.inner).unlocked.as_ref() {
             return Ok(Arc::clone(u));
@@ -433,9 +485,7 @@ impl WfmSession {
         Ok(())
     }
 
-    /// Read + parse the on-disk envelope - shared by the passphrase and
-    /// silent-unlock paths, with the same error mapping (missing file →
-    /// `needs_login`).
+    /// Read + parse the on-disk envelope (missing file → `needs_login`).
     fn read_blob(&self) -> Result<EncryptedJwt, CmdError> {
         let bytes = match fs::read(&self.jwt_path) {
             Ok(b) => b,
@@ -453,22 +503,84 @@ impl WfmSession {
             .map_err(|e| CmdError::internal(format!("login file is unreadable: {e}")))
     }
 
-    /// Read + decrypt the on-disk JWT with `passphrase` - the offline half of
-    /// `unlock`. Returns `(jwt_plaintext, platform, derived_key, kdf_salt)`.
-    /// Split out so the error mapping (missing file → `needs_login`, wrong
-    /// passphrase → `bad_passphrase`) is unit-testable without the network
-    /// catalog warm.
-    fn decrypt_from_disk(
-        &self,
-        passphrase: &str,
-    ) -> Result<(String, String, [u8; 32], String), CmdError> {
+    /// Open the sign-in file with a saved key, inside the credential section so
+    /// a concurrent sign-in or logout cannot change the file or its key between
+    /// the read and a decision about them. Returns `(jwt, platform)`.
+    ///
+    /// No saved key opens it - none left, or only one from an earlier sign-in -
+    /// means the file can never be opened again, so it is removed with its keys
+    /// and the caller hears `needs_login`. A key store that did not answer is
+    /// different: the file and keys stay, and the caller hears
+    /// `keyring_unavailable`, which a retry can clear.
+    fn open_saved_login(&self, generation: u64) -> Result<(String, String), CmdError> {
+        let _credential = guard(&self.credential_file);
+        if self.session_generation() != generation {
+            return Err(CmdError::of(
+                "session_changed",
+                "The session changed while signing in. Sign in again.",
+            ));
+        }
         let blob = self.read_blob()?;
-        let platform = blob.platform.clone();
-        // Any decrypt failure (wrong key or tampered ciphertext) reads as a bad
-        // passphrase - the only actionable cause from the user's side.
-        let key = derive_jwt_key(&blob, passphrase).map_err(|_| CmdError::bad_passphrase())?;
-        let jwt = decrypt_jwt_with_key(&blob, &key).map_err(|_| CmdError::bad_passphrase())?;
-        Ok((jwt, platform, key, blob.kdf.salt))
+        let read = self.load_keys();
+        let opened = read
+            .keys
+            .iter()
+            .find_map(|key| decrypt_jwt_with_key(&blob, key).ok());
+        let Some(jwt) = opened else {
+            // A store that did not answer may hold the key that opens the file.
+            if let Some(detail) = read.unavailable {
+                return Err(CmdError::keyring_unavailable(&detail));
+            }
+            self.discard_unopenable_login(generation)?;
+            return Err(CmdError::needs_login());
+        };
+        if blob.format == JWT_FORMAT_V1 {
+            self.convert_passphrase_era_login(generation, &jwt, &blob.platform);
+        }
+        Ok((jwt, blob.platform))
+    }
+
+    /// A sign-in file no saved key opens. Called inside the credential section.
+    fn discard_unopenable_login(&self, generation: u64) -> Result<(), CmdError> {
+        if let Err(error) = fs::remove_file(&self.jwt_path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                return Err(CmdError::internal(format!(
+                    "could not remove the saved warframe.market login at {}: {error}",
+                    self.jwt_path.display()
+                )));
+            }
+        }
+        self.apply_device_key(generation, KeyringIntent::Forget);
+        Ok(())
+    }
+
+    /// Rewrite a passphrase-era file under a fresh key. Its old key is the
+    /// derived one "remember on this device" kept; once the new file is written
+    /// the old key opens nothing. Best-effort: on failure the old file and key
+    /// stay, and still open the next time. Called inside the credential section.
+    fn convert_passphrase_era_login(&self, generation: u64, jwt: &str, platform: &str) {
+        let converted = new_jwt_key().and_then(|key| Ok((key, encrypt_jwt(jwt, &key, platform)?)));
+        let (key, encrypted) = match converted {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("tennoworth: converting the saved sign-in failed: {e}");
+                return;
+            }
+        };
+        let old = self.load_keys().keys;
+        if !self.apply_device_key(generation, KeyringIntent::Remember(&key)) {
+            return;
+        }
+        if let Err(e) = self.persist(&encrypted) {
+            eprintln!(
+                "tennoworth: converting the saved sign-in failed: {}",
+                e.message
+            );
+            // The old file is still on disk; put back the key that opens it.
+            if let Some(old) = old.first() {
+                self.apply_device_key(generation, KeyringIntent::Remember(old));
+            }
+        }
     }
 
     /// The pre-publication work every installer shares: warm the WFM catalog with
@@ -482,112 +594,34 @@ impl WfmSession {
         warm(jwt, platform)
     }
 
-    /// Decrypt the on-disk JWT and warm the WFM catalog, populating the session.
-    /// Network: `/v2/items` + `/v2/me`. On success the plaintext JWT is held only
-    /// inside the session `Arc`; with `remember`, the salt-bound derived key
-    /// (never the passphrase) also goes to the OS keyring for silent unlock.
-    /// Remember only on FULL success - an unlock the user abandons after a
-    /// network failure should leave no trace.
-    pub fn unlock(&self, passphrase: &str, remember: bool) -> Result<(), CmdError> {
+    /// Open the saved sign-in with the device's key and warm the WFM catalog,
+    /// populating the session. Network: `/v2/items` + `/v2/me`. Missing or
+    /// unopenable file → `needs_login`; key store not answering →
+    /// `keyring_unavailable`; catalog/me failure → `wfm` (retryable).
+    pub fn unlock(&self) -> Result<(), CmdError> {
+        if self.is_unlocked() {
+            return Ok(());
+        }
         let generation = self.session_generation();
-        let (jwt, platform, key, salt) = self.decrypt_from_disk(passphrase)?;
+        let (jwt, platform) = self.open_saved_login(generation)?;
         let unlocked = self.warm_session(jwt, platform)?;
         wfm_client::transport::invalidate_reads();
-        self.install_unlocked(generation, unlocked)?;
-        // A sign-in that finished during the warm rotated the salt and made
-        // its own remember choice. This unlock's key and choice belong to the
-        // replaced file; neither may overwrite the newer sign-in's keyring entry.
-        // Sign-in leaves the generation alone, so only the file shows it.
-        // The re-read stays outside the session lock, as the keyring call does.
-        if self
-            .read_blob()
-            .is_ok_and(|current| current.kdf.salt == salt)
-        {
-            let intent = if remember {
-                KeyringIntent::Remember(&key)
-            } else {
-                KeyringIntent::Forget
-            };
-            self.apply_keyring(generation, intent);
-        }
-        Ok(())
+        self.install_unlocked(generation, unlocked)
     }
 
-    /// Try the OS-keyring key against the current login file - the silent
-    /// analogue of `unlock`, called by the SPA before it raises the passphrase
-    /// modal. Never fails the caller: every miss (no entry, no daemon, network
-    /// warm failure) is `Ok(false)` → the modal opens as before. The entry is
-    /// deleted ONLY on a definitive GCM auth failure (stale after a re-login),
-    /// never on transient store errors.
-    pub fn try_silent_unlock(&self) -> bool {
-        if self.is_unlocked() {
-            return true;
-        }
-        let generation = self.session_generation();
-        if !self.use_keyring || !self.jwt_path.exists() {
-            return false;
-        }
-        let Some(key) = self.load_keyring_key() else {
-            return false;
-        };
-        let Ok(blob) = self.read_blob() else {
-            return false;
-        };
-        let platform = blob.platform.clone();
-        let jwt = match decrypt_jwt_with_key(&blob, &key) {
-            Ok(jwt) => jwt,
-            Err(_) => {
-                // The key no longer opens the file, so the entry is stale - but
-                // only if it is still the entry that failed. A sign-in that
-                // landed meanwhile rotated the salt and stored a different key,
-                // and the generation cannot reveal it: only logout advances it.
-                // What is left is the gap between this read and the delete.
-                if self.load_keyring_key() == Some(key) {
-                    self.apply_keyring(generation, KeyringIntent::Forget);
-                }
-                return false;
-            }
-        };
-        match self.warm_session(jwt, platform) {
-            Ok(unlocked) => {
-                wfm_client::transport::invalidate_reads();
-                // A logout during the warm supersedes this unlock; report a miss,
-                // exactly as any other silent-unlock miss does.
-                self.install_unlocked(generation, unlocked).is_ok()
-            }
-            Err(e) => {
-                // Key is good; the warm (network) failed. Keep the entry and
-                // let the passphrase modal surface the error on retry.
-                eprintln!("tennoworth: silent unlock warm failed: {}", e.message);
-                false
-            }
-        }
+    /// The checks a sign-in must pass before the sign-in window opens.
+    pub fn validate_login(platform: &str) -> Result<(), CmdError> {
+        validate_platform(platform).map_err(CmdError::internal)
     }
 
-    /// The checks a sign-in must pass before the sign-in window opens, so a
-    /// short passphrase is refused before the user types their WFM password.
-    pub fn validate_login(passphrase: &str, platform: &str) -> Result<(), CmdError> {
-        validate_platform(platform).map_err(CmdError::internal)?;
-        // Shared with wfm-trading so the floor cannot drift (it had: bytes in the
-        // old CLI, chars here).
-        validate_passphrase(passphrase).map_err(|e| CmdError::internal(e.to_string()))
-    }
-
-    /// Persist the JWT from a completed warframe.market sign-in (unchanged
-    /// on-disk format) and populate the session with it - so the first listing
-    /// action doesn't re-prompt for the passphrase the user just set. The
-    /// passphrase only encrypts and is not retained here.
-    pub fn login(
-        &self,
-        generation: u64,
-        jwt: String,
-        passphrase: &str,
-        platform: &str,
-        remember: bool,
-    ) -> Result<(), CmdError> {
-        Self::validate_login(passphrase, platform)?;
-
-        let encrypted = encrypt_jwt(&jwt, passphrase, platform).map_err(CmdError::internal)?;
+    /// Persist the JWT from a completed warframe.market sign-in under a fresh
+    /// key and populate the session with it. The key is saved before the file
+    /// is written, both inside the credential section: a file whose key could
+    /// not be saved would be a sign-in that silently ends at the next launch.
+    pub fn login(&self, generation: u64, jwt: String, platform: &str) -> Result<(), CmdError> {
+        Self::validate_login(platform)?;
+        let key = new_jwt_key().map_err(CmdError::internal)?;
+        let encrypted = encrypt_jwt(&jwt, &key, platform).map_err(CmdError::internal)?;
         // A logout that completed while this login was authenticating removed the
         // saved credential; recreating it here would hand the next launch a login
         // the user just discarded. The credential section makes the check and the
@@ -604,28 +638,21 @@ impl WfmSession {
             if let Some(hook) = self.persist_hook {
                 hook(self);
             }
+            if !self.apply_device_key(generation, KeyringIntent::Remember(&key)) {
+                return Err(CmdError::of(
+                    "key_unsaved",
+                    "TennoWorth could not save this sign-in on this device: neither the system keyring nor its settings folder accepted the key.",
+                ));
+            }
             self.persist(&encrypted)?;
         }
 
         // Warm the session with the in-hand JWT (no redundant decrypt). If the
-        // catalog warm fails the JWT is already saved, so a later listing action
-        // unlocks via the passphrase modal - surface the network error either way.
+        // catalog warm fails the sign-in is already saved, so a later listing
+        // action unlocks with the saved key - surface the network error either way.
         let unlocked = self.warm_session(jwt, platform.to_string())?;
         wfm_client::transport::invalidate_reads();
-        self.install_unlocked(generation, unlocked)?;
-        if remember {
-            // A fresh login rotated the salt, so derive against the blob we just
-            // persisted - any older keyring entry is overwritten. A derivation
-            // failure leaves the session usable and costs a passphrase prompt
-            // next launch, so it is not worth failing the sign-in over.
-            match derive_jwt_key(&encrypted, passphrase) {
-                Ok(key) => self.apply_keyring(generation, KeyringIntent::Remember(&key)),
-                Err(e) => eprintln!("tennoworth: deriving remember-key failed: {e}"),
-            }
-        } else {
-            self.apply_keyring(generation, KeyringIntent::Forget);
-        }
-        Ok(())
+        self.install_unlocked(generation, unlocked)
     }
 
     fn persist(&self, encrypted: &EncryptedJwt) -> Result<(), CmdError> {
@@ -655,12 +682,15 @@ impl WfmSession {
     }
 
     /// Probe-only companion to `debug_set_unlocked`: write a real encrypted
-    /// envelope (same `encrypt_jwt` + `persist` production code) at the
-    /// session's jwt_path so a hermetic run can exercise the needs_unlock /
-    /// bad_passphrase branches against a genuine AES-GCM blob, no WFM login.
-    pub fn debug_write_login(&self, passphrase: &str) -> Result<(), CmdError> {
-        let encrypted =
-            encrypt_jwt("probe.jwt.value", passphrase, "pc").map_err(CmdError::internal)?;
+    /// envelope and save its key (the same `encrypt_jwt`, key and `persist`
+    /// production code) at the session's paths, so a hermetic run can exercise
+    /// the needs_unlock branch against a genuine AES-GCM blob, no WFM login.
+    pub fn debug_write_login(&self) -> Result<(), CmdError> {
+        let key = new_jwt_key().map_err(CmdError::internal)?;
+        let encrypted = encrypt_jwt("probe.jwt.value", &key, "pc").map_err(CmdError::internal)?;
+        if !self.apply_device_key(self.session_generation(), KeyringIntent::Remember(&key)) {
+            return Err(CmdError::internal("could not save the probe sign-in key"));
+        }
         self.persist(&encrypted)
     }
 }
@@ -706,13 +736,15 @@ mod tests {
     fn session_with(jwt_path: PathBuf) -> WfmSession {
         let pending = jwt_path.with_extension("pending.json");
         WfmSession {
+            key_path: jwt_path.with_extension("key"),
             jwt_path,
             pending_path: pending,
             inner: Mutex::new(SessionState::default()),
             credential_file: Mutex::new(()),
             plan_running: AtomicBool::new(false),
             plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
-            // Tests must never read or write the developer's real OS keyring.
+            // Tests must never read or write the developer's real OS keyring;
+            // the key goes to the key file beside the test's sign-in file.
             use_keyring: false,
             warm_hook: None,
             keyring_hook: None,
@@ -761,124 +793,86 @@ mod tests {
         KEYRING_LOG.lock().expect("keyring log").clone()
     }
 
-    /// A session with a real encrypted login on disk, the writing half of the
-    /// keyring enabled, and its decisions recorded.
+    /// A session with a real encrypted login on disk under `KEY`, and its
+    /// key decisions recorded instead of performed.
     fn keyring_session(tag: &str) -> WfmSession {
         let path = tmp_path(tag);
-        fs::write(
-            &path,
-            serde_json::to_vec(
-                &encrypt_jwt("jwt.header.body.sig", PASSPHRASE, "pc").expect("encrypt"),
-            )
-            .expect("serialize"),
-        )
-        .expect("write login file");
+        write_login(&path, &KEY, "jwt.header.body.sig");
         let mut s = session_with(path);
-        s.use_keyring = true;
         s.keyring_hook = Some(record_keyring);
         s
     }
 
-    const PASSPHRASE: &str = "correct horse battery";
+    const KEY: [u8; 32] = [7; 32];
 
-    /// A logout that lands after the session is published but before the keyring
-    /// write must take the keyring entry with it.
-    ///
-    /// This is the window the publish guard cannot cover: the unlock genuinely
-    /// succeeded, so only the keyring decision's own generation check stands
-    /// between a discarded session and an entry that would silently re-unlock it
-    /// on the next launch. The interleaving is driven between the guard and the
-    /// action because that is where production separates them.
+    fn write_login(path: &Path, key: &[u8; 32], jwt: &str) {
+        fs::write(
+            path,
+            serde_json::to_vec(&encrypt_jwt(jwt, key, "pc").expect("encrypt")).expect("serialize"),
+        )
+        .expect("write login file");
+    }
+
+    /// A passphrase-era file: the same envelope under the v1 tag, with the
+    /// `kdf` block those files carry.
+    fn write_v1_login(path: &Path, key: &[u8; 32], jwt: &str) {
+        let mut v1 = serde_json::to_value(encrypt_jwt(jwt, key, "pc").expect("encrypt")).unwrap();
+        v1["format"] = JWT_FORMAT_V1.into();
+        v1["kdf"] = serde_json::json!({
+            "name": "PBKDF2", "hash": "SHA-256", "iterations": 600000, "salt": "c2FsdHNhbHRzYWx0c2FsdA==",
+        });
+        fs::write(path, serde_json::to_vec(&v1).unwrap()).expect("write v1 login file");
+    }
+
+    fn successful_warm(
+        _session: &WfmSession,
+        jwt: String,
+        platform: String,
+    ) -> Result<Unlocked, CmdError> {
+        let mut prepared = dummy_unlocked();
+        prepared.jwt = jwt;
+        prepared.platform = platform;
+        Ok(prepared)
+    }
+
+    fn cleanup(s: &WfmSession) {
+        let _ = fs::remove_file(&s.jwt_path);
+        let _ = fs::remove_file(&s.key_path);
+    }
+
+    /// A logout that lands before a straggling key save must win: the save
+    /// belongs to the session the logout discarded.
     #[test]
-    fn a_logout_at_the_keyring_decision_stops_the_entry_being_restored() {
+    fn a_logout_before_a_key_save_stops_the_key_being_restored() {
         let _serial = KEYRING_TESTS.lock().expect("keyring tests");
         reset_keyring_log();
         let s = keyring_session("keyring-logout-at-decision");
 
-        // The logout runs first, then the interrupted unlock reaches the keyring
-        // with the generation it captured before its session was discarded.
         let read_generation = s.session_generation();
-        s.logout()
-            .expect("logout lands while the unlock is still in flight");
-        s.apply_keyring(read_generation, KeyringIntent::Remember(&[7_u8; 32]));
+        s.logout().expect("logout lands first");
+        assert!(!s.apply_device_key(read_generation, KeyringIntent::Remember(&[9_u8; 32])));
 
-        // The logout's own forget is permitted; the straggler's store is not.
+        // The logout's own forget is permitted; the straggler's save is not.
         assert_eq!(keyring_log(), vec![(false, true), (true, false)]);
+        cleanup(&s);
     }
 
-    /// The positive control: with no logout in the way, the same path still
-    /// stores the key. Without this the guard above could pass by refusing
-    /// every write.
+    /// The positive control: a sign-in with no logout in the way saves its key.
+    /// Without this the guard above could pass by refusing every save.
     #[test]
-    fn an_uninterrupted_unlock_still_stores_the_keyring_entry() {
+    fn a_sign_in_saves_its_key_before_its_file() {
         let _serial = KEYRING_TESTS.lock().expect("keyring tests");
         reset_keyring_log();
-        let mut s = keyring_session("keyring-store");
-        s.warm_hook = Some(|_session, _jwt, _platform| Ok(dummy_unlocked()));
+        let mut s = keyring_session("keyring-sign-in");
+        fs::remove_file(&s.jwt_path).unwrap();
+        s.warm_hook = Some(successful_warm);
 
-        s.unlock(PASSPHRASE, true).expect("unlock publishes");
+        s.login(s.session_generation(), "jwt.new.sig".into(), "pc")
+            .expect("sign-in publishes");
 
         assert_eq!(keyring_log(), vec![(true, true)]);
-    }
-
-    /// A sign-in that completes while an unlock is warming writes a login file
-    /// with a new salt and stores its own key. The unlock's key opens only the
-    /// file it decrypted, so remembering it would overwrite the sign-in's entry
-    /// and the next launch's silent unlock would fail.
-    #[test]
-    fn an_unlock_does_not_remember_a_key_a_sign_in_replaced() {
-        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
-        reset_keyring_log();
-        let mut s = keyring_session("keyring-unlock-vs-sign-in");
-        s.warm_hook = Some(|session, _jwt, _platform| {
-            let signed_in = encrypt_jwt("jwt.newer.sig", PASSPHRASE, "pc").expect("encrypt");
-            session
-                .persist(&signed_in)
-                .expect("sign-in writes its login file");
-            Ok(dummy_unlocked())
-        });
-
-        s.unlock(PASSPHRASE, true).expect("unlock publishes");
-
-        assert_eq!(keyring_log(), vec![]);
-    }
-
-    #[test]
-    fn an_unlock_does_not_forget_a_key_a_sign_in_replaced() {
-        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
-        reset_keyring_log();
-        let mut s = keyring_session("keyring-forget-vs-sign-in");
-        s.warm_hook = Some(|session, _jwt, _platform| {
-            let signed_in = encrypt_jwt("jwt.newer.sig", PASSPHRASE, "pc").expect("encrypt");
-            session
-                .persist(&signed_in)
-                .expect("sign-in writes its login file");
-            let key = derive_jwt_key(&signed_in, PASSPHRASE).expect("sign-in key");
-            session.apply_keyring(session.session_generation(), KeyringIntent::Remember(&key));
-            Ok(dummy_unlocked())
-        });
-
-        s.unlock(PASSPHRASE, false).expect("unlock publishes");
-
-        assert_eq!(
-            keyring_log(),
-            vec![(true, true)],
-            "the newer sign-in's key must survive"
-        );
-        fs::remove_file(&s.jwt_path).expect("remove login fixture");
-    }
-
-    #[test]
-    fn an_uninterrupted_unlock_still_forgets_the_keyring_entry() {
-        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
-        reset_keyring_log();
-        let mut s = keyring_session("keyring-unlock-forget");
-        s.warm_hook = Some(|_session, _jwt, _platform| Ok(dummy_unlocked()));
-
-        s.unlock(PASSPHRASE, false).expect("unlock publishes");
-
-        assert_eq!(keyring_log(), vec![(false, true)]);
-        fs::remove_file(&s.jwt_path).expect("remove login fixture");
+        assert!(s.jwt_path.exists());
+        cleanup(&s);
     }
 
     /// A forget decided before a logout belongs to the session the logout
@@ -887,31 +881,17 @@ mod tests {
     fn a_forget_decided_before_a_logout_is_void() {
         let _serial = KEYRING_TESTS.lock().expect("keyring tests");
         reset_keyring_log();
-        let mut s = keyring_session("keyring-stale-forget");
-        s.keyring_hook = Some(record_keyring);
+        let s = keyring_session("keyring-stale-forget");
         let read_generation = s.session_generation();
         s.logout().expect("logout");
 
-        s.apply_keyring(read_generation, KeyringIntent::Forget);
+        s.apply_device_key(read_generation, KeyringIntent::Forget);
 
         assert_eq!(keyring_log().last(), Some(&(false, false)));
+        cleanup(&s);
     }
 
-    /// The same decision made against the current generation is permitted, so
-    /// the test above is not passing because `apply_keyring` refuses everything.
-    #[test]
-    fn a_stale_key_is_forgotten_while_its_session_still_stands() {
-        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
-        reset_keyring_log();
-        let mut s = keyring_session("keyring-forget");
-        s.keyring_hook = Some(record_keyring);
-
-        s.apply_keyring(s.session_generation(), KeyringIntent::Forget);
-
-        assert_eq!(keyring_log(), vec![(false, true)]);
-    }
-
-    /// Keyring reads served to `try_silent_unlock`, in order.
+    /// Key reads served to `unlock`, in order.
     static KEY_READS: Mutex<Vec<[u8; 32]>> = Mutex::new(Vec::new());
 
     fn next_key_read() -> Option<[u8; 32]> {
@@ -919,37 +899,122 @@ mod tests {
         (!reads.is_empty()).then(|| reads.remove(0))
     }
 
-    fn silent_unlock_forgets(reads: [[u8; 32]; 2]) -> Vec<(bool, bool)> {
-        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
-        reset_keyring_log();
-        *KEY_READS.lock().expect("key reads") = reads.to_vec();
-        let mut s = keyring_session("keyring-silent-forget");
-        s.key_read_hook = Some(next_key_read);
-
+    /// The real key files, no hooks: what a device with no keyring does.
+    #[test]
+    fn a_sign_in_without_a_keyring_unlocks_from_its_key_file_next_launch() {
+        let path = tmp_path("file-key");
+        let mut s = session_with(path.clone());
+        s.warm_hook = Some(successful_warm);
+        s.login(s.session_generation(), "jwt.saved.sig".into(), "ps4")
+            .expect("sign-in");
         assert!(
-            !s.try_silent_unlock(),
-            "the key does not open the login file"
+            s.key_path.exists(),
+            "no keyring: the key goes to the key file"
         );
-        keyring_log()
+
+        // The next launch: a fresh session over the same files.
+        let mut next = session_with(path);
+        next.warm_hook = Some(successful_warm);
+        assert_eq!(next.auth_status(), (true, false));
+        next.unlock().expect("the saved key opens the file");
+        let creds = next.require_unlocked().unwrap();
+        assert_eq!(creds.jwt, "jwt.saved.sig");
+        assert_eq!(creds.platform, "ps4");
+        cleanup(&next);
     }
 
-    /// A sign-in that finishes while a silent unlock is decrypting replaces the
-    /// login file and stores a new key. The unlock's failure is about the key it
-    /// read, so it must not delete the one the sign-in stored. Sign-in does not
-    /// advance the session generation, so only the entry itself can show this.
+    /// No saved key at all: the file can never open, so it goes, and the user
+    /// is sent to sign in instead of being asked for something that cannot work.
     #[test]
-    fn a_silent_unlock_does_not_forget_a_key_a_sign_in_just_stored() {
-        assert_eq!(silent_unlock_forgets([[1; 32], [2; 32]]), vec![]);
+    fn an_unlock_with_no_saved_key_discards_the_file_and_needs_login() {
+        let path = tmp_path("no-key");
+        write_login(&path, &KEY, "jwt.lost.sig");
+        let s = session_with(path.clone());
+
+        assert_eq!(s.unlock().unwrap_err().code, "needs_login");
+        assert!(!path.exists());
+        assert_eq!(s.auth_status(), (false, false));
     }
 
-    /// The positive control: an entry that still holds the failing key is stale
-    /// and is removed.
+    /// A saved key from an earlier sign-in opens nothing current; the same.
     #[test]
-    fn a_silent_unlock_forgets_a_key_that_no_longer_opens_the_login() {
-        assert_eq!(
-            silent_unlock_forgets([[1; 32], [1; 32]]),
-            vec![(false, true)]
-        );
+    fn an_unlock_whose_key_no_longer_opens_the_file_needs_login() {
+        let path = tmp_path("stale-key");
+        write_login(&path, &KEY, "jwt.current.sig");
+        let s = session_with(path.clone());
+        crate::persistence::keyring_store::write_key_file(&s.key_path, &[1; 32]).unwrap();
+
+        assert_eq!(s.unlock().unwrap_err().code, "needs_login");
+        assert!(!path.exists());
+        assert!(!s.key_path.exists(), "the stale key goes with it");
+    }
+
+    /// A key store that does not answer may hold the right key: the sign-in
+    /// stays, and the error says so, so a retry can still open it.
+    #[test]
+    fn an_unreadable_key_store_keeps_the_sign_in() {
+        let path = tmp_path("unreadable-key");
+        write_login(&path, &KEY, "jwt.kept.sig");
+        let s = session_with(path.clone());
+        fs::create_dir(&s.key_path).unwrap();
+
+        assert_eq!(s.unlock().unwrap_err().code, "keyring_unavailable");
+        assert!(path.exists());
+        fs::remove_dir(&s.key_path).unwrap();
+        cleanup(&s);
+    }
+
+    /// A passphrase-era file whose remembered key is still saved opens, and is
+    /// rewritten under a fresh key, so the user stays signed in.
+    #[test]
+    fn a_passphrase_era_login_opens_with_its_remembered_key_and_is_converted() {
+        let path = tmp_path("v1");
+        write_v1_login(&path, &KEY, "jwt.old.sig");
+        let mut s = session_with(path.clone());
+        crate::persistence::keyring_store::write_key_file(&s.key_path, &KEY).unwrap();
+        s.warm_hook = Some(successful_warm);
+
+        s.unlock().expect("the remembered key opens the old file");
+        assert_eq!(s.require_unlocked().unwrap().jwt, "jwt.old.sig");
+
+        let blob: EncryptedJwt = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(blob.format, wfm_trading::auth::JWT_FORMAT);
+        let saved = crate::persistence::keyring_store::read_key_file(&s.key_path)
+            .unwrap()
+            .expect("the new key is saved");
+        assert_ne!(saved, KEY, "a fresh key, not the derived one");
+        assert_eq!(decrypt_jwt_with_key(&blob, &saved).unwrap(), "jwt.old.sig");
+        cleanup(&s);
+    }
+
+    /// A passphrase-era file without a remembered key: its passphrase is the
+    /// only way in, and there is no longer anywhere to type it. Sign in again.
+    #[test]
+    fn a_passphrase_era_login_without_its_key_needs_login() {
+        let path = tmp_path("v1-no-key");
+        write_v1_login(&path, &KEY, "jwt.old.sig");
+        let s = session_with(path.clone());
+
+        assert_eq!(s.unlock().unwrap_err().code, "needs_login");
+        assert!(!path.exists());
+    }
+
+    /// A sign-in that finishes while an unlock reads the keys replaces the file
+    /// and its key. The unlock must never discard the new sign-in: the
+    /// credential section makes it read the file and keys together.
+    #[test]
+    fn an_unlock_never_discards_a_sign_in_that_landed_meanwhile() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        *KEY_READS.lock().expect("key reads") = vec![[2; 32]];
+        let path = tmp_path("unlock-vs-sign-in");
+        write_login(&path, &[2; 32], "jwt.newest.sig");
+        let mut s = session_with(path.clone());
+        s.key_read_hook = Some(next_key_read);
+        s.warm_hook = Some(successful_warm);
+
+        s.unlock().expect("the file and key read together match");
+        assert!(path.exists());
+        cleanup(&s);
     }
 
     #[test]
@@ -965,11 +1030,7 @@ mod tests {
     fn require_unlocked_with_login_file_but_locked_is_needs_unlock() {
         let path = tmp_path("locked");
         // Any file at the path counts as "a login exists" for the classification.
-        fs::write(
-            &path,
-            serde_json::to_vec(&encrypt_jwt("j", "correct horse battery", "pc").unwrap()).unwrap(),
-        )
-        .unwrap();
+        write_login(&path, &KEY, "j");
         let s = session_with(path.clone());
         let err = s.require_unlocked().err().expect("expected a typed error");
         assert_eq!(err.code, "needs_unlock");
@@ -989,53 +1050,20 @@ mod tests {
     }
 
     #[test]
-    fn decrypt_from_disk_missing_file_is_needs_login() {
-        let path = tmp_path("decrypt-missing");
+    fn unlock_with_no_login_file_is_needs_login() {
+        let path = tmp_path("unlock-missing");
         let _ = fs::remove_file(&path);
         let s = session_with(path);
-        let err = s.decrypt_from_disk("whatever passphrase").unwrap_err();
-        assert_eq!(err.code, "needs_login");
+        assert_eq!(s.unlock().unwrap_err().code, "needs_login");
     }
 
     #[test]
-    fn decrypt_from_disk_wrong_passphrase_is_bad_passphrase() {
-        let path = tmp_path("decrypt-wrong");
-        let blob = encrypt_jwt("jwt.secret.value", "the-correct-passphrase", "pc").unwrap();
-        fs::write(&path, serde_json::to_vec(&blob).unwrap()).unwrap();
-        let s = session_with(path.clone());
-        let err = s.decrypt_from_disk("the-WRONG-passphrase").unwrap_err();
-        assert_eq!(err.code, "bad_passphrase");
-        let _ = fs::remove_file(&path);
-    }
-
-    #[test]
-    fn decrypt_from_disk_correct_passphrase_returns_jwt_and_platform() {
-        let path = tmp_path("decrypt-ok");
-        let blob = encrypt_jwt("jwt.secret.value", "the-correct-passphrase", "ps4").unwrap();
-        fs::write(&path, serde_json::to_vec(&blob).unwrap()).unwrap();
-        let s = session_with(path.clone());
-        let (jwt, platform, key, _salt) = s.decrypt_from_disk("the-correct-passphrase").unwrap();
-        assert_eq!(jwt, "jwt.secret.value");
-        assert_eq!(platform, "ps4");
-        // The derived key it hands back must actually open the same envelope -
-        // that key is what "remember on this device" stores.
-        let blob: EncryptedJwt = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(
-            decrypt_jwt_with_key(&blob, &key).unwrap(),
-            "jwt.secret.value"
-        );
-        let _ = fs::remove_file(&path);
-    }
-
-    #[test]
-    fn decrypt_from_disk_corrupt_file_is_internal_not_bad_passphrase() {
-        // A present-but-garbage file must not read as "wrong passphrase" - that
-        // would send the user in circles retyping a correct passphrase.
-        let path = tmp_path("decrypt-corrupt");
+    fn unlock_with_a_corrupt_file_is_internal() {
+        // Garbage is a bug to report, not a missing sign-in.
+        let path = tmp_path("unlock-corrupt");
         fs::write(&path, b"{not valid json at all").unwrap();
         let s = session_with(path.clone());
-        let err = s.decrypt_from_disk("anything").unwrap_err();
-        assert_eq!(err.code, "internal");
+        assert_eq!(s.unlock().unwrap_err().code, "internal");
         let _ = fs::remove_file(&path);
     }
 
@@ -1044,11 +1072,13 @@ mod tests {
         let path = tmp_path("logout");
         fs::write(&path, b"encrypted login placeholder").unwrap();
         let s = session_with(path.clone());
+        crate::persistence::keyring_store::write_key_file(&s.key_path, &KEY).unwrap();
         s.debug_set_unlocked(dummy_unlocked());
         assert!(s.is_unlocked());
         s.logout().unwrap();
         assert!(!s.is_unlocked());
         assert!(!path.exists());
+        assert!(!s.key_path.exists(), "logout takes the saved key too");
         assert_eq!(s.auth_status(), (false, false));
         assert_eq!(
             s.require_unlocked()
@@ -1142,45 +1172,17 @@ mod tests {
     }
 
     #[test]
-    fn login_rejects_short_passphrase_before_any_network() {
-        // wfm_login runs validate_login before opening the sign-in window, so
-        // the user is not sent to WFM with a passphrase that will be refused.
-        let err = WfmSession::validate_login("short", "pc").unwrap_err();
-        assert_eq!(err.code, "internal");
-        assert!(err.message.contains("12 characters"));
-
-        let path = tmp_path("login-short");
+    fn login_rejects_unknown_platform_before_any_network() {
+        assert!(WfmSession::validate_login("playstation").is_err());
+        let path = tmp_path("login-plat");
         let s = session_with(path.clone());
         let generation = s.session_generation();
         let err = s
-            .login(
-                generation,
-                "header.payload.sig".into(),
-                "short",
-                "pc",
-                false,
-            )
-            .unwrap_err();
-        assert!(err.message.contains("12 characters"));
-        assert!(!path.exists());
-    }
-
-    #[test]
-    fn login_rejects_unknown_platform_before_any_network() {
-        assert!(WfmSession::validate_login("a-long-enough-passphrase", "playstation").is_err());
-        let path = tmp_path("login-plat");
-        let s = session_with(path);
-        let generation = s.session_generation();
-        let err = s
-            .login(
-                generation,
-                "header.payload.sig".into(),
-                "a-long-enough-passphrase",
-                "playstation",
-                false,
-            )
+            .login(generation, "header.payload.sig".into(), "playstation")
             .unwrap_err();
         assert_eq!(err.code, "internal");
+        assert!(!path.exists());
+        assert!(!s.key_path.exists());
     }
 
     #[test]
@@ -1219,43 +1221,25 @@ mod tests {
     }
 
     #[test]
-    fn debug_write_login_roundtrips_through_real_decrypt() {
+    fn debug_write_login_roundtrips_through_the_real_unlock() {
         let path = tmp_path("probe-login");
         let _ = fs::remove_file(&path);
-        let s = session_with(path.clone());
-        s.debug_write_login("probe-pass-123456").unwrap();
+        let mut s = session_with(path.clone());
+        s.debug_write_login().unwrap();
         assert_eq!(s.auth_status(), (true, false));
-        // Wrong passphrase against the probe envelope is the same code path the
-        // probe drives through the unlock dialog.
-        assert_eq!(
-            s.decrypt_from_disk("wrong-pass").unwrap_err().code,
-            "bad_passphrase"
-        );
-        let (jwt, platform, _key, _salt) = s.decrypt_from_disk("probe-pass-123456").unwrap();
-        assert_eq!(jwt, "probe.jwt.value");
-        assert_eq!(platform, "pc");
-        let _ = fs::remove_file(&path);
+        s.warm_hook = Some(successful_warm);
+        s.unlock().unwrap();
+        let creds = s.require_unlocked().unwrap();
+        assert_eq!(creds.jwt, "probe.jwt.value");
+        assert_eq!(creds.platform, "pc");
+        cleanup(&s);
     }
 
     #[test]
-    fn try_silent_unlock_is_inert_when_keyring_is_disabled() {
-        // The probe/test seam (use_keyring: false) must short-circuit BEFORE
-        // any keyring access, even with a perfectly good login file on disk -
-        // a hermetic run must never unlock via the developer's real keyring.
-        let path = tmp_path("silent-gated");
-        let blob = encrypt_jwt("jwt.secret.value", "correct horse battery", "pc").unwrap();
-        fs::write(&path, serde_json::to_vec(&blob).unwrap()).unwrap();
-        let s = session_with(path.clone());
-        assert!(!s.try_silent_unlock());
-        assert!(!s.is_unlocked());
-        let _ = fs::remove_file(&path);
-    }
-
-    #[test]
-    fn try_silent_unlock_reports_true_when_already_unlocked() {
-        let s = session_with(tmp_path("silent-already"));
+    fn unlock_reports_success_when_already_unlocked() {
+        let s = session_with(tmp_path("unlock-already"));
         s.debug_set_unlocked(dummy_unlocked());
-        assert!(s.try_silent_unlock());
+        assert!(s.unlock().is_ok());
     }
 
     #[test]
@@ -1264,11 +1248,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         let s = session_with(path.clone());
         assert_eq!(s.auth_status(), (false, false));
-        fs::write(
-            &path,
-            serde_json::to_vec(&encrypt_jwt("j", "correct horse battery", "pc").unwrap()).unwrap(),
-        )
-        .unwrap();
+        write_login(&path, &KEY, "j");
         assert_eq!(s.auth_status(), (true, false));
         s.debug_set_unlocked(dummy_unlocked());
         assert_eq!(s.auth_status(), (true, true));
@@ -1296,11 +1276,9 @@ mod tests {
         let path = tmp_path("logout-during-unlock");
         let mut session = session_with(path.clone());
         session.warm_hook = Some(logout_during_warm);
-        session
-            .debug_write_login("probe-pass-123456")
-            .expect("login is written");
+        session.debug_write_login().expect("login is written");
 
-        let _ = session.unlock("probe-pass-123456", false);
+        let _ = session.unlock();
 
         assert_eq!(
             session.auth_status(),
@@ -1332,11 +1310,9 @@ mod tests {
         let path = tmp_path("unlock-without-logout");
         let mut session = session_with(path.clone());
         session.warm_hook = Some(successful_warm);
-        session
-            .debug_write_login("probe-pass-123456")
-            .expect("login is written");
+        session.debug_write_login().expect("login is written");
 
-        let result = session.unlock("probe-pass-123456", false);
+        let result = session.unlock();
 
         assert!(result.is_ok(), "an uninterrupted unlock still succeeds");
         assert_eq!(session.auth_status(), (true, true));
@@ -1377,13 +1353,7 @@ mod tests {
         let session = SESSION.get_or_init(|| Arc::new(session));
         let generation = session.session_generation();
 
-        let _ = session.login(
-            generation,
-            "header.payload.sig".into(),
-            "a-long-enough-passphrase",
-            "pc",
-            false,
-        );
+        let _ = session.login(generation, "header.payload.sig".into(), "pc");
         let logout = guard(&LOGOUT).take().expect("the hook started a logout");
         logout
             .join()

@@ -188,7 +188,7 @@ fn show(
     height: u32,
 ) -> Result<(), String> {
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+    if crate::gamescope::overlay_wayland_display().is_some() {
         let geometry = super::presentation::wayland::OverlayGeometry {
             x,
             y,

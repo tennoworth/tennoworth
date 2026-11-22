@@ -10,61 +10,49 @@
 //! an anonymous `JWT` cookie before sign-in; [`jwt_is_signed_in`] tells the
 //! two apart.
 //!
-//! At rest the JWT is AES-256-GCM encrypted, key derived via PBKDF2-HMAC-SHA256
-//! (600k iterations, OWASP 2023). **The on-disk envelope shape and its default
-//! path (`~/.config/wfminv/wfm-jwt.enc`) are a compatibility contract** - do not
-//! change field names, the format tag, or the KDF without a migration; existing
-//! users' files must keep decrypting.
-//!
-//! No terminal I/O lives here: the caller reads the passphrase (from a TTY, a
-//! pipe, or a desktop dialog) and hands the plaintext to `encrypt_jwt`, or to
-//! `derive_jwt_key` and then `decrypt_jwt_with_key`.
+//! At rest the JWT is AES-256-GCM encrypted under a random per-sign-in key that
+//! the caller keeps (the desktop: the OS keyring, else a file only the user can
+//! read). There is no passphrase: one guarded a token whose site cookie already
+//! sits unencrypted in the user's browser, and it made sign-in unusable on a
+//! controller. **The on-disk envelope shape and its default path
+//! (`~/.config/wfminv/wfm-jwt.enc`) are a compatibility contract** - do not
+//! change field names or format tags without a migration; files already on
+//! users' machines must keep decrypting.
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
-use hmac::Hmac;
-use pbkdf2::pbkdf2;
 use rand::{rngs::SysRng, TryRng};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use wfm_client::governor::Kind;
 use wfm_client::transport::GovernedRequest;
 
 use crate::time::chrono_now_iso;
 
-pub const JWT_FORMAT: &str = "wfminv-jwt-v1";
-pub const JWT_KDF_ITERATIONS: u32 = 600_000;
-/// The iteration count is read back from the file, so it is bounded: below the
-/// default it is a downgraded file, and an unbounded value stalls unlock for
-/// hours. The ceiling leaves room for a future raise of the default.
-const MAX_JWT_KDF_ITERATIONS: u32 = 10_000_000;
+/// The current envelope: the JWT under a random key the device keeps.
+pub const JWT_FORMAT: &str = "wfminv-jwt-v2";
+/// The passphrase-era envelope: the key was PBKDF2-derived from a passphrase,
+/// and the only copy the app can still use is the derived key "remember on
+/// this device" put in the keyring. It decrypts with that key exactly as a
+/// current file does; the desktop rewrites it as [`JWT_FORMAT`] once opened.
+pub const JWT_FORMAT_V1: &str = "wfminv-jwt-v1";
 /// AES-GCM's nonce size. `Nonce::from_slice` panics on any other length, and
 /// release builds abort on panic, so a damaged file must be refused first.
 const JWT_IV_BYTES: usize = 12;
 
 /// The on-disk encrypted-JWT envelope. Field names + shape are a compat
-/// contract - see the module docs. Mirrors the web app's encrypted-export
-/// format so a single human can reason about both.
+/// contract - see the module docs. A v1 file also carries a `kdf` block,
+/// which nothing reads any more; serde skips it.
 #[derive(Serialize, Deserialize)]
 pub struct EncryptedJwt {
     pub format: String,
     pub created: String,
     pub platform: String,
-    pub kdf: KdfParams,
     pub cipher: CipherParams,
     pub ciphertext: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct KdfParams {
-    pub name: String,
-    pub hash: String,
-    pub iterations: u32,
-    pub salt: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -82,60 +70,30 @@ pub fn validate_platform(platform: &str) -> Result<()> {
     wfm_client::validate_platform(platform).map_err(|e| anyhow!(e))
 }
 
-/// Minimum passphrase length, in **characters** - the unit the error message
-/// promises the user.
-pub const MIN_PASSPHRASE_CHARS: usize = 12;
-
-/// The single passphrase-length gate for every entry point that sets one.
-///
-/// This lives here because it previously did not: the old CLI's `login`
-/// counted `passphrase.len()` (bytes) while the desktop dialog counted
-/// `chars().count()`, under a comment asserting the two were the same floor.
-/// They were not - a 4-character CJK passphrase is 12 bytes, so the CLI
-/// accepted what the desktop app rejected. The desktop shell is the only
-/// caller now, and both sides share this function, so the floor cannot
-/// drift again.
-pub fn validate_passphrase(passphrase: &str) -> Result<()> {
-    if passphrase.chars().count() < MIN_PASSPHRASE_CHARS {
-        bail!(
-            "Passphrase must be at least {MIN_PASSPHRASE_CHARS} characters - it guards your multi-month WFM token against offline brute force."
-        );
-    }
-    Ok(())
+fn random_bytes<const N: usize>() -> Result<[u8; N]> {
+    let mut bytes = [0u8; N];
+    SysRng
+        .try_fill_bytes(&mut bytes)
+        .map_err(|e| anyhow!("system randomness unavailable: {e}"))?;
+    Ok(bytes)
 }
 
-pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<EncryptedJwt> {
-    let mut salt = [0u8; 16];
-    let mut iv = [0u8; JWT_IV_BYTES];
-    SysRng
-        .try_fill_bytes(&mut salt)
-        .and_then(|()| SysRng.try_fill_bytes(&mut iv))
-        .map_err(|e| anyhow::anyhow!("system randomness unavailable: {e}"))?;
+/// A fresh AES-256 key for one sign-in. Every sign-in gets its own, so a key
+/// left behind by an earlier one cannot open the current file.
+pub fn new_jwt_key() -> Result<[u8; 32]> {
+    random_bytes()
+}
 
-    let mut key_bytes = [0u8; 32];
-    pbkdf2::<Hmac<Sha256>>(
-        passphrase.as_bytes(),
-        &salt,
-        JWT_KDF_ITERATIONS,
-        &mut key_bytes,
-    )
-    .map_err(|e| anyhow!("PBKDF2 failed: {e}"))?;
-
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
+pub fn encrypt_jwt(jwt: &str, key: &[u8; 32], platform: &str) -> Result<EncryptedJwt> {
+    let iv: [u8; JWT_IV_BYTES] = random_bytes()?;
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     let ciphertext = cipher
         .encrypt(Nonce::from_slice(&iv), jwt.as_bytes())
         .map_err(|e| anyhow!("AES-GCM encrypt failed: {e}"))?;
-
     Ok(EncryptedJwt {
         format: JWT_FORMAT.into(),
         created: chrono_now_iso(),
         platform: platform.into(),
-        kdf: KdfParams {
-            name: "PBKDF2".into(),
-            hash: "SHA-256".into(),
-            iterations: JWT_KDF_ITERATIONS,
-            salt: B64.encode(salt),
-        },
         cipher: CipherParams {
             name: "AES-GCM".into(),
             iv: B64.encode(iv),
@@ -144,32 +102,8 @@ pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<Encryp
     })
 }
 
-/// Run the blob's KDF over `passphrase`, yielding the raw AES-256 key. Kept
-/// separate from decryption so the desktop can hold the derived key in the OS
-/// keyring for silent unlock - the key is salt-bound (a re-login rotates the
-/// salt, so a stale key fails GCM auth) and useless without the .enc file,
-/// unlike the passphrase, which users may reuse elsewhere.
-pub fn derive_jwt_key(blob: &EncryptedJwt, passphrase: &str) -> Result<[u8; 32]> {
-    if blob.format != JWT_FORMAT {
-        bail!("Unknown JWT blob format: {}", blob.format);
-    }
-    if !(JWT_KDF_ITERATIONS..=MAX_JWT_KDF_ITERATIONS).contains(&blob.kdf.iterations) {
-        bail!("The saved WFM sign-in file is damaged (KDF iterations out of range).");
-    }
-    let salt = B64.decode(&blob.kdf.salt).context("decoding salt")?;
-    let mut key_bytes = [0u8; 32];
-    pbkdf2::<Hmac<Sha256>>(
-        passphrase.as_bytes(),
-        &salt,
-        blob.kdf.iterations,
-        &mut key_bytes,
-    )
-    .map_err(|e| anyhow!("PBKDF2 failed: {e}"))?;
-    Ok(key_bytes)
-}
-
 pub fn decrypt_jwt_with_key(blob: &EncryptedJwt, key_bytes: &[u8; 32]) -> Result<String> {
-    if blob.format != JWT_FORMAT {
+    if blob.format != JWT_FORMAT && blob.format != JWT_FORMAT_V1 {
         bail!("Unknown JWT blob format: {}", blob.format);
     }
     let iv = B64.decode(&blob.cipher.iv).context("decoding IV")?;
@@ -186,14 +120,8 @@ pub fn decrypt_jwt_with_key(blob: &EncryptedJwt, key_bytes: &[u8; 32]) -> Result
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key_bytes));
     let plaintext = cipher
         .decrypt(Nonce::from_slice(&iv), ciphertext.as_ref())
-        .map_err(|_| anyhow!("Wrong passphrase, or the JWT file was modified."))?;
+        .map_err(|_| anyhow!("The saved key does not open this sign-in file."))?;
     String::from_utf8(plaintext).context("JWT plaintext was not valid UTF-8")
-}
-
-#[cfg(test)]
-pub fn decrypt_jwt(blob: &EncryptedJwt, passphrase: &str) -> Result<String> {
-    let key_bytes = derive_jwt_key(blob, passphrase)?;
-    decrypt_jwt_with_key(blob, &key_bytes)
 }
 
 /// Whether `jwt` belongs to a signed-in account. warframe.market issues an
@@ -258,31 +186,15 @@ fn username_from_me(status: reqwest::StatusCode, body: &str) -> Result<String> {
 mod tests {
     use super::*;
 
+    const KEY: [u8; 32] = [7; 32];
+
     #[test]
     fn a_damaged_envelope_is_refused_instead_of_aborting() {
-        let good = encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
-        let key = derive_jwt_key(&good, "correct horse battery").unwrap();
         for iv in ["", "AAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"] {
-            let mut blob =
-                encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
+            let mut blob = encrypt_jwt("header.payload.sig", &KEY, "pc").unwrap();
             blob.cipher.iv = iv.into();
-            let err = decrypt_jwt_with_key(&blob, &key).unwrap_err().to_string();
+            let err = decrypt_jwt_with_key(&blob, &KEY).unwrap_err().to_string();
             assert!(err.contains("damaged"), "{iv:?}: {err}");
-        }
-        for iterations in [
-            0,
-            1,
-            JWT_KDF_ITERATIONS - 1,
-            MAX_JWT_KDF_ITERATIONS + 1,
-            u32::MAX,
-        ] {
-            let mut blob =
-                encrypt_jwt("header.payload.sig", "correct horse battery", "pc").unwrap();
-            blob.kdf.iterations = iterations;
-            let err = derive_jwt_key(&blob, "correct horse battery")
-                .unwrap_err()
-                .to_string();
-            assert!(err.contains("damaged"), "{iterations}: {err}");
         }
     }
 
@@ -312,12 +224,42 @@ mod tests {
 
     #[test]
     fn encrypt_then_decrypt_roundtrips_the_jwt() {
-        let blob = encrypt_jwt("jwt.abc.123", "correct horse battery", "pc").unwrap();
+        let blob = encrypt_jwt("jwt.abc.123", &KEY, "pc").unwrap();
         assert_eq!(blob.format, JWT_FORMAT);
         assert_eq!(blob.platform, "pc");
-        assert_eq!(blob.kdf.iterations, JWT_KDF_ITERATIONS);
-        let jwt = decrypt_jwt(&blob, "correct horse battery").unwrap();
-        assert_eq!(jwt, "jwt.abc.123");
+        assert_eq!(decrypt_jwt_with_key(&blob, &KEY).unwrap(), "jwt.abc.123");
+    }
+
+    #[test]
+    fn a_key_from_another_sign_in_does_not_open_the_file() {
+        let blob = encrypt_jwt("jwt.abc.123", &new_jwt_key().unwrap(), "pc").unwrap();
+        assert!(decrypt_jwt_with_key(&blob, &new_jwt_key().unwrap()).is_err());
+    }
+
+    /// A passphrase-era file, exactly as one sits on disk (its `kdf` block
+    /// included), still opens with the derived key the keyring kept for it.
+    #[test]
+    fn a_passphrase_era_file_opens_with_its_remembered_key() {
+        let current = encrypt_jwt("jwt.abc.123", &KEY, "ps4").unwrap();
+        let mut v1 = serde_json::to_value(&current).unwrap();
+        v1["format"] = JWT_FORMAT_V1.into();
+        v1["kdf"] = serde_json::json!({
+            "name": "PBKDF2", "hash": "SHA-256", "iterations": 600000, "salt": "c2FsdHNhbHRzYWx0c2FsdA==",
+        });
+        let blob: EncryptedJwt = serde_json::from_value(v1).unwrap();
+        assert_eq!(blob.format, JWT_FORMAT_V1);
+        assert_eq!(blob.platform, "ps4");
+        assert_eq!(decrypt_jwt_with_key(&blob, &KEY).unwrap(), "jwt.abc.123");
+    }
+
+    #[test]
+    fn an_unknown_format_is_refused() {
+        let mut blob = encrypt_jwt("jwt.abc.123", &KEY, "pc").unwrap();
+        blob.format = "wfminv-jwt-v9".into();
+        assert!(decrypt_jwt_with_key(&blob, &KEY)
+            .unwrap_err()
+            .to_string()
+            .contains("Unknown JWT blob format"));
     }
 
     #[test]
@@ -332,92 +274,10 @@ mod tests {
     }
 
     #[test]
-    fn passphrase_floor_matches_the_shared_scalar_value_cases() {
-        #[derive(Deserialize)]
-        struct Case {
-            name: String,
-            passphrase: String,
-            accepted: bool,
-        }
-        let cases: Vec<Case> = serde_json::from_str(include_str!(
-            "../../../tests/fixtures/passphrase-floor.json"
-        ))
-        .unwrap();
-        for case in cases {
-            assert_eq!(
-                validate_passphrase(&case.passphrase).is_ok(),
-                case.accepted,
-                "{}",
-                case.name
-            );
-        }
-    }
-
-    #[test]
-    fn passphrase_floor_counts_characters_not_bytes() {
-        // The regression this function exists to kill: 4 CJK characters are 12
-        // UTF-8 bytes, so a byte-counting floor waved them through. `login`
-        // counted bytes, the desktop dialog counted chars, and a comment
-        // claimed the two floors matched.
-        let four_cjk = "密码密码";
-        assert_eq!(four_cjk.len(), 12);
-        assert_eq!(four_cjk.chars().count(), 4);
-        assert!(validate_passphrase(four_cjk).is_err());
-
-        assert!(validate_passphrase("hunter2").is_err());
-        assert!(validate_passphrase("correct horse battery").is_ok());
-        // Exactly at the floor, in a script where chars != bytes.
-        assert!(validate_passphrase("密码密码密码密码密码密码").is_ok());
-    }
-
-    #[test]
-    fn decrypt_with_wrong_passphrase_fails() {
-        let blob = encrypt_jwt("jwt.abc.123", "correct horse battery", "pc").unwrap();
-        assert!(decrypt_jwt(&blob, "wrong passphrase!!").is_err());
-    }
-
-    #[test]
-    fn derived_key_decrypts_without_the_passphrase() {
-        let blob = encrypt_jwt("jwt.abc.123", "correct horse battery", "pc").unwrap();
-        let key = derive_jwt_key(&blob, "correct horse battery").unwrap();
-        assert_eq!(decrypt_jwt_with_key(&blob, &key).unwrap(), "jwt.abc.123");
-    }
-
-    #[test]
-    fn derived_key_is_salt_bound_so_a_relogin_invalidates_it() {
-        // Same passphrase, fresh envelope → fresh salt → the old derived key
-        // must fail GCM auth (this is what makes a stale keyring entry
-        // detectable instead of silently decrypting a rotated login).
-        let old = encrypt_jwt("jwt.abc.123", "correct horse battery", "pc").unwrap();
-        let old_key = derive_jwt_key(&old, "correct horse battery").unwrap();
-        let new = encrypt_jwt("jwt.def.456", "correct horse battery", "pc").unwrap();
-        assert!(decrypt_jwt_with_key(&new, &old_key).is_err());
-    }
-
-    #[test]
     fn validate_platform_accepts_known_rejects_unknown() {
         assert!(validate_platform("pc").is_ok());
         assert!(validate_platform("switch").is_ok());
         assert!(validate_platform("PC").is_err());
         assert!(validate_platform("playstation").is_err());
-    }
-
-    // Parity gate: frontend/src/adapters/encrypted-snapshot.ts's KDF_ITERATIONS must match this
-    // crate's JWT_KDF_ITERATIONS exactly - a mismatch bricks JWT decryption
-    // with a false "wrong passphrase" error. Both sides read
-    // tests/fixtures/jwt-kdf.json.
-    #[test]
-    fn jwt_kdf_iterations_matches_the_shared_fixture() {
-        #[derive(serde::Deserialize)]
-        struct Fixture {
-            iterations: u32,
-        }
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/jwt-kdf.json"
-        );
-        let raw = std::fs::read_to_string(path).expect("read the shared KDF fixture");
-        let fx: Fixture = serde_json::from_str(&raw).expect("parse the KDF fixture");
-        assert_eq!(JWT_KDF_ITERATIONS, fx.iterations);
     }
 }

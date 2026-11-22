@@ -158,6 +158,9 @@ test('manual checks expose failed and unsupported outcomes; Notifications never 
 
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} snapshot age advances and failed refresh remains visible after dismissing details`, async ({ page }, info) => {
+    // One of the suite's longest tests (10-30 s locally). Four CI workers sharing
+    // four cores stretched one like it past the default limit, so all get triple.
+    test.slow();
     await page.emulateMedia({ colorScheme: theme });
     await page.clock.install({ time: new Date('2026-09-10T12:00:00Z') });
     await page.goto('/?preview-desktop&sample');

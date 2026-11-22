@@ -17,8 +17,8 @@ build and check commands are in ../CONTRIBUTING.md. Crate-specific rules:
 [`game-acquisition/AGENTS.md`](game-acquisition/AGENTS.md) (memory scan), [`wfm-client/AGENTS.md`](wfm-client/AGENTS.md) (WFM transport).
 
 - `game-acquisition` and `wfm-trading` stay usable without a terminal or
-  Tauri: **no interactive terminal I/O** - the passphrase arrives from the
-  webview over IPC. `game-acquisition` never talks to warframe.market.
+  Tauri: **no interactive terminal I/O** - anything the user supplies arrives
+  from the webview over IPC. `game-acquisition` never talks to warframe.market.
 - `market-domain::math` stays pure: no I/O, nothing outside `std`, no clock.
 - `wfm-client` shares transport primitives only; authed order mutation and its
   reconciliation stay in `wfm-trading`.
@@ -83,9 +83,9 @@ These bind every crate here, including callers:
   removes `cap_sys_ptrace`; say so in any run instructions.
 - Linux `/proc/<pid>/comm` truncates at 15 chars (`Warframe.x64.ex`); match the
   prefix in `matches_warframe()`.
-- On Linux without a Secret Service daemon, "remember on device" falls back to a
-  per-launch passphrase and logs `keyring read failed (falling back to
-  passphrase)` - the diagnostic, not a bug.
+- On Linux without a Secret Service daemon the sign-in key goes to
+  `wfm-jwt.key` beside the sign-in file and logs `keyring unavailable, keeping
+  the sign-in key in a file` - the designed fallback, not a bug.
 - `regex` with `default-features = false` cannot compile `\d` or `\b`; keep
   default features.
 

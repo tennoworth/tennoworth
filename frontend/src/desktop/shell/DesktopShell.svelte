@@ -62,6 +62,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   import { rewardLanguageFor } from './language-choice';
   import type { LanguageCode } from '../../i18n/languages';
   import SettingsPanel from '../settings/SettingsPanel.svelte';
+  import GamingShell from '../gaming/GamingShell.svelte';
   import PriceSharingPrompt from '../settings/PriceSharingPrompt.svelte';
   import SupportPrompt from '../community/SupportPrompt.svelte';
   import { PromptSession } from '../prompts/prompt-session.svelte';
@@ -443,7 +444,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   }
 
   let feedbackRef: FeedbackDialog;
-  let statusStripRef: StatusStrip;
+  let statusStripRef = $state<StatusStrip>();
   let feedbackFromMore = false;
   function openFeedback() { feedbackRef.openFeedback(); }
   function captureFeedbackState() {
@@ -497,12 +498,35 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   });
 
   let restoring = $derived(!inventory.restored && !hasInventory);
+
+  // Steam Gaming Mode opens the controller layout unless the player chose the
+  // desktop one; the choice persists either way.
+  let layoutChoice = $state(untrack(() => store.getSetting('layout')));
+  let gamingLayout = $derived(layoutChoice === 'gaming' || (layoutChoice == null && session.gamingMode));
+  function chooseLayout(layout: 'gaming' | 'desktop') {
+    layoutChoice = layout;
+    void store.setSetting('layout', layout);
+  }
+  $effect(() => { document.documentElement.dataset.layout = gamingLayout ? 'gaming' : 'desktop'; });
 </script>
 
-<a class="skip-navigation" href="#workspace" onclick={(event) => { event.preventDefault(); workspaceElement?.focus(); }}>{t('shell.skip')}</a>
+{#if !gamingLayout}<a class="skip-navigation" href="#workspace" onclick={(event) => { event.preventDefault(); workspaceElement?.focus(); }}>{t('shell.skip')}</a>{/if}
 
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
+{#if gamingLayout}
+<GamingShell
+  ordersIssues={listing.ordersSummary?.issues ?? 0} {results} ready={calculationsReady && !calculationError} {hasInventory} canList={listingQuantitiesKnown} blockReason={workspace.listingBlockReason} actionLabel={listingActionLabel} oncheck={() => void checkListingRequirements()} {tradeAllowance}
+  scanning={inventory.pullingInventory} scanText={inventory.lastUpdated ? t('gaming.scannedAgo', { age: inventoryFreshness }) : t('gaming.notScanned')}
+  wfmStatus={listing.wfmStatus} {autoScan} overlayPort={transport}
+  ordersInput={{ get transport() { return transport; }, get market() { return inventory.market; }, get ownedQty() { return ownedQtyForOrders; }, get sessionEpoch() { return listing.sessionEpoch; }, onauthrequired: (code) => wfmAuthDialogsRef?.open(code), onsummary: (s) => (listing.ordersSummary = s), get healthPrefs() { return pricing.healthPrefs; } }}
+  onlist={(rows) => void listing.openListingFlow(rows ?? null)}
+  onscan={() => void inventory.pullInventory()}
+  onauth={(code) => wfmAuthDialogsRef?.open(code)}
+  onsignout={() => listing.handleWfmLogout()}
+  ondesktop={() => chooseLayout('desktop')}
+/>
+{:else}
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
 <div data-shell data-testid="desktop-mode" class={showWorkspace ? 'shell' : 'desktop-landing'} bind:this={shellElement} data-sidebar={showWorkspace && sidebar.collapsed ? 'rail' : undefined} style:--sidebar={showWorkspace ? (sidebar.collapsed ? 'var(--sidebar-rail)' : `${sidebar.width}px`) : undefined}>
   <StatusStrip keyboardTools={firstRunKeyboard} bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
@@ -778,7 +802,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
     {/if}
     {#if visited.has('settings')}
     <div data-shell class="view-pane" hidden={!(effectiveView === 'settings')}>
-      <SettingsPanel {store} {pricing} active={effectiveView === 'settings'} onlanguage={changeLanguage} {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+      <SettingsPanel {store} {pricing} active={effectiveView === 'settings'} onlanguage={changeLanguage} {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} ongaminglayout={session.gamingMode ? () => chooseLayout('gaming') : undefined} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
     </div>
     {/if}
 
@@ -808,6 +832,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
   {#if tip}<div data-shell class="rail-tip" aria-hidden="true" style:top="{tip.top}px" style:left="{tip.left}px">{tip.text}</div>{/if}
   {/if}
 </div>
+{/if}
 
 {#snippet keepSection()}
   <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={connectForListings}

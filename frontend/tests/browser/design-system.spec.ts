@@ -480,6 +480,9 @@ async function overflowingTables(page: Page) {
 }
 
 test('every desktop table fits its pane from the minimum window up', async ({ page }) => {
+  // One of the suite's longest tests (10-30 s locally). Four CI workers sharing
+  // four cores stretched one like it past the default limit, so all get triple.
+  test.slow();
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
   await page.route('**/item-art/*', route => route.fulfill({ body: png, contentType: 'image/png' }));
   await page.route('**/item-art.json', route => route.fulfill({
@@ -520,6 +523,9 @@ test('every desktop table fits its pane from the minimum window up', async ({ pa
 // instead (a screen-reader label in Settings) once let the whole app scroll up
 // and leave an empty band under it.
 test('the desktop page itself never scrolls; only the workspace does', async ({ page }) => {
+  // One of the suite's longest tests (10-30 s locally). Four CI workers sharing
+  // four cores stretched one like it past the default limit, so all get triple.
+  test.slow();
   await page.goto('/?preview-desktop&sample');
   await previewShell(page);
   const sidebar = page.locator('.sidebar');

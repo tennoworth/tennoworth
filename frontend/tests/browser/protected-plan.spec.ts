@@ -198,6 +198,9 @@ test('missing allocation keeps known estimates while unavailable sets and scrap 
 });
 
 test('a changed native scan blocks an open review and retains its edits after rescanning', async ({ page }) => {
+  // One of the suite's longest tests (10-30 s locally). Four CI workers sharing
+  // four cores stretched one like it past the default limit, so all get triple.
+  test.slow();
   await page.clock.install();
   await page.goto('/?preview-desktop&sample');
   await page.getByRole('button', { name: 'List on WFM', exact: true }).click();

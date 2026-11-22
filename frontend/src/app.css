@@ -119,6 +119,11 @@ html { font-synthesis-weight: none; }
 code, kbd, samp, pre { font-family: var(--font-mono); font-size: 1em; }
 @media (min-width: 1900px) { html { font-size: 17px; } }
 @media (min-width: 2500px) { html { font-size: 18px; } }
+/* Gaming Mode is one 1280 by 800 screen read from arm's length. */
+html[data-layout="gaming"] { font-size: 18px; }
+/* A pad moves focus from script, which :focus-visible does not mark, so the
+   dialogs Gaming Mode borrows from the desktop layout draw any focus. */
+html[data-layout="gaming"] :focus { outline: 3px solid var(--fg); outline-offset: 2px; }
 
 /* ---------- yorha: paper & ink (default look; light) ----------------------- */
 /* `html:not([data-look])` = the boot script didn't run (desktop build before

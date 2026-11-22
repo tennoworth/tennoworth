@@ -50,6 +50,11 @@ pub async fn capture_signed_in_jwt(app: &AppHandle, platform: &str) -> Result<St
         .incognito(true)
         .build()
         .map_err(|e| CmdError::internal(format!("opening the sign-in window: {e}")))?;
+    // gamescope shows one window at a time and letterboxes a small one, so in
+    // Gaming Mode the sign-in takes the whole screen, like the main window.
+    if crate::gamescope::active() {
+        let _ = window.set_fullscreen(true);
+    }
     let result = wait_for_sign_in(app, platform).await;
     // Already gone when the user closed it; nothing to report then.
     let _ = window.destroy();

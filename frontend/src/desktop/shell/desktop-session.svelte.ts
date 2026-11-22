@@ -14,6 +14,7 @@ export function createDesktopSession({ inventory, listing, transport, store, ser
   const { desktopNotifications, listenForTauriEvent, desktopWfmStatus } = services;
   let desktopAppVersion = $state<string | null>(null);
   let desktopPlatform = $state<string | null>(null);
+  let gamingMode = $state(false);
   let notesReady = $state(false);
   let trayHint = $state(false);
 
@@ -68,6 +69,7 @@ export function createDesktopSession({ inventory, listing, transport, store, ser
       const h = await transport.health();
       desktopPlatform = h?.platform ?? null;
       desktopAppVersion = h?.app_version ?? null;
+      gamingMode = h?.gaming_mode === true;
     } catch (e) {
       console.error('desktop health check failed', e);
     }
@@ -166,6 +168,7 @@ export function createDesktopSession({ inventory, listing, transport, store, ser
 
     get notesReady() { return notesReady; },
     get desktopPlatform() { return desktopPlatform; },
+    get gamingMode() { return gamingMode; },
     get desktopAppVersion() { return desktopAppVersion; },
     get trayHint() { return trayHint; },
     set trayHint(value: typeof trayHint) { trayHint = value; },

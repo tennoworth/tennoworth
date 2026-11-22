@@ -18,6 +18,9 @@ struct Health {
     platform: String,
     app_version: String,
     core_version: String,
+    /// Running under gamescope (Steam Gaming Mode): the SPA opens its
+    /// controller layout.
+    gaming_mode: bool,
 }
 
 /// IPC liveness + build info. Proves the SPA can reach the native crates over the
@@ -29,6 +32,7 @@ fn health() -> Health {
         platform: std::env::consts::OS.to_string(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         core_version: wfm_trading::version().to_string(),
+        gaming_mode: crate::gamescope::active(),
     }
 }
 
@@ -206,8 +210,6 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::commands::auth::wfm_login_cancel,
             crate::commands::auth::wfm_login_with_token,
             crate::commands::auth::unlock_jwt,
-            crate::commands::auth::try_silent_unlock,
-            crate::commands::auth::wfm_remember_available,
             crate::commands::auth::wfm_logout,
             crate::commands::listing::submit_plan,
             crate::commands::listing::cancel_plan,
@@ -373,7 +375,13 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 b = b.additional_browser_args("--disable-gpu --no-first-run --disable-extensions");
             }
             let w = b.build()?;
-            window_size::fit_to_screen(&w);
+            // gamescope letterboxes a window smaller than its output rather
+            // than stretching it, so Gaming Mode gets the whole screen.
+            if crate::gamescope::active() {
+                let _ = w.set_fullscreen(true);
+            } else {
+                window_size::fit_to_screen(&w);
+            }
             // The builder's icon is the small one; Windows' taskbar needs the big one too.
             #[cfg(windows)]
             crate::shell::app_icon::apply_to_window(&w, icon_colour, app.handle());

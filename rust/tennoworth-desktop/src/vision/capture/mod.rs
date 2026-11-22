@@ -140,9 +140,11 @@ mod windows;
 #[cfg(target_os = "windows")]
 pub(crate) use windows::capture_warframe;
 #[cfg(target_os = "linux")]
+mod gamescope;
+#[cfg(target_os = "linux")]
 mod x11;
 #[cfg(target_os = "linux")]
-pub(crate) use x11::capture_warframe;
+pub(crate) use x11::{capture_warframe, warframe_window_size};
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 mod unsupported;
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
@@ -159,7 +161,9 @@ pub(crate) fn capture_backend_name() -> &'static str {
         // Capture talks X11 directly - under Wayland that means XWayland, not
         // the portal. Report the truth so the settings UI cannot claim a
         // portal/PipeWire backend that does not exist.
-        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        if crate::gamescope::active() {
+            "gamescope-screenshot"
+        } else if std::env::var_os("WAYLAND_DISPLAY").is_some() {
             "wayland-xwayland"
         } else {
             "x11-window"

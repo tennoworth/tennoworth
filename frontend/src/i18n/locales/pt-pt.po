@@ -9514,12 +9514,6 @@ msgstr "Switch"
 
 #. Error.
 #, fuzzy
-msgctxt "auth.mismatch"
-msgid "Passphrases don’t match."
-msgstr "As frases-passe não coincidem."
-
-#. Error.
-#, fuzzy
 msgctxt "auth.windowClosed"
 msgid "The warframe.market window was closed before you signed in."
 msgstr "A janela do warframe.market foi fechada antes de iniciar sessão."
@@ -9532,8 +9526,9 @@ msgstr "Iniciar sessão no warframe.market"
 
 #. Dialog text. WFM = warframe.market.
 #, fuzzy
+#| msgid "You sign in on warframe.market’s own page - your WFM password never passes through TennoWorth. The sign-in token is encrypted on this PC with a passphrase you choose."
 msgctxt "auth.loginLede"
-msgid "You sign in on warframe.market’s own page - your WFM password never passes through TennoWorth. The sign-in token is encrypted on this PC with a passphrase you choose."
+msgid "You sign in on warframe.market’s own page - your WFM password never passes through TennoWorth. The sign-in is saved encrypted on this device, so you stay signed in."
 msgstr "Inicia sessão na própria página do warframe.market - a sua palavra-passe do WFM nunca passa pelo TennoWorth. O token de sessão é encriptado neste PC com uma frase-passe à sua escolha."
 
 #. Field label; the token guide refers to it.
@@ -9571,54 +9566,6 @@ msgstr "do seu navegador."
 msgctxt "auth.platform"
 msgid "Platform"
 msgstr "Plataforma"
-
-#. Field label.
-#, fuzzy
-msgctxt "auth.passphrase"
-msgid "Encryption passphrase"
-msgstr "Frase-passe de encriptação"
-
-#. Field placeholder.
-#, fuzzy
-msgctxt "auth.passphraseHint"
-msgid "12+ characters - you may need it again after a restart"
-msgstr "12+ caracteres - pode voltar a precisar dela após reiniciar"
-
-#. Field help.
-#, fuzzy
-msgctxt "auth.passphraseHelp"
-msgid "Locks your WFM sign-in token to this PC, so the app can list and manage your orders all session without signing in to WFM again."
-msgstr "Prende o seu token de sessão do WFM a este PC, para que a aplicação possa anunciar e gerir as suas ordens durante toda a sessão sem voltar a iniciar sessão no WFM."
-
-#. Field label.
-#, fuzzy
-msgctxt "auth.confirm"
-msgid "Confirm passphrase"
-msgstr "Confirmar frase-passe"
-
-#. Field help.
-#, fuzzy
-msgctxt "auth.confirmHelp"
-msgid "Forgot it? No problem - just log in again and set a new one. Your WFM account is never locked out."
-msgstr "Esqueceu-se? Não há problema - basta iniciar sessão de novo e definir uma nova. A sua conta do WFM nunca fica bloqueada."
-
-#. Checkbox. Keep the product names.
-#, fuzzy
-msgctxt "auth.rememberLong"
-msgid "Remember on this device - stores the unlock key in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager) so you’re not asked each launch. Never the passphrase itself."
-msgstr "Lembrar neste dispositivo - guarda a chave de desbloqueio no porta-chaves do sistema (KWallet, GNOME Keyring, Windows Credential Manager) para não ser pedida a cada arranque. Nunca a frase-passe em si."
-
-#. Checkbox.
-#, fuzzy
-msgctxt "auth.remember"
-msgid "Remember on this device - stores the unlock key in your OS keyring so you’re not asked each launch. Never the passphrase itself."
-msgstr "Lembrar neste dispositivo - guarda a chave de desbloqueio no porta-chaves do sistema para não ser pedida a cada arranque. Nunca a frase-passe em si."
-
-#. Note.
-#, fuzzy
-msgctxt "auth.noKeyring"
-msgid "Your system’s keyring isn’t available, so TennoWorth can’t remember this device and will ask for your passphrase each launch. On KDE, turn on KDE Wallet in System Settings."
-msgstr "O porta-chaves do sistema não está disponível, por isso o TennoWorth não consegue memorizar este dispositivo e vai pedir a sua frase-passe a cada arranque. No KDE, ative a KDE Wallet nas Definições do Sistema."
 
 #. Status.
 #, fuzzy
@@ -9670,51 +9617,35 @@ msgstr "Continuar para o warframe.market"
 
 #. Dialog heading.
 #, fuzzy
+#| msgid "Unlock warframe.market listing"
 msgctxt "auth.unlockTitle"
-msgid "Unlock warframe.market listing"
+msgid "Couldn’t open your saved sign-in"
 msgstr "Desbloquear anúncios no warframe.market"
 
 #. Dialog text.
 #, fuzzy
+#| msgid "Enter the passphrase you set at login to decrypt your WFM token for this session. It stays in the app’s memory - never on disk, never in this window."
 msgctxt "auth.unlockLede"
-msgid "Enter the passphrase you set at login to decrypt your WFM token for this session. It stays in the app’s memory - never on disk, never in this window."
+msgid "TennoWorth keeps your warframe.market sign-in on this device and couldn’t open it just now. Try again, or sign in again."
 msgstr "Introduza a frase-passe que definiu ao iniciar sessão para desencriptar o seu token do WFM nesta sessão. Fica na memória da aplicação - nunca no disco, nunca nesta janela."
 
-#. Field label.
+#. Button.
 #, fuzzy
-msgctxt "auth.passphraseLabel"
-msgid "Passphrase"
-msgstr "Frase-passe"
-
-#. Text before a link button.
-#, fuzzy
-msgctxt "auth.forgot"
-msgid "Forgot it?"
-msgstr "Esqueceu-se?"
-
-#. Link button.
-#, fuzzy
+#| msgid "Log in again"
 msgctxt "auth.loginAgain"
-msgid "Log in again"
+msgid "Sign in again"
 msgstr "Inicie sessão novamente"
 
-#. Text after "Log in again". Keep the leading space.
-#, fuzzy
-msgctxt "auth.forgotAfter"
-msgid " to set a new passphrase."
-msgstr " para definir uma nova frase-passe."
+#. Button.
+msgctxt "auth.retry"
+msgid "Try again"
+msgstr ""
 
 #. Button while busy.
 #, fuzzy
 msgctxt "auth.unlocking"
 msgid "Unlocking…"
 msgstr "A desbloquear…"
-
-#. Button.
-#, fuzzy
-msgctxt "auth.unlock"
-msgid "Unlock"
-msgstr "Desbloquear"
 
 #. Screen reader name of the browser choice.
 #, fuzzy
@@ -13388,8 +13319,9 @@ msgstr "O que nunca sai do seu computador"
 
 #. FAQ answer. Keep the tags and the technical names in <code>.
 #, fuzzy
+#| msgid "There are no TennoWorth accounts and no inventory upload: the site only downloads the public market snapshot, and the desktop app computes every item, price join, and ranking on your machine. If you log in to warframe.market to post listings, that login token is <b>encrypted on disk</b> (AES-256-GCM) at <code>~/.config/wfminv/</code> (or the Windows equivalent), and the webview never sees it - it stays in the Rust process. The desktop app can optionally remember the unlock key in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager) - never the passphrase itself; details in SECURITY.md."
 msgctxt "faq.local.a1"
-msgid "There are no TennoWorth accounts and no inventory upload: the site only downloads the public market snapshot, and the desktop app computes every item, price join, and ranking on your machine. If you log in to warframe.market to post listings, that login token is <b>encrypted on disk</b> (AES-256-GCM) at <code>~/.config/wfminv/</code> (or the Windows equivalent), and the webview never sees it - it stays in the Rust process. The desktop app can optionally remember the unlock key in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager) - never the passphrase itself; details in SECURITY.md."
+msgid "There are no TennoWorth accounts and no inventory upload: the site only downloads the public market snapshot, and the desktop app computes every item, price join, and ranking on your machine. If you log in to warframe.market to post listings, that login token is <b>encrypted on disk</b> (AES-256-GCM) at <code>~/.config/wfminv/</code> (or the Windows equivalent), and the webview never sees it - it stays in the Rust process. The key that opens it is kept in your OS keyring (KWallet, GNOME Keyring, Windows Credential Manager), or in a file only your user can read where there is no keyring; details in SECURITY.md."
 msgstr "Não existem contas TennoWorth nem envio de inventário: o site apenas transfere o instantâneo público do mercado, e a aplicação para computador calcula cada item, associação de preço e classificação no seu computador. Se iniciar sessão no warframe.market para publicar anúncios, esse token de sessão fica <b>encriptado no disco</b> (AES-256-GCM) em <code>~/.config/wfminv/</code> (ou o equivalente no Windows), e a webview nunca o vê - fica no processo Rust. A aplicação para computador pode, opcionalmente, memorizar a chave de desbloqueio no porta-chaves do sistema (KWallet, GNOME Keyring, Windows Credential Manager) - nunca a frase-passe em si; detalhes no SECURITY.md."
 
 #. FAQ answer. Keep the tags and the technical names in <code>.
@@ -13514,8 +13446,9 @@ msgstr "Como anuncio itens no WFM?"
 
 #. FAQ answer. Keep the tags and the technical names in <code>. Use the translated button and view names.
 #, fuzzy
+#| msgid "Listing is a <b>desktop app</b> feature. Install the desktop app (Windows + Linux), scan your account, and use <b>List on WFM</b> from the Sell view. The first time, you sign in on warframe.market’s own page in a separate window, so TennoWorth never sees your password. The resulting sign-in token is encrypted behind a passphrase you choose and never leaves your machine; the app can remember the unlock in your OS keyring so later launches don’t ask again."
 msgctxt "faq.list.a1"
-msgid "Listing is a <b>desktop app</b> feature. Install the desktop app (Windows + Linux), scan your account, and use <b>List on WFM</b> from the Sell view. The first time, you sign in on warframe.market’s own page in a separate window, so TennoWorth never sees your password. The resulting sign-in token is encrypted behind a passphrase you choose and never leaves your machine; the app can remember the unlock in your OS keyring so later launches don’t ask again."
+msgid "Listing is a <b>desktop app</b> feature. Install the desktop app (Windows + Linux), scan your account, and use <b>List on WFM</b> from the Sell view. The first time, you sign in on warframe.market’s own page in a separate window, so TennoWorth never sees your password. The resulting sign-in token is saved encrypted and never leaves your machine, so later launches don’t ask again."
 msgstr "Anunciar é uma funcionalidade da <b>aplicação para computador</b>. Instale a aplicação para computador (Windows + Linux), analise a sua conta e use <b>Anunciar no WFM</b> na vista Vender. Da primeira vez, inicia sessão na própria página do warframe.market numa janela separada, por isso o TennoWorth nunca vê a sua palavra-passe. O token de sessão resultante é encriptado com uma frase-passe à sua escolha e nunca sai do seu computador; a aplicação pode memorizar o desbloqueio no porta-chaves do sistema para não voltar a pedi-lo nos arranques seguintes."
 
 #. FAQ answer. Keep the tags and the technical names in <code>.
@@ -14426,3 +14359,365 @@ msgstr "A ler nomes em {language}."
 msgctxt "settings.sameAsGame"
 msgid "Same as the game"
 msgstr "Igual ao jogo"
+
+#. Accessible name of the section tabs.
+msgctxt "gaming.sections"
+msgid "Sections"
+msgstr ""
+
+#. Section tab.
+#. Max 16 characters.
+msgctxt "gaming.sell"
+msgid "Sell now"
+msgstr ""
+
+#. Section tab: relic reward screens.
+#. Max 16 characters.
+msgctxt "gaming.rewards"
+msgid "Rewards"
+msgstr ""
+
+#. Section tab: the player's warframe.market listings.
+#. Max 16 characters.
+msgctxt "gaming.orders"
+msgid "Orders"
+msgstr ""
+
+#. Section tab.
+#. Max 16 characters.
+msgctxt "gaming.setup"
+msgid "Setup"
+msgstr ""
+
+#. Controller legend beside the A button.
+#. Max 12 characters.
+msgctxt "gaming.legendSelect"
+msgid "Select"
+msgstr ""
+
+#. Controller legend beside the B button.
+#. Max 12 characters.
+msgctxt "gaming.legendBack"
+msgid "Back"
+msgstr ""
+
+#. Controller legend beside the Y button: scan the inventory.
+#. Max 12 characters.
+msgctxt "gaming.legendScan"
+msgid "Scan"
+msgstr ""
+
+#. Controller legend beside the LB and RB buttons.
+#. Max 12 characters.
+msgctxt "gaming.legendSection"
+msgid "Section"
+msgstr ""
+
+#. Status: when the inventory was last read. {age} is like "5 min ago".
+msgctxt "gaming.scannedAgo"
+msgid "Scanned {age}"
+msgstr ""
+
+#. Status.
+msgctxt "gaming.notScanned"
+msgid "Not scanned yet"
+msgstr ""
+
+#. Status.
+msgctxt "gaming.scanning"
+msgid "Scanning…"
+msgstr ""
+
+#. Status.
+msgctxt "gaming.wfmSignedIn"
+msgid "warframe.market connected"
+msgstr ""
+
+#. Status.
+msgctxt "gaming.wfmLocked"
+msgid "warframe.market locked"
+msgstr ""
+
+#. Status.
+msgctxt "gaming.wfmSignedOut"
+msgid "warframe.market not connected"
+msgstr ""
+
+#. Sell now heading line. {value} is platinum.
+msgctxt "gaming.sellSummary"
+msgid "{count, plural, one {# pick} other {# picks}} · {value}p"
+msgstr ""
+
+#. Button and X legend.
+#. Max 24 characters.
+msgctxt "gaming.listAll"
+msgid "List all picks"
+msgstr ""
+
+#. Row action.
+#. Max 12 characters.
+msgctxt "gaming.list"
+msgid "List"
+msgstr ""
+
+#. Price per copy.
+msgctxt "gaming.each"
+msgid "{price}p each"
+msgstr ""
+
+#. Empty state title.
+msgctxt "gaming.noPicksTitle"
+msgid "Nothing worth selling right now"
+msgstr ""
+
+#. Empty state.
+msgctxt "gaming.noPicksBody"
+msgid "Scan again after a few missions; new drops and price moves bring new picks."
+msgstr ""
+
+#. Loading state.
+msgctxt "gaming.calculating"
+msgid "Working out what sells…"
+msgstr ""
+
+#. Empty state title before any scan.
+msgctxt "gaming.needScanTitle"
+msgid "Scan your inventory first"
+msgstr ""
+
+#. Empty state.
+msgctxt "gaming.needScanBody"
+msgid "Press Y, or Scan inventory now in Setup, while Warframe is running."
+msgstr ""
+
+#. Rewards heading.
+msgctxt "gaming.lastReward"
+msgid "Last reward screen"
+msgstr ""
+
+#. Rewards empty state.
+msgctxt "gaming.noReward"
+msgid "No reward screen read yet. Open a relic in a Void Fissure and the prices appear over the rewards by themselves."
+msgstr ""
+
+#. Tag on a reward card.
+#. Max 16 characters.
+msgctxt "gaming.bestPlat"
+msgid "Best platinum"
+msgstr ""
+
+#. Tag on a reward card.
+#. Max 16 characters.
+msgctxt "gaming.bestDucats"
+msgid "Best ducats"
+msgstr ""
+
+#. Reward card whose name could not be read.
+#. Max 16 characters.
+msgctxt "gaming.unread"
+msgid "Not read"
+msgstr ""
+
+#. Reward card fact.
+msgctxt "gaming.ducats"
+msgid "{count} ducats"
+msgstr ""
+
+#. Reward card fact.
+msgctxt "gaming.owned"
+msgid "{count} owned"
+msgstr ""
+
+#. Rewards notice.
+msgctxt "gaming.overlayOff"
+msgid "The reward overlay is off."
+msgstr ""
+
+#. Button.
+#. Max 28 characters.
+msgctxt "gaming.turnOnOverlay"
+msgid "Turn on reward overlay"
+msgstr ""
+
+#. Rewards status.
+msgctxt "gaming.overlayWatching"
+msgid "Watching for reward screens."
+msgstr ""
+
+#. Rewards status.
+msgctxt "gaming.overlayWaiting"
+msgid "Waiting for Warframe."
+msgstr ""
+
+#. Rewards status.
+msgctxt "gaming.overlayError"
+msgid "The overlay hit a problem: {message}"
+msgstr ""
+
+#. X legend on Rewards.
+#. Max 12 characters.
+msgctxt "gaming.refresh"
+msgid "Refresh"
+msgstr ""
+
+#. Orders heading line.
+msgctxt "gaming.ordersCount"
+msgid "{count, plural, one {# listing} other {# listings}}"
+msgstr ""
+
+#. Orders heading line, after the listing count.
+msgctxt "gaming.ordersIssues"
+msgid "{count, plural, one {# needs a fix} other {# need a fix}}"
+msgstr ""
+
+#. Orders heading line, after the listing count, when nothing needs fixing.
+msgctxt "gaming.ordersFine"
+msgid "all priced well"
+msgstr ""
+
+#. Button and X legend.
+#. Max 24 characters.
+msgctxt "gaming.fixAll"
+msgid "Fix all prices"
+msgstr ""
+
+#. Row action.
+#. Max 12 characters.
+msgctxt "gaming.fix"
+msgid "Fix"
+msgstr ""
+
+#. Orders when signed out or locked.
+msgctxt "gaming.ordersLocked"
+msgid "Connect warframe.market to see your listings."
+msgstr ""
+
+#. Button.
+#. Max 28 characters.
+msgctxt "gaming.connect"
+msgid "Connect warframe.market"
+msgstr ""
+
+#. Orders empty state.
+msgctxt "gaming.noOrders"
+msgid "No listings yet. List picks from Sell now."
+msgstr ""
+
+#. Loading state.
+msgctxt "gaming.loadingOrders"
+msgid "Loading your listings…"
+msgstr ""
+
+#. Listing state.
+#. Max 12 characters.
+msgctxt "gaming.hidden"
+msgid "Hidden"
+msgstr ""
+
+#. Row action: hide the listing on warframe.market.
+#. Max 12 characters.
+msgctxt "gaming.hide"
+msgid "Hide"
+msgstr ""
+
+#. Row action: make the listing visible on warframe.market.
+#. Max 12 characters.
+msgctxt "gaming.show"
+msgid "Show"
+msgstr ""
+
+#. Order row facts.
+msgctxt "gaming.priceQty"
+msgid "{price}p · {quantity} listed"
+msgstr ""
+
+#. Order row: what the fix changes.
+msgctxt "gaming.suggest"
+msgid "{issue}: {from}p → {to}p"
+msgstr ""
+
+#. Setup button.
+#. Max 28 characters.
+msgctxt "gaming.scanNow"
+msgid "Scan inventory now"
+msgstr ""
+
+#. Setup row.
+msgctxt "gaming.autoScan"
+msgid "Automatic scan"
+msgstr ""
+
+#. Setup help.
+msgctxt "gaming.autoScanHelp"
+msgid "Reads the inventory again while you play."
+msgstr ""
+
+#. Setup row.
+msgctxt "gaming.overlay"
+msgid "Reward overlay"
+msgstr ""
+
+#. Setup help.
+msgctxt "gaming.overlayHelp"
+msgid "Shows prices over relic rewards. The screen is read on this device only."
+msgstr ""
+
+#. Toggle state.
+#. Max 8 characters.
+msgctxt "gaming.on"
+msgid "On"
+msgstr ""
+
+#. Toggle state.
+#. Max 8 characters.
+msgctxt "gaming.off"
+msgid "Off"
+msgstr ""
+
+#. Setup row. Keep the site name.
+msgctxt "gaming.account"
+msgid "warframe.market"
+msgstr ""
+
+#. Setup help.
+msgctxt "gaming.accountHelp"
+msgid "Needed to list items and fix prices. Sign-in uses Steam's on-screen keyboard (Steam + X)."
+msgstr ""
+
+#. Button.
+#. Max 16 characters.
+msgctxt "gaming.signOut"
+msgid "Sign out"
+msgstr ""
+
+#. Settings row title, shown only in Steam Gaming Mode.
+msgctxt "gaming.gamingLayout"
+msgid "Controller layout"
+msgstr ""
+
+#. Settings row help.
+msgctxt "gaming.gamingLayoutHelp"
+msgid "The Gaming Mode screen: what to sell, rewards, orders, all on the controller."
+msgstr ""
+
+#. Button.
+#. Max 24 characters.
+msgctxt "gaming.useGamingLayout"
+msgid "Use controller layout"
+msgstr ""
+
+#. Setup button.
+#. Max 28 characters.
+msgctxt "gaming.desktopLayout"
+msgid "Use desktop layout"
+msgstr ""
+
+#. Setup help.
+msgctxt "gaming.desktopLayoutHelp"
+msgid "The full app, for a mouse and keyboard. Gaming Mode returns from Settings."
+msgstr ""
+
+#. Setup tip.
+msgctxt "gaming.pasteTip"
+msgid "To paste a copied whisper in Warframe, bind a back button to Ctrl+V in Steam Input."
+msgstr ""

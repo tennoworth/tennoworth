@@ -121,7 +121,7 @@ const PROBE_JS: &str = r#"(function(){
   }
   // Like invk, but keeps the typed CmdError shape: rejections come back as
   // { ok:false, code, message } so the report can assert needs_login vs
-  // needs_unlock vs bad_passphrase instead of a flattened string.
+  // needs_login vs needs_unlock instead of a flattened string.
   var wfmRequestSerial = 0;
   function invkE(cmd, args){
     if (cmd === 'submit_plan' || cmd === 'resume_pending_plan') {
@@ -414,7 +414,7 @@ const PROBE_JS: &str = r#"(function(){
     })
     // Write a REAL encrypted envelope (production encrypt+persist), then the
     // same call sites must flip to needs_unlock.
-    .then(function(){ return invkE('debug_write_login', { passphrase: 'probe-pass-123456' }).then(function(v){ R.wfm.wroteLogin = v; }); })
+    .then(function(){ return invkE('debug_write_login').then(function(v){ R.wfm.wroteLogin = v; }); })
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status1 = v; }); })
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planLocked = v; }); })
     .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersLocked = v; if (v.ok || v.code !== 'needs_unlock') throw new Error('fetch_orders did not require unlock'); }); })
@@ -578,13 +578,10 @@ pub fn debug_post_scan(app: AppHandle) -> Result<Option<ScanNotification>, Strin
 }
 
 /// Probe-only: write a real encrypted login envelope (production encrypt +
-/// persist path) so the hermetic probe can drive the needs_unlock /
-/// bad_passphrase branches without a live WFM login.
+/// persist path, key saved beside it) so the hermetic probe can drive the
+/// needs_unlock branch without a live WFM login.
 #[tauri::command]
-pub fn debug_write_login(
-    session: State<'_, Arc<WfmSession>>,
-    passphrase: String,
-) -> Result<(), CmdError> {
+pub fn debug_write_login(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
     if !enabled() {
         return Err(CmdError::internal("debug_write_login is probe-only"));
     }
@@ -596,7 +593,7 @@ pub fn debug_write_login(
             "debug_write_login requires TENNOWORTH_JWT_PATH (refusing to touch the real login file)",
         ));
     }
-    session.debug_write_login(&passphrase)
+    session.debug_write_login()
 }
 
 /// Probe-only: flip the session to unlocked with a synthetic credential bundle

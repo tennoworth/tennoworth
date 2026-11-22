@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from '../dev/testing/test-utils.js';
 import { isDesktopRuntime, installDesktopExternalLinkHandler } from './runtime';
 import { HostedTransport } from './hosted';
-import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock, parseScanPayload } from './desktop';
+import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, parseScanPayload } from './desktop';
 import { DesktopCmdError } from '../contracts/errors';
 
 // The desktop sniff and TauriTransport read the Tauri globals; install/remove
@@ -209,7 +209,7 @@ describe('TauriTransport op → invoke mapping', () => {
   });
 
   it('needs_unlock rejections keep their code too (locked session, login on disk)', async () => {
-    const invoke = vi.fn().mockRejectedValue({ code: 'needs_unlock', message: 'Enter your passphrase.' });
+    const invoke = vi.fn().mockRejectedValue({ code: 'needs_unlock', message: 'Opening your saved warframe.market sign-in.' });
     installTauri(invoke);
     const err = await new TauriTransport().resumePendingPlan().catch((e) => e);
     expect(err).toBeInstanceOf(DesktopCmdError);
@@ -300,16 +300,11 @@ describe('desktop WFM auth ops', () => {
     expect(invoke).toHaveBeenCalledWith('wfm_logout');
   });
 
-  it('desktopWfmLoginWithToken() passes the pasted token and local settings through', async () => {
+  it('desktopWfmLoginWithToken() passes the pasted token and platform through', async () => {
     const invoke = vi.fn().mockResolvedValue(null);
     installTauri(invoke);
-    await desktopWfmLoginWithToken('a.b.c', 'a-long-enough-passphrase', 'pc', false);
-    expect(invoke).toHaveBeenCalledWith('wfm_login_with_token', {
-      token: 'a.b.c',
-      passphrase: 'a-long-enough-passphrase',
-      platform: 'pc',
-      remember: false,
-    });
+    await desktopWfmLoginWithToken('a.b.c', 'pc');
+    expect(invoke).toHaveBeenCalledWith('wfm_login_with_token', { token: 'a.b.c', platform: 'pc' });
   });
 
   it('desktopWfmLoginCancel() invokes wfm_login_cancel', async () => {
@@ -319,40 +314,20 @@ describe('desktop WFM auth ops', () => {
     expect(invoke).toHaveBeenCalledWith('wfm_login_cancel');
   });
 
-  it('desktopWfmLogin() sends no WFM credentials, only the local passphrase settings', async () => {
+  it('desktopWfmLogin() sends no WFM credentials, only the platform', async () => {
     const invoke = vi.fn().mockResolvedValue(null);
     installTauri(invoke);
-    await desktopWfmLogin('a-long-enough-passphrase', 'pc', true);
-    expect(invoke).toHaveBeenCalledWith('wfm_login', {
-      passphrase: 'a-long-enough-passphrase',
-      platform: 'pc',
-      remember: true,
-    });
+    await desktopWfmLogin('pc');
+    expect(invoke).toHaveBeenCalledWith('wfm_login', { platform: 'pc' });
   });
 
-  it('desktopWfmUnlock() surfaces bad_passphrase as a typed DesktopCmdError', async () => {
-    const invoke = vi.fn().mockRejectedValue({ code: 'bad_passphrase', message: 'Wrong passphrase, or the login file was modified.' });
+  it('desktopWfmUnlock() asks for nothing and surfaces keyring_unavailable as a typed DesktopCmdError', async () => {
+    const invoke = vi.fn().mockRejectedValue({ code: 'keyring_unavailable', message: 'Your system keyring didn’t answer.' });
     installTauri(invoke);
-    const err = await desktopWfmUnlock('nope', false).catch((e) => e);
+    const err = await desktopWfmUnlock().catch((e) => e);
+    expect(invoke).toHaveBeenCalledWith('unlock_jwt');
     expect(err).toBeInstanceOf(DesktopCmdError);
-    expect(err.code).toBe('bad_passphrase');
-  });
-
-  it('desktopWfmUnlock() forwards the remember flag', async () => {
-    const invoke = vi.fn().mockResolvedValue(null);
-    installTauri(invoke);
-    await desktopWfmUnlock('a-long-enough-passphrase', true);
-    expect(invoke).toHaveBeenCalledWith('unlock_jwt', {
-      passphrase: 'a-long-enough-passphrase',
-      remember: true,
-    });
-  });
-
-  it('desktopTrySilentUnlock() resolves the keyring verdict as a plain boolean', async () => {
-    const invoke = vi.fn().mockResolvedValue(false);
-    installTauri(invoke);
-    await expect(desktopTrySilentUnlock()).resolves.toBe(false);
-    expect(invoke).toHaveBeenCalledWith('try_silent_unlock');
+    expect(err.code).toBe('keyring_unavailable');
   });
 
   it('a non-CmdError rejection (plain string) still becomes an Error, not a swallow', async () => {

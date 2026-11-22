@@ -1,13 +1,14 @@
 /// Typed command error serialized to the webview as `{ code, message }`. The SPA
 /// maps `code` to its own error classes:
 ///   - `needs_login`   - no login on this machine → open the login modal.
-///   - `needs_unlock`  - login present, session locked → open the passphrase modal.
-///   - `bad_passphrase`- wrong passphrase in the unlock/login modal.
+///   - `needs_unlock`  - login present, session not open yet → call `unlock_jwt`.
+///   - `keyring_unavailable` - the key store did not answer; the sign-in is kept
+///     and a retry may open it.
 ///   - `no_pending` / `busy` - pending-plan resume edge cases.
 ///   - `pending_plan` - logout refused while a listing batch is still saved.
 ///   - `wfm` / `internal` - everything else, message shown verbatim.
 ///
-/// Never carries the JWT, the passphrase, or the WFM password.
+/// Never carries the JWT, its key, or the WFM password.
 #[derive(Debug, serde::Serialize, ts_rs::TS)]
 pub struct CmdError {
     pub code: &'static str,
@@ -30,13 +31,15 @@ impl CmdError {
     pub fn needs_unlock() -> Self {
         Self::of(
             "needs_unlock",
-            "Enter your passphrase to unlock warframe.market listing.",
+            "Opening your saved warframe.market sign-in.",
         )
     }
-    pub fn bad_passphrase() -> Self {
+    /// The key store did not answer. The detail is the store's own error,
+    /// which names a daemon or wallet, never the key.
+    pub fn keyring_unavailable(detail: &str) -> Self {
         Self::of(
-            "bad_passphrase",
-            "Wrong passphrase, or the login file was modified.",
+            "keyring_unavailable",
+            format!("Your system keyring didn't answer ({detail})."),
         )
     }
     pub fn wfm(e: anyhow::Error) -> Self {

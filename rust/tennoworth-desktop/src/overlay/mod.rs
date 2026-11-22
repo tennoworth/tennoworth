@@ -419,15 +419,29 @@ fn preview_monitor(app: &AppHandle) -> Result<tauri::Monitor, String> {
         .ok_or_else(|| "no monitor is available".to_string())
 }
 
+/// Where the preview is laid out. Under gamescope that is the game's own
+/// resolution, the space the overlay is placed in there.
+/// The area as x, y, width and height.
+fn preview_area(app: &AppHandle) -> Result<(i32, i32, u32, u32), String> {
+    #[cfg(target_os = "linux")]
+    if crate::gamescope::active() {
+        if let Some(size) = crate::vision::capture::warframe_window_size() {
+            return Ok((0, 0, size.0, size.1));
+        }
+    }
+    let monitor = preview_monitor(app)?;
+    let size = monitor.size();
+    let position = monitor.position();
+    Ok((position.x, position.y, size.width, size.height))
+}
+
 #[tauri::command]
 pub fn preview_relic_overlay(app: AppHandle, state: State<'_, OverlayState>) -> Result<(), String> {
-    let monitor = preview_monitor(&app)?;
-    let monitor_size = monitor.size();
-    let monitor_position = monitor.position();
-    let width = (monitor_size.width as f64 * 0.52).round().max(720.0) as u32;
+    let (area_x, area_y, area_width, area_height) = preview_area(&app)?;
+    let width = (area_width as f64 * 0.52).round().max(720.0) as u32;
     let height = 150u32;
-    let x = monitor_position.x + (monitor_size.width.saturating_sub(width) / 2) as i32;
-    let y = monitor_position.y + (monitor_size.height as f64 * 0.48).round() as i32;
+    let x = area_x + (area_width.saturating_sub(width) / 2) as i32;
+    let y = area_y + (area_height as f64 * 0.48).round() as i32;
     let names = [
         ("Forma Blueprint", None, None, true, false),
         (
@@ -581,13 +595,74 @@ pub fn scan_overlay_now(app: AppHandle) -> Result<(), String> {
     // The settings button is a hand-off to the game: leaving the dashboard in
     // front makes a correctly positioned transparent overlay look embedded in
     // Tennoworth instead. A global-shortcut capture already has Warframe in
-    // front and does not take this path.
+    // front and does not take this path. Gaming Mode has no tray and does not
+    // bring the game forward, so hiding there leaves a black screen and an app
+    // that cannot be reached again. It shows one app at a time and captures
+    // only what is in front, so wait for the player to switch to the game.
+    if crate::gamescope::active() {
+        return trigger_capture(&app, "settings button");
+    }
     if let Some(window) = app.get_webview_window("main") {
         window
             .hide()
             .map_err(|e| format!("hiding Tennoworth before capture: {e}"))?;
     }
     trigger_capture(&app, "settings button")
+}
+
+/// How long a capture waits, in Gaming Mode, for the game in front.
+const GAME_SWITCH_WAIT: Duration = Duration::from_secs(15);
+const GAME_FOCUS_POLL: Duration = Duration::from_millis(200);
+/// gamescope swaps the visible app on its next frames.
+const GAMESCOPE_SWAP_SETTLE: Duration = Duration::from_millis(400);
+
+/// Gaming Mode shows one app at a time and its screenshot holds only that app,
+/// so a capture taken while TennoWorth is in front reads TennoWorth: a reward
+/// screen the log announced while the player was here was never seen. Every
+/// capture there waits for the player to switch back to the game; the reward
+/// screen stays up meanwhile. True when it had to wait.
+fn wait_for_game_in_gaming_mode() -> Result<bool, String> {
+    if !crate::gamescope::active() {
+        return Ok(false);
+    }
+    let switched = wait_for_game_in_front(
+        crate::vision::focus::game_focus,
+        GAME_SWITCH_WAIT,
+        GAME_FOCUS_POLL,
+    )?;
+    if switched {
+        std::thread::sleep(GAMESCOPE_SWAP_SETTLE);
+    }
+    Ok(switched)
+}
+
+/// Ok(true) once the game came to the front after waiting, Ok(false) when it
+/// already was or focus cannot be read.
+fn wait_for_game_in_front(
+    mut focus: impl FnMut() -> crate::vision::focus::GameFocus,
+    wait: Duration,
+    poll: Duration,
+) -> Result<bool, String> {
+    use crate::vision::focus::GameFocus;
+    let deadline = Instant::now() + wait;
+    let mut waited = false;
+    loop {
+        match focus() {
+            GameFocus::Focused(_) => return Ok(waited),
+            // gamescope always names the app in front, so no answer means the
+            // X server could not be asked: capture as before rather than stall.
+            GameFocus::Unknown => return Ok(false),
+            GameFocus::Background => {}
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "capture_failed: Warframe was not brought to the front within {} seconds",
+                wait.as_secs()
+            ));
+        }
+        waited = true;
+        std::thread::sleep(poll);
+    }
 }
 
 pub fn register_configured_shortcut(app: &AppHandle) {
@@ -888,7 +963,12 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
     std::thread::Builder::new()
         .name("relic-capture".into())
         .spawn(move || {
-            if let Err(error) = capture_and_recognize(&app, &source, triggered_at) {
+            let result = wait_for_game_in_gaming_mode().and_then(|waited| {
+                // The reward names were drawn while the player was away.
+                let started = if waited { Instant::now() } else { triggered_at };
+                capture_and_recognize(&app, &source, started)
+            });
+            if let Err(error) = result {
                 eprintln!("tennoworth: relic scan ({source}) failed: {error}");
                 app.state::<OverlayState>().set_status("error", Some(error));
             }
