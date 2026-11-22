@@ -1289,3 +1289,51 @@ fn real_three_reward_capture_survives_common_display_shapes() {
         );
     }
 }
+
+fn focus_sequence(
+    answers: Vec<crate::vision::focus::GameFocus>,
+) -> (
+    impl FnMut() -> crate::vision::focus::GameFocus,
+    std::rc::Rc<std::cell::Cell<usize>>,
+) {
+    let asked = std::rc::Rc::new(std::cell::Cell::new(0));
+    let counter = asked.clone();
+    let focus = move || {
+        let index = counter.get();
+        counter.set(index + 1);
+        answers
+            .get(index)
+            .or(answers.last())
+            .copied()
+            .unwrap_or(crate::vision::focus::GameFocus::Unknown)
+    };
+    (focus, asked)
+}
+
+#[test]
+fn a_capture_waits_for_the_game_to_come_to_the_front() {
+    use crate::vision::focus::{GameFocus, GameWindow};
+    let game = GameFocus::Focused(GameWindow {
+        x: 0,
+        y: 0,
+        width: 1280,
+        height: 720,
+    });
+    let quick = Duration::from_millis(1);
+    let wait = Duration::from_secs(5);
+
+    let (focus, asked) = focus_sequence(vec![game]);
+    assert_eq!(wait_for_game_in_front(focus, wait, quick), Ok(false));
+    assert_eq!(asked.get(), 1);
+
+    let (focus, asked) = focus_sequence(vec![GameFocus::Background, GameFocus::Background, game]);
+    assert_eq!(wait_for_game_in_front(focus, wait, quick), Ok(true));
+    assert_eq!(asked.get(), 3);
+
+    let (focus, _) = focus_sequence(vec![GameFocus::Unknown]);
+    assert_eq!(wait_for_game_in_front(focus, wait, quick), Ok(false));
+
+    let (focus, _) = focus_sequence(vec![GameFocus::Background]);
+    let error = wait_for_game_in_front(focus, Duration::ZERO, quick).unwrap_err();
+    assert!(error.contains("not brought to the front"), "{error}");
+}

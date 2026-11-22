@@ -600,7 +600,7 @@ pub fn scan_overlay_now(app: AppHandle) -> Result<(), String> {
     // that cannot be reached again. It shows one app at a time and captures
     // only what is in front, so wait for the player to switch to the game.
     if crate::gamescope::active() {
-        return capture_after_switching_to_the_game(app);
+        return trigger_capture(&app, "settings button");
     }
     if let Some(window) = app.get_webview_window("main") {
         window
@@ -610,38 +610,59 @@ pub fn scan_overlay_now(app: AppHandle) -> Result<(), String> {
     trigger_capture(&app, "settings button")
 }
 
-/// How long the settings button waits, in Gaming Mode, for the game in front.
+/// How long a capture waits, in Gaming Mode, for the game in front.
 const GAME_SWITCH_WAIT: Duration = Duration::from_secs(15);
+const GAME_FOCUS_POLL: Duration = Duration::from_millis(200);
+/// gamescope swaps the visible app on its next frames.
+const GAMESCOPE_SWAP_SETTLE: Duration = Duration::from_millis(400);
 
-fn capture_after_switching_to_the_game(app: AppHandle) -> Result<(), String> {
-    std::thread::Builder::new()
-        .name("relic-capture-wait".into())
-        .spawn(move || {
-            let deadline = Instant::now() + GAME_SWITCH_WAIT;
-            while Instant::now() < deadline {
-                if matches!(
-                    crate::vision::focus::game_focus(),
-                    crate::vision::focus::GameFocus::Focused(_)
-                ) {
-                    // gamescope swaps the visible app on its next frames.
-                    std::thread::sleep(Duration::from_millis(400));
-                    if let Err(error) = trigger_capture(&app, "settings button") {
-                        app.state::<OverlayState>().set_status("error", Some(error));
-                    }
-                    return;
-                }
-                std::thread::sleep(Duration::from_millis(200));
-            }
-            app.state::<OverlayState>().set_status(
-                "error",
-                Some(
-                    "capture_failed: Warframe was not brought to the front within 15 seconds"
-                        .into(),
-                ),
-            );
-        })
-        .map(|_| ())
-        .map_err(|e| format!("starting capture wait: {e}"))
+/// Gaming Mode shows one app at a time and its screenshot holds only that app,
+/// so a capture taken while TennoWorth is in front reads TennoWorth: a reward
+/// screen the log announced while the player was here was never seen. Every
+/// capture there waits for the player to switch back to the game; the reward
+/// screen stays up meanwhile. True when it had to wait.
+fn wait_for_game_in_gaming_mode() -> Result<bool, String> {
+    if !crate::gamescope::active() {
+        return Ok(false);
+    }
+    let switched = wait_for_game_in_front(
+        crate::vision::focus::game_focus,
+        GAME_SWITCH_WAIT,
+        GAME_FOCUS_POLL,
+    )?;
+    if switched {
+        std::thread::sleep(GAMESCOPE_SWAP_SETTLE);
+    }
+    Ok(switched)
+}
+
+/// Ok(true) once the game came to the front after waiting, Ok(false) when it
+/// already was or focus cannot be read.
+fn wait_for_game_in_front(
+    mut focus: impl FnMut() -> crate::vision::focus::GameFocus,
+    wait: Duration,
+    poll: Duration,
+) -> Result<bool, String> {
+    use crate::vision::focus::GameFocus;
+    let deadline = Instant::now() + wait;
+    let mut waited = false;
+    loop {
+        match focus() {
+            GameFocus::Focused(_) => return Ok(waited),
+            // gamescope always names the app in front, so no answer means the
+            // X server could not be asked: capture as before rather than stall.
+            GameFocus::Unknown => return Ok(false),
+            GameFocus::Background => {}
+        }
+        if Instant::now() >= deadline {
+            return Err(format!(
+                "capture_failed: Warframe was not brought to the front within {} seconds",
+                wait.as_secs()
+            ));
+        }
+        waited = true;
+        std::thread::sleep(poll);
+    }
 }
 
 pub fn register_configured_shortcut(app: &AppHandle) {
@@ -942,7 +963,12 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
     std::thread::Builder::new()
         .name("relic-capture".into())
         .spawn(move || {
-            if let Err(error) = capture_and_recognize(&app, &source, triggered_at) {
+            let result = wait_for_game_in_gaming_mode().and_then(|waited| {
+                // The reward names were drawn while the player was away.
+                let started = if waited { Instant::now() } else { triggered_at };
+                capture_and_recognize(&app, &source, started)
+            });
+            if let Err(error) = result {
                 eprintln!("tennoworth: relic scan ({source}) failed: {error}");
                 app.state::<OverlayState>().set_status("error", Some(error));
             }
