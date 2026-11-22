@@ -85,7 +85,7 @@
     <a class="btn" href={answer.setOrdersUrl} target="_blank" rel="noopener noreferrer">Check current set orders</a>
     <a class="btn ghost" href="/desktop/">Personalize in the app</a>
   </div>
-  <p class="decision-handoff">Windows or Linux. Install the desktop app to compare against your locally scanned inventory.</p>
+  <p class="decision-handoff">Windows, Linux or Steam Deck. Install the desktop app to compare against your locally scanned inventory.</p>
   <p class="decision-evidence">{text.evidence}</p>
   <p class="decision-status" aria-live="polite">{status}</p>
   {#if stale}<p class="decision-stale">Updated since this page was built ({formatStampUtc(buildStamp)}). Shared previews may show the older snapshot.</p>{/if}

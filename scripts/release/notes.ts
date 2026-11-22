@@ -222,6 +222,6 @@ export function releaseNotesTemplate(version: string, date: string): string {
     `- **Short user-facing title** Explain what changed in plain English. <!-- app-note {"id":"replace-me","kind":"improved"} -->\n\n` +
     `## Updating\n\n` +
     `TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. ` +
-    `Downloads for Windows and Linux are available in the assets below.\n\n`;
+    `Downloads for Windows and Linux, including Steam Deck, are available in the assets below.\n\n`;
 }
 

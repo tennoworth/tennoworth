@@ -46,8 +46,8 @@ body:
     id: operating-system
     attributes:
       label: Operating system
-      description: Windows or Linux. Include your Windows version or Linux distribution if known.
-      placeholder: Windows 11, Fedora 43, Ubuntu 24.04, etc.
+      description: Windows, Linux or Steam Deck. Include your Windows version or Linux distribution if known, and on Steam Deck whether you were in Desktop Mode or Gaming Mode.
+      placeholder: Windows 11, Fedora 43, Ubuntu 24.04, Steam Deck (Gaming Mode), etc.
   - type: dropdown
     id: game-launch
     attributes:
