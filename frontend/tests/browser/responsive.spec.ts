@@ -368,6 +368,9 @@ test.describe('desktop responsive layout', () => {
   });
 
   test('all views and the complete navigation remain reachable', async ({ page }) => {
+    // One of the suite's longest tests (10-30 s locally). Four CI workers sharing
+    // four cores stretched one like it past the default limit, so all get triple.
+    test.slow();
     for (const width of [320, 560, 899, 900, 901, 1200]) {
       await page.setViewportSize({ width, height: width <= 560 ? 480 : 700 });
       for (const name of DESKTOP_VIEWS) {
