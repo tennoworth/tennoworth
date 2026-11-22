@@ -13639,6 +13639,93 @@ msgctxt "cal.event.rewardsMore"
 msgid "In-game event. Rewards include {rewards} and more."
 msgstr "游戏内活动。奖励包括 {rewards} 等。"
 
+#. Event title; rewards is a list such as "Kuva ×200,000".
+msgctxt "cal.alert.title"
+msgid "Alert: {rewards}"
+msgstr ""
+
+#. Short label in the month grid.
+#. Max 24 characters.
+msgctxt "cal.alert.short"
+msgid "Alert · {rewards}"
+msgstr ""
+
+#. One alert reward and how many of it.
+msgctxt "cal.alert.count"
+msgid "{item} ×{count}"
+msgstr ""
+
+#. An alert that pays only credits.
+msgctxt "cal.alert.credits"
+msgid "{credits} credits"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.alert.detail"
+msgid "A mission open for a limited time. Play it before it ends to collect the reward."
+msgstr ""
+
+#. Event description.
+msgctxt "cal.alert.detailCredits"
+msgid "A mission open for a limited time. Play it before it ends to collect the reward and {credits} credits."
+msgstr ""
+
+#. Booster name.
+msgctxt "cal.boost.resource-amount"
+msgid "Resource drop amount"
+msgstr ""
+
+#. Booster name.
+msgctxt "cal.boost.resource-chance"
+msgid "Resource drop chance"
+msgstr ""
+
+#. Booster name.
+msgctxt "cal.boost.affinity"
+msgid "Affinity"
+msgstr ""
+
+#. Booster name.
+msgctxt "cal.boost.credits"
+msgid "Credits"
+msgstr ""
+
+#. Booster name when its kind is unknown.
+msgctxt "cal.boost.other"
+msgid "Game-wide booster"
+msgstr ""
+
+#. Event title, e.g. "Resource drop amount ×2".
+msgctxt "cal.booster.title"
+msgid "{boost} ×{factor}"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.booster.detail"
+msgid "A booster for every player until it ends."
+msgstr ""
+
+#. Event title.
+msgctxt "cal.nightwave.season"
+msgid "Nightwave season"
+msgstr ""
+
+#. Event title: the break between Nightwave seasons.
+msgctxt "cal.nightwave.intermission"
+msgid "Nightwave intermission"
+msgstr ""
+
+#. Short label.
+#. Max 24 characters.
+msgctxt "cal.nightwave.short"
+msgid "Nightwave"
+msgstr ""
+
+#. Event description.
+msgctxt "cal.nightwave.detail"
+msgid "Nightwave Cred buys offerings such as aura mods, many of them tradeable. The offerings change when it ends."
+msgstr ""
+
 #. Event description.
 #, fuzzy
 msgctxt "cal.official.update"
@@ -13735,6 +13822,12 @@ msgstr "TennoWorth 通知"
 msgctxt "cal.kind.deal"
 msgid "Darvo deals"
 msgstr "Darvo 特惠"
+
+#. Event kind.
+#. Max 20 characters.
+msgctxt "cal.kind.nightwave"
+msgid "Nightwave"
+msgstr ""
 
 #. Event kind: the player's own daily/weekly checklist and monthly goals.
 #. Max 20 characters.

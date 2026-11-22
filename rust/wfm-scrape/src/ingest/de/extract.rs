@@ -1184,6 +1184,277 @@ pub fn deals_from_world(
     out
 }
 
+// ---------------------------------------------------------------------------
+// worldState → alerts, boosters and the Nightwave season
+// ---------------------------------------------------------------------------
+
+/// `uniqueName → name` from `ExportResources`.
+///
+/// Alert rewards are mostly untradeable resources that the market catalogue
+/// rightly cannot resolve, and the path alone misnames them: an Exilus Warframe
+/// Adapter is `.../UtilityUnlocker`. DE's own export names every one.
+pub fn resource_names(resources: Option<&Value>) -> HashMap<String, String> {
+    let Some(doc) = resources else {
+        return HashMap::new();
+    };
+    manifest_rows_for(doc, "ExportResources_en.json")
+        .iter()
+        .filter_map(|row| {
+            Some((
+                row.get("uniqueName")?.as_str()?.to_string(),
+                row.get("name")?.as_str()?.to_string(),
+            ))
+        })
+        .collect()
+}
+
+/// A reward's display name and, only when the catalogue resolves it, its slug.
+fn named_reward(
+    path: &str,
+    path_to_info: &HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+    names: &HashMap<String, String>,
+) -> (String, Option<String>) {
+    if let Some(info) = resolve_path(path, path_to_info, alias) {
+        if let Some(name) = info.get("name").and_then(|v| v.as_str()) {
+            let slug = info.get("slug").and_then(|v| v.as_str()).map(String::from);
+            return (name.to_string(), slug);
+        }
+    }
+    let bare = path.replacen("/Lotus/StoreItems/", "/Lotus/", 1);
+    if let Some(name) = names.get(path).or_else(|| names.get(&bare)) {
+        return (name.clone(), None);
+    }
+    (readable_from_path(path), None)
+}
+
+/// Alerts: a mission open for a few days that pays a fixed reward.
+///
+/// An alert with no dates or no recognised reward is skipped, which makes the
+/// child invalid as a whole (see `world_array_observation`) rather than
+/// publishing a subset beside a fresh stamp.
+pub fn alerts_from_world(
+    world: &Value,
+    path_to_info: &HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+    names: &HashMap<String, String>,
+    iso: impl Fn(i64) -> String,
+) -> Vec<Value> {
+    let mut out = Vec::new();
+    for alert in world
+        .get("Alerts")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&Vec::new())
+    {
+        let (Some(start), Some(end)) = (
+            de_millis(alert.get("Activation")),
+            de_millis(alert.get("Expiry")),
+        ) else {
+            continue;
+        };
+        let Some(reward) = alert.pointer("/MissionInfo/missionReward") else {
+            continue;
+        };
+        let mut rewards = Vec::new();
+        let mut push = |path: &str, count: i64| {
+            let (item, slug) = named_reward(path, path_to_info, alias, names);
+            let mut row = serde_json::Map::new();
+            row.insert("item".into(), Value::String(item));
+            row.insert("count".into(), Value::from(count));
+            if let Some(slug) = slug {
+                row.insert("slug".into(), Value::String(slug));
+            }
+            rewards.push(Value::Object(row));
+        };
+        for path in reward
+            .get("items")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_str())
+        {
+            push(path, 1);
+        }
+        for counted in reward
+            .get("countedItems")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+        {
+            if let Some(path) = counted.get("ItemType").and_then(|v| v.as_str()) {
+                let count = counted
+                    .get("ItemCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(1);
+                push(path, count);
+            }
+        }
+        let credits = reward
+            .get("credits")
+            .and_then(|v| v.as_i64())
+            .filter(|c| *c > 0);
+        if rewards.is_empty() && credits.is_none() {
+            continue;
+        }
+        let id = alert
+            .pointer("/_id/$oid")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| format!("{start}"));
+        let mut row = serde_json::Map::new();
+        row.insert("id".into(), Value::String(id));
+        row.insert("activation".into(), Value::String(iso(start)));
+        row.insert("expiry".into(), Value::String(iso(end)));
+        row.insert("rewards".into(), Value::Array(rewards));
+        if let Some(credits) = credits {
+            row.insert("credits".into(), Value::from(credits));
+        }
+        out.push(Value::Object(row));
+    }
+    out
+}
+
+/// Game-wide boosters (`GlobalUpgrades`), such as double resource drops.
+///
+/// DE's upgrade code is published as is; the reader words the ones it knows.
+pub fn boosters_from_world(world: &Value, iso: impl Fn(i64) -> String) -> Vec<Value> {
+    let mut out = Vec::new();
+    for boost in world
+        .get("GlobalUpgrades")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&Vec::new())
+    {
+        let (Some(start), Some(end), Some(upgrade), Some(value)) = (
+            de_millis(boost.get("Activation")),
+            de_millis(boost.get("ExpiryDate").or_else(|| boost.get("Expiry"))),
+            boost.get("UpgradeType").and_then(|v| v.as_str()),
+            boost.get("Value").and_then(|v| v.as_f64()),
+        ) else {
+            continue;
+        };
+        let mut row = serde_json::Map::new();
+        row.insert("activation".into(), Value::String(iso(start)));
+        row.insert("expiry".into(), Value::String(iso(end)));
+        row.insert("upgrade".into(), Value::String(upgrade.to_string()));
+        row.insert("value".into(), Value::from(value));
+        if let Some(op) = boost.get("OperationType").and_then(|v| v.as_str()) {
+            row.insert("operation".into(), Value::String(op.to_string()));
+        }
+        out.push(Value::Object(row));
+    }
+    out
+}
+
+/// The running Nightwave season, or `None` when `SeasonInfo` is absent or
+/// undated. DE's season number is not the one players see, so only the dates
+/// and whether it is an intermission are kept.
+pub fn nightwave_from_world(world: &Value, iso: impl Fn(i64) -> String) -> Option<Value> {
+    let season = world.get("SeasonInfo")?;
+    let start = de_millis(season.get("Activation"))?;
+    let end = de_millis(season.get("Expiry"))?;
+    let intermission = season
+        .get("AffiliationTag")
+        .and_then(|v| v.as_str())
+        .is_some_and(|tag| tag.contains("Intermission"));
+    Some(serde_json::json!({
+        "activation": iso(start),
+        "expiry": iso(end),
+        "intermission": intermission,
+    }))
+}
+
+#[cfg(test)]
+mod world_event_tests {
+    use super::*;
+
+    fn iso(ms: i64) -> String {
+        format!("ms:{ms}")
+    }
+
+    fn date(ms: i64) -> Value {
+        serde_json::json!({"$date": {"$numberLong": ms.to_string()}})
+    }
+
+    fn names() -> HashMap<String, String> {
+        resource_names(Some(&serde_json::json!({"ExportResources": [
+            {"uniqueName": "/Lotus/Types/Items/MiscItems/UtilityUnlocker", "name": "Exilus Warframe Adapter"},
+            {"uniqueName": "/Lotus/Types/Items/MiscItems/Kuva", "name": "Kuva"}
+        ]})))
+    }
+
+    #[test]
+    fn alert_rewards_take_de_s_resource_names_and_the_catalogue_s_slugs() {
+        let mut p2i = HashMap::new();
+        p2i.insert(
+            "/Lotus/Upgrades/Mods/Pistol/Expert/WeaponReloadSpeedModExpert".to_string(),
+            serde_json::json!({"name": "Primed Quickdraw", "slug": "primed_quickdraw"}),
+        );
+        let world = serde_json::json!({"Alerts": [
+            {"_id": {"$oid": "a1"}, "Activation": date(1000), "Expiry": date(2000),
+             "MissionInfo": {"missionReward": {"credits": 10000, "countedItems": [
+                {"ItemType": "/Lotus/Types/Items/MiscItems/Kuva", "ItemCount": 200000},
+                {"ItemType": "/Lotus/StoreItems/Types/Items/MiscItems/UtilityUnlocker", "ItemCount": 1}
+             ], "items": ["/Lotus/StoreItems/Upgrades/Mods/Pistol/Expert/WeaponReloadSpeedModExpert"]}}}
+        ]});
+        let rows = alerts_from_world(&world, &p2i, &HashMap::new(), &names(), iso);
+        assert_eq!(
+            rows,
+            vec![serde_json::json!({
+                "id": "a1", "activation": "ms:1000", "expiry": "ms:2000", "credits": 10000,
+                "rewards": [
+                    {"item": "Primed Quickdraw", "count": 1, "slug": "primed_quickdraw"},
+                    {"item": "Kuva", "count": 200000},
+                    {"item": "Exilus Warframe Adapter", "count": 1}
+                ]
+            })]
+        );
+    }
+
+    #[test]
+    fn an_alert_without_dates_or_rewards_is_dropped_and_an_unknown_path_stays_readable() {
+        let world = serde_json::json!({"Alerts": [
+            {"Activation": date(1000), "MissionInfo": {"missionReward": {"credits": 5}}},
+            {"Activation": date(1000), "Expiry": date(2000), "MissionInfo": {"missionReward": {}}},
+            {"Activation": date(1000), "Expiry": date(2000),
+             "MissionInfo": {"missionReward": {"countedItems": [{"ItemType": "/Lotus/Types/Items/MiscItems/NewThing"}]}}}
+        ]});
+        let rows = alerts_from_world(&world, &HashMap::new(), &HashMap::new(), &names(), iso);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["id"], "1000");
+        assert_eq!(
+            rows[0]["rewards"],
+            serde_json::json!([{"item": "New Thing", "count": 1}])
+        );
+    }
+
+    #[test]
+    fn boosters_read_either_expiry_field_and_keep_de_s_code() {
+        let world = serde_json::json!({"GlobalUpgrades": [
+            {"Activation": date(1), "ExpiryDate": date(2), "UpgradeType": "GAMEPLAY_PICKUP_AMOUNT", "OperationType": "MULTIPLY", "Value": 2},
+            {"Activation": date(3), "Expiry": date(4), "UpgradeType": "GAMEPLAY_KILL_XP_AMOUNT", "Value": 2},
+            {"Activation": date(5), "UpgradeType": "GAMEPLAY_PICKUP_RATE", "Value": 2}
+        ]});
+        assert_eq!(
+            boosters_from_world(&world, iso),
+            vec![
+                serde_json::json!({"activation": "ms:1", "expiry": "ms:2", "upgrade": "GAMEPLAY_PICKUP_AMOUNT", "operation": "MULTIPLY", "value": 2.0}),
+                serde_json::json!({"activation": "ms:3", "expiry": "ms:4", "upgrade": "GAMEPLAY_KILL_XP_AMOUNT", "value": 2.0}),
+            ]
+        );
+    }
+
+    #[test]
+    fn nightwave_keeps_its_dates_and_says_when_it_is_an_intermission() {
+        let world = serde_json::json!({"SeasonInfo": {"Activation": date(1), "Expiry": date(2), "AffiliationTag": "RadioLegionIntermission16Syndicate", "Season": 18}});
+        assert_eq!(
+            nightwave_from_world(&world, iso),
+            Some(serde_json::json!({"activation": "ms:1", "expiry": "ms:2", "intermission": true}))
+        );
+        let undated = serde_json::json!({"SeasonInfo": {"Activation": date(1)}});
+        assert_eq!(nightwave_from_world(&undated, iso), None);
+        assert_eq!(nightwave_from_world(&serde_json::json!({}), iso), None);
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

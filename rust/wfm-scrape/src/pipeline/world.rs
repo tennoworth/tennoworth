@@ -9,6 +9,9 @@ use std::collections::{BTreeMap, HashMap};
 pub(super) struct WorldSurfaces {
     pub(super) vault: Reconciled<Vec<serde_json::Value>>,
     pub(super) deals: Reconciled<Vec<serde_json::Value>>,
+    pub(super) alerts: Reconciled<Vec<serde_json::Value>>,
+    pub(super) boosters: Reconciled<Vec<serde_json::Value>>,
+    pub(super) nightwave: Reconciled<Vec<serde_json::Value>>,
     pub(super) goals: Reconciled<BTreeMap<String, serde_json::Value>>,
     pub(super) events: Reconciled<BTreeMap<String, serde_json::Value>>,
 }
@@ -17,6 +20,7 @@ pub(super) fn reconcile_children(
     de_world_observation: &Observation<serde_json::Value>,
     path_to_info_for_de: &HashMap<String, serde_json::Value>,
     de_alias: &HashMap<String, String>,
+    resource_names: &HashMap<String, String>,
     prior: &serde_json::Value,
     prior_child_stamps: &BTreeMap<String, String>,
     now: Timestamp,
@@ -32,6 +36,14 @@ pub(super) fn reconcile_children(
     let deals_old: Option<Vec<serde_json::Value>> = prior_de
         .and_then(|d| d.get("deals"))
         .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let carried = |key: &str| -> Option<Vec<serde_json::Value>> {
+        prior_de
+            .and_then(|d| d.get(key))
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+    };
+    let alerts_old = carried("alerts");
+    let boosters_old = carried("boosters");
+    let nightwave_old = carried("nightwave");
     let goals_old: Option<std::collections::BTreeMap<String, serde_json::Value>> = prior
         .get("event_rewards")
         .and_then(|v| v.get("goals"))
@@ -79,6 +91,58 @@ pub(super) fn reconcile_children(
             .map(|s| s.as_str()),
         now,
         STALE_DAYS,
+    );
+    let iso = |ms| clock::iso_z(clock::from_millis(ms));
+    let array_observation = |key: &str, rows: Vec<serde_json::Value>| match de_world_observation {
+        Observation::Unavailable => Observation::Unavailable,
+        Observation::Invalid => Observation::Invalid,
+        Observation::Usable { .. } => de::world_array_observation(de_world, key, rows),
+        Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
+    };
+    let alerts_observation = array_observation(
+        "Alerts",
+        de_world
+            .map(|w| {
+                de_extract::alerts_from_world(w, path_to_info_for_de, de_alias, resource_names, iso)
+            })
+            .unwrap_or_default(),
+    );
+    let boosters_observation = array_observation(
+        "GlobalUpgrades",
+        de_world
+            .map(|w| de_extract::boosters_from_world(w, iso))
+            .unwrap_or_default(),
+    );
+    // One season object, not an array. Its absence is not evidence that no
+    // season runs, so only a dated season is usable; anything else carries.
+    let nightwave_observation = match de_world_observation {
+        Observation::Unavailable => Observation::Unavailable,
+        Observation::Usable { data, .. } => match de_extract::nightwave_from_world(data, iso) {
+            Some(row) => Observation::usable(vec![row]),
+            None => Observation::Invalid,
+        },
+        _ => Observation::Invalid,
+    };
+    let world_child = |key: &str, observation, old: Option<&Vec<serde_json::Value>>| {
+        reconcile(
+            key,
+            observation,
+            old,
+            prior_child_stamps.get(key).map(|s| s.as_str()),
+            now,
+            STALE_DAYS,
+        )
+    };
+    let r_world_alerts = world_child("world.alerts", alerts_observation, alerts_old.as_ref());
+    let r_world_boosters = world_child(
+        "world.boosters",
+        boosters_observation,
+        boosters_old.as_ref(),
+    );
+    let r_world_nightwave = world_child(
+        "world.nightwave",
+        nightwave_observation,
+        nightwave_old.as_ref(),
     );
     let r_world_deals = reconcile(
         "world.deals",
@@ -149,6 +213,9 @@ pub(super) fn reconcile_children(
     WorldSurfaces {
         vault: r_world_vault,
         deals: r_world_deals,
+        alerts: r_world_alerts,
+        boosters: r_world_boosters,
+        nightwave: r_world_nightwave,
         goals: r_world_goals,
         events: r_world_events,
     }

@@ -22,6 +22,16 @@ describe('eventWords', () => {
     expect(eventWords({ kind: 'event', title: 'Heat Fissure', rewards: [] }).detail).toBe('In-game event.');
   });
 
+  it('words alerts by their rewards, boosters by what they raise, and Nightwave by its phase', () => {
+    expect(eventWords({ kind: 'alert', rewards: [{ item: 'Kuva', count: 200000 }, { item: 'Exilus Warframe Adapter', count: 1 }], credits: 10000 }))
+      .toEqual({ title: 'Alert: Kuva ×200,000 and Exilus Warframe Adapter', short: 'Alert · Kuva ×200,000 and Exilus Warframe Adapter', detail: 'A mission open for a limited time. Play it before it ends to collect the reward and 10,000 credits.' });
+    expect(eventWords({ kind: 'alert', rewards: [], credits: 5000 }).title).toBe('Alert: 5,000 credits');
+    expect(eventWords({ kind: 'booster', boost: 'resource-amount', factor: 2 }).title).toBe('Resource drop amount ×2');
+    expect(eventWords({ kind: 'booster', boost: 'other', factor: null }).title).toBe('Game-wide booster');
+    expect(eventWords({ kind: 'nightwave', intermission: true }).title).toBe('Nightwave intermission');
+    expect(eventWords({ kind: 'nightwave', intermission: false }).title).toBe('Nightwave season');
+  });
+
   it('prefers an announcement’s own note, and falls back by its type', () => {
     expect(eventWords({ kind: 'official', title: 'Update 41', note: 'Patch notes follow at release.', type: 'update' }).detail).toBe('Patch notes follow at release.');
     expect(eventWords({ kind: 'official', title: 'Devstream 200', note: null, type: 'devstream' }).detail).toMatch(/^DE presents what is coming next/);
