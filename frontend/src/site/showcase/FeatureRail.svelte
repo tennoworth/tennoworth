@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fitTable } from '../../ui/table-fit';
   // The breadth reveal on the hosted landing ({#if !isDesktop} in App.svelte,
   // after DesktopShowcase, before the FAQ).
   //
@@ -207,7 +208,7 @@
           {:else}
           <p class="desc">{t.blurb}</p>
 
-          <div class="mini scroll">
+          <div class="mini scroll" use:fitTable>
             {#if t.id === 'sell'}
               <table class="tw">
                 <thead><tr>
