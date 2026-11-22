@@ -203,6 +203,28 @@ step fails, and asserts the report whenever the probe ran at all. Previously a
 timeout skipped the assertion entirely, so the run's own diagnosis never reached
 the log.
 
+### Playwright workers (November 22)
+
+The responsive browser suite was the longest step of `audit`, and `audit`
+had become the gate a pull request waits on: `frontend-check` took 15-25
+minutes against roughly 10 for `ui-smoke`. Playwright defaults to half the
+runner's cores, so GitHub's 4-core Linux runners ran the 426 tests on 2
+workers. `playwright.config.ts` now sets 4 in CI.
+
+| | Responsive step | `frontend-check` |
+|---|---:|---:|
+| 2 workers, last 16 successful PR runs | 690-1062 s, median 843 s | median about 1300 s |
+| 4 workers, [run 45028742919](https://github.com/tennoworth/tennoworth/actions/runs/45028742919) attempt 1 | 683 s | 965 s |
+| 4 workers, same run, attempt 2 | 607 s | 842 s |
+
+Both samples beat the fastest two-worker run, every test passed, and runner
+time fell rather than rose. Two alternatives were measured first and
+dropped. Serving the suite a bundled development build instead of the Vite dev
+server made page loads 2-3x faster (Chromium 0.14 s against 0.44 s, 54
+requests against 324), but most tests failed or timed out against it. Caching
+the admin gate's cold publisher build (43 s per run) was not added because the
+repository's Actions cache already held 9.86 of its 10 GB.
+
 ## Measured and rejected
 
 - Playwright sharding: splitting the responsive gate across a matrix would cut
@@ -214,6 +236,10 @@ the log.
   buy nothing on the critical path while adding a matrix job, per-shard artifact
   names and a `CONTRIBUTING.md` update. Revisit if `ui-smoke` falls below about
   5 minutes, at which point audit becomes the gate that decides the wait.
+  By November 2026 the suite had grown until audit decided the wait without
+  that (see "Playwright workers" above). Sharding would shorten it further, but
+  each shard repeats about two minutes of setup, so it adds runner work; using
+  all four cores of one runner came first.
 - `arithmetic_side_effects`: roughly 31 distinct sites, dominated by index
   counters and deliberate date arithmetic; no useful finding.
 - `as_conversions`: roughly 15 sites, mostly date math and bounded conversions.
