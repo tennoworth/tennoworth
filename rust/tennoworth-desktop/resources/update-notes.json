@@ -1,5 +1,5 @@
 {
-  "version": "0.10.105",
+  "version": "0.10.106",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2362,6 +2362,56 @@
           "kind": "improved",
           "title": "Every screen translated",
           "body": "The screens that still showed English in other languages are now translated in all 15 languages. Corrections from native speakers are welcome.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.106",
+      "date": "2026-11-22",
+      "changes": [
+        {
+          "id": "gaming-mode-layout",
+          "kind": "improved",
+          "title": "A controller layout for Gaming Mode",
+          "body": "Started from Steam's Gaming Mode, TennoWorth opens a layout sized for the Deck's screen: Sell now, Rewards, Orders and Setup, with LB and RB to move between them and A, B, X and Y to select, go back, act and scan. A relic reward scan waits for Warframe to be back in front before it reads the screen. The full layout stays one choice away in Setup.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "no-signin-passphrase",
+          "kind": "improved",
+          "title": "No more sign-in passphrase",
+          "body": "Signing in to warframe.market no longer asks you to choose a passphrase, and later launches never ask for one. The saved sign-in is encrypted with a key kept in your system keyring, or in a file only your user can read where there is no keyring, as in Steam Deck Gaming Mode. If you signed in with \"Remember on this device\", you stay signed in; otherwise sign in once more.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "signin-window-audio-crash",
+          "kind": "fixed",
+          "title": "The sign-in window works on more Linux systems",
+          "body": "On systems without GStreamer's audio plugins, including SteamOS, the warframe.market sign-in page crashed a few seconds after opening and the app fell back to asking for a pasted session token. The AppImage now carries those plugins. In Steam Deck Gaming Mode the sign-in also fills the screen.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "calendar-world-events",
+          "kind": "improved",
+          "title": "Alerts, boosters and Nightwave on the Calendar",
+          "body": "The Calendar now shows the game's alerts with their rewards, such as Kuva or an Exilus Adapter, and game-wide boosters such as double resource drops, both under In-game events. The running Nightwave season and when it ends have their own filter.",
           "platforms": [
             "windows",
             "linux"

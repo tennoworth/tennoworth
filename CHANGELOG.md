@@ -54,6 +54,33 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.106 - 2026-11-22
+
+# 🎮 TennoWorth Desktop 0.10.106
+
+TennoWorth Desktop 0.10.106 is ready.
+
+This release is for anyone playing on a Steam Deck or Linux. Started from Steam's Gaming Mode, TennoWorth now opens a controller layout made for the Deck, and the warframe.market sign-in works there and on other Linux systems where it used to crash. Signing in no longer asks for a passphrase on any system, and the Calendar now shows the game's alerts, boosters and Nightwave season.
+
+## Changelog (4)
+
+### Steam Deck
+
+- **A controller layout for Gaming Mode** Started from Steam's Gaming Mode, TennoWorth opens a layout sized for the Deck's screen: Sell now, Rewards, Orders and Setup, with LB and RB to move between them and A, B, X and Y to select, go back, act and scan. A relic reward scan waits for Warframe to be back in front before it reads the screen. The full layout stays one choice away in Setup. <!-- app-note {"id":"gaming-mode-layout","kind":"improved"} -->
+
+### Selling
+
+- **No more sign-in passphrase** Signing in to warframe.market no longer asks you to choose a passphrase, and later launches never ask for one. The saved sign-in is encrypted with a key kept in your system keyring, or in a file only your user can read where there is no keyring, as in Steam Deck Gaming Mode. If you signed in with "Remember on this device", you stay signed in; otherwise sign in once more. <!-- app-note {"id":"no-signin-passphrase","kind":"improved"} -->
+- **The sign-in window works on more Linux systems** On systems without GStreamer's audio plugins, including SteamOS, the warframe.market sign-in page crashed a few seconds after opening and the app fell back to asking for a pasted session token. The AppImage now carries those plugins. In Steam Deck Gaming Mode the sign-in also fills the screen. <!-- app-note {"id":"signin-window-audio-crash","kind":"fixed"} -->
+
+### Calendar
+
+- **Alerts, boosters and Nightwave on the Calendar** The Calendar now shows the game's alerts with their rewards, such as Kuva or an Exilus Adapter, and game-wide boosters such as double resource drops, both under In-game events. The running Nightwave season and when it ends have their own filter. <!-- app-note {"id":"calendar-world-events","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux, including Steam Deck, are available in the assets below.
+
 ## 0.10.105 - 2026-11-20
 
 # 📈 TennoWorth Desktop 0.10.105
@@ -1324,15 +1351,6 @@ Finish or discard pending Trade Session listing batches before downgrading; olde
 ## Unreleased
 
 *Fold this into the next version's section when you run `release.ts prepare`.*
-
-### Selling
-
-- **No more sign-in passphrase** Signing in to warframe.market no longer asks you to choose a passphrase, and later launches never ask for one. The saved sign-in is encrypted with a key kept in your system keyring, or in a file only your user can read where there is no keyring, as in Steam Deck Gaming Mode. If you signed in with "Remember on this device", you stay signed in; otherwise sign in once more. <!-- app-note {"id":"no-signin-passphrase","kind":"improved"} -->
-- **The sign-in window works on more Linux systems** On systems without GStreamer's audio plugins, including SteamOS, the warframe.market sign-in page crashed a few seconds after opening and the app fell back to asking for a pasted session token. The AppImage now carries those plugins. In Steam Deck Gaming Mode the sign-in also fills the screen. <!-- app-note {"id":"signin-window-audio-crash","kind":"fixed"} -->
-
-### Calendar
-
-- **Alerts, boosters and Nightwave on the Calendar** The Calendar now shows the game's alerts with their rewards, such as Kuva or an Exilus Adapter, and game-wide boosters such as double resource drops, both under In-game events. The running Nightwave season and when it ends have their own filter. <!-- app-note {"id":"calendar-world-events","kind":"improved"} -->
 
 ## 0.6.0 - 2026-08-22
 
