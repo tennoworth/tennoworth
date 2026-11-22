@@ -1,6 +1,6 @@
 # TennoWorth
 
-**A Windows and Linux Warframe inventory dashboard built around one decision: what is worth selling now?**
+**A Warframe inventory dashboard for Windows, Linux and Steam Deck, built around one decision: what is worth selling now?**
 
 TennoWorth joins the inventory for your current Warframe session with
 warframe.market prices, Digital Extremes drop tables, vault rotations, usage
@@ -148,6 +148,30 @@ but it can read any process on the machine, including root's, and code that
 gets into the app as you - a GTK module named in your own settings, for
 example - can use it. The app keeps the capability inactive except while it
 opens the game's memory, which prevents accidental use but not deliberate use.
+
+### Steam Deck
+
+The Steam Deck uses the same Linux AppImage and the same glibc floor.
+
+1. In Desktop Mode, download `TennoWorth-x86_64.AppImage` as shown above and
+   make it executable.
+2. In Steam, choose **Games → Add a Non-Steam Game to My Library** and pick the
+   AppImage.
+3. Return to Gaming Mode and start TennoWorth from your library, alongside
+   Warframe.
+
+In Gaming Mode TennoWorth opens a controller layout sized for the Deck's
+screen: **Sell now**, **Rewards**, **Orders** and **Setup**, with LB and RB
+moving between them. Signing in to warframe.market uses Steam's on-screen
+keyboard, and the sign-in window fills the screen. Gaming Mode has no system
+keyring, so the saved sign-in is encrypted with a key kept in a file only your
+user can read. Gaming Mode shows one app at a time: switch between Warframe and
+TennoWorth from the Steam menu. The full desktop layout stays one choice away
+in **Setup**, and Desktop Mode behaves like any Linux desktop.
+
+If the scan reports a ptrace permission error, follow the Linux steps above.
+
+### Reward overlay
 
 The optional reward overlay works with Borderless Fullscreen or Windowed mode
 on both platforms. Windows and X11 use direct window capture. Wayland capture

@@ -9,7 +9,7 @@
   <Links />
   <section class="ui-panel public-prose" id="desktop">
     <h2>Your inventory, ranked locally</h2>
-    <p>The free Windows and Linux desktop app compares your owned items, sets, parts and ducat value. No Overwolf. Your inventory stays on your machine.</p>
+    <p>The free desktop app for Windows, Linux and Steam Deck compares your owned items, sets, parts and ducat value. No Overwolf. Your inventory stays on your machine.</p>
     <a href="/desktop/">Explore the desktop app and downloads</a>
   </section>
   <Faq />

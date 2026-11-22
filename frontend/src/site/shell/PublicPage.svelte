@@ -72,7 +72,7 @@
       <p>Or choose a selling guide above, or go to the <a href="/">homepage</a>.</p>
     {:else if kind === 'desktop'}
       <p>Find the tradeable items you own that are worth a closer look. TennoWorth ranks your inventory, compares sets and parts, and helps you review your next sale.</p>
-      <p>Free and open source for Windows and Linux. No Overwolf. No TennoWorth account. Your inventory stays on your machine.</p>
+      <p>Free and open source for Windows, Linux and Steam Deck. No Overwolf. No TennoWorth account. Your inventory stays on your machine.</p>
       <h2>From inventory to selling decision</h2>
       <ol><li>Launch Warframe and log in, then open TennoWorth.</li><li>Scan inventory. Review your ranked sell list and keep the items you still need.</li><li>Compare sets, parts and ducat value. Check market activity before choosing a price.</li><li>Optionally sign in to warframe.market in the app to review and manage listings.</li></ol>
       <h2>See the selling workflow</h2>
@@ -82,8 +82,11 @@
       <p>Download the .exe installer from the latest release. The installer is unsigned, so Windows SmartScreen may warn. Check the release checksums and trust information before running it.</p>
       <p><a class="btn primary" href="https://github.com/tennoworth/tennoworth/releases/latest">Download for Windows</a></p>
       <h2>Linux</h2>
-      <p>Download the AppImage, make it executable, and launch it. Reading the running game can require an additional ptrace permission step; follow the Linux setup instructions for your system. Linux support alone does not establish Steam Deck game-mode support.</p>
+      <p>Download the AppImage, make it executable, and launch it. Reading the running game can require an additional ptrace permission step; follow the Linux setup instructions for your system.</p>
       <p><a class="btn primary" href="https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage">Download Linux AppImage</a> <a href="https://github.com/tennoworth/tennoworth#linux">Linux setup and permissions</a></p>
+      <h2>Steam Deck</h2>
+      <p>The same AppImage runs on Steam Deck. Download it in Desktop Mode and add it to Steam as a non-Steam game, then start it from Gaming Mode. There it opens a controller layout: what to sell now, relic rewards and your warframe.market orders, all on the controller, with Steam’s on-screen keyboard for the sign-in. Switch between Warframe and TennoWorth from the Steam menu.</p>
+      <p><a href="https://github.com/tennoworth/tennoworth#steam-deck">Steam Deck setup</a></p>
       <h2>What stays local?</h2>
       <p>The desktop app reads the running game’s memory to obtain short-lived credentials, then requests inventory from Digital Extremes. It does not write game memory or inject gameplay input. Optional warframe.market operations make network requests. Usage and price sharing are optional.</p>
       <p>No third-party tool can promise freedom from bans. Read the <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md">security and privacy explanation</a> before scanning. This website has no inventory uploads or visitor analytics.</p>
@@ -148,7 +151,7 @@
         <p><a href="/guides/sell-prime-sets-or-parts/">How to compare sets and parts</a> · <a href="/tools/ducats-vs-platinum/">Compare ducat opportunity cost</a></p>
       {/if}
       <h2>Make it personal</h2>
-      <p>This page compares public prices. <a href="/desktop/">TennoWorth for Windows and Linux</a> adds your locally scanned inventory so you can review which of these items you actually own.</p>
+      <p>This page compares public prices. <a href="/desktop/">TennoWorth for Windows, Linux and Steam Deck</a> adds your locally scanned inventory so you can review which of these items you actually own.</p>
     {/if}
     {#if kind === 'troubleshooting'}
       <div class="ui-stack selling-article">
@@ -170,7 +173,7 @@
         <p>Remove sold listings, check quantities against your latest inventory and keep crafting copies. If messages arrive faster than you can answer, hide some listings and work through a smaller batch. Check the actual item and total in Warframe before confirming the trade.</p>
         <p><a href="https://forums.warframe.com/announcement/44-trading-guide-faq-tips-guidelines/">Digital Extremes’ trading guide</a> explains the in-game trade. Refer to <a href="https://warframe.market/faq">warframe.market’s current help</a> for marketplace questions.</p>
         <h2>Review the problem with your own inventory</h2>
-        <p><a href="/desktop/">TennoWorth for Windows and Linux</a> brings your locally scanned inventory and listing checks together. You can use the explanations and public comparisons on this site without installing anything or signing in.</p>
+        <p><a href="/desktop/">TennoWorth for Windows, Linux and Steam Deck</a> brings your locally scanned inventory and listing checks together. You can use the explanations and public comparisons on this site without installing anything or signing in.</p>
 
       </div>
     {/if}
