@@ -1010,6 +1010,7 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 [data-kind="notice"] { --k: var(--good); }
 [data-kind="routine"] { --k: var(--routine); }
 [data-kind="deal"] { --k: var(--muted); }
+[data-kind="nightwave"] { --k: var(--muted); }
 
 /* Focus-only links let a keyboard cross long navigation and market tables. */
 .skip-navigation {

@@ -642,12 +642,16 @@ pub fn build(
     let world::WorldSurfaces {
         vault: r_world_vault,
         deals: r_world_deals,
+        alerts: r_world_alerts,
+        boosters: r_world_boosters,
+        nightwave: r_world_nightwave,
         goals: r_world_goals,
         events: r_world_events,
     } = world::reconcile_children(
         &de_world_observation,
         &path_to_info_for_de,
         &de_alias,
+        &de_extract::resource_names(de_snap.manifests.get("ExportResources_en.json")),
         &prior,
         &prior_child_stamps,
         now,
@@ -715,6 +719,9 @@ pub fn build(
     provenance!("usage", r_usage);
     provenance!("world.vault_rotation", r_world_vault);
     provenance!("world.deals", r_world_deals);
+    provenance!("world.alerts", r_world_alerts);
+    provenance!("world.boosters", r_world_boosters);
+    provenance!("world.nightwave", r_world_nightwave);
     provenance!("world.goals", r_world_goals);
     provenance!("world.events", r_world_events);
     if let Some(p) = surface_provenance.get_mut("relic_rewards") {
@@ -773,6 +780,12 @@ pub fn build(
                 r_world_vault.fetched_at.clone(),
             );
             stamps.insert("world.deals".into(), r_world_deals.fetched_at.clone());
+            stamps.insert("world.alerts".into(), r_world_alerts.fetched_at.clone());
+            stamps.insert("world.boosters".into(), r_world_boosters.fetched_at.clone());
+            stamps.insert(
+                "world.nightwave".into(),
+                r_world_nightwave.fetched_at.clone(),
+            );
             stamps.insert("world.goals".into(), r_world_goals.fetched_at.clone());
             stamps.insert("world.events".into(), r_world_events.fetched_at.clone());
             stamps.insert("de.dispositions".into(), disposition_fetched_at);
@@ -789,6 +802,9 @@ pub fn build(
         },
         vault_rotation: r_world_vault.data,
         deals: r_world_deals.data,
+        alerts: r_world_alerts.data,
+        boosters: r_world_boosters.data,
+        nightwave: r_world_nightwave.data,
         ducats: de_ducats,
         dispositions: de_dispositions,
     };

@@ -85,6 +85,11 @@
     baro: { activation: calendarAt(3), expiry: calendarAt(5), location: 'Sample Relay' },
     calendar: { resurgence_current: { from: calendarAt(-12), to: calendarAt(16), frames: ['sample_prime_set', 'example_prime_set'] } },
     event_rewards: { goals: { sample: { id: 'sample', source: 'goal' as const, title: 'Sample Operation', starts_at: calendarAt(-6), ends_at: calendarAt(8), completeness: 'complete' as const, groups: [] } } },
+    de: {
+      alerts: [{ id: 'sample-alert', activation: calendarAt(-1), expiry: calendarAt(2), credits: 10000, rewards: [{ item: 'Sample Resource', count: 50000 }] }],
+      boosters: [{ activation: calendarAt(1), expiry: calendarAt(4), upgrade: 'GAMEPLAY_PICKUP_AMOUNT', operation: 'MULTIPLY', value: 2 }],
+      nightwave: [{ activation: calendarAt(-40), expiry: calendarAt(60), intermission: false }],
+    },
   };
   const calendarRoutines: CalendarEvent[] = [{
     id: 'sample-routine-weekly', kind: 'routine', from: Date.parse(calendarAt(3)), to: null, estimate: false, source: 'routine',

@@ -68,6 +68,24 @@ fn build_uses_de_export_and_world_state() {
         "announced vault rotation"
     );
     assert_eq!(de["deals"][0]["discount"], 40, "Darvo's daily deal");
+    assert_eq!(
+        de["alerts"][0]["rewards"][0],
+        serde_json::json!({"item": "Exilus Warframe Adapter", "count": 1}),
+        "an untradeable alert reward is named from ExportResources, with no slug"
+    );
+    assert_eq!(de["alerts"][0]["credits"], 10000);
+    assert_eq!(de["boosters"][0]["upgrade"], "GAMEPLAY_PICKUP_AMOUNT");
+    assert_eq!(de["nightwave"][0]["intermission"], true);
+    for child in ["world.alerts", "world.boosters", "world.nightwave"] {
+        assert_eq!(
+            de["child_fetched_at"][child], "2026-07-01T12:00:00Z",
+            "{child}"
+        );
+        assert_eq!(
+            snap["surface_provenance"][child]["disposition"], "published_fresh",
+            "{child}"
+        );
+    }
 
     // One relic, not four: Bronze/Silver/Gold/Platinum are refinement variants
     // of the same relic and carry identical reward lists.
@@ -230,6 +248,15 @@ fn world_children_reconcile_independently_and_only_literal_empty_clears() {
     let valid_deal = world["DailyDeals"].as_array().unwrap()[0].clone();
     world.remove("DailyDeals");
     world.insert("PrimeVaultTraders".into(), serde_json::json!([]));
+    // A season between polls is not evidence that none runs, an undated
+    // booster beside a valid one spoils the child, and only [] ends alerts.
+    world.remove("SeasonInfo");
+    let valid_boost = world["GlobalUpgrades"][0].clone();
+    world.insert(
+        "GlobalUpgrades".into(),
+        serde_json::json!([valid_boost, {"UpgradeType": "GAMEPLAY_KILL_XP_AMOUNT"}]),
+    );
+    world.insert("Alerts".into(), serde_json::json!([]));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
     let second = run(
@@ -272,6 +299,22 @@ fn world_children_reconcile_independently_and_only_literal_empty_clears() {
     assert_eq!(
         snap["surface_provenance"]["world.vault_rotation"]["disposition"],
         "cleared_authoritative_empty"
+    );
+    for (child, kept, disposition) in [
+        ("nightwave", true, "preserved_invalid"),
+        ("boosters", true, "preserved_invalid"),
+        ("alerts", false, "cleared_authoritative_empty"),
+    ] {
+        assert_eq!(snap["de"].get(child).is_some(), kept, "{child}");
+        assert_eq!(
+            snap["surface_provenance"][format!("world.{child}")]["disposition"],
+            disposition,
+            "{child}"
+        );
+    }
+    assert_eq!(
+        snap["de"]["child_fetched_at"]["world.nightwave"], "2026-07-01T12:00:00Z",
+        "a carried season keeps its own age"
     );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
@@ -741,8 +784,8 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     assert!(second.status.success());
     let second_err = String::from_utf8_lossy(&second.stderr).to_string();
     assert!(
-        second_err.contains("3 skipped as unchanged") && second_err.contains("3 fetched"),
-        "a warm run skips the three carryable manifests and still pulls the three \
+        second_err.contains("2 skipped as unchanged") && second_err.contains("4 fetched"),
+        "a warm run skips the two carryable manifests and still pulls the four \
          whose data cannot be carried:\n{second_err}"
     );
     // The relic manifest is never skipped: its table resolves through
@@ -764,6 +807,12 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     assert!(
         !snap["relic_rewards"].as_object().unwrap().is_empty(),
         "a skipped manifest must not blank the surface it feeds"
+    );
+    // Alerts are rebuilt every cycle, so their names need ExportResources
+    // every cycle, not only when its hash moves.
+    assert_eq!(
+        snap["de"]["alerts"][0]["rewards"][0]["item"], "Exilus Warframe Adapter",
+        "a warm run must still name alert rewards from ExportResources"
     );
 
     // The bug this test missed the first time: non-empty is not enough. A warm

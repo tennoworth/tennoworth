@@ -66,7 +66,74 @@
         ],
         "Node": "PlutoHUB"
       }
-    ]
+    ],
+    "Alerts": [
+      {
+        "_id": {
+          "$oid": "6ae0fixturealert"
+        },
+        "Activation": {
+          "$date": {
+            "$numberLong": "1787317200000"
+          }
+        },
+        "Expiry": {
+          "$date": {
+            "$numberLong": "1787490000000"
+          }
+        },
+        "Tag": "LotusGift",
+        "MissionInfo": {
+          "missionType": "MT_EXTERMINATION",
+          "descText": "/Lotus/Language/Alerts/LotusGiftDesc",
+          "missionReward": {
+            "credits": 10000,
+            "countedItems": [
+              {
+                "ItemType": "/Lotus/Types/Items/MiscItems/UtilityUnlocker",
+                "ItemCount": 1
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "GlobalUpgrades": [
+      {
+        "_id": {
+          "$oid": "6ae3fixtureboost"
+        },
+        "Activation": {
+          "$date": {
+            "$numberLong": "1787317200000"
+          }
+        },
+        "ExpiryDate": {
+          "$date": {
+            "$numberLong": "1787490000000"
+          }
+        },
+        "UpgradeType": "GAMEPLAY_PICKUP_AMOUNT",
+        "OperationType": "MULTIPLY",
+        "Value": 2,
+        "ValidType": "/Lotus/Types/Items/MiscItems/ResourceItem"
+      }
+    ],
+    "SeasonInfo": {
+      "Activation": {
+        "$date": {
+          "$numberLong": "1786039200000"
+        }
+      },
+      "Expiry": {
+        "$date": {
+          "$numberLong": "1798000000000"
+        }
+      },
+      "AffiliationTag": "RadioLegionIntermission16Syndicate",
+      "Season": 18,
+      "Phase": 0
+    }
   },
   "https://api.warframe.market/v2/items": {
     "data": [
@@ -356,7 +423,15 @@
     ]
   },
   "https://content.warframe.com/PublicExport/Manifest/ExportResources_en.json!00_rESOURCEShash": {
-    "ExportResources": []
+    "ExportResources": [
+      {
+        "uniqueName": "/Lotus/Types/Items/MiscItems/UtilityUnlocker",
+        "name": "Exilus Warframe Adapter",
+        "description": "",
+        "codexSecret": false,
+        "parentName": "/Lotus/Types/Items/MiscItems/ResourceItem"
+      }
+    ]
   },
   "https://content.warframe.com/PublicExport/Manifest/ExportUpgrades_en.json!00_uPGRADEShash": {
     "ExportUpgrades": []

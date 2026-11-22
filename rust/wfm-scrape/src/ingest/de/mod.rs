@@ -127,7 +127,12 @@ pub const WANTED_MANIFESTS: &[&str] = &[
 ///    published without their Citrine, Steflos and Corufell rewards, and
 ///    would have stayed that way until DE next touched the manifest.
 ///
-/// Together these are ~5 MB a cycle against a scrape that already runs for
+/// 4. **A surface rebuilt every cycle is named from it.** Alerts change hourly
+///    while `ExportResources` rarely does, and their untradeable rewards are
+///    named only there; skipping it on an unchanged hash would leave the next
+///    alert to be named from its path.
+///
+/// Together these are ~6 MB a cycle against a scrape that already runs for
 /// half an hour. Correctness is worth more than the saving.
 ///
 /// **This list guarantees an ATTEMPT, not a result.** The index can answer
@@ -139,6 +144,7 @@ pub const ALWAYS_FETCH: &[&str] = &[
     "ExportWeapons_en.json",
     "ExportRecipes_en.json",
     "ExportRelicArcane_en.json",
+    "ExportResources_en.json",
 ];
 
 // ---------------------------------------------------------------------------

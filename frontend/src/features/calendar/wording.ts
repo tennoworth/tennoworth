@@ -43,6 +43,27 @@ export function eventWords(text: CalendarText): EventWords {
       const detail = !text.rewards.length ? t('cal.event.detail') : t(text.rewards.length > 3 ? 'cal.event.rewardsMore' : 'cal.event.rewards', { rewards });
       return { title: text.title, short: text.title, detail };
     }
+    case 'alert': {
+      const rewards = text.rewards.length
+        ? listNames(text.rewards.map(({ item, count }) => (count > 1 ? t('cal.alert.count', { item, count }) : item)))
+        : t('cal.alert.credits', { credits: text.credits ?? 0 });
+      return {
+        title: t('cal.alert.title', { rewards }),
+        short: t('cal.alert.short', { rewards }),
+        detail: text.rewards.length && text.credits ? t('cal.alert.detailCredits', { credits: text.credits }) : t('cal.alert.detail'),
+      };
+    }
+    case 'booster': {
+      const boost = t(`cal.boost.${text.boost}`);
+      const title = text.factor === null ? boost : t('cal.booster.title', { boost, factor: text.factor });
+      return { title, short: title, detail: t('cal.booster.detail') };
+    }
+    case 'nightwave':
+      return {
+        title: t(text.intermission ? 'cal.nightwave.intermission' : 'cal.nightwave.season'),
+        short: t('cal.nightwave.short'),
+        detail: t('cal.nightwave.detail'),
+      };
     case 'official': {
       const type = (OFFICIAL as readonly string[]).includes(text.type) ? (text.type as (typeof OFFICIAL)[number]) : 'other';
       return { title: text.title, short: text.title, detail: text.note ?? t(`cal.official.${type}`) };

@@ -289,6 +289,16 @@ pub struct DeSurface {
     /// Darvo's daily deal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deals: Vec<serde_json::Value>,
+    /// Alerts and their rewards, named from `ExportResources` where the
+    /// catalogue has no entry.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alerts: Vec<serde_json::Value>,
+    /// Game-wide boosters, such as double resource drops.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub boosters: Vec<serde_json::Value>,
+    /// The running Nightwave season: none or one row.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nightwave: Vec<serde_json::Value>,
     /// `{slug: ducats}` for exactly the slugs DE's recipe tree set.
     ///
     /// This is PROVENANCE, and it is load-bearing. Ducats are an override on a

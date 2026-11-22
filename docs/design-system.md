@@ -589,8 +589,9 @@ These extend the existing review/continuity patterns without a new palette.
 The Calendar is a desktop view and a section of the hosted landing (`#calendar`,
 linked from the status strip). It shows dated things that move prices: official
 DE announcements entered in the dashboard (devstreams, updates, Prime Access),
-DE's in-game events, Baro visits, Prime Resurgence rotations, estimated vaulting,
-our curated notices and, when switched on, Darvo deals. On desktop it also
+DE's in-game events (operations, alerts and game-wide boosters, under one
+filter), the Nightwave season, Baro visits, Prime Resurgence rotations,
+estimated vaulting, our curated notices and, when switched on, Darvo deals. On desktop it also
 shows the player's routines: each list's next reset (daily, weekly, monthly
 goals, from the Routines view's own reset maths) with what is still open, and
 an Open routines action; a list with nothing open adds nothing, and the hosted
@@ -607,7 +608,8 @@ choice offers three views of the same events, remembered per device:
   month-long events. On a phone the grid keeps only coloured lines and the day
   panel carries the words.
 - **Lanes** puts one row per kind across eight weeks with an ink line for now,
-  so overlaps read at a glance. It scrolls sideways inside its own panel.
+  so overlaps read at a glance. A kind whose own events overlap, such as alerts
+  running together, takes one more row for each, never drawing one over another. It scrolls sideways inside its own panel.
 
 Each kind has a 3px edge colour set once in `app.css` by `data-kind`. An
 estimated date is dashed and tagged "est.", never gets a countdown, and says

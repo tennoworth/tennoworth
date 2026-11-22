@@ -352,6 +352,38 @@ export interface DailyDeal {
   sold?: number;
 }
 
+/** An alert reward. `slug` is present only when the market catalogue knows it. */
+export interface WorldAlertReward {
+  item: string;
+  count: number;
+  slug?: string;
+}
+
+/** A worldState alert: a mission open for a few days with a fixed reward. */
+export interface WorldAlert {
+  id: string;
+  activation: string;
+  expiry: string;
+  rewards: WorldAlertReward[];
+  credits?: number;
+}
+
+/** A game-wide booster. `upgrade` is DE's code, e.g. GAMEPLAY_PICKUP_AMOUNT. */
+export interface WorldBooster {
+  activation: string;
+  expiry: string;
+  upgrade: string;
+  operation?: string;
+  value: number;
+}
+
+/** The running Nightwave season. */
+export interface NightwaveSeason {
+  activation: string;
+  expiry: string;
+  intermission: boolean;
+}
+
 export interface DeSurface {
   /** Export manifest basename → content hash. Provenance: it says exactly
    *  which build of DE's data every derived surface came from. */
@@ -363,6 +395,10 @@ export interface DeSurface {
   world_ok?: boolean;
   vault_rotation?: VaultRotation[];
   deals?: DailyDeal[];
+  alerts?: WorldAlert[];
+  boosters?: WorldBooster[];
+  /** None or one season. */
+  nightwave?: NightwaveSeason[];
   /** `{slug: ducats}` for exactly the slugs DE's recipe tree set - provenance,
    *  so a later pipeline run can tell its own overrides from warframe.market's
    *  values. Consumers read `items[slug].ducats`, not this. */

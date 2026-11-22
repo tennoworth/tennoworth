@@ -1,7 +1,7 @@
 import type { EventKind } from '../../domain/calendar-events';
 import { t } from '../../i18n/i18n.svelte';
 
-export const KINDS: EventKind[] = ['official', 'event', 'baro', 'resurgence', 'vault', 'notice', 'routine', 'deal'];
+export const KINDS: EventKind[] = ['official', 'event', 'baro', 'resurgence', 'vault', 'nightwave', 'notice', 'routine', 'deal'];
 
 /** Routines live on this device, so the hosted calendar never offers them. */
 export const kindsFor = (surface: 'desktop' | 'hosted'): EventKind[] =>

@@ -88,6 +88,26 @@ describe('calendarEvents', () => {
     ]);
   });
 
+  it('files alerts and boosters with the in-game events and keeps Nightwave its own kind', () => {
+    const events = calendarEvents(market({ de: {
+      alerts: [
+        { id: 'a1', activation: '2026-10-12T19:00:00Z', expiry: '2026-10-15T19:00:00Z', credits: 10000, rewards: [{ item: 'Kuva', count: 200000 }] },
+        { id: 'a2', activation: '2026-10-12T19:00:00Z', expiry: '2026-10-15T19:00:00Z', rewards: [] },
+      ],
+      boosters: [
+        { activation: '2026-10-12T19:00:00Z', expiry: '2026-10-14T19:00:00Z', upgrade: 'GAMEPLAY_PICKUP_AMOUNT', operation: 'MULTIPLY', value: 2 },
+        { activation: '2026-10-12T19:00:00Z', expiry: '2026-10-14T19:00:00Z', upgrade: 'GAMEPLAY_SOMETHING_NEW', operation: 'ADD', value: 5 },
+      ],
+      nightwave: [{ activation: '2026-08-12T15:30:00Z', expiry: '2027-03-08T00:00:00Z', intermission: true }],
+    } }), null, NOW);
+    expect(events.map(e => [e.id, e.kind, e.text])).toEqual([
+      ['nightwave-1786548600000', 'nightwave', { kind: 'nightwave', intermission: true }],
+      ['alert-a1', 'event', { kind: 'alert', rewards: [{ item: 'Kuva', count: 200000 }], credits: 10000 }],
+      ['booster-1791831600000-GAMEPLAY_PICKUP_AMOUNT', 'event', { kind: 'booster', boost: 'resource-amount', factor: 2 }],
+      ['booster-1791831600000-GAMEPLAY_SOMETHING_NEW', 'event', { kind: 'booster', boost: 'other', factor: null }],
+    ]);
+  });
+
   it('turns a live Darvo deal into a one-day event', () => {
     const [deal] = calendarEvents(market({ de: { deals: [{ item: 'Tenno Sword Shield', expiry: '2026-10-13T15:00:00Z', discount: 90, sale_price: 15 }] } }), null, NOW);
     expect(deal.text).toEqual({ kind: 'deal', item: 'Tenno Sword Shield', discount: 90, price: 15 });

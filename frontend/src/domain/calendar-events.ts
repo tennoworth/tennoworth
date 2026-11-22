@@ -8,7 +8,18 @@
 import type { Market, OwnedRecord, ResurgenceRotation } from '../contracts/data';
 import type { AnnouncementFeed } from '../contracts/generated/desktop';
 
-export type EventKind = 'official' | 'event' | 'baro' | 'resurgence' | 'vault' | 'notice' | 'routine' | 'deal';
+export type EventKind = 'official' | 'event' | 'baro' | 'resurgence' | 'vault' | 'notice' | 'routine' | 'deal' | 'nightwave';
+
+/** What a game-wide booster raises; DE's codes the calendar does not know are 'other'. */
+export type BoostKind = 'resource-amount' | 'resource-chance' | 'affinity' | 'credits' | 'other';
+
+const BOOSTS: Record<string, BoostKind> = {
+  GAMEPLAY_PICKUP_AMOUNT: 'resource-amount',
+  GAMEPLAY_PICKUP_RATE: 'resource-chance',
+  GAMEPLAY_KILL_XP_AMOUNT: 'affinity',
+  GAMEPLAY_MONEY_PICKUP_AMOUNT: 'credits',
+  GAMEPLAY_MONEY_REWARD_AMOUNT: 'credits',
+};
 
 export interface CalendarEvent {
   /** Stable across refreshes of the same snapshot, so a selection survives. */
@@ -40,6 +51,10 @@ export type CalendarText =
   | { kind: 'vault'; names: string[] }
   | { kind: 'deal'; item: string; discount: number | null; price: number | null }
   | { kind: 'event'; title: string; rewards: string[] }
+  | { kind: 'alert'; rewards: { item: string; count: number }[]; credits: number | null }
+  /** `factor` is the multiplier, or null when DE's operation is not a plain multiply. */
+  | { kind: 'booster'; boost: BoostKind; factor: number | null }
+  | { kind: 'nightwave'; intermission: boolean }
   | { kind: 'official'; title: string; note: string | null; type: string }
   | { kind: 'given'; title: string; detail: string }
   /** A routine list's next reset and what is still open on it (desktop only). */
@@ -164,6 +179,47 @@ function gameEvents(market: Market, now: number): CalendarEvent[] {
   });
 }
 
+// Alerts and boosters are short in-game happenings, filed with the in-game
+// events rather than given a filter each.
+function alerts(market: Market, now: number): CalendarEvent[] {
+  return (market.de?.alerts ?? []).flatMap(alert => {
+    const from = at(alert.activation);
+    const to = at(alert.expiry);
+    const credits = typeof alert.credits === 'number' && alert.credits > 0 ? alert.credits : null;
+    const rewards = (alert.rewards ?? []).map(({ item, count }) => ({ item, count }));
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to < now - PAST || (!rewards.length && credits === null)) return [];
+    return [{
+      id: `alert-${alert.id}`, kind: 'event' as const, from, to, estimate: false, source: 'worldstate' as const,
+      text: { kind: 'alert' as const, rewards, credits },
+    }];
+  });
+}
+
+function boosters(market: Market, now: number): CalendarEvent[] {
+  return (market.de?.boosters ?? []).flatMap(booster => {
+    const from = at(booster.activation);
+    const to = at(booster.expiry);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to < now - PAST) return [];
+    const multiplies = (booster.operation ?? 'MULTIPLY') === 'MULTIPLY' && Number.isFinite(booster.value) && booster.value > 1;
+    return [{
+      id: `booster-${from}-${booster.upgrade}`, kind: 'event' as const, from, to, estimate: false, source: 'worldstate' as const,
+      text: { kind: 'booster' as const, boost: BOOSTS[booster.upgrade] ?? 'other', factor: multiplies ? booster.value : null },
+    }];
+  });
+}
+
+function nightwave(market: Market, now: number): CalendarEvent[] {
+  return (market.de?.nightwave ?? []).flatMap(season => {
+    const from = at(season.activation);
+    const to = at(season.expiry);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to < now - PAST) return [];
+    return [{
+      id: `nightwave-${from}`, kind: 'nightwave' as const, from, to, estimate: false, source: 'worldstate' as const,
+      text: { kind: 'nightwave' as const, intermission: season.intermission === true },
+    }];
+  });
+}
+
 function official(feed: AnnouncementFeed | null | undefined, now: number): CalendarEvent[] {
   return (feed?.events ?? []).flatMap(event => {
     const from = at(event.starts_at);
@@ -196,7 +252,7 @@ export function calendarEvents(
   owned?: Map<string, OwnedRecord> | null,
 ): CalendarEvent[] {
   const events = [
-    ...(market ? [...gameEvents(market, now), ...baro(market, now), ...resurgence(market, now, owned), ...vaulting(market, now, owned), ...deals(market, now)] : []),
+    ...(market ? [...gameEvents(market, now), ...alerts(market, now), ...boosters(market, now), ...nightwave(market, now), ...baro(market, now), ...resurgence(market, now, owned), ...vaulting(market, now, owned), ...deals(market, now)] : []),
     ...notices(feed, now),
     ...official(feed, now),
   ];

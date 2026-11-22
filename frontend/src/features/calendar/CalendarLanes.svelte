@@ -29,34 +29,51 @@
     const last = event.to === null ? first : Math.min(DAYS - 1, Math.floor((dayStart(event.to - 1) - start) / DAY));
     return { first, last, continued: event.from < start };
   }
+  // A kind gets a second row only when its events overlap: three alerts
+  // running together would otherwise be drawn over one another.
+  const lanes = $derived.by(() => {
+    let row = 3;
+    return kinds.map(kind => {
+      const ends: number[] = [];
+      const placed = shown.filter(e => e.kind === kind).sort((a, b) => a.from - b.from || a.id.localeCompare(b.id)).map(event => {
+        const c = columns(event);
+        let track = ends.findIndex(end => end < c.first);
+        if (track === -1) { track = ends.length; ends.push(c.last); } else ends[track] = c.last;
+        return { event, c, track };
+      });
+      const lane = { kind, row, tracks: Math.max(1, ends.length), placed };
+      row += lane.tracks;
+      return lane;
+    });
+  });
+  const rows = $derived(lanes.reduce((n, lane) => n + lane.tracks, 0));
   const nowOffset = $derived((now - start) / DAY);
 </script>
 
 <section class="lanes-panel" aria-label={t('cal.lanes')}>
   <div class="scroll">
-    <div class="lanes" style:--days={DAYS} style:grid-template-rows="auto auto repeat({kinds.length}, auto)">
+    <div class="lanes" style:--days={DAYS} style:grid-template-rows="auto auto repeat({rows}, auto)">
       <span class="corner" style:grid-row="1 / 3"></span>
       {#each months as m (m.label)}<span class="mon" style:grid-column="{m.first + 2} / span {m.span}">{m.label}</span>{/each}
       {#each days as d, i (d)}
         {@const wd = new Date(d).getUTCDay()}
         <span class="dn" class:weekend={wd === 0 || wd === 6} class:today={d === dayStart(now)} style:grid-column={i + 2} aria-hidden="true">{new Date(d).getUTCDate()}</span>
       {/each}
-      {#each kinds as kind, r (kind)}
-        <span class="lab" data-kind={kind} style:grid-row={r + 3}><i></i>{kindLabel(kind)}</span>
+      {#each lanes as lane (lane.kind)}
+        <span class="lab" data-kind={lane.kind} style:grid-row="{lane.row} / span {lane.tracks}"><i></i>{kindLabel(lane.kind)}</span>
         {#each days as d, i (d)}
           {@const wd = new Date(d).getUTCDay()}
-          <span class="col" class:week-edge={wd === 1} class:weekend={wd === 0 || wd === 6} style:grid-row={r + 3} style:grid-column={i + 2}></span>
+          <span class="col" class:week-edge={wd === 1} class:weekend={wd === 0 || wd === 6} style:--tracks={lane.tracks} style:grid-row="{lane.row} / span {lane.tracks}" style:grid-column={i + 2}></span>
         {/each}
-        {#each shown.filter(e => e.kind === kind) as event (event.id)}
-          {@const c = columns(event)}
+        {#each lane.placed as { event, c, track } (event.id)}
           <button type="button" class={event.to === null ? 'pin' : 'run'} class:estimate={event.estimate} data-kind={event.kind}
-            style:grid-row={r + 3} style:grid-column="{c.first + 2} / {c.last + 3}" aria-pressed={selected === event.id}
+            style:grid-row={lane.row + track} style:grid-column="{c.first + 2} / {c.last + 3}" aria-pressed={selected === event.id}
             aria-label="{wordsOf(event).title}, {utcDay(event.from)}" title={wordsOf(event).title} onclick={() => { selected = selected === event.id ? null : event.id; }}>
             {#if event.to !== null}{c.continued ? '◂ ' : ''}{wordsOf(event).short}{/if}
           </button>
         {/each}
       {/each}
-      <span class="now" style:grid-row="3 / {kinds.length + 3}" style:grid-column={Math.floor(nowOffset) + 2} style:margin-left="calc(var(--day) * {(nowOffset % 1).toFixed(2)})" aria-hidden="true"></span>
+      <span class="now" style:grid-row="3 / {rows + 3}" style:grid-column={Math.floor(nowOffset) + 2} style:margin-left="calc(var(--day) * {(nowOffset % 1).toFixed(2)})" aria-hidden="true"></span>
     </div>
   </div>
   <div class="chosen" aria-live="polite">
@@ -81,7 +98,7 @@
   .dn.today { background: var(--ink-bar); color: var(--on-ink); font-weight: 600; }
   .lab { grid-column: 1; display: flex; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); font: 600 var(--text-caption)/1.2 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; border-top: 1px var(--rule) var(--hairline); }
   .lab i { width: 3px; align-self: stretch; background: var(--k); }
-  .col { min-height: 2.75rem; border-left: 1px var(--rule) var(--hairline); border-top: 1px var(--rule) var(--hairline); }
+  .col { min-height: max(2.75rem, calc(var(--tracks, 1) * 2.125rem)); border-left: 1px var(--rule) var(--hairline); border-top: 1px var(--rule) var(--hairline); }
   .col.week-edge { border-left: 1px solid var(--hairline); }
   .run { z-index: 2; align-self: center; min-width: 0; height: 1.75rem; margin: 0 1px; padding: 0 var(--s2); font: inherit; font-family: var(--font-body); letter-spacing: normal; text-transform: none; font-size: var(--text-caption); color: var(--fg); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: color-mix(in srgb, var(--k) 16%, var(--panel)); border: 1px solid var(--k); border-left-width: 3px; cursor: pointer; }
   .run.estimate { border-style: dashed; border-left-style: solid; background: transparent; }
