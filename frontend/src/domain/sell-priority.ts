@@ -127,69 +127,10 @@ export function scoreRow({ owned, m, usageShare }: SellScoreInput): SellScoreOut
   };
 }
 
-// Where the current price sits inside its 90-day Donchian band answers the
-// timing question the raw sell-score ignores: are you about to sell into a
-// trough or a peak? A price pinned near its 90-day low - e.g. a mod Baro just
-// flooded, which craters ~50% on arrival and recovers over weeks - is a "hold";
-// near its 90-day high is "peak", the moment to list. Neutral in between, or
-// whenever the band is missing/degenerate (CSV-only rebuilds inherit zeros).
-// "drop" is a hold-band price on heavy selling: over a year of history those
-// recovered about half as often as quiet dips (tests/fixtures/sell-priority/timing.json).
+// Where today's median sits in its 90-day channel: native scoring::timing
+// decides it (tests/fixtures/sell-priority/timing.json). "hold" is a dip near
+// the 90-day low, "drop" the same on heavy selling, "peak" a corroborated high.
 export type TimingState = 'hold' | 'drop' | 'peak' | 'neutral';
-
-export interface BandSignalInput {
-  // Nullable like the other fields - the function already treats a missing
-  // price as "no signal" via `Number(price) || 0`, same as a missing band.
-  price: number | null;
-  donchTop?: number | null;
-  donchBot?: number | null;
-  lowSell?: number | null;
-  topBuy?: number | null;
-  // 48-hour volume and the mean daily volume of the 28 days before it.
-  vol?: number | null;
-  vol28d?: number | null;
-}
-
-const HOLD_BELOW = 0.2;
-export const FLOOD_RATIO = 3;
-export const FLOOD_MIN_DAILY = 5;
-const PEAK_ABOVE = 0.8;
-// A peak must be corroborated by the live book - "peak" means "list NOW",
-// and you list into the standing market, not into a price history. Two
-// independent corroborations, either suffices:
-//  - ask-side: a live ask within 2× of the price (real peaks have asks
-//    tracking the trades up; wash-traded "peaks" sit over 1p ask walls -
-//    Goopolla printed 36 "sales" at 12p over 209 live asks at 1p);
-//  - demand-side: a live top buy offer within 2× of the price. This is the
-//    signal a solo seller can't fake cheaply, and it rescues legit peaks
-//    whose ask side is polluted by one troll undercut.
-// NO live book at all → neutral, fail closed: an uncorroborated peak on a
-// no-ask item (neo_t7_relic: median 42, zero asks, top buy 15) was exactly
-// the cheapest state to manipulate into existence.
-const PEAK_MAX_ASK_GAP = 2;
-
-function flooded(vol: number | null | undefined, vol28d: number | null | undefined): boolean {
-  const normal = Number(vol28d) || 0;
-  const daily = (Number(vol) || 0) / 2;
-  return normal >= FLOOD_MIN_DAILY && daily >= normal * FLOOD_RATIO;
-}
-
-export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy, vol, vol28d }: BandSignalInput): TimingState {
-  const p = Number(price) || 0;
-  const top = Number(donchTop) || 0;
-  const bot = Number(donchBot) || 0;
-  if (p <= 0 || top <= 0 || bot <= 0 || top <= bot) return 'neutral';
-  const pos = (p - bot) / (top - bot); // 0 = at 90d low, 1 = at 90d high
-  if (pos <= HOLD_BELOW) return flooded(vol, vol28d) ? 'drop' : 'hold';
-  if (pos >= PEAK_ABOVE) {
-    const ask = Number(lowSell) || 0;
-    const buy = Number(topBuy) || 0;
-    const askCorroborates = ask > 0 && p <= ask * PEAK_MAX_ASK_GAP;
-    const buyCorroborates = buy > 0 && p <= buy * PEAK_MAX_ASK_GAP;
-    return askCorroborates || buyCorroborates ? 'peak' : 'neutral';
-  }
-  return 'neutral';
-}
 
 // "Top picks" strip - the best rows to act on right now, out of everything
 // already scored above; the evening digest uses the same bar (pick-floor.json).

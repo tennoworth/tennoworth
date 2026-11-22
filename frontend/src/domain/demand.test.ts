@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   masteryBand,
-  readDemand,
   usageFor,
   type UsageEntry,
 } from './demand';
 import type { Market } from '../contracts/data';
-import { DEAD_SHARE } from './sell-priority';
 
 /** A usage curve peaking at `peak`, with a little mass either side. */
 function curve(peak: number, height = 9): number[] {
@@ -100,37 +98,3 @@ describe('masteryBand', () => {
   });
 });
 
-describe('readDemand', () => {
-  const traded = { vol: 40, price: 12, baseline: 12 };
-
-  it('calls a played, trading part sells-today', () => {
-    expect(readDemand('braton_prime_receiver', MARKET, traded).liquidity).toBe('sells-today');
-  });
-
-  it('flags a played part priced under its own baseline as underpriced', () => {
-    const r = readDemand('braton_prime_receiver', MARKET, { vol: 40, price: 8, baseline: 12 });
-    expect(r.liquidity).toBe('underpriced');
-  });
-
-  it('calls an unplayed part slow even when it is trading', () => {
-    const r = readDemand('ancient_thing_barrel', MARKET, traded);
-    expect(r.usage!.share).toBeLessThan(DEAD_SHARE);
-    expect(r.liquidity).toBe('slow');
-  });
-
-  it('lets volume override popularity - a buyer tonight is not implied by fame', () => {
-    const r = readDemand('braton_prime_receiver', MARKET, { vol: 1, price: 12, baseline: 12 });
-    expect(r.liquidity).toBe('thin');
-  });
-
-  it('is unknown, not slow, when there is simply no usage data', () => {
-    const r = readDemand('mystery_item', MARKET, traded);
-    expect(r.liquidity).toBe('unknown');
-    expect(r.usage).toBeNull();
-  });
-
-  it('carries the mastery band a seller can price against', () => {
-    const r = readDemand('torid', MARKET, traded);
-    expect(r.band!.from).toBeGreaterThan(14);
-  });
-});

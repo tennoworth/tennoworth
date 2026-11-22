@@ -211,7 +211,7 @@ export function createSellWorkspace({ inventory, filters, protection, listing, t
     return visible.filter(row => !row.subtype && row.sellable > 0);
   });
   $effect(() => {
-    results = computeFilteredResults(guidanceOwned, inventory.market, filterState, filters.reserveCopies, adviceMap, guidanceAvailability, currentFacts.value);
+    results = computeFilteredResults(guidanceOwned, inventory.market, filterState, currentFacts.value, adviceMap, guidanceAvailability);
   });
   $effect(() => {
     void calculationEpoch;
@@ -263,7 +263,7 @@ export function createSellWorkspace({ inventory, filters, protection, listing, t
   // cascade costs ~0.1 ms on a 2k-item inventory (measured 2026-08-01).
   let prevSummary = $derived.by(() => {
     if (!inventory.previousOwned || !inventory.market || previousFacts.phase !== 'done' || currentFacts.phase !== 'done') return null;
-    const rows = computeFilteredResults(inventory.previousOwned, inventory.market, filterState, filters.reserveCopies, undefined, undefined, previousFacts.value);
+    const rows = computeFilteredResults(inventory.previousOwned, inventory.market, filterState, previousFacts.value);
     return {
       owned: inventory.previousOwned.size,
       sellable: rows.filter((r) => r.sellable > 0).length,

@@ -1,6 +1,6 @@
 // @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
-import { scoreRow, bandSignal, clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
+import { scoreRow, clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
 
 describe('scoreRow', () => {
   it('returns zero score with no market data', () => {
@@ -147,70 +147,6 @@ describe('sellableQty', () => {
 
   it('clamps at 0 rather than going negative when leveled exceeds owned', () => {
     expect(sellableQty(3, 0, 5)).toBe(0);
-  });
-});
-
-describe('bandSignal', () => {
-  it('flags a price near the 90d low as hold (e.g. a Baro-flooded mod)', () => {
-    // Primed Reach post-Baro: trough ~28 in a 25–66 band → bottom of range
-    expect(bandSignal({ price: 28, donchBot: 25, donchTop: 66 })).toBe('hold');
-  });
-
-  it('flags a corroborated price near the 90d high as peak', () => {
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 60 })).toBe('peak');
-  });
-
-  it('returns neutral in the middle of the band', () => {
-    expect(bandSignal({ price: 45, donchBot: 25, donchTop: 66 })).toBe('neutral');
-  });
-
-  it('is neutral when the band is degenerate (top === bot)', () => {
-    expect(bandSignal({ price: 50, donchBot: 50, donchTop: 50 })).toBe('neutral');
-  });
-
-  it('is neutral when band data is missing or zero (CSV-only rebuilds)', () => {
-    expect(bandSignal({ price: 50, donchBot: 0, donchTop: 0 })).toBe('neutral');
-    expect(bandSignal({ price: 50 })).toBe('neutral');
-    expect(bandSignal({ price: 0, donchBot: 25, donchTop: 66 })).toBe('neutral');
-  });
-
-  it('clamps prices outside the band rather than throwing', () => {
-    expect(bandSignal({ price: 10, donchBot: 25, donchTop: 66 })).toBe('hold');
-    expect(bandSignal({ price: 90, donchBot: 25, donchTop: 66, lowSell: 85 })).toBe('peak');
-  });
-
-  it('suppresses a peak the live book contradicts (wash-traded median)', () => {
-    // Goopolla: 36 "trades" at 12p while 209 live asks sit at 1p - the peak
-    // price is unrealizable, so "list now" would be wrong twice over.
-    expect(bandSignal({ price: 12, donchBot: 1, donchTop: 12, lowSell: 1 })).toBe('neutral');
-  });
-
-  it('keeps a peak when the live ask corroborates it', () => {
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 60 })).toBe('peak');
-    // a normal undercut spread is nowhere near the 2× gap threshold
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 40 })).toBe('peak');
-  });
-
-  it('fails CLOSED when there is no live book at all', () => {
-    // neo_t7_relic: median 42 at the band top, zero live asks, top buy 15.
-    // An uncorroborated peak on a no-ask item is the cheapest state to
-    // manipulate into existence - never render "list now" from history alone.
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 0 })).toBe('neutral');
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66 })).toBe('neutral');
-    expect(bandSignal({ price: 42, donchBot: 3, donchTop: 42, lowSell: 0, topBuy: 15 })).toBe('neutral');
-  });
-
-  it('lets real demand corroborate a peak when the ask side is polluted', () => {
-    // akbolto receiver: stable 38p median at its high, one 1p troll ask -
-    // but a live buy offer near the price proves the peak is real.
-    expect(bandSignal({ price: 38, donchBot: 20, donchTop: 40, lowSell: 1, topBuy: 30 })).toBe('peak');
-    // ...while a wash-traded fish has no demand side to fake (Goopolla:
-    // fake 12p median over 1p asks, zero buyers) → stays suppressed.
-    expect(bandSignal({ price: 12, donchBot: 1, donchTop: 12, lowSell: 1, topBuy: 0 })).toBe('neutral');
-  });
-
-  it('does not let the ask gap interfere with hold', () => {
-    expect(bandSignal({ price: 28, donchBot: 25, donchTop: 66, lowSell: 1 })).toBe('hold');
   });
 });
 

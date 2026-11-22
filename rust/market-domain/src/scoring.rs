@@ -437,6 +437,56 @@ mod tests {
         assert!(score_inventory(request).is_err());
     }
 
+    /// The table half of the shared scan: what score_inventory answers for the
+    /// composed rows before local protection (the tray half is sellables.rs).
+    #[test]
+    fn scores_the_shared_scan_into_the_table() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/tray-table-composition.json"
+        ))
+        .unwrap();
+        let mut owned = BTreeMap::<String, OwnedItem>::new();
+        for row in fixture["inventory"].as_array().unwrap() {
+            let slug = row["slug"].as_str().unwrap();
+            let count = row["count"].as_f64().unwrap();
+            let rec = owned
+                .entry(format!("{slug}|"))
+                .or_insert_with(|| OwnedItem {
+                    count: 0.0,
+                    name: row["name"].as_str().unwrap().into(),
+                    item_type: row["category"].as_str().unwrap().into(),
+                    slug: slug.into(),
+                    subtype: None,
+                    kept_lvl: None,
+                    leveled: 0.0,
+                });
+            rec.count += count;
+            if row["xp"].as_f64().unwrap() > 0.0 {
+                rec.leveled += count;
+            }
+        }
+        let mut facts = score_inventory(ScoreInventoryRequest {
+            owned: owned.into_iter().collect(),
+            market: serde_json::from_value(fixture["market"].clone()).unwrap(),
+            reserve_copies: fixture["reserve_copies"].as_f64().unwrap(),
+            spares_only: false,
+            availability: None,
+        })
+        .unwrap();
+        facts.sort_by(|a, b| b.sell_score.total_cmp(&a.sell_score));
+        let table: Vec<Value> = facts
+            .iter()
+            .map(|f| serde_json::json!({ "slug": f.key.trim_end_matches('|'), "sellable": f.sellable }))
+            .collect();
+        let expected: Vec<Value> = fixture["expected"]["table"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| serde_json::json!({ "slug": row["slug"], "sellable": row["sellable"].as_f64() }))
+            .collect();
+        assert_eq!(table, expected);
+    }
+
     #[test]
     fn matches_shared_frontend_fixture() {
         let fixture: Fixture = serde_json::from_str(include_str!(

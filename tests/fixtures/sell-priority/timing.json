@@ -1,5 +1,5 @@
 {
-  "_comment": "Where a price sits in its 90-day channel, read by market-domain scoring::timing and frontend bandSignal. vol is the 48-hour volume; vol_28d the mean daily volume of the 28 days before it. A Hold-band price on at least flood_ratio x that normal, for an item trading at least flood_min_daily a day, is a drop.",
+  "_comment": "Where a price sits in its 90-day channel, read by market-domain scoring::timing. A peak must be corroborated by a live ask or buy order within 2x of the price; with no live book it is neutral. vol is the 48-hour volume; vol_28d the mean daily volume of the 28 days before it. A Hold-band price on at least flood_ratio x that normal, for an item trading at least flood_min_daily a day, is a drop.",
   "flood_ratio": 3,
   "flood_min_daily": 5,
   "cases": [
@@ -12,6 +12,17 @@
     { "name": "normal volume unknown", "price": 12, "top": 50, "bot": 10, "low_sell": 12, "top_buy": 9, "vol": 400, "vol_28d": 0, "expected": "hold" },
     { "name": "heavy selling mid-channel is not a signal", "price": 30, "top": 50, "bot": 10, "low_sell": 30, "top_buy": 25, "vol": 400, "vol_28d": 10, "expected": "neutral" },
     { "name": "peak on heavy volume stays a peak", "price": 48, "top": 50, "bot": 10, "low_sell": 47, "top_buy": 40, "vol": 400, "vol_28d": 10, "expected": "peak" },
-    { "name": "no channel", "price": 12, "top": 0, "bot": 0, "low_sell": 12, "top_buy": 9, "vol": 400, "vol_28d": 10, "expected": "neutral" }
+    { "name": "no channel", "price": 12, "top": 0, "bot": 0, "low_sell": 12, "top_buy": 9, "vol": 400, "vol_28d": 10, "expected": "neutral" },
+    { "name": "a trough with no live book is still a hold", "price": 28, "top": 66, "bot": 25, "low_sell": 0, "top_buy": 0, "vol": 0, "vol_28d": 0, "expected": "hold" },
+    { "name": "below the channel reads as its low", "price": 10, "top": 66, "bot": 25, "low_sell": 0, "top_buy": 0, "vol": 0, "vol_28d": 0, "expected": "hold" },
+    { "name": "a troll ask does not touch a hold", "price": 28, "top": 66, "bot": 25, "low_sell": 1, "top_buy": 0, "vol": 0, "vol_28d": 0, "expected": "hold" },
+    { "name": "above the channel with a corroborating ask", "price": 90, "top": 66, "bot": 25, "low_sell": 85, "top_buy": 0, "vol": 0, "vol_28d": 0, "expected": "peak" },
+    { "name": "an ordinary undercut still corroborates", "price": 64, "top": 66, "bot": 25, "low_sell": 40, "top_buy": 0, "vol": 0, "vol_28d": 0, "expected": "peak" },
+    { "name": "wash-traded peak over 1p asks and no buyers", "price": 12, "top": 12, "bot": 1, "low_sell": 1, "top_buy": 0, "vol": 0, "vol_28d": 0, "expected": "neutral" },
+    { "name": "no live book fails closed", "price": 64, "top": 66, "bot": 25, "low_sell": 0, "top_buy": 0, "vol": 0, "vol_28d": 0, "expected": "neutral" },
+    { "name": "a far-off buy order does not corroborate", "price": 42, "top": 42, "bot": 3, "low_sell": 0, "top_buy": 15, "vol": 0, "vol_28d": 0, "expected": "neutral" },
+    { "name": "a near buy order corroborates over a troll ask", "price": 38, "top": 40, "bot": 20, "low_sell": 1, "top_buy": 30, "vol": 0, "vol_28d": 0, "expected": "peak" },
+    { "name": "a degenerate channel", "price": 50, "top": 50, "bot": 50, "low_sell": 50, "top_buy": 40, "vol": 0, "vol_28d": 0, "expected": "neutral" },
+    { "name": "no price", "price": 0, "top": 66, "bot": 25, "low_sell": 10, "top_buy": 9, "vol": 0, "vol_28d": 0, "expected": "neutral" }
   ]
 }

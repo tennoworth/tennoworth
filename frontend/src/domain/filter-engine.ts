@@ -10,9 +10,8 @@
 import { canonicalTags } from './tag-groups';
 import type { ScoredInventoryFact } from '../contracts/generated/domain';
 import { lookup } from './market';
-import { readDemand } from './demand';
 import { crowdedBook } from './book-depth';
-import { clearingPrice, scoreRow, bandSignal, sellableQty, spareQty, LIQUID_VOL } from './sell-priority';
+import { spareQty } from './sell-priority';
 import type { Verdict } from '../contracts/generated/domain';
 import type { Market, MarketItemEntry, OwnedRecord } from '../contracts/data';
 
@@ -87,83 +86,10 @@ function passesMedian(m: MarketItemEntry, f: FilterState): boolean {
   return f.minMedian <= 0 || (m.median_90d || 0) >= f.minMedian;
 }
 
-function previewRowFacts(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly: boolean, allocation?: number): ScoredInventoryFact {
-  const available = Math.min(sellableQty(rec.count, reserveCopies, rec.leveled ?? 0), allocation ?? Infinity);
-  const sellable = sparesOnly
-    ? Math.min(available, spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0))
-    : available;
-  const row_price = clearingPrice(m);
-  const demand = readDemand(rec.slug, market, {
-    vol: m.vol,
-    price: row_price,
-    baseline: m.median_90d || null,
-  });
-  const { sell_score, patience } = scoreRow({
-    owned: sellable,
-    m,
-    usageShare: demand.usage?.share,
-  });
-  // ducats live on `m` because WFM is authoritative for the value -
-  // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
-  // null so we don't suggest "Baro this" on a non-ducat trade.
-  const ducats = rec.subtype ? null : (m.ducats ?? null);
-  // p/100d - "platinum cost per 100 ducats of value." Low numbers mean
-  // ducat-trading the part is the better deal vs selling it on WFM. Null
-  // when no ducats data. Uses the clamped clearing price, not raw low_sell -
-  // a single 1p troll ask made a stable 38p part read as a "feed it to
-  // Baro" deal.
-  const plat_per_100d = ducats && ducats > 0 && row_price > 0 ? (row_price * 100) / ducats : null;
-  // 90d trend signal. `median_90d` is what experienced WFM traders price
-  // against (48h avg is noisy on low-volume items). We compute Δ% vs the
-  // 90d median using the most recent daily median as "now". Null when
-  // there's no series yet (CSV-only rebuilds inherit zeros until the next
-  // full scrape).
-  const medians = Array.isArray(m.medians_7d) ? m.medians_7d.filter((v) => v > 0) : [];
-  // "today" = latest daily median. Pre-split snapshots have no median_now,
-  // so fall back to median_90d (which on those WAS the latest day). `||`
-  // not `??`: a literal median_now of 0 is never a meaningful "today" price
-  // (it's a thin item with no recent trade), so fall back to the 90d
-  // baseline rather than null out the band + Δ signals entirely.
-  const median_now = m.median_now || m.median_90d || null;
-  // median_90d is now the 90-day BASELINE (median of the daily medians), so
-  // Δ-vs-90d = today vs the 90-day norm - a real signal at last. On old
-  // snapshots median_now === median_90d → Δ = 0 until the next scrape,
-  // which is honest rather than fake.
-  const median_90d = m.median_90d && m.median_90d > 0 ? m.median_90d : null;
-  // A trend needs trades behind it: one closed sale can print ▲127% on a
-  // vol-1 row (mountain's edge), which reads as signal but is one person's
-  // afternoon. Below LIQUID_VOL the honest Δ is "not enough data" (null →
-  // renders as ·), same bar the ask-clamp uses.
-  const delta_90d_pct =
-    median_now != null && median_90d != null && median_90d > 0 && (m.vol || 0) >= LIQUID_VOL
-      ? ((median_now - median_90d) / median_90d) * 100
-      : null;
-  // Timing: where today's median sits in its 90-day band. Uses median_now,
-  // not low_sell - the Donchian bands are built from the daily median
-  // series, so a thin-book ask outlier (a lone 200p listing on a ~20p
-  // item) would mislabel as "peak". median_now is always inside its own
-  // band. "hold" = near the 90d low (don't dump into a trough - e.g. a mod
-  // Baro just flooded), "peak" = near the 90d high (list now).
-  const timing = bandSignal({
-    price: median_now,
-    donchTop: m.donch_top_90d,
-    donchBot: m.donch_bot_90d,
-    lowSell: m.low_sell,
-    topBuy: m.top_buy,
-    vol: m.vol,
-    vol28d: m.vol_28d,
-  });
-  return { key, sellable, clearing_price: row_price, sell_score, patience, ducats, plat_per_100d,
-    medians_7d: medians, median_90d, delta_90d_pct, timing, demand,
-    potential_plat: sellable * m.avg,
-    raw_value: sellable * ((m.low5_avg || 0) > 0 ? (m.low5_avg as number) : m.avg),
-  };
-}
-
-// Row enrichment: score, timing, ducat-trade math. Runs only for rows that
-// already passed every clause above.
-function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict, nativeFact?: ScoredInventoryFact, allocation?: number) {
-  const original = nativeFact ?? previewRowFacts(key, rec, m, market, reserveCopies, sparesOnly, allocation);
+// Row enrichment over the native facts (score, timing, ducat-trade math come
+// from score_inventory). Runs only for rows that already passed every clause
+// above.
+function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, original: ScoredInventoryFact, verdict?: Verdict, allocation?: number) {
   const safeQuantity = Math.min(original.sellable, allocation ?? Infinity);
   const facts = { ...original, sellable: safeQuantity,
     potential_plat: safeQuantity * m.avg,
@@ -231,10 +157,11 @@ export function computeResults(
   owned: Map<string, OwnedRecord>,
   market: Market | null | undefined,
   filters: FilterState,
-  reserveCopies: number,
+  // score_inventory's rows for this inventory, reserve and spares mode. A row
+  // without one is not shown: the table never scores on its own.
+  nativeFacts: ReadonlyMap<string, ScoredInventoryFact>,
   advice?: Map<string, Verdict>,
   availability?: ReadonlyMap<string, number>,
-  nativeFacts?: Map<string, ScoredInventoryFact>,
 ) {
   const out: ReturnType<typeof buildRow>[] = [];
   for (const [key, rec] of owned) {
@@ -251,9 +178,9 @@ export function computeResults(
     if (!passesMedian(m, filters)) continue;
     if (!passesSpares(rec, filters)) continue;
     if (!passesAdvice(rec, filters, advice)) continue;
-    const nativeFact = nativeFacts?.get(key);
-    if (nativeFacts && !nativeFact) continue;
-    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug), nativeFact, availability ? availability.get(key) ?? 0 : undefined));
+    const fact = nativeFacts.get(key);
+    if (!fact) continue;
+    out.push(buildRow(key, rec, m, market, fact, advice?.get(rec.slug), availability ? availability.get(key) ?? 0 : undefined));
   }
   out.sort((a, b) => b.sell_score - a.sell_score);
   return out;

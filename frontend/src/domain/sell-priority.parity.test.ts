@@ -4,11 +4,10 @@
 // need this counterpart. Both implementations consume the same expected order
 // so a one-sided formula change cannot silently alter their recommendations.
 import { describe, it, expect } from 'vitest';
-import { bandSignal, clearingPrice, FLOOD_MIN_DAILY, FLOOD_RATIO, LIQUID_VOL, MIN_PICK_SCORE, scoreRow, sellableQty } from './sell-priority.js';
+import { clearingPrice, LIQUID_VOL, MIN_PICK_SCORE, scoreRow, sellableQty } from './sell-priority.js';
 import fixture from '../../../tests/fixtures/sell-priority/cases.json';
 import boundary from '../../../tests/fixtures/sell-priority/liquidity-boundary.json';
 import pickFloor from '../../../tests/fixtures/sell-priority/pick-floor.json';
-import timing from '../../../tests/fixtures/sell-priority/timing.json';
 
 describe('sell-priority ranking parity (hosted and preview side)', () => {
   it('ranks the shared fixture into the golden order', () => {
@@ -43,20 +42,6 @@ describe('sell-priority ranking parity (hosted and preview side)', () => {
     expect(zeroed).toContain('reserve_zeroes');
     for (const slug of zeroed) {
       expect(fixture.expected_order).not.toContain(slug);
-    }
-  });
-});
-
-describe('timing parity (hosted and preview side)', () => {
-  it('reads the shared channel cases as the native scorer does', () => {
-    expect(FLOOD_RATIO).toBe(timing.flood_ratio);
-    expect(FLOOD_MIN_DAILY).toBe(timing.flood_min_daily);
-    for (const c of timing.cases) {
-      const got = bandSignal({
-        price: c.price, donchTop: c.top, donchBot: c.bot, lowSell: c.low_sell,
-        topBuy: c.top_buy, vol: c.vol, vol28d: c.vol_28d,
-      });
-      expect(got, c.name).toBe(c.expected);
     }
   });
 });

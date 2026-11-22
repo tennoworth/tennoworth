@@ -18,7 +18,6 @@
 //     record so a reader knows how fresh it is.
 
 import type { Market } from '../contracts/data';
-import { DEAD_SHARE, LIQUID_VOL } from './sell-priority';
 
 export interface UsageEntry {
   name: string;
@@ -149,42 +148,3 @@ export function masteryBand(byMr: number[], coverage = 0.6): { from: number; to:
   }
   return { from, to };
 }
-
-/**
- * Fuse usage with the market signal.
- *
- * Volume gates everything: an item nobody has traded in 48h is thin no matter
- * how popular its parent weapon is, because popularity does not make a buyer
- * appear tonight. Only past that gate does usage separate "sells today" from
- * "list high and wait".
- */
-export function readDemand(
-  slug: string,
-  market: Market | null | undefined,
-  opts: { vol: number; price: number | null; baseline: number | null },
-): DemandRead {
-  const hit = usageFor(slug, market);
-  const usage = hit?.entry ?? null;
-  const band = usage ? masteryBand(usage.by_mr) : null;
-
-  let liquidity: Liquidity;
-  if (opts.vol < LIQUID_VOL) {
-    liquidity = 'thin';
-  } else if (!usage) {
-    liquidity = 'unknown';
-  } else if (usage.share < DEAD_SHARE) {
-    liquidity = 'slow';
-  } else if (
-    opts.price != null &&
-    opts.baseline != null &&
-    opts.baseline > 0 &&
-    opts.price < opts.baseline * 0.9
-  ) {
-    liquidity = 'underpriced';
-  } else {
-    liquidity = 'sells-today';
-  }
-
-  return { usage, inherited: hit?.inherited ?? false, liquidity, band };
-}
-
