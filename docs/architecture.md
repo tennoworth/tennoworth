@@ -400,9 +400,11 @@ the authority for mutations.
 Frontend adapters serialize Maps and optional fields explicitly. Feature
 controllers guard response generations, clear obsolete evidence, expose pending
 or failed calculations, and preserve local editing state. UI filtering stays
-synchronous over native facts. Market-only browsing keeps fixture-gated
-TypeScript sell-priority scoring and history; these are not production desktop
-fallbacks when native computation fails. The `?preview-desktop` development host
+synchronous over native facts. There is no TypeScript sell score: the Sell
+table shows score_inventory's facts, and the homepage's hand-off sample is
+scored by the pipeline (`handoff_sample`). The views keep fixture-gated copies
+of the clearing price, sellable quantity and pick rule they apply per row, and
+market-only browsing keeps the history chart shaping. The `?preview-desktop` development host
 has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
 `DomainRequest::execute`, compiled to wasm32 by `scripts/build-domain-wasm.ts`
 and loaded by `frontend/src/dev/preview/domain-wasm.ts`. The preview therefore shows

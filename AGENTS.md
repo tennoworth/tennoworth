@@ -124,7 +124,7 @@ These exist because each has already gone wrong once:
 - **Cross-language logic duplication needs a parity fixture, not a comment.**
   When the same heuristic or constant must exist in Rust and TypeScript, put
   the cases and expected output in `tests/fixtures/` and have a test on **each**
-  side read them (`sell-priority/cases.json` is the reference; a value that only
+  side read them (`sell-priority/pick-floor.json` is the reference; a value that only
   has to match can be one JSON file, like `pacing.json`). Prefer one
   implementation: the desktop preview runs the native planners as WebAssembly.
 - **A gate must test CURRENT code.** A runner that only checks a built artifact
