@@ -24,8 +24,8 @@ import { DesktopCmdError } from '../../contracts/errors';
   let wfmLoginPassphrase = $state('');
   let wfmLoginConfirm = $state('');
   let wfmLoginPlatform = $state('pc');
-  // 'token' is the fallback for when the sign-in window cannot work (it
-  // crashes under some Linux WebKitGTK builds): the user signs in with their
+  // 'token' is the fallback for when the sign-in window cannot work (its page
+  // crashes on Linux when GStreamer lacks an audio sink): the user signs in with their
   // own browser and pastes its JWT cookie.
   let wfmLoginMode = $state<'window' | 'token'>('window');
   let wfmLoginToken = $state('');
