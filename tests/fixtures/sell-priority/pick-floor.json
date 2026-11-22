@@ -1,4 +1,63 @@
 {
-  "_comment": "The priority a row needs to be a Top pick, and to appear in the evening sell digest, so both name the same items. Read by frontend/src/domain/sell-priority.parity.test.ts and rust/market-domain/src/math/sell_priority.rs.",
-  "min_pick_score": 20
+  "_comment": "What makes a row a Top pick, and an evening sell-digest line, so both name the same items: copies to sell, a book that moves, not a dip to wait out (a flooded drop still counts), and at least min_pick_score; at most max_picks, best first. Read by frontend/src/domain/sell-priority.parity.test.ts and rust/market-domain/src/math/sell_priority.rs.",
+  "min_pick_score": 20,
+  "max_picks": 5,
+  "cases": [
+    {
+      "name": "a liquid row over the bar",
+      "sellable": 2,
+      "patience": false,
+      "timing": "neutral",
+      "score": 20,
+      "pick": true
+    },
+    {
+      "name": "just under the bar",
+      "sellable": 2,
+      "patience": false,
+      "timing": "neutral",
+      "score": 19.99,
+      "pick": false
+    },
+    {
+      "name": "nothing to sell",
+      "sellable": 0,
+      "patience": false,
+      "timing": "peak",
+      "score": 500,
+      "pick": false
+    },
+    {
+      "name": "a book that barely moves",
+      "sellable": 3,
+      "patience": true,
+      "timing": "neutral",
+      "score": 500,
+      "pick": false
+    },
+    {
+      "name": "a dip to wait out",
+      "sellable": 3,
+      "patience": false,
+      "timing": "hold",
+      "score": 500,
+      "pick": false
+    },
+    {
+      "name": "a flooded drop still sells",
+      "sellable": 3,
+      "patience": false,
+      "timing": "drop",
+      "score": 500,
+      "pick": true
+    },
+    {
+      "name": "a peak",
+      "sellable": 1,
+      "patience": false,
+      "timing": "peak",
+      "score": 40,
+      "pick": true
+    }
+  ]
 }

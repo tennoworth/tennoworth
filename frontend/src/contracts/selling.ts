@@ -1,4 +1,4 @@
-import type { DemandRead } from '../domain/demand';
+import type { DemandRead } from './generated/domain';
 export interface SellRow {
   key?: string;
   slug: string;

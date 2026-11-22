@@ -5,7 +5,7 @@
   // its whole job is to break the tie between two rows that look identical on
   // price and spread. The tooltip carries the honesty the cell has no room
   // for: which parent the figure came from, and which year DE measured.
-  import { masteryBand, type DemandRead } from '../../domain/demand';
+  import type { DemandRead } from '../../contracts/generated/domain';
   import { formatLocale, t } from '../../i18n/i18n.svelte';
   import type { MessageKey } from '../../i18n/en';
 
@@ -24,7 +24,7 @@
     unknown: null,
   };
 
-  let band = $derived(demand.usage ? masteryBand(demand.usage.by_mr) : null);
+  let band = $derived(demand.usage ? demand.band : null);
 
   let title = $derived.by(() => {
     const liq = t(`demand.phrase.${demand.liquidity}`);

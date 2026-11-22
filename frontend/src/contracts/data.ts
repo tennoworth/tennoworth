@@ -256,7 +256,7 @@ export interface Market {
    *  recipe PRODUCES. Absent on older snapshots. */
   recipes?: Record<string, RecipeEntry> | null;
   /** DE's annual usage telemetry, keyed by the PARENT's slug (a part inherits
-   *  its set's figure - see `lib/demand.ts`). Absent on older snapshots. */
+   *  its set's figure - see `market_domain::scoring::UsageIndex`). Absent on older snapshots. */
   usage?: Record<string, UsageRecord> | null;
   /** Compact immutable annual history for same-category percentage-point
    *  comparisons. Historical rows intentionally omit Mastery-Rank curves. */

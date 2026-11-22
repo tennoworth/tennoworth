@@ -22,6 +22,16 @@ pub const LIQUID_VOL: f64 = 5.0;
 /// bar so both name the same items. Pinned against `MIN_PICK_SCORE` in
 /// sell-priority.ts by `tests/fixtures/sell-priority/pick-floor.json`.
 pub const MIN_PICK_SCORE: f64 = 20.0;
+/// How many Top picks, and digest lines, at most.
+pub const MAX_PICKS: usize = 5;
+
+/// Whether a row is a Top pick: copies to sell, a book that moves, not a dip
+/// to wait out (`hold`; a flooded drop still counts), and the bar cleared.
+/// The Sell view's `selectPicks` applies the same rule, pinned by
+/// `tests/fixtures/sell-priority/pick-floor.json`.
+pub fn is_pick(sellable: f64, patience: bool, hold: bool, score: f64) -> bool {
+    sellable > 0.0 && !patience && !hold && score >= MIN_PICK_SCORE
+}
 /// At/under this 48 h volume a listing barely moves - flagged `patience`.
 /// The patience bar has no TypeScript copy: the score that carries it is native.
 const PATIENCE_VOL: f64 = 3.0;
@@ -160,6 +170,20 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(floor["min_pick_score"].as_f64(), Some(MIN_PICK_SCORE));
+        assert_eq!(floor["max_picks"].as_u64(), Some(MAX_PICKS as u64));
+        for case in floor["cases"].as_array().unwrap() {
+            assert_eq!(
+                is_pick(
+                    case["sellable"].as_f64().unwrap(),
+                    case["patience"].as_bool().unwrap(),
+                    case["timing"] == "hold",
+                    case["score"].as_f64().unwrap(),
+                ),
+                case["pick"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+        }
     }
 
     // Ported 1:1 from frontend/src/domain/sell-priority.test.ts so the two

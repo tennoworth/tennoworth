@@ -84,6 +84,11 @@ pub enum Liquidity {
     Thin,
     Unknown,
 }
+/// Demand from DE's own telemetry. Spread and volume say what is traded, not
+/// what is wanted: two 12p parts can look alike while one belongs to a weapon
+/// 5% of players run. Two honesties the views must carry: usage is measured on
+/// the parent, so a part's figure is inherited (`inherited`), and it is annual
+/// and published in arrears (`usage.year`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct DemandRead {
     pub usage: Option<UsageEntry>,
@@ -458,6 +463,28 @@ mod tests {
         request.owned.first_mut().unwrap().1.count = f64::MAX;
         request.market.items.get_mut("item").unwrap().avg = Some(f64::MAX);
         assert!(score_inventory(request).is_err());
+    }
+
+    /// A usage curve peaking at `peak`, with a little mass either side.
+    fn curve(peak: f64) -> Vec<f64> {
+        (0..34)
+            .map(|mr| (9.0 - (f64::from(mr) - peak).abs() * 1.2).max(0.0))
+            .collect()
+    }
+
+    #[test]
+    fn the_mastery_band_brackets_the_peak_and_clamps_at_the_ends() {
+        let band = mastery_band(&curve(10.0)).unwrap();
+        assert!(band.from < 10 && band.to > 10);
+        let (low, high) = (
+            mastery_band(&curve(5.0)).unwrap(),
+            mastery_band(&curve(28.0)).unwrap(),
+        );
+        assert!(low.to < high.from);
+        assert_eq!(mastery_band(&curve(0.0)).unwrap().from, 0);
+        assert_eq!(mastery_band(&curve(33.0)).unwrap().to, 33);
+        assert_eq!(mastery_band(&[0.0; 34]), None);
+        assert_eq!(mastery_band(&[]), None);
     }
 
     /// The table half of the shared scan: what score_inventory answers for the
