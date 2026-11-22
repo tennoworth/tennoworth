@@ -4,6 +4,9 @@ export default defineConfig({
   testDir: './tests/browser',
   outputDir: 'test-results/responsive',
   fullyParallel: false,
+  // GitHub's Linux runners have 4 cores and Playwright defaults to half of
+  // them. The suite is the critical path of audit, so CI uses all four.
+  workers: process.env.CI ? 4 : undefined,
   timeout: 45_000,
   expect: { timeout: 10_000 },
   use: {
