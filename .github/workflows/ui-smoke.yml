@@ -69,6 +69,8 @@ jobs:
               - 'rust/tennoworth-desktop/**'
               - 'rust/wfm-client/**'
               - 'rust/market-domain/**'
+              - 'rust/market-domain-web/**'
+              - 'scripts/build-domain-wasm.ts'
               - 'rust/game-acquisition/**'
               - 'rust/wfm-trading/**'
               - 'frontend/src/**'
@@ -153,6 +155,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-key: windows-desktop-release-${{ steps.windows-ocr.outputs.compatibility-key }}
+          targets: wasm32-unknown-unknown
 
       - name: Stage pinned OCR model
         uses: ./.github/actions/stage-tessdata
@@ -253,6 +256,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-key: linux-ubuntu-24.04-debug-${{ steps.runner-image.outputs.version }}
+          targets: wasm32-unknown-unknown
       - name: Install native build and display dependencies
         run: >-
           sudo apt-get update && sudo apt-get install -y --no-install-recommends

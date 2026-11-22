@@ -6,6 +6,9 @@ dist/
 frontend/test-results/
 # The preview's wasm32 build of rust/market-domain-wasm (bun run build:domain-wasm).
 frontend/src/dev/generated/
+# The view rules, rust/market-domain-web for wasm32 (bun run build:web-domain);
+# the frontend's dev, test and build scripts compile it from the current tree.
+frontend/src/generated/
 .playwright-mcp/
 *.tmp
 rust_out

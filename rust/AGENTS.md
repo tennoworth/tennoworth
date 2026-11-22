@@ -25,7 +25,10 @@ build and check commands are in ../CONTRIBUTING.md. Crate-specific rules:
 - `wfm-scrape` is the ONLY market pipeline and runs only on the host.
 - `market-domain` holds the market heuristics, decision contracts and
   computations, free of Tauri and the network; `market-domain-wasm` exposes it to the browser preview and never
-  ships.
+  ships. `market-domain-web` ships in every frontend build as the view rules:
+  keep it a thin export layer over market-domain (the rules and their
+  `WebRequest` contract live in market-domain), and keep it small - every
+  surface downloads it before rendering.
 - `tennoworth-publisher` has no Tauri dependency and no player account
   operations; the collectors (`tennoworth-collectors`' two binaries) stay
   separate processes with their own databases.

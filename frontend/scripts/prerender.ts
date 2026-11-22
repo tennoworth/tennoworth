@@ -10,7 +10,8 @@ const root = resolve(import.meta.dirname, '..');
 const renderDir = resolve(root, 'target/public-render');
 await build({ root, logLevel: 'warn', build: { ssr: resolve(root, 'src/site/pages/render.ts'), outDir: renderDir, emptyOutDir: true, copyPublicDir: false } });
 try {
-  const { render, PublicPage, PublicHome } = await import(pathToFileURL(resolve(renderDir, 'render.js')).href);
+  const { render, PublicPage, PublicHome, installNative } = await import(pathToFileURL(resolve(renderDir, 'render.js')).href);
+  installNative(new Uint8Array(await readFile(resolve(root, 'src/generated/market-domain-web.wasm'))));
   const market = JSON.parse(await readFile(resolve(root, 'public/market.json'), 'utf8')) as Market;
   const selected = pilotItems;
   if (selected.length < 10 || selected.some(slug => !market.items[slug])) throw new Error('Item pilot has incomplete snapshot coverage');

@@ -9,6 +9,7 @@ pub mod planners;
 pub mod scoring;
 pub mod stamp;
 pub mod trade_session;
+pub mod web;
 
 pub mod dispatch;
 pub mod orders;

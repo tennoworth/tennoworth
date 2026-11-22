@@ -32,6 +32,13 @@ const DESKTOP_CONNECT_SRC = "connect-src 'self' ipc://localhost http://ipc.local
 // asks its own `art` protocol (Rust caches them from tennoworth.app), which
 // Tauri exposes as `art://localhost` and, on Windows, `http://art.localhost`.
 const HOSTED_IMG_SRC = "img-src 'self' data:";
+// The site and the desktop webview compile the view rules (rust/market-domain-web,
+// frontend/src/domain/native.ts) from a same-origin .wasm file. 'wasm-unsafe-eval'
+// permits WebAssembly compilation only, not eval() or new Function(); script
+// sources stay 'self'. The private dashboard runs no wasm and keeps the plain
+// directive.
+const APP_SCRIPT_SRC = "script-src 'self' 'wasm-unsafe-eval'";
+const ADMIN_SCRIPT_SRC = "script-src 'self'";
 const DESKTOP_IMG_SRC = "img-src 'self' data: art://localhost http://art.localhost";
 
 const DIRECTIVES = [
@@ -39,7 +46,7 @@ const DIRECTIVES = [
   // No non-self origins: WFM has no CORS, warframestat dropped theirs;
   // everything (market.json, wfstat-catalog.json) is baked same-origin.
   HOSTED_CONNECT_SRC,
-  "script-src 'self'",
+  APP_SCRIPT_SRC,
   "style-src 'self' 'unsafe-inline'",
   HOSTED_IMG_SRC,
   "font-src 'self'",
@@ -51,6 +58,9 @@ const DIRECTIVES = [
 
 const full = DIRECTIVES.join('; ');
 const metaDirectives = DIRECTIVES.filter((d) => !d.startsWith('frame-ancestors'));
+const ADMIN_DIRECTIVES = DIRECTIVES.map((d) => (d === APP_SCRIPT_SRC ? ADMIN_SCRIPT_SRC : d));
+const adminFull = ADMIN_DIRECTIVES.join('; ');
+const adminMetaDirectives = ADMIN_DIRECTIVES.filter((d) => !d.startsWith('frame-ancestors'));
 
 // The desktop header: same directives with connect-src and img-src swapped.
 const DESKTOP_SWAPS = new Map([
@@ -89,12 +99,12 @@ const TARGETS = [
   {
     path: 'deploy/caddy/Caddyfile-admin',
     re: /^(\s*Content-Security-Policy ").*(")$/m,
-    replacement: `$1${full}$2`,
+    replacement: `$1${adminFull}$2`,
   },
   {
     path: 'frontend/admin.html',
     re: META_RE,
-    replacement: metaReplacement(metaDirectives),
+    replacement: metaReplacement(adminMetaDirectives),
   },
   {
     path: 'deploy/caddy/Caddyfile',

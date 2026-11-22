@@ -15,5 +15,6 @@ export default defineConfig({
     environment: 'jsdom',
     globals: false,
     include: ['src/**/*.test.{ts,svelte}'],
+    setupFiles: ['src/dev/testing/native-setup.ts'],
   },
 });

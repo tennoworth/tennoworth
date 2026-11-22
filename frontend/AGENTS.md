@@ -55,6 +55,15 @@ baked `/wfstat-catalog.json` the webview hands it. All UI code joins through
 `market.items[slug]` (stats) and `market.catalog[name_lower]` (slug
 lookup).
 
+### View rules are native
+A calculation a view applies synchronously belongs in Rust: expose it from
+`rust/market-domain-web` (a function of numbers, or a `WebRequest` op in
+`market-domain/src/web.rs`) and call it through `src/domain/native.ts`, not as
+a TypeScript copy. The module is instantiated before any surface mounts, so a
+call from `$derived` or a component is plain and synchronous; a new entry
+point must await it the way `main.ts` does, and `admin.html` does not load it
+yet. The unit suite installs it in `src/dev/testing/native-setup.ts`.
+
 ### The desktop preview runs native calculations
 `?preview-desktop` answers `evaluate_domain` from `rust/market-domain-wasm`
 compiled to wasm32 (`bun run build:domain-wasm`; loader in
@@ -232,7 +241,10 @@ companion CLI. The policy also has private-dashboard copies in `admin.html` and
 **edited in ONE**: `scripts/sync-csp.ts`. Change the directives there,
 run `bun run csp` to rewrite all copies; `bun run build` fails via its
 prebuild `--check` if any copy drifted. (The meta copies deliberately
-omits `frame-ancestors` - browsers ignore it in meta tags.)
+omits `frame-ancestors` - browsers ignore it in meta tags.) `script-src`
+carries `'wasm-unsafe-eval'` on the site and desktop for the view rules
+module (WebAssembly compilation only, not `eval`); the dashboard copies keep
+plain `'self'`.
 
 **Desktop (Tauri) policy is a committed copy in
 `rust/tennoworth-desktop/tauri.conf.json`** (`app.security.csp`), generated

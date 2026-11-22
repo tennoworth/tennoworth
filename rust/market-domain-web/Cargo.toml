@@ -1,0 +1,18 @@
+[package]
+name = "market-domain-web"
+version = "0.1.0"
+edition = "2021"
+description = "The synchronous view rules of market-domain, compiled for the site and the desktop webview."
+license = "MIT"
+publish = false
+
+[lib]
+# cdylib is the wasm32 module the views load; rlib lets the host suite test it.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+market-domain = { path = "../market-domain" }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

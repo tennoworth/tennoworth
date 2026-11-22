@@ -72,6 +72,7 @@ rust/
     pipeline/                build: CSV input, render, reconcile, history, publication
   market-domain/             market heuristics (math), inventory, scoring, advisor, planners
   market-domain-wasm/        market-domain for the browser desktop preview (wasm32)
+  market-domain-web/         the view rules every surface loads before rendering (wasm32)
   wfm-client/                shared request policy and transport primitives
   announcement-feed/         pure curated announcement feed contract
   tennoworth-publisher/      private publisher API, SQLite history and feed export
@@ -197,6 +198,7 @@ flowchart TD
   Core --> Client
   Core --> Market
   Wasm[market-domain-wasm] --> Market
+  Web[market-domain-web] --> Market
   Scrape[wfm-scrape] --> Market
   Scrape --> Client
   Publisher[tennoworth-publisher] --> Feed
@@ -402,15 +404,30 @@ controllers guard response generations, clear obsolete evidence, expose pending
 or failed calculations, and preserve local editing state. UI filtering stays
 synchronous over native facts. There is no TypeScript sell score: the Sell
 table shows score_inventory's facts, and the homepage's hand-off sample is
-scored by the pipeline (`handoff_sample`). The views keep fixture-gated copies
-of the clearing price, sellable quantity and pick rule they apply per row, and
-market-only browsing keeps the history chart shaping. The `?preview-desktop` development host
+scored by the pipeline (`handoff_sample`).
+
+Rules the views apply synchronously, per row inside `$derived`, run from
+`market-domain-web`: market-domain compiled to wasm32 and instantiated before
+any surface mounts. `main.ts` fetches the module beside each surface's own
+startup work; the prerender and the unit suite pass its bytes to
+`installNative` in `frontend/src/domain/native.ts`, the page side. Rules over
+plain numbers are wasm functions of numbers (`clearingPrice`, `sellableQty`);
+rules over objects take one JSON request in wasm memory, typed by
+`WebRequest` in `rust/market-domain/src/web.rs` and its generated
+`contracts/generated/web.ts` (`selectPicks`). A TypeScript file in `domain/`
+that wraps a native rule keeps only the call and the thresholds the views
+print. The module is built from the current tree by the frontend's dev, test
+and build scripts and is never committed. It costs about 135 KB (57 KB
+gzipped), most of it number parsing, formatting and the allocator that every
+JSON rule shares. The site and the desktop policy grant `'wasm-unsafe-eval'`
+for it, which allows WebAssembly compilation only; script sources stay `'self'`,
+and the private dashboard, which loads no wasm, does not grant it.
+
+Market-only browsing keeps the history chart shaping. The `?preview-desktop` development host
 has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
 `DomainRequest::execute`, compiled to wasm32 by `scripts/build-domain-wasm.ts`
 and loaded by `frontend/src/dev/preview/domain-wasm.ts`. The preview therefore shows
 native results and there is no TypeScript copy of the planners to keep in step.
-The dev server alone grants the page `'wasm-unsafe-eval'`; the shipped CSP
-copies do not.
 
 `frontend/src/contracts/generated/` contains Rust-derived declarations. The
 ordinary Rust tests compare them against current types. To update intentionally:

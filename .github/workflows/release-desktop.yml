@@ -252,6 +252,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-key: windows-desktop-release-${{ steps.windows-ocr.outputs.compatibility-key }}
+          targets: wasm32-unknown-unknown
 
       - name: Stage pinned OCR model
         uses: ./.github/actions/stage-tessdata
@@ -420,6 +421,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-key: linux-ubuntu-24.04-release-${{ steps.runner-image.outputs.version }}
+          targets: wasm32-unknown-unknown
 
       # Identical list to audit.yml's - without these the *-sys crates fail at
       # pkg-config before anything builds.

@@ -2,15 +2,15 @@
 //!
 //! The only implementation of the score: the desktop table, tray and planners
 //! read it, and the host pipeline scores the homepage's hand-off sample with it.
-//! `frontend/src/domain/sell-priority.ts` keeps only what the views apply
-//! synchronously - the clearing price, sellable quantity and the thresholds -
-//! pinned to the values here by shared fixtures.
+//! The views call the clearing price, quantities and pick rule synchronously
+//! through `market-domain-web`; `frontend/src/domain/sell-priority.ts` keeps
+//! only the call shape and the thresholds it prints, pinned to the values here
+//! by shared fixtures.
 //!
-//! Purity is preserved (no I/O, no deps, no clocks) like everything here. The
-//! one subtlety is JS truthiness: `clearingPrice` in sell-priority.ts reads
-//! every field as `Number(x) || 0`, so `0`, `NaN`, and a missing key all
-//! collapse to `0` and fall through to the next fallback. [`truthy`] mirrors
-//! that exactly.
+//! No I/O and no clock, like everything here. Snapshot fields arrive as the
+//! page read them (`Number(x) || 0`), so `0`, `NaN` and a missing key all
+//! mean "no figure" and fall through to the next fallback; [`truthy`] keeps
+//! that reading for callers that pass raw numbers.
 
 /// Below this many closed trades / 48 h the book is too thin to trust its ask
 /// as a forecast - the ask clamp, the trend badges and the thin liquidity
@@ -29,6 +29,27 @@ pub const MAX_PICKS: usize = 5;
 /// to wait out (`hold`; a flooded drop still counts), and the bar cleared.
 /// The Sell view's `selectPicks` applies the same rule, pinned by
 /// `tests/fixtures/sell-priority/pick-floor.json`.
+/// One row as Top picks and the evening digest read it.
+#[derive(Debug, Clone, Copy)]
+pub struct PickCandidate {
+    pub sellable: f64,
+    pub patience: bool,
+    pub hold: bool,
+    pub score: f64,
+}
+
+/// Indices of the first `cap` rows that are picks, in the given order: rows
+/// arrive best-first, and re-sorting here would hide a caller that stopped
+/// guaranteeing it.
+pub fn select_picks(rows: &[PickCandidate], cap: usize) -> Vec<usize> {
+    rows.iter()
+        .enumerate()
+        .filter(|(_, r)| is_pick(r.sellable, r.patience, r.hold, r.score))
+        .map(|(i, _)| i)
+        .take(cap)
+        .collect()
+}
+
 pub fn is_pick(sellable: f64, patience: bool, hold: bool, score: f64) -> bool {
     sellable > 0.0 && !patience && !hold && score >= MIN_PICK_SCORE
 }
@@ -98,19 +119,42 @@ fn truthy(x: f64) -> f64 {
 }
 
 /// How many copies are actually listable: owned minus whichever holds back
-/// more, the user's reserve or the count of leveled (XP > 0, untradeable)
-/// copies - they don't stack. Clamped at 0. 1:1 with `sellableQty` in
-/// sell-priority.ts.
+/// more, the user's "Keep copies" reserve or the leveled copies. Warframe
+/// trades only unranked gear, so a leveled (XP > 0) copy already satisfies the
+/// "don't sell my only copy" intent the reserve exists for: they don't stack.
+/// Clamped at 0, so a stale or edited reserve can never go negative.
 pub fn sellable_qty(count: i64, reserve: i64, leveled: i64) -> i64 {
     (count - reserve.max(leveled)).max(0)
 }
 
-/// What a listing would realistically clear at - the sanity-clamped ask. 1:1
-/// with `clearingPrice` in sell-priority.ts:
+/// [`sellable_qty`] over the snapshot's JSON numbers.
+pub fn sellable(count: f64, reserve: f64, leveled: f64) -> f64 {
+    (count - reserve.max(leveled)).max(0.0)
+}
+
+/// The Spares preset's notion of sellable: copies you would otherwise dissolve
+/// for endo. Owning a ranked copy (`kept_lvl` > 0, the one you use) makes every
+/// tradeable copy a spare; otherwise one is kept to rank later. Leveled copies
+/// never count. `None` is "no individual copy recorded".
+pub fn spare_qty(count: f64, kept_lvl: Option<f64>, leveled: f64) -> f64 {
+    let tradeable = (count - leveled).max(0.0);
+    if kept_lvl.is_some_and(|level| level > 0.0) {
+        tradeable
+    } else {
+        (tradeable - 1.0).max(0.0)
+    }
+}
+
+/// What a listing would realistically clear at - the sanity-clamped ask. The
+/// lowest live ask is usually the honest answer, but any account can set it
+/// for free, so it is checked against the closed-trade median:
 ///  - no live ask → median, else avg, floor 1;
-///  - a troll undercut (ask < median/3) → the median;
+///  - a troll undercut (ask < median/3) → the median. One 1p ask under a
+///    stable 38p median once cratered akbolto receiver's score, killed its
+///    peak pill and fired a Baro deal badge; a lone listing absorbs one sale;
 ///  - a thin book (vol < LIQUID_VOL) with an aspirational ask (> 1.5× median)
-///    → 1.5× median;
+///    → 1.5× median. A vol-2 scene with one 100p ask over a 10p median once
+///    ranked #7; on a thin book the closed trades are the evidence;
 ///  - otherwise the live ask (on a liquid book the ask is real information).
 pub fn clearing_price(m: &PricedEntry) -> f64 {
     let low_sell = truthy(m.low_sell);
@@ -186,8 +230,6 @@ mod tests {
         }
     }
 
-    // Ported 1:1 from frontend/src/domain/sell-priority.test.ts so the two
-    // suites move together.
     fn m(vol: f64, low_sell: f64, avg: f64, median_now: f64, median_90d: f64) -> PricedEntry {
         PricedEntry {
             vol,
@@ -334,5 +376,59 @@ mod tests {
         assert_eq!(sellable_qty(5, 1, 2), 3); // leveled wins
         assert_eq!(sellable_qty(5, 3, 1), 2); // reserve wins
         assert_eq!(sellable_qty(4, 0, 4), 0); // all leveled
+    }
+
+    #[test]
+    fn sellable_over_json_numbers_matches_the_integer_rule() {
+        for (count, reserve, leveled) in [(5, 1, 2), (5, 3, 1), (4, 0, 4), (2, 5, 0), (3, 0, 5)] {
+            assert_eq!(
+                sellable(f64::from(count), f64::from(reserve), f64::from(leveled)),
+                sellable_qty(count.into(), reserve.into(), leveled.into()) as f64
+            );
+        }
+    }
+
+    #[test]
+    fn spares_are_every_copy_beside_a_ranked_one_else_all_but_one() {
+        assert_eq!(spare_qty(4.0, Some(5.0), 0.0), 4.0);
+        assert_eq!(spare_qty(4.0, Some(1.0), 0.0), 4.0);
+        assert_eq!(spare_qty(4.0, None, 0.0), 3.0);
+        assert_eq!(spare_qty(4.0, Some(0.0), 0.0), 3.0);
+        assert_eq!(spare_qty(1.0, None, 0.0), 0.0);
+        assert_eq!(spare_qty(0.0, None, 0.0), 0.0);
+        assert_eq!(spare_qty(3.0, Some(5.0), 3.0), 0.0);
+        assert_eq!(spare_qty(3.0, Some(5.0), 1.0), 2.0);
+        assert_eq!(spare_qty(3.0, None, 1.0), 1.0);
+    }
+
+    #[test]
+    fn picks_filter_and_truncate_without_resorting() {
+        let row = |score: f64| PickCandidate {
+            sellable: 5.0,
+            patience: false,
+            hold: false,
+            score,
+        };
+        let rows = [
+            row(30.0),
+            row(90.0),
+            PickCandidate {
+                hold: true,
+                ..row(500.0)
+            },
+            PickCandidate {
+                patience: true,
+                ..row(500.0)
+            },
+            PickCandidate {
+                sellable: 0.0,
+                ..row(500.0)
+            },
+            row(MIN_PICK_SCORE - 0.01),
+            row(MIN_PICK_SCORE),
+        ];
+        assert_eq!(select_picks(&rows, MAX_PICKS), vec![0, 1, 6]);
+        assert_eq!(select_picks(&rows, 1), vec![0]);
+        assert!(select_picks(&[], MAX_PICKS).is_empty());
     }
 }

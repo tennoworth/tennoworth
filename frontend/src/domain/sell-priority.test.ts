@@ -1,6 +1,10 @@
 // @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
-import { clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
+//
+// The rules are native; these run them through the view module, so they also
+// check what the wrappers hand it (missing fields, a null kept_lvl, hold rows).
+import { clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE } from './sell-priority.js';
+import pickFloor from '../../../tests/fixtures/sell-priority/pick-floor.json';
 
 describe('clearingPrice', () => {
   it('uses the live ask when it agrees with the median', () => {
@@ -34,6 +38,11 @@ describe('clearingPrice', () => {
     expect(clearingPrice({ low_sell: 0, median_now: 42, avg: 50, vol: 5 })).toBe(42);
     expect(clearingPrice({ low_sell: 0, median_now: 0, avg: 50, vol: 5 })).toBe(50);
     expect(clearingPrice({ low_sell: 0, median_now: 0, avg: 0, vol: 5 })).toBe(1);
+  });
+
+  it('reads a missing row or garbage fields as no figure', () => {
+    expect(clearingPrice(null)).toBe(1);
+    expect(clearingPrice({ low_sell: 'x', median_now: Number.NaN, avg: 7 })).toBe(7);
   });
 
   it('uses median_90d when median_now is absent (pre-split snapshots)', () => {
@@ -95,8 +104,6 @@ describe('selectPicks', () => {
 
   it('excludes rows below the score floor', () => {
     const rows = [row({ sell_score: 5 }), row({ sell_score: 19.9 })];
-    expect(selectPicks(rows, { minScore: 20 })).toEqual([]);
-    // default floor (MIN_PICK_SCORE) behaves the same without an explicit option
     expect(selectPicks(rows)).toEqual([]);
   });
 
@@ -108,6 +115,10 @@ describe('selectPicks', () => {
   it('excludes hold rows, which would sell near their 90-day low', () => {
     const rows = [row({ sell_score: 500, timing: 'hold' }), row({ sell_score: 400, timing: 'peak', key: 'peak' })];
     expect(selectPicks(rows).map((r) => r.key)).toEqual(['peak']);
+  });
+
+  it('reads a missing score or quantity as zero', () => {
+    expect(selectPicks([row({ sell_score: Number.NaN }), row({ sellable: undefined })])).toEqual([]);
   });
 
   it('excludes rows with nothing sellable', () => {
@@ -122,12 +133,12 @@ describe('selectPicks', () => {
     expect(picks.map((r) => r.key)).toEqual([0, 1, 2]);
   });
 
-  it('defaults the cap to MAX_PICKS', () => {
-    const rows = Array.from({ length: MAX_PICKS + 3 }, () => row());
-    expect(selectPicks(rows)).toHaveLength(MAX_PICKS);
+  it('defaults the cap to the native pick count', () => {
+    const rows = Array.from({ length: pickFloor.max_picks + 3 }, () => row());
+    expect(selectPicks(rows)).toHaveLength(pickFloor.max_picks);
   });
 
-  it('defaults the score floor to MIN_PICK_SCORE', () => {
+  it('holds the score floor at MIN_PICK_SCORE', () => {
     const rows = [row({ sell_score: MIN_PICK_SCORE - 0.01 }), row({ sell_score: MIN_PICK_SCORE })];
     expect(selectPicks(rows)).toEqual([row({ sell_score: MIN_PICK_SCORE })]);
   });
@@ -136,8 +147,8 @@ describe('selectPicks', () => {
     // Deliberately out of score order. If selectPicks ever re-sorted, this
     // would come back ['high', 'low'] and mask a caller regression instead
     // of surfacing it.
-    const rows = [row({ sell_score: 10, key: 'low' }), row({ sell_score: 90, key: 'high' })];
-    const picks = selectPicks(rows, { minScore: 1 });
+    const rows = [row({ sell_score: 30, key: 'low' }), row({ sell_score: 90, key: 'high' })];
+    const picks = selectPicks(rows);
     expect(picks.map((r) => r.key)).toEqual(['low', 'high']);
   });
 });

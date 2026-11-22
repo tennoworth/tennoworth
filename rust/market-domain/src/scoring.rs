@@ -288,8 +288,7 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
             median_now: m.median_now.unwrap_or(0.0),
             median_90d: m.median_90d.unwrap_or(0.0),
         };
-        let available = (owned.count - request.reserve_copies.max(owned.leveled))
-            .max(0.0)
+        let available = sell_priority::sellable(owned.count, request.reserve_copies, owned.leveled)
             .min(
                 request
                     .availability
@@ -304,12 +303,7 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
                     .unwrap_or(f64::INFINITY),
             );
         let sellable = if request.spares_only {
-            let tradeable = (owned.count - owned.leveled).max(0.0);
-            if owned.kept_lvl.is_some_and(|v| v > 0.0) {
-                tradeable.min(available)
-            } else {
-                (tradeable - 1.0).max(0.0).min(available)
-            }
+            sell_priority::spare_qty(owned.count, owned.kept_lvl, owned.leveled).min(available)
         } else {
             available
         };
