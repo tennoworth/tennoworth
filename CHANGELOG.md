@@ -198,7 +198,7 @@ The relic overlay now reads reward names that wrap onto two lines, such as a Pri
 
 ### Relic overlay
 
-- **Two-line reward names are recognized** A reward whose name wraps onto two lines, like "Wisp Prime - Châssis (Schéma)", showed "Reward not recognized" when it was drawn over bright item art. The overlay now reads only the text lines of each title, at a larger size, and recognizes it in every game language. <!-- app-note {"id":"relic-two-line-titles","kind":"fixed"} -->
+- **Two-line reward names are recognized** A reward whose name wraps onto two lines, like "Wisp Prime - Châssis (Schéma)", showed "Reward not recognized" when it was drawn over bright item art. The overlay now reads only the text lines of each title, at a larger size, and recognizes it in every game language. Thanks to @Owlcricket for reporting it and offering to test. <!-- app-note {"id":"relic-two-line-titles","kind":"fixed"} -->
 - **Rewards appear sooner and more reliably** When a relic opens, the game logs the rewards before it draws their names. The overlay now waits for the names instead of spending its attempts on the loading screen, so it shows all four rewards on its first look. <!-- app-note {"id":"relic-wait-for-names","kind":"improved"} -->
 
 ### Linux

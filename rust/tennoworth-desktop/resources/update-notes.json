@@ -2015,7 +2015,7 @@
           "id": "relic-two-line-titles",
           "kind": "fixed",
           "title": "Two-line reward names are recognized",
-          "body": "A reward whose name wraps onto two lines, like \"Wisp Prime - Châssis (Schéma)\", showed \"Reward not recognized\" when it was drawn over bright item art. The overlay now reads only the text lines of each title, at a larger size, and recognizes it in every game language.",
+          "body": "A reward whose name wraps onto two lines, like \"Wisp Prime - Châssis (Schéma)\", showed \"Reward not recognized\" when it was drawn over bright item art. The overlay now reads only the text lines of each title, at a larger size, and recognizes it in every game language. Thanks to @Owlcricket for reporting it and offering to test.",
           "platforms": [
             "windows",
             "linux"
