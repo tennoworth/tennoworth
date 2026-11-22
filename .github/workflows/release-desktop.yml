@@ -430,6 +430,14 @@ jobs:
           librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev
           xvfb xauth dbus-x11
 
+      # bundleMediaFramework (tauri.conf.json) copies the build host's GStreamer
+      # plugins into the AppImage. Without autoaudiosink (plugins-good) WebKit
+      # aborts on warframe.market's sign-in page, whose bot check touches audio,
+      # and the bundled GStreamer finds no plugins on non-Debian hosts. The
+      # bundler's GStreamer step also needs patchelf, or tauri build fails.
+      - name: Install the GStreamer plugins the AppImage bundles
+        run: sudo apt-get install -y --no-install-recommends gstreamer1.0-plugins-base gstreamer1.0-plugins-good patchelf
+
       - name: Stage OCR language model
         uses: ./.github/actions/stage-tessdata
 

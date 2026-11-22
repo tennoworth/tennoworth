@@ -1328,6 +1328,7 @@ Finish or discard pending Trade Session listing batches before downgrading; olde
 ### Selling
 
 - **No more sign-in passphrase** Signing in to warframe.market no longer asks you to choose a passphrase, and later launches never ask for one. The saved sign-in is encrypted with a key kept in your system keyring, or in a file only your user can read where there is no keyring, as in Steam Deck Gaming Mode. If you signed in with "Remember on this device", you stay signed in; otherwise sign in once more. <!-- app-note {"id":"no-signin-passphrase","kind":"improved"} -->
+- **The sign-in window works on more Linux systems** On systems without GStreamer's audio plugins, including SteamOS, the warframe.market sign-in page crashed a few seconds after opening and the app fell back to asking for a pasted session token. The AppImage now carries those plugins. <!-- app-note {"id":"signin-window-audio-crash","kind":"fixed"} -->
 
 ## 0.6.0 - 2026-08-22
 
