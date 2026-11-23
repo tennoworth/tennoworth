@@ -1,58 +1,20 @@
+// The board's basket and visit phase are native (market_domain::baro), like
+// the board itself; this file is their call shape.
 import type { BaroRow } from '../contracts/generated/domain';
-
-export interface DucatBasket {
-  /** Ducats the worthwhile items cost, all together. */
-  needed: number;
-  /** How many items that is. */
-  count: number;
-  /** How many of them scrapping every spare part would cover, best value
-   *  first. */
-  coveredByScrapping: number;
-  /** What the basket resells for at 90-day baselines. */
-  resale: number;
-}
+import type { DucatBasket } from '../contracts/generated/web';
+import { call, jsNumber } from './native';
 
 /**
- * What his stock costs, and how far your spare parts would go toward it.
- *
- * **There is no ducat balance here, because we cannot see one.** Ducats are
- * account state, not an item, so an inventory scan never observes them - the
- * only ducat figure a scan can derive is what your spare prime parts would
- * yield IF you scrapped them. An earlier version passed that potential in as
- * `ducatsHeld` and treated it as money already banked, then went on to propose
- * scrapping those very same parts to cover the remainder: the same ducats
- * counted twice, and a plan wrong in the user's favour.
- *
- * Rows arrive in rank order from the native Baro calculation.
- *
- * So this takes the potential explicitly and reports COVERAGE, never
- * affordability.
- *
- * "Worthwhile" is flip-or-hold: skip and thin rows are excluded, because
- * sizing the basket with items the board just told the user not to buy would
- * inflate it.
+ * What his stock costs, and how far your spare parts would go toward it -
+ * coverage, never affordability: a scan cannot see a ducat balance
+ * (market_domain::baro::ducat_basket says why). Rows arrive in rank order
+ * from the native Baro calculation.
  */
 export function ducatBasket(rows: BaroRow[], scrapPotential: number): DucatBasket {
-  const basket = rows.filter(
-    (r) => (r.verdict === 'flip' || r.verdict === 'hold') && (r.ducats ?? 0) > 0,
-  );
-  const needed = basket.reduce((sum, r) => sum + (r.ducats ?? 0), 0);
-
-  let spent = 0;
-  let coveredByScrapping = 0;
-  for (const r of basket) {
-    const cost = r.ducats ?? 0;
-    if (spent + cost > scrapPotential) break;
-    spent += cost;
-    coveredByScrapping += 1;
-  }
-  const resale = basket.reduce((sum, r) => sum + (r.baseline ?? r.price ?? 0), 0);
-  return {
-    needed,
-    count: basket.length,
-    coveredByScrapping,
-    resale: Math.round(resale),
-  };
+  return call({ op: 'ducat_basket', input: {
+    rows: rows.map((r) => ({ verdict: r.verdict, ducats: r.ducats ?? null, baseline: r.baseline ?? null, price: r.price ?? null })),
+    scrap_potential: jsNumber(scrapPotential),
+  } });
 }
 
 /**
@@ -66,13 +28,11 @@ export function baroPhase(
   expiry: string | undefined,
   now: number,
 ): { phase: 'here' | 'incoming' | 'unknown'; windowMs: number | null } {
-  const start = activation ? Date.parse(activation) : NaN;
-  const end = expiry ? Date.parse(expiry) : NaN;
-  if (Number.isFinite(end) && now < end && Number.isFinite(start) && now >= start) {
-    return { phase: 'here', windowMs: end - now };
-  }
-  if (Number.isFinite(start) && now < start) return { phase: 'incoming', windowMs: start - now };
-  return { phase: 'unknown', windowMs: null };
+  return call({ op: 'baro_phase', input: {
+    activation_ms: jsNumber(activation ? Date.parse(activation) : NaN),
+    expiry_ms: jsNumber(expiry ? Date.parse(expiry) : NaN),
+    now_ms: jsNumber(now),
+  } });
 }
 
 /**

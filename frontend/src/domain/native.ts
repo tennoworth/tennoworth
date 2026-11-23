@@ -7,7 +7,7 @@
 // Two kinds of export: rules over plain numbers are wasm functions of numbers;
 // rules over snapshot objects go through `call`, a JSON request in wasm
 // memory (contracts/generated/web.ts types both ends).
-import type { WebRequest, WebResponse } from '../contracts/generated/web';
+import type { JsNumber, WebRequest, WebResponse } from '../contracts/generated/web';
 
 interface WebExports {
   memory: WebAssembly.Memory;
@@ -16,7 +16,6 @@ interface WebExports {
   web_call(ptr: number, len: number): number;
   web_result_len(): number;
   web_sellable_qty(count: number, reserve: number, leveled: number): number;
-  web_spare_qty(count: number, keptLvl: number, leveled: number): number;
   web_clearing_price(vol: number, lowSell: number, avg: number, medianNow: number, median90d: number): number;
   web_crowded_book(low5: number, low20: number, sells: number): number;
   web_delta_pct(medianNow: number, median90d: number): number;
@@ -24,6 +23,8 @@ interface WebExports {
   web_order_unit_price(platinum: number, lot: number): number;
   web_order_lot_price(unit: number, lot: number): number;
   web_weekend_nudge(weekday: number): number;
+  web_valid_session_lot(quantity: number, lot: number, bulk: number): number;
+  web_trades_to_sell(quantity: number, bulk: number): number;
 }
 
 let exports: WebExports | null = null;
@@ -62,4 +63,12 @@ export function call<R extends WebRequest>(request: R): ResultOf<R['op']> {
   const answer = JSON.parse(text) as { ok: WebResponse } | { error: string };
   if ('error' in answer) throw new Error(answer.error);
   return answer.ok.result as ResultOf<R['op']>;
+}
+
+/** A number as a native rule reads it (market_domain::js::JsNumber): what
+ *  `Number(x)` gives, as a JS comparison or arithmetic on `x` would read it.
+ *  JSON has no NaN or infinities, so those travel as their names. */
+export function jsNumber(x: unknown): JsNumber {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : (String(n) as Exclude<JsNumber, number>);
 }

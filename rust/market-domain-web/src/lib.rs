@@ -9,6 +9,7 @@
 use market_domain::calendar;
 use market_domain::listing;
 use market_domain::math::sell_priority;
+use market_domain::trade_session;
 use market_domain::web::WebRequest;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -36,12 +37,6 @@ fn error_json(message: &str) -> String {
 #[no_mangle]
 pub extern "C" fn web_sellable_qty(count: f64, reserve: f64, leveled: f64) -> f64 {
     sell_priority::sellable(count, reserve, leveled)
-}
-
-/// Spare copies; a non-finite `kept_lvl` is "no individual copy".
-#[no_mangle]
-pub extern "C" fn web_spare_qty(count: f64, kept_lvl: f64, leveled: f64) -> f64 {
-    sell_priority::spare_qty(count, kept_lvl.is_finite().then_some(kept_lvl), leveled)
 }
 
 /// What a listing would realistically clear at (`sell_priority::clearing_price`).
@@ -152,6 +147,17 @@ pub extern "C" fn web_weekend_nudge(weekday: f64) -> u32 {
         Some(calendar::WeekendNudge::During) => 2,
     }
 }
+/// Whether `quantity` copies can trade `lot` at a time; 1 or 0, as is `bulk`.
+#[no_mangle]
+pub extern "C" fn web_valid_session_lot(quantity: f64, lot: f64, bulk: i32) -> i32 {
+    i32::from(trade_session::valid_session_lot(quantity, lot, bulk != 0))
+}
+
+/// The fewest trades that sell `quantity` copies; `bulk` is 1 or 0.
+#[no_mangle]
+pub extern "C" fn web_trades_to_sell(quantity: f64, bulk: i32) -> f64 {
+    trade_session::trades_to_sell(quantity, bulk != 0)
+}
 
 #[cfg(test)]
 mod tests {
@@ -176,8 +182,6 @@ mod tests {
     #[test]
     fn the_scalar_exports_are_the_domain_rules() {
         assert_eq!(web_sellable_qty(5.0, 1.0, 2.0), 3.0);
-        assert_eq!(web_spare_qty(4.0, 5.0, 0.0), 4.0);
-        assert_eq!(web_spare_qty(4.0, f64::NAN, 0.0), 3.0);
         assert_eq!(web_clearing_price(20.0, 1.0, 0.0, 38.0, 0.0), 38.0);
         assert!(web_crowded_book(69.0, 70.0, 50.0));
         assert!(!web_crowded_book(50.0, 55.5, 40.0));
@@ -200,5 +204,9 @@ mod tests {
             ],
             [2, 0, 1, 2]
         );
+        assert_eq!(web_valid_session_lot(12.0, 6.0, 1), 1);
+        assert_eq!(web_valid_session_lot(12.0, 6.0, 0), 0);
+        assert_eq!(web_trades_to_sell(9.0, 1), 2.0);
+        assert_eq!(web_trades_to_sell(9.0, 0), 9.0);
     }
 }
