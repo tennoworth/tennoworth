@@ -8,7 +8,8 @@ import { createStateStore } from './adapters/state-store';
 import { initTheme } from './ui/theme';
 import { installDesktopExternalLinkHandler } from './adapters/runtime';
 import { MISSING_NATIVE, startNative } from './domain/native';
-import webDomainUrl from './generated/market-domain-web.wasm?url';
+import desktopRulesUrl from './generated/market-domain-web.wasm?url';
+import siteRulesUrl from './generated/market-domain-site.wasm?url';
 
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
 // installs a stub Tauri runtime BEFORE anything sniffs for it, so the
@@ -41,7 +42,10 @@ const store = createStateStore();
 // components, so every surface waits for the module before it mounts. Fetched
 // beside the surface's own startup work, not before it. On the hosted site a
 // failed load leaves the prerendered page in place, as a failed chunk does.
-const nativeReady = fetch(webDomainUrl)
+// The hosted site loads the build without the desktop-only rules.
+const hostedSurface = !overlaySurface && !noticeSurface && store.mode !== 'tauri'
+  && !(import.meta.env.DEV && new URLSearchParams(location.search).has('styleguide'));
+const nativeReady = fetch(hostedSurface ? siteRulesUrl : desktopRulesUrl)
   .then(response => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(`${MISSING_NATIVE} (${response.status})`))))
   .then(startNative);
 // Keep the overlay's transparent, scroll-locked document CSS out of the hosted

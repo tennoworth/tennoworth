@@ -2,6 +2,11 @@
 //! `market-domain-web` (the wasm32 module the site and the desktop webview
 //! load before they render). Rules over plain numbers skip this: that crate
 //! exports them as functions of numbers.
+//!
+//! Ops gated on `desktop-views` serve desktop-only views; the hosted site's
+//! build leaves them out (and with them their readers), so the module every
+//! visitor downloads carries only what the site calls.
+#![cfg_attr(not(feature = "desktop-views"), allow(unused_imports))]
 
 use crate::buyers::{self, BuyerCompareRequest, BuyerComparison};
 use crate::calendar;
@@ -67,10 +72,10 @@ pub struct TopTagsRequest {
 }
 
 macro_rules! web_operations {
-    ($($name:ident: $input:ty => $output:ty = $run:expr),+ $(,)?) => {
+    ($($(#[$gate:meta])* $name:ident: $input:ty => $output:ty = $run:expr),+ $(,)?) => {
         #[derive(TS)]
         #[ts(tag = "op", content = "input", rename_all = "snake_case")]
-        pub enum WebRequest { $($name($input)),+ }
+        pub enum WebRequest { $($(#[$gate])* $name($input)),+ }
 
         // The derived adjacently tagged form compiles every input's
         // deserializer twice (once to buffer an `input` that arrives before
@@ -80,7 +85,7 @@ macro_rules! web_operations {
             fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
                 #[derive(Deserialize)]
                 #[serde(rename_all = "snake_case")]
-                enum Op { $($name),+ }
+                enum Op { $($(#[$gate])* $name),+ }
                 #[derive(Deserialize)]
                 struct Envelope<'a> {
                     op: Op,
@@ -88,24 +93,25 @@ macro_rules! web_operations {
                     input: &'a serde_json::value::RawValue,
                 }
                 let Envelope { op, input } = Envelope::deserialize(d)?;
-                match op { $(Op::$name => serde_json::from_str(input.get()).map(Self::$name)),+ }
+                match op { $($(#[$gate])* Op::$name => serde_json::from_str(input.get()).map(Self::$name)),+ }
                     .map_err(serde::de::Error::custom)
             }
         }
 
         #[derive(Serialize, TS)]
         #[serde(tag = "op", content = "result", rename_all = "snake_case")]
-        pub enum WebResponse { $($name($output)),+ }
+        pub enum WebResponse { $($(#[$gate])* $name($output)),+ }
 
         impl WebRequest {
             pub fn execute(self) -> Result<WebResponse, String> {
-                match self { $(Self::$name(input) => ($run)(input).map(WebResponse::$name)),+ }
+                match self { $($(#[$gate])* Self::$name(input) => ($run)(input).map(WebResponse::$name)),+ }
             }
         }
     };
 }
 
 web_operations! {
+    #[cfg(feature = "desktop-views")]
     SelectPicks: PicksRequest => Vec<usize> = |input: PicksRequest| Ok::<_, String>(
         sell_priority::select_picks(
             &input.rows.into_iter().map(PickCandidate::from).collect::<Vec<_>>(),
@@ -119,24 +125,31 @@ web_operations! {
     VaultedTop: VaultedRequest => Vec<usize> = |input: VaultedRequest| Ok::<_, String>(browse::vaulted_top(&input)),
     DispositionChanges: DispositionRequest => Vec<usize> = |input: DispositionRequest| browse::disposition_changes(&input),
     HandoffSample: HandoffRequest => Vec<HandoffPick> = |input: HandoffRequest| Ok::<_, String>(browse::handoff_sample(&input)),
+    #[cfg(feature = "desktop-views")]
     FindBargains: BargainsRequest => Vec<BargainLead> = |input: BargainsRequest| Ok::<_, String>(browse::find_bargains(&input)),
     MetaDrift: MetaDriftRequest => Option<MetaDrift> = |input: MetaDriftRequest| meta_drift::meta_drift(&input),
     YearViews: YearViewsRequest => Vec<YearView> = |input: YearViewsRequest| Ok::<_, String>(advisor::year_views(&input)),
+    #[cfg(feature = "desktop-views")]
     PriceFromRule: PriceRuleRequest => Option<f64> = |input: PriceRuleRequest| Ok::<_, String>(
         listing::price_from_rule(input.rule, &input.evidence)
     ),
+    #[cfg(feature = "desktop-views")]
     ReasonableLowestAsk: LiveAskRequest => LiveAskRead = |input: LiveAskRequest| Ok::<_, String>(
         listing::reasonable_lowest_ask(&input.asks, input.median)
     ),
+    #[cfg(feature = "desktop-views")]
     AssessListings: HealthRequest => HealthReport = |input: HealthRequest| Ok::<_, String>(
         listing::assess_listings(&input.orders, &input.prefs)
     ),
+    #[cfg(feature = "desktop-views")]
     SelectDrifted: DriftRequest => Vec<DriftRow> = |input: DriftRequest| Ok::<_, String>(
         listing::select_drifted(&input.orders, input.limit.unwrap_or(listing::DRIFT_LIMIT))
     ),
+    #[cfg(feature = "desktop-views")]
     InterruptedBatch: BatchRequest => Option<InterruptedBatch> = |input: BatchRequest| Ok::<_, String>(
         listing::interrupted_batch(&input.statuses)
     ),
+    #[cfg(feature = "desktop-views")]
     CompareBuyers: BuyerCompareRequest => BuyerComparison = |input: BuyerCompareRequest| Ok::<_, String>(
         buyers::compare_buyers(&input)
     ),
@@ -146,57 +159,77 @@ web_operations! {
     CalendarEvents: calendar::CalendarRequest => Vec<calendar::events::DatedEvent> = |input: calendar::CalendarRequest| Ok::<_, String>(
         calendar::events::build(&input.market, &input.feed, input.owned.as_deref(), input.now)
     ),
+    #[cfg(feature = "desktop-views")]
     SellResults: sell_filter::SellFilterRequest => Vec<sell_filter::SellResult> = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
         sell_filter::sell_results(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     SellTags: sell_filter::SellFilterRequest => Vec<sell_filter::AvailableTag> = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
         sell_filter::available_tags(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     SellEmptyReason: sell_filter::SellFilterRequest => sell_filter::EmptyReason = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
         sell_filter::empty_reason(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     TagGroups: Vec<String> => Vec<tags::TagGroup> = |input: Vec<String>| Ok::<_, String>(
         input.iter().map(|tag| tags::tag_group(tag)).collect()
     ),
+    #[cfg(feature = "desktop-views")]
     TopTags: TopTagsRequest => Vec<String> = |input: TopTagsRequest| Ok::<_, String>(
         tags::top_tags(&input.available, input.limit.map_or(tags::TOP_TAGS, |n| n.0))
     ),
+    #[cfg(feature = "desktop-views")]
     SplitByTrades: trade_session::TradeSplitRequest => trade_session::TradeSplit = |input: trade_session::TradeSplitRequest| Ok::<_, String>(
         trade_session::split_by_trades(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     LedgerTotals: Vec<ledger::LedgerTrade> => ledger::LedgerTotals = |input: Vec<ledger::LedgerTrade>| Ok::<_, String>(
         ledger::totals(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     LedgerSince: ledger::LedgerSinceRequest => Vec<usize> = |input: ledger::LedgerSinceRequest| Ok::<_, String>(
         ledger::since(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     SoldByItem: Vec<ledger::LedgerTrade> => Vec<ledger::SoldItemTotal> = |input: Vec<ledger::LedgerTrade>| Ok::<_, String>(
         ledger::sold_by_item(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     TopSellers: ledger::TopSellersRequest => ledger::TopSellers = |input: ledger::TopSellersRequest| Ok::<_, String>(
         ledger::top_sellers(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     MedianWeek: Vec<ledger::WeekPlat> => Option<f64> = |input: Vec<ledger::WeekPlat>| Ok::<_, String>(
         ledger::median_week(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     DucatBasket: baro::BasketRequest => baro::DucatBasket = |input: baro::BasketRequest| Ok::<_, String>(
         baro::ducat_basket(&input)
     ),
     BaroPhase: baro::PhaseRequest => baro::BaroPhase = |input: baro::PhaseRequest| Ok::<_, String>(
         baro::baro_phase(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     DiffOwned: inventory::DiffOwnedRequest => Vec<(String, f64)> = |input: inventory::DiffOwnedRequest| Ok::<_, String>(
         inventory::diff_owned(&input)
     ),
+    #[cfg(feature = "desktop-views")]
     ExtractRivens: ExtractRivensRequest => Vec<OwnedRiven> =
         |input: ExtractRivensRequest| Ok::<_, String>(rivens::extract_rivens(&input.upgrades)),
+    #[cfg(feature = "desktop-views")]
     ResolveRivens: ResolveRivensRequest => Vec<Option<usize>> =
         |input: ResolveRivensRequest| Ok::<_, String>(rivens::resolve_rivens(&input.rivens, &input.game_refs)),
+    #[cfg(feature = "desktop-views")]
     RivenRows: RivenRowsRequest => Vec<RivenRow> = |input: RivenRowsRequest| Ok::<_, String>(rivens::riven_rows(&input)),
+    #[cfg(feature = "desktop-views")]
     RivenSimilarity: RivenSimilarityRequest => Vec<Option<f64>> =
         |input: RivenSimilarityRequest| Ok::<_, String>(rivens::riven_similarities(&input)),
+    #[cfg(feature = "desktop-views")]
     SplicedTraits: () => Vec<&'static str> = |(): ()| Ok::<_, String>(rivens::spliced_traits()),
+    #[cfg(feature = "desktop-views")]
     AppraiseRiven: AppraiseRequest => Appraisal = |input: AppraiseRequest| Ok::<_, String>(input.run()),
+    #[cfg(feature = "desktop-views")]
     DescribeRivenComps: DescribeCompsRequest => CompsSampleRead = |input: DescribeCompsRequest| {
         Ok::<_, String>(rivens::appraise::describe_comps(&input.comps, input.now_ms))
     },

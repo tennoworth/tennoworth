@@ -423,8 +423,13 @@ how the page reads its fields, and the thresholds the views print. Ties
 that the page broke with `localeCompare` are broken by `math::collate`,
 pinned to the engines by `tests/fixtures/collation/ascii.json`. The module is
 built from the current tree by the frontend's dev, test and build scripts and
-is never committed. `WebRequest` reads its input after its op so each reader
-is compiled once. A rule over snapshot surfaces reads them as JSON, field by
+is never committed, in two builds: the hosted site and its prerender load
+one without the ops gated on `desktop-views` (orders, rivens, the Sell
+workspace, ledger, Baro planning), about 325 KB (117 KB gzipped); the desktop,
+overlay and unit suite load every op, about 580 KB (177 KB gzipped). Most of
+either is serde: each op's request reader and response writer, plus the number
+formatting and allocator they share. `WebRequest` reads its input after its op
+so each reader is compiled once. A rule over snapshot surfaces reads them as JSON, field by
 field (`market_domain::calendar`): derived deserialization of the calendar's
 surfaces alone cost the module over 200 KB more. The announcement feed's
 reader (`domain/announcements.ts`) stays TypeScript beside its Rust twin,

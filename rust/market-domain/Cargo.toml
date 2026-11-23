@@ -18,5 +18,11 @@ ts-rs = { workspace = true }
 [dev-dependencies]
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
+[features]
+default = ["desktop-views"]
+# The desktop-only WebRequest ops (web.rs). market-domain-web's site build turns
+# it off so the hosted module carries only the ops the site calls.
+desktop-views = []
+
 [lints]
 workspace = true

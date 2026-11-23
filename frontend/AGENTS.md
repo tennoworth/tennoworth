@@ -62,7 +62,10 @@ A calculation a view applies synchronously belongs in Rust: expose it from
 a TypeScript copy. The module is instantiated before any surface mounts, so a
 call from `$derived` or a component is plain and synchronous; a new entry
 point must await it the way `main.ts` does, and `admin.html` does not load it
-yet. The unit suite installs it in `src/dev/testing/native-setup.ts`. A
+yet. The unit suite installs it in `src/dev/testing/native-setup.ts`. The hosted
+site loads `market-domain-site.wasm`, built without the `desktop-views` ops: an
+op the site calls must not carry that gate in `market-domain/src/web.rs`; the
+prerender and `tests/public/` run against that build, so a missing op fails them. A
 script or Playwright spec that imports a `domain/` module directly holds its
 own copy of `native.ts` and installs the module itself, as
 `scripts/prerender.ts` and `tests/public/pages.spec.ts` do.

@@ -5,7 +5,7 @@ import { decisionAnswer, decisionText, formatStampUtc, priceText, publicData } f
 import { installNative } from '../../src/domain/native';
 
 // The expected text is computed here with the same native rules the build ran.
-installNative(readFileSync('src/generated/market-domain-web.wasm'));
+installNative(readFileSync('src/generated/market-domain-site.wasm'));
 
 // The built pages carry the bundled snapshot, which every desktop release
 // refreshes. Expected text comes from it; model.test.ts pins the arithmetic.

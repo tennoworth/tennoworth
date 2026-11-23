@@ -14,7 +14,7 @@ try {
   const { render, PublicPage, PublicHome, installNative } = await import(pathToFileURL(resolve(renderDir, 'render.js')).href);
   // The page model below is this script's own import, not the bundle's, so
   // each copy of the native module needs the rules installed.
-  const rules = new Uint8Array(await readFile(resolve(root, 'src/generated/market-domain-web.wasm')));
+  const rules = new Uint8Array(await readFile(resolve(root, 'src/generated/market-domain-site.wasm')));
   installNative(rules);
   installScriptNative(rules);
   const market = JSON.parse(await readFile(resolve(root, 'public/market.json'), 'utf8')) as Market;
