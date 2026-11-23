@@ -18,6 +18,8 @@ interface WebExports {
   web_sellable_qty(count: number, reserve: number, leveled: number): number;
   web_spare_qty(count: number, keptLvl: number, leveled: number): number;
   web_clearing_price(vol: number, lowSell: number, avg: number, medianNow: number, median90d: number): number;
+  web_order_unit_price(platinum: number, lot: number): number;
+  web_order_lot_price(unit: number, lot: number): number;
 }
 
 let exports: WebExports | null = null;
