@@ -164,6 +164,24 @@ status: string | null,
  */
 avg: number | null, };
 
-export type WebRequest = { "op": "select_picks", "input": PicksRequest } | { "op": "browse_index", "input": BrowseIndexRequest } | { "op": "slug_name", "input": string } | { "op": "search_items", "input": SearchRequest } | { "op": "top_movers", "input": MoversRequest } | { "op": "vaulted_top", "input": VaultedRequest } | { "op": "disposition_changes", "input": DispositionRequest } | { "op": "handoff_sample", "input": HandoffRequest } | { "op": "find_bargains", "input": BargainsRequest } | { "op": "meta_drift", "input": MetaDriftRequest };
+export type WebRequest = { "op": "select_picks", "input": PicksRequest } | { "op": "browse_index", "input": BrowseIndexRequest } | { "op": "slug_name", "input": string } | { "op": "search_items", "input": SearchRequest } | { "op": "top_movers", "input": MoversRequest } | { "op": "vaulted_top", "input": VaultedRequest } | { "op": "disposition_changes", "input": DispositionRequest } | { "op": "handoff_sample", "input": HandoffRequest } | { "op": "find_bargains", "input": BargainsRequest } | { "op": "meta_drift", "input": MetaDriftRequest } | { "op": "year_views", "input": YearViewsRequest };
 
-export type WebResponse = { "op": "select_picks", "result": Array<number> } | { "op": "browse_index", "result": BrowseNames } | { "op": "slug_name", "result": string } | { "op": "search_items", "result": Array<number> } | { "op": "top_movers", "result": Movers } | { "op": "vaulted_top", "result": Array<number> } | { "op": "disposition_changes", "result": Array<number> } | { "op": "handoff_sample", "result": Array<HandoffPick> } | { "op": "find_bargains", "result": Array<BargainLead> } | { "op": "meta_drift", "result": MetaDrift | null };
+export type WebResponse = { "op": "select_picks", "result": Array<number> } | { "op": "browse_index", "result": BrowseNames } | { "op": "slug_name", "result": string } | { "op": "search_items", "result": Array<number> } | { "op": "top_movers", "result": Movers } | { "op": "vaulted_top", "result": Array<number> } | { "op": "disposition_changes", "result": Array<number> } | { "op": "handoff_sample", "result": Array<HandoffPick> } | { "op": "find_bargains", "result": Array<BargainLead> } | { "op": "meta_drift", "result": MetaDrift | null } | { "op": "year_views", "result": Array<YearView> };
+
+export type YearStats = { latest: number, latestIdx: number, baseline: number, deltaPct: number | null, high: number, low: number, tradedDays: number, };
+
+export type YearView = { stats: YearStats | null, weekly: Array<number>, };
+
+export type YearViewsRequest = {
+/**
+ * Each series' daily medians, a non-number as `null`.
+ */
+medians: Array<Array<number | null>>,
+/**
+ * Defaults to 20 traded days.
+ */
+min_days?: number,
+/**
+ * Defaults to 52.
+ */
+buckets?: number, };

@@ -20,7 +20,8 @@
   } from '../../domain/market-browse';
   import Sparkline from '../../ui/Sparkline.svelte';
   import { hasSparkline } from '../../ui/sparkline';
-  import { weekly, yearStats, type History } from '../../domain/history';
+  import { yearViews, type History, type HistorySeries } from '../../domain/history';
+  import type { YearStats } from '../../contracts/generated/web';
   import MetaDriftPanel from './MetaDriftPanel.svelte';
   import { shimmer, type ShimmerMode } from '../../ui/shimmer';
 
@@ -92,13 +93,6 @@
       histState = history ? 'ready' : 'unavailable';
     }
   }
-  function yearFor(slug: string) {
-    const s = history?.items[slug];
-    if (!s) return null;
-    const stats = yearStats(s);
-    if (!stats) return null;
-    return { stats, spark: weekly(s, 52) };
-  }
   let yearMode = $derived(showYear && histState === 'ready');
 
   // Index + the standing reports are pure derivations of the snapshot.
@@ -129,6 +123,23 @@
     document.getElementById(`ctx-tab-${ids[next]}`)?.focus();
   }
   let sample = $derived(handoff ? handoffSample(market, index) : []);
+  // One native call for every row the 1-year columns show.
+  let years = $derived.by(() => {
+    const out = new Map<string, { stats: YearStats; spark: number[] }>();
+    if (!yearMode || !history) return out;
+    const shown = [...new Set([...results, ...movers.risers, ...movers.fallers, ...vaulted].map((r) => r.slug))];
+    const series = shown.flatMap((slug): Array<[string, HistorySeries]> => {
+      const s = history!.items[slug];
+      return s ? [[slug, s]] : [];
+    });
+    yearViews(series.map(([, s]) => s)).forEach(({ stats, weekly }, i) => {
+      if (stats) out.set(series[i]![0], { stats, spark: weekly });
+    });
+    return out;
+  });
+  function yearFor(slug: string) {
+    return years.get(slug) ?? null;
+  }
   function dispoDelta(from: number, to: number): string {
     const d = to - from;
     return `${d > 0 ? '+' : ''}${d.toFixed(2)}`;

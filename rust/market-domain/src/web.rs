@@ -7,6 +7,7 @@ use crate::math::sell_priority::{self, PickCandidate};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::advisor::{self, YearView, YearViewsRequest};
 use crate::browse::{
     self, BargainLead, BargainsRequest, BrowseIndexRequest, BrowseNames, DispositionRequest,
     HandoffPick, HandoffRequest, Movers, MoversRequest, SearchRequest, VaultedRequest,
@@ -98,12 +99,13 @@ web_operations! {
     HandoffSample: HandoffRequest => Vec<HandoffPick> = |input: HandoffRequest| Ok::<_, String>(browse::handoff_sample(&input)),
     FindBargains: BargainsRequest => Vec<BargainLead> = |input: BargainsRequest| Ok::<_, String>(browse::find_bargains(&input)),
     MetaDrift: MetaDriftRequest => Option<MetaDrift> = |input: MetaDriftRequest| meta_drift::meta_drift(&input),
+    YearViews: YearViewsRequest => Vec<YearView> = |input: YearViewsRequest| Ok::<_, String>(advisor::year_views(&input)),
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     fn call(request: serde_json::Value) -> serde_json::Value {
         let request: WebRequest = serde_json::from_str(&request.to_string()).unwrap();
@@ -136,6 +138,21 @@ mod tests {
             call(json!({ "op": "slug_name", "input": "lato_prime" })),
             json!({ "op": "slug_name", "result": "Lato Prime" })
         );
+        let views = call(
+            json!({ "op": "year_views", "input": { "medians": [[10, null, 12]], "min_days": 0, "buckets": 1 } }),
+        );
+        assert_eq!(views["result"][0]["weekly"], json!([11.0]));
+        assert_eq!(views["result"][0]["stats"]["latestIdx"], json!(2));
+        let days: Vec<_> = (0..104).map(|d| json!(f64::from(d))).collect();
+        let defaults = call(json!({ "op": "year_views", "input": { "medians": [days] } }));
+        assert_eq!(
+            defaults["result"][0]["weekly"].as_array().unwrap().len(),
+            52
+        );
+        assert_eq!(defaults["result"][0]["stats"]["tradedDays"], json!(104));
+        let thin: Vec<_> = (0..19).map(|d| json!(f64::from(d))).collect();
+        let thin = call(json!({ "op": "year_views", "input": { "medians": [thin] } }));
+        assert_eq!(thin["result"][0]["stats"], Value::Null);
         assert_eq!(
             call(json!({ "op": "meta_drift", "input": { "usage_history": null } })),
             json!({ "op": "meta_drift", "result": null })

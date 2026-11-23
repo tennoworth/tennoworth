@@ -429,8 +429,8 @@ typed reader, plus the number parsing, formatting and allocator they share.
 The site and the desktop policy grant `'wasm-unsafe-eval'` for it, which allows WebAssembly compilation only; script sources stay `'self'`,
 and the private dashboard, which loads no wasm, does not grant it.
 
-Market-only browsing keeps the history chart shaping. The `?preview-desktop` development host
-has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
+Market-only browsing's one-year columns are native too (`yearViews`). The
+`?preview-desktop` development host has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
 `DomainRequest::execute`, compiled to wasm32 by `scripts/build-domain-wasm.ts`
 and loaded by `frontend/src/dev/preview/domain-wasm.ts`. The preview therefore shows
 native results and there is no TypeScript copy of the planners to keep in step.
