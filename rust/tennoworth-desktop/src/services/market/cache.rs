@@ -266,7 +266,10 @@ fn validated_market_stamp(body: &str) -> Option<String> {
 
 /// Whether a snapshot stamped `fetched` may replace one stamped `held`, at
 /// `now`. Shared with the webview through
-/// `tests/fixtures/market-contract/ordering.json`.
+/// `tests/fixtures/market-contract/ordering.json`, except on an equal stamp
+/// (`cache_replaces` there): the webview keeps the prices it shows, while the
+/// cache takes the body so it stores the server's new ETag. Refusing it would
+/// keep the stale ETag and download the full body on every refresh.
 fn stamp_replaces(held: Option<&str>, fetched: &str, now: jiff::Timestamp) -> bool {
     let Some(held) = held.and_then(stamp_instant) else {
         return true;
@@ -992,7 +995,10 @@ mod tests {
                     case["next"].as_str().unwrap(),
                     now
                 ),
-                case["replaces"].as_bool().unwrap(),
+                case.get("cache_replaces")
+                    .unwrap_or(&case["replaces"])
+                    .as_bool()
+                    .unwrap(),
                 "{}",
                 case["name"]
             );

@@ -67,7 +67,8 @@ export function isMarket(value: unknown): value is Market {
 /** Whether a snapshot stamped `next` should replace one stamped `current` at
  *  `nowMs`: when nothing usable is held, or `next` is strictly newer. A held
  *  stamp more than an hour ahead of the clock is no evidence of being newer;
- *  a 2099 stamp once blocked every later snapshot. */
+ *  a 2099 stamp once blocked every later snapshot. The desktop cache also
+ *  takes an equal stamp, to store its new ETag; ordering.json pins both. */
 export function replacesMarket(current: string | null | undefined, next: string, nowMs: number): boolean {
   const held = Date.parse(current ?? '');
   if (!Number.isFinite(held) || held - nowMs > MAX_FUTURE_SKEW_MS) return true;

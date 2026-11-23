@@ -21,6 +21,14 @@
     "replaces": false
   },
   {
+    "name": "the same stamp again: the page keeps what it shows, the cache stores it and its new ETag",
+    "now": "2026-10-13T12:00:00Z",
+    "current": "2026-10-13T10:00:00Z",
+    "next": "2026-10-13T10:00:00Z",
+    "replaces": false,
+    "cache_replaces": true
+  },
+  {
     "name": "held stamp within clock skew still orders",
     "now": "2026-10-13T12:00:00Z",
     "current": "2026-10-13T12:30:00Z",
