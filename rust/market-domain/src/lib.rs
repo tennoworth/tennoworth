@@ -18,6 +18,7 @@ pub mod baro;
 
 pub mod browse;
 pub mod buyers;
+pub mod calendar;
 pub mod listing;
 pub mod meta_drift;
 mod page;

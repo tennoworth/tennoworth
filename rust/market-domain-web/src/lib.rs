@@ -6,6 +6,7 @@
 //! [`web_result_len`] bytes of JSON at the returned pointer and frees both.
 //! `frontend/src/domain/native.ts` is that page side.
 
+use market_domain::calendar;
 use market_domain::listing;
 use market_domain::math::sell_priority;
 use market_domain::web::WebRequest;
@@ -141,6 +142,17 @@ pub extern "C" fn web_result_len() -> usize {
     RESULT_LEN.load(Ordering::SeqCst)
 }
 
+/// 0 for no nudge, 1 to list before the weekend, 2 during it; `weekday` is
+/// `Date.prototype.getDay` in the reader's zone (`calendar::weekend_nudge`).
+#[no_mangle]
+pub extern "C" fn web_weekend_nudge(weekday: f64) -> u32 {
+    match calendar::weekend_nudge(weekday) {
+        None => 0,
+        Some(calendar::WeekendNudge::Before) => 1,
+        Some(calendar::WeekendNudge::During) => 2,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,5 +191,14 @@ mod tests {
         assert!(web_order_unit_price(12.0, 7.0).is_nan());
         assert_eq!(web_order_lot_price(7.2, 5.0), 36.0);
         assert!(web_order_lot_price(0.0, 1.0).is_nan());
+        assert_eq!(
+            [
+                web_weekend_nudge(0.0),
+                web_weekend_nudge(1.0),
+                web_weekend_nudge(4.0),
+                web_weekend_nudge(6.0)
+            ],
+            [2, 0, 1, 2]
+        );
     }
 }

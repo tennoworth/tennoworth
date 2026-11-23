@@ -23,6 +23,7 @@ interface WebExports {
   web_bargain_holds(flip: boolean, seenAsk: number, ask: number, bid: number): number;
   web_order_unit_price(platinum: number, lot: number): number;
   web_order_lot_price(unit: number, lot: number): number;
+  web_weekend_nudge(weekday: number): number;
 }
 
 let exports: WebExports | null = null;

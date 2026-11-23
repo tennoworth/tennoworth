@@ -423,11 +423,17 @@ how the page reads its fields, and the thresholds the views print. Ties
 that the page broke with `localeCompare` are broken by `math::collate`,
 pinned to the engines by `tests/fixtures/collation/ascii.json`. The module is
 built from the current tree by the frontend's dev, test and build scripts and
-is never committed. It costs about 280 KB (101 KB gzipped): each JSON rule's
-typed reader, plus the number parsing, formatting and allocator they share.
-`WebRequest` reads its input after its op so each reader is compiled once.
-The site and the desktop policy grant `'wasm-unsafe-eval'` for it, which allows WebAssembly compilation only; script sources stay `'self'`,
-and the private dashboard, which loads no wasm, does not grant it.
+is never committed. `WebRequest` reads its input after its op so each reader
+is compiled once. A rule over snapshot surfaces reads them as JSON, field by
+field (`market_domain::calendar`): derived deserialization of the calendar's
+surfaces alone cost the module over 200 KB more. The announcement feed's
+reader (`domain/announcements.ts`) stays TypeScript beside its Rust twin,
+`announcement-feed`, both held to `tests/fixtures/announcements/`: it guards
+a fetched input on every surface including the private dashboard, and sharing
+the crate would add its URL and date parsers to the module, about 400 KB. The
+site and the desktop policy grant `'wasm-unsafe-eval'` for it, which allows
+WebAssembly compilation only; script sources stay `'self'`, and the private
+dashboard, which loads no wasm, does not grant it.
 
 Market-only browsing's one-year columns are native too (`yearViews`). The
 `?preview-desktop` development host has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same

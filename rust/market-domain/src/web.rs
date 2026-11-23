@@ -4,6 +4,7 @@
 //! exports them as functions of numbers.
 
 use crate::buyers::{self, BuyerCompareRequest, BuyerComparison};
+use crate::calendar;
 use crate::listing::{
     self, BatchRequest, DriftRequest, DriftRow, HealthReport, HealthRequest, InterruptedBatch,
     LiveAskRead, LiveAskRequest, PriceRuleRequest,
@@ -122,6 +123,12 @@ web_operations! {
     ),
     CompareBuyers: BuyerCompareRequest => BuyerComparison = |input: BuyerCompareRequest| Ok::<_, String>(
         buyers::compare_buyers(&input)
+    ),
+    CalendarFeed: calendar::CalendarRequest => Vec<calendar::feed::FeedItem> = |input: calendar::CalendarRequest| Ok::<_, String>(
+        calendar::feed::build(&input.market, input.owned.as_deref(), input.now)
+    ),
+    CalendarEvents: calendar::CalendarRequest => Vec<calendar::events::DatedEvent> = |input: calendar::CalendarRequest| Ok::<_, String>(
+        calendar::events::build(&input.market, &input.feed, input.owned.as_deref(), input.now)
     ),
 }
 
