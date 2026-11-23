@@ -7,6 +7,7 @@
 //! `frontend/src/domain/native.ts` is that page side.
 
 use market_domain::math::sell_priority;
+use market_domain::rivens::{self, appraise};
 use market_domain::web::WebRequest;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -98,6 +99,25 @@ pub extern "C" fn web_result_len() -> usize {
     RESULT_LEN.load(Ordering::SeqCst)
 }
 
+/// The DE band a riven reads (`rivens::band_tier`): 0 none, 1 unrolled,
+/// 2 rolled. The flags are whether DE published each tier; integers rather
+/// than `bool`, which the page could hand over as any number.
+#[no_mangle]
+pub extern "C" fn web_riven_band(rerolls: f64, has_unrolled: u32, has_rolled: u32) -> u32 {
+    match rivens::band_tier(rerolls, has_unrolled != 0, has_rolled != 0) {
+        None => 0,
+        Some(rivens::BandTier::Unrolled) => 1,
+        Some(rivens::BandTier::Rolled) => 2,
+    }
+}
+
+/// `appraise::rerolled_discount` of the two bands' medians (0 for a missing
+/// band); NaN when either has no price.
+#[no_mangle]
+pub extern "C" fn web_riven_rerolled_discount(unrolled_median: f64, rolled_median: f64) -> f64 {
+    appraise::rerolled_discount(unrolled_median, rolled_median).unwrap_or(f64::NAN)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +144,28 @@ mod tests {
         assert_eq!(web_spare_qty(4.0, 5.0, 0.0), 4.0);
         assert_eq!(web_spare_qty(4.0, f64::NAN, 0.0), 3.0);
         assert_eq!(web_clearing_price(20.0, 1.0, 0.0, 38.0, 0.0), 38.0);
+    }
+
+    #[test]
+    fn the_riven_exports_are_the_domain_rules() {
+        assert_eq!(web_riven_band(3.0, 1, 1), 2);
+        assert_eq!(web_riven_band(3.0, 1, 0), 1);
+        assert_eq!(web_riven_band(0.0, 0, 7), 2);
+        assert_eq!(web_riven_band(0.0, 0, 0), 0);
+        assert!((web_riven_rerolled_discount(200.0, 176.0) - 0.12).abs() < 1e-12);
+        assert!(web_riven_rerolled_discount(200.0, 0.0).is_nan());
+    }
+
+    #[test]
+    fn requests_read_the_pages_floats_exactly() {
+        // A ratio as JSON.stringify prints it: the default parser reads this
+        // one a unit in the last place off.
+        let answer: Value = serde_json::from_str(&call_json(
+            r#"{"op":"appraise_riven","input":{"price":null,"tier":{"avg":0.9090909090909091,"median":1.0000000000000002,"min":0,"max":0,"stddev":0,"pop":0},"rerolls":0,"locked":false}}"#,
+        ))
+        .unwrap();
+        let dist = &answer["ok"]["result"]["dist"];
+        assert_eq!(dist["avg"].as_f64(), Some(0.909_090_909_090_909_1));
+        assert_eq!(dist["median"].as_f64(), Some(1.0000000000000002));
     }
 }

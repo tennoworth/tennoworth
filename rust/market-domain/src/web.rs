@@ -4,6 +4,8 @@
 //! exports them as functions of numbers.
 
 use crate::math::sell_priority::{self, PickCandidate};
+use crate::rivens::appraise::{AppraiseRequest, Appraisal, CompsSampleRead, DescribeCompsRequest};
+use crate::rivens::{self, ExtractRivensRequest, OwnedRiven, ResolveRivensRequest, RivenRow, RivenRowsRequest, RivenSimilarityRequest};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -62,6 +64,18 @@ web_operations! {
             input.cap.unwrap_or(sell_priority::MAX_PICKS),
         )
     ),
+    ExtractRivens: ExtractRivensRequest => Vec<OwnedRiven> =
+        |input: ExtractRivensRequest| Ok::<_, String>(rivens::extract_rivens(&input.upgrades)),
+    ResolveRivens: ResolveRivensRequest => Vec<Option<usize>> =
+        |input: ResolveRivensRequest| Ok::<_, String>(rivens::resolve_rivens(&input.rivens, &input.game_refs)),
+    RivenRows: RivenRowsRequest => Vec<RivenRow> = |input: RivenRowsRequest| Ok::<_, String>(rivens::riven_rows(&input)),
+    RivenSimilarity: RivenSimilarityRequest => Vec<Option<f64>> =
+        |input: RivenSimilarityRequest| Ok::<_, String>(rivens::riven_similarities(&input)),
+    SplicedTraits: () => Vec<&'static str> = |(): ()| Ok::<_, String>(rivens::spliced_traits()),
+    AppraiseRiven: AppraiseRequest => Appraisal = |input: AppraiseRequest| Ok::<_, String>(input.run()),
+    DescribeRivenComps: DescribeCompsRequest => CompsSampleRead = |input: DescribeCompsRequest| {
+        Ok::<_, String>(rivens::appraise::describe_comps(&input.comps, input.now_ms))
+    },
 }
 
 #[cfg(test)]

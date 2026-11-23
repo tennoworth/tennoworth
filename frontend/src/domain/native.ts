@@ -18,6 +18,8 @@ interface WebExports {
   web_sellable_qty(count: number, reserve: number, leveled: number): number;
   web_spare_qty(count: number, keptLvl: number, leveled: number): number;
   web_clearing_price(vol: number, lowSell: number, avg: number, medianNow: number, median90d: number): number;
+  web_riven_band(rerolls: number, hasUnrolled: number, hasRolled: number): number;
+  web_riven_rerolled_discount(unrolledMedian: number, rolledMedian: number): number;
 }
 
 let exports: WebExports | null = null;

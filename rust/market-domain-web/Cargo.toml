@@ -12,7 +12,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 market-domain = { path = "../market-domain" }
-serde_json = { workspace = true }
+# Requests carry the page's numbers as JSON.stringify printed them, the
+# shortest text that reads back to the same double; the default parser can
+# land one unit in the last place away, and a view rule then disagrees with
+# the number on screen.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 
 [lints]
 workspace = true
