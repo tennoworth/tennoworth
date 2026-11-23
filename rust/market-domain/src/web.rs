@@ -3,6 +3,11 @@
 //! load before they render). Rules over plain numbers skip this: that crate
 //! exports them as functions of numbers.
 
+use crate::buyers::{self, BuyerCompareRequest, BuyerComparison};
+use crate::listing::{
+    self, BatchRequest, DriftRequest, DriftRow, HealthReport, HealthRequest, InterruptedBatch,
+    LiveAskRead, LiveAskRequest, PriceRuleRequest,
+};
 use crate::math::sell_priority::{self, PickCandidate};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -100,6 +105,24 @@ web_operations! {
     FindBargains: BargainsRequest => Vec<BargainLead> = |input: BargainsRequest| Ok::<_, String>(browse::find_bargains(&input)),
     MetaDrift: MetaDriftRequest => Option<MetaDrift> = |input: MetaDriftRequest| meta_drift::meta_drift(&input),
     YearViews: YearViewsRequest => Vec<YearView> = |input: YearViewsRequest| Ok::<_, String>(advisor::year_views(&input)),
+    PriceFromRule: PriceRuleRequest => Option<f64> = |input: PriceRuleRequest| Ok::<_, String>(
+        listing::price_from_rule(input.rule, &input.evidence)
+    ),
+    ReasonableLowestAsk: LiveAskRequest => LiveAskRead = |input: LiveAskRequest| Ok::<_, String>(
+        listing::reasonable_lowest_ask(&input.asks, input.median)
+    ),
+    AssessListings: HealthRequest => HealthReport = |input: HealthRequest| Ok::<_, String>(
+        listing::assess_listings(&input.orders, &input.prefs)
+    ),
+    SelectDrifted: DriftRequest => Vec<DriftRow> = |input: DriftRequest| Ok::<_, String>(
+        listing::select_drifted(&input.orders, input.limit.unwrap_or(listing::DRIFT_LIMIT))
+    ),
+    InterruptedBatch: BatchRequest => Option<InterruptedBatch> = |input: BatchRequest| Ok::<_, String>(
+        listing::interrupted_batch(&input.statuses)
+    ),
+    CompareBuyers: BuyerCompareRequest => BuyerComparison = |input: BuyerCompareRequest| Ok::<_, String>(
+        buyers::compare_buyers(&input)
+    ),
 }
 
 #[cfg(test)]

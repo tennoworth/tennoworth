@@ -18,10 +18,6 @@ const num = (v: unknown) => Number(v) || 0;
  *  ask; the thin-book tags print it. liquidity-boundary.json pins it. */
 export const LIQUID_VOL = 5;
 
-/** An ask this many times under the median is a troll or stale undercut, not
- *  a price. The live-ask read in price-rule.ts applies it too. */
-export const TROLL_UNDERCUT_RATIO = 3;
-
 /** The Top-picks floor, printed in the picks tooltip; pick-floor.json pins it. */
 export const MIN_PICK_SCORE = 20;
 

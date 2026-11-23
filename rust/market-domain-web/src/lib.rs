@@ -6,6 +6,7 @@
 //! [`web_result_len`] bytes of JSON at the returned pointer and frees both.
 //! `frontend/src/domain/native.ts` is that page side.
 
+use market_domain::listing;
 use market_domain::math::sell_priority;
 use market_domain::web::WebRequest;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -87,6 +88,19 @@ pub extern "C" fn web_bargain_holds(flip: bool, seen_ask: f64, ask: f64, bid: f6
     browse::bargain_holds(kind, seen_ask, ask, (!bid.is_nan()).then_some(bid))
 }
 
+/// The per-unit price of a listing whose `platinum` buys one lot; `NaN` for
+/// none. The page passes an absent lot as `1` and a non-number as `NaN`.
+#[no_mangle]
+pub extern "C" fn web_order_unit_price(platinum: f64, lot: f64) -> f64 {
+    listing::unit_price(platinum, lot).unwrap_or(f64::NAN)
+}
+
+/// The whole-platinum lot total for a per-unit price; `NaN` for none.
+#[no_mangle]
+pub extern "C" fn web_order_lot_price(unit: f64, lot: f64) -> f64 {
+    listing::lot_price(unit, lot).unwrap_or(f64::NAN)
+}
+
 static RESULT_LEN: AtomicUsize = AtomicUsize::new(0);
 
 /// A zeroed buffer of exactly `len` bytes, owned by the caller until [`web_free`].
@@ -161,5 +175,9 @@ mod tests {
         assert!(web_bargain_holds(true, 30.0, 31.0, 38.0));
         assert!(!web_bargain_holds(true, 30.0, 31.0, f64::NAN));
         assert!(web_bargain_holds(false, 14.0, 14.0, f64::NAN));
+        assert_eq!(web_order_unit_price(36.0, 5.0), 7.2);
+        assert!(web_order_unit_price(12.0, 7.0).is_nan());
+        assert_eq!(web_order_lot_price(7.2, 5.0), 36.0);
+        assert!(web_order_lot_price(0.0, 1.0).is_nan());
     }
 }

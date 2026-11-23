@@ -1,15 +1,19 @@
 import type { MarketItemEntry } from '../contracts/data';
+import { native } from './native';
 
+// A wasm f64 parameter would coerce a string or null to a number; the rule
+// reads anything but a number as invalid, so it travels as NaN.
+const wasmNumber = (value: unknown) => typeof value === 'number' ? value : Number.NaN;
+const orNull = (value: number) => Number.isNaN(value) ? null : value;
+
+/** The per-unit price of a listing (market_domain::listing::unit_price). */
 export function orderUnitPrice(platinum: number, perTrade?: number | null): number | null {
-  const lot = perTrade ?? 1;
-  return Number.isFinite(platinum) && platinum > 0 && Number.isSafeInteger(lot) && lot >= 1 && lot <= 6
-    ? platinum / lot : null;
+  return orNull(native().web_order_unit_price(wasmNumber(platinum), wasmNumber(perTrade ?? 1)));
 }
 
+/** The whole-platinum lot total for a per-unit price. */
 export function orderLotPrice(unit: number, perTrade?: number | null): number | null {
-  const lot = perTrade ?? 1;
-  return Number.isFinite(unit) && unit > 0 && Number.isSafeInteger(lot) && lot >= 1 && lot <= 6
-    ? Math.ceil(unit * lot) : null;
+  return orNull(native().web_order_lot_price(wasmNumber(unit), wasmNumber(perTrade ?? 1)));
 }
 
 /** The snapshot figures for one rank of an item, or `null` when the snapshot

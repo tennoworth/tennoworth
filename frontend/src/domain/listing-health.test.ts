@@ -1,7 +1,10 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { assessListing, assessListings, summarize, ownedKey, ownedEvidence, parseHealthPrefs } from './listing-health.js';
+import { assessListings as assessReport, ownedKey, ownedEvidence, parseHealthPrefs } from './listing-health.js';
 import { DEFAULT_PRICE_RULE } from './price-rule';
+
+const assessListings = (orders, prefs) => assessReport(orders, prefs).issues;
+const assessListing = (o, prefs) => assessListings([o], prefs);
 
 const live = (over = {}) => ({
   slug: 'x', sells: [], buys: [], low_sell: null, top_buy: null, own_ask: null, own_bid: null, error: null, ...over,
@@ -50,14 +53,14 @@ describe('assessListing', () => {
   });
 });
 
-describe('summarize / ownedKey', () => {
+describe('summary / ownedKey', () => {
   it('counts by kind', () => {
-    const issues = assessListings([
+    const { summary } = assessReport([
       order({ id: 'a', platinum: 20, live: live({ low_sell: 15 }) }),
       order({ id: 'b', platinum: 5, live: live({ low_sell: 9, top_buy: 7 }) }),
       order({ id: 'c', quantity: 3, owned: 0 }),
     ]);
-    expect(summarize(issues)).toEqual({ overpriced: 1, underbid: 1, underpriced: 0, excessQty: 0, notOwned: 1, total: 3 });
+    expect(summary).toEqual({ overpriced: 1, underbid: 1, underpriced: 0, excessQty: 0, notOwned: 1, total: 3 });
   });
   it('keys owned quantities by slug + refinement, not rank', () => {
     expect(ownedKey('lith_c5_relic', 'intact')).toBe('lith_c5_relic|intact');
@@ -180,6 +183,22 @@ describe('whole-platinum targets', () => {
     const [i] = assessListing(order({ platinum: 40 / 6, perTrade: 6, live: live({ low_sell: 6.5, sells: [6.5] }) }));
     expect(i).toMatchObject({ kind: 'overpriced', suggestedLot: 39, suggested: 6.5 });
     expect(assessListing(order({ platinum: 39 / 6, perTrade: 6, live: live({ low_sell: 6.5, sells: [6.5] }) }))).toEqual([]);
+  });
+
+  it('does not let float noise in the lot total add a platinum', () => {
+    // (2.2 - 1) x 5 is 6.000000000000001 in floating point.
+    const rule = { rule: { basis: 'low5-avg', offset: -1 }, tolerance: 0, muted: [] };
+    const [i] = assessListing(order({ platinum: 7 / 5, perTrade: 5, stats: { low5Avg: 2.2 }, live: live({ low_sell: 2, sells: [2] }) }), rule);
+    expect(i).toMatchObject({ kind: 'overpriced', suggestedLot: 6 });
+  });
+});
+
+describe('a snapshot average the entry lacks', () => {
+  // An older snapshot leaves low5_avg out; its evidence key is still there,
+  // so the live asks must not stand in for it.
+  it('gives no low5 verdict rather than averaging the live asks', () => {
+    const o = order({ platinum: 30, stats: { low5Avg: undefined, median: 2 }, live: live({ low_sell: 20, sells: [20, 22, 24] }) });
+    expect(assessListing(o, { rule: { basis: 'low5-avg', offset: 0 }, tolerance: 0, muted: [] })).toEqual([]);
   });
 });
 

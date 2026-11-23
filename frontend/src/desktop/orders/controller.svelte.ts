@@ -7,7 +7,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import { MAX_PLATINUM, MIN_PLATINUM } from '../../domain/limits';
   import { humanError } from '../../contracts/errors';
   import { selectDrifted, type DriftRow } from '../../domain/order-drift';
-  import { assessListings, summarize, ownedEvidence, type HealthIssue, type HealthPrefs } from '../../domain/listing-health';
+  import { assessListings, ownedEvidence, type HealthIssue, type HealthPrefs } from '../../domain/listing-health';
   import type { Market, MarketItemEntry } from '../../contracts/data';
   import { orderUnitPrice, orderLotPrice, cachedUnitMarket, marketAtRank } from '../../domain/order-prices';
 
@@ -335,10 +335,11 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   // individual items can never report the set itself. See `ownedEvidence`.
   let composedSlugs = $derived(input.market?.set_to_parts ? new Set(Object.keys(input.market.set_to_parts)) : null);
 
-  let health = $derived.by((): HealthIssue[] => {
-    if (liveTop.quotes.size === 0 && !input.ownedQty) return [];
+  // Nothing to assess before a live check or a scan; the tally is still native.
+  let healthReport = $derived.by(() => {
+    const checked = liveTop.quotes.size > 0 || !!input.ownedQty;
     return assessListings(
-      orders
+      (checked ? orders : [])
         .filter((o) => o.side !== 'buy')
         .map((o) => {
           const slug = itemSlug(o);
@@ -356,7 +357,8 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
       input.healthPrefs,
     );
   });
-  let healthSummary = $derived(summarize(health));
+  let health: HealthIssue[] = $derived(healthReport.issues);
+  let healthSummary = $derived(healthReport.summary);
   $effect(() => {
     input.onsummary?.(phase === 'done' ? { live: orders.length, issues: health.length } : null);
   });

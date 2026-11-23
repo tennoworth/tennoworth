@@ -18,6 +18,10 @@
 /// `tests/fixtures/sell-priority/liquidity-boundary.json`, checked from
 /// market-domain so this crate stays dependency-free.
 pub const LIQUID_VOL: f64 = 5.0;
+/// An ask this many times under the median is a troll or stale undercut, not
+/// a price: the clearing price falls back to the median, and the live-ask read
+/// of the listing rules (`crate::listing`) skips to the next ask.
+pub const TROLL_UNDERCUT_RATIO: f64 = 3.0;
 /// The priority a row needs to be a Top pick; the evening digest uses the same
 /// bar so both name the same items. Pinned against `MIN_PICK_SCORE` in
 /// sell-priority.ts by `tests/fixtures/sell-priority/pick-floor.json`.
@@ -174,7 +178,7 @@ pub fn clearing_price(m: &PricedEntry) -> f64 {
         return if median > 0.0 { median } else { avg.max(1.0) };
     }
     if median > 0.0 {
-        if low_sell * 3.0 < median {
+        if low_sell * TROLL_UNDERCUT_RATIO < median {
             return median;
         }
         if vol < LIQUID_VOL && low_sell > median * 1.5 {
