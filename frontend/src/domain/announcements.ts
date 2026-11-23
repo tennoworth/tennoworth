@@ -1,3 +1,7 @@
+// The feed's reader, at the boundary where every surface (the private dashboard
+// too) takes it in. It stays TypeScript beside its Rust twin in
+// rust/announcement-feed, both held to tests/fixtures/announcements: the twin's
+// URL and date parsers would add about 400 KB to the view-rule module.
 import type { AnnouncementFeed } from '../contracts/generated/desktop';
 import limits from '../../../tests/fixtures/announcements/limits.json';
 

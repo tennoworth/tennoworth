@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Market, OwnedRecord } from '../contracts/data';
 import { calendarEvents, eventKey } from './calendar-events';
+import dates from '../../../tests/fixtures/calendar/date-parse.json';
 
 const NOW = Date.parse('2026-10-13T09:00:00Z');
 
@@ -11,6 +12,11 @@ function owned(...slugs: string[]): Map<string, OwnedRecord> {
   return new Map(slugs.map(slug => [slug, { count: 1, name: slug, type: '', slug, subtype: null, kept_lvl: null, leveled: 0 }]));
 }
 const rotation = { from: '2026-10-01T18:00:00.000Z', to: '2026-10-29T18:00:00.000Z', frames: ['protea_prime_set', 'ivara_prime_set'] };
+
+// The native rules read dates as this engine does; the fixture pins both sides.
+it.each(dates.utc as [string, number | null][])('Date.parse(%j) is the fixture value', (raw, ms) => {
+  expect(Date.parse(raw)).toBe(ms ?? Number.NaN);
+});
 
 describe('calendarEvents', () => {
   it('marks Baro projections as estimates and keeps the confirmed visit', () => {

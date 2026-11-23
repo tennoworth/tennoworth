@@ -417,11 +417,19 @@ rules over objects take one JSON request in wasm memory, typed by
 `contracts/generated/web.ts` (`selectPicks`). A TypeScript file in `domain/`
 that wraps a native rule keeps only the call and the thresholds the views
 print. The module is built from the current tree by the frontend's dev, test
-and build scripts and is never committed. It costs about 135 KB (57 KB
-gzipped), most of it number parsing, formatting and the allocator that every
-JSON rule shares. The site and the desktop policy grant `'wasm-unsafe-eval'`
-for it, which allows WebAssembly compilation only; script sources stay `'self'`,
-and the private dashboard, which loads no wasm, does not grant it.
+and build scripts and is never committed. It costs about 216 KB (83 KB
+gzipped): about 135 KB is the number parsing, formatting and allocator that
+every JSON rule shares, and the calendar rules are most of the rest. A rule
+over snapshot surfaces reads them as JSON, field by field
+(`market_domain::calendar`): derived deserialization of the calendar's
+surfaces alone cost the module over 200 KB more. The announcement feed's
+reader (`domain/announcements.ts`) stays TypeScript beside its Rust twin,
+`announcement-feed`, both held to `tests/fixtures/announcements/`: it guards
+a fetched input on every surface including the private dashboard, and sharing
+the crate would add its URL and date parsers to the module, about 400 KB. The
+site and the desktop policy grant `'wasm-unsafe-eval'` for it, which allows
+WebAssembly compilation only; script sources stay `'self'`, and the private
+dashboard, which loads no wasm, does not grant it.
 
 Market-only browsing keeps the history chart shaping. The `?preview-desktop` development host
 has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same

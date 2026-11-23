@@ -3,6 +3,7 @@
 //! load before they render). Rules over plain numbers skip this: that crate
 //! exports them as functions of numbers.
 
+use crate::calendar;
 use crate::math::sell_priority::{self, PickCandidate};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -61,6 +62,12 @@ web_operations! {
             &input.rows.into_iter().map(PickCandidate::from).collect::<Vec<_>>(),
             input.cap.unwrap_or(sell_priority::MAX_PICKS),
         )
+    ),
+    CalendarFeed: calendar::CalendarRequest => Vec<calendar::feed::FeedItem> = |input: calendar::CalendarRequest| Ok::<_, String>(
+        calendar::feed::build(&input.market, input.owned.as_deref(), input.now)
+    ),
+    CalendarEvents: calendar::CalendarRequest => Vec<calendar::events::DatedEvent> = |input: calendar::CalendarRequest| Ok::<_, String>(
+        calendar::events::build(&input.market, &input.feed, input.owned.as_deref(), input.now)
     ),
 }
 

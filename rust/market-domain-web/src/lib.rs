@@ -6,6 +6,7 @@
 //! [`web_result_len`] bytes of JSON at the returned pointer and frees both.
 //! `frontend/src/domain/native.ts` is that page side.
 
+use market_domain::calendar;
 use market_domain::math::sell_priority;
 use market_domain::web::WebRequest;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -98,6 +99,17 @@ pub extern "C" fn web_result_len() -> usize {
     RESULT_LEN.load(Ordering::SeqCst)
 }
 
+/// 0 for no nudge, 1 to list before the weekend, 2 during it; `weekday` is
+/// `Date.prototype.getDay` in the reader's zone (`calendar::weekend_nudge`).
+#[no_mangle]
+pub extern "C" fn web_weekend_nudge(weekday: f64) -> u32 {
+    match calendar::weekend_nudge(weekday) {
+        None => 0,
+        Some(calendar::WeekendNudge::Before) => 1,
+        Some(calendar::WeekendNudge::During) => 2,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +136,14 @@ mod tests {
         assert_eq!(web_spare_qty(4.0, 5.0, 0.0), 4.0);
         assert_eq!(web_spare_qty(4.0, f64::NAN, 0.0), 3.0);
         assert_eq!(web_clearing_price(20.0, 1.0, 0.0, 38.0, 0.0), 38.0);
+        assert_eq!(
+            [
+                web_weekend_nudge(0.0),
+                web_weekend_nudge(1.0),
+                web_weekend_nudge(4.0),
+                web_weekend_nudge(6.0)
+            ],
+            [2, 0, 1, 2]
+        );
     }
 }
