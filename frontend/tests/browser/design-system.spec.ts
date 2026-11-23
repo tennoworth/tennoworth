@@ -473,10 +473,22 @@ test('selling tables label pick facts and retain readable item identities', asyn
 // Tables fit their pane in shared steps (ui/table-fit.ts): narrow first, then
 // hide ranked columns with a note naming them. Sideways scrolling inside a
 // table used to start at the default 1200px window and hid Sell's Stack value.
+// A table refits a frame after its box resizes. A busy browser can take longer
+// than a fixed pause to get there: WebKit on a loaded runner, cold-loading the
+// page and its view-rules module, once still showed the previous width's step.
+// So a table counts as overflowing only if it has not fitted within five
+// seconds; one that never fits still fails.
 async function overflowingTables(page: Page) {
-  return page.locator('.scroll:has(> table)').evaluateAll(boxes => boxes
+  const measure = () => page.locator('.scroll:has(> table)').evaluateAll(boxes => boxes
     .filter(box => (box as HTMLElement).offsetParent && box.scrollWidth > box.clientWidth + 1)
     .map(box => `${box.getAttribute('aria-label') ?? box.querySelector('th')?.textContent?.trim()}: +${box.scrollWidth - box.clientWidth}px at step ${(box as HTMLElement).dataset.fit}`));
+  const deadline = Date.now() + 5_000;
+  let overflowing = await measure();
+  while (overflowing.length && Date.now() < deadline) {
+    await page.waitForTimeout(100);
+    overflowing = await measure();
+  }
+  return overflowing;
 }
 
 test('every desktop table fits its pane from the minimum window up', async ({ page }) => {
@@ -569,6 +581,8 @@ test('the opening window shows every view in the sidebar and its foot', async ({
 });
 
 test('every hosted table fits from phone width up', async ({ page }) => {
+  // A table that never fits waits out overflowingTables at each of 12 sizes.
+  test.slow();
   const failures: string[] = [];
   for (const url of ['/', '/?q=prime']) {
     await page.goto(url);
