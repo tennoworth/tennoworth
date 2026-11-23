@@ -30,11 +30,6 @@ export function sellableQty(count: number, reserve: number, leveled = 0): number
   return native().web_sellable_qty(count, reserve, leveled);
 }
 
-/** Copies the Spares preset counts: the ones you would dissolve for endo. */
-export function spareQty(count: number, keptLvl: number | null, leveled = 0): number {
-  return native().web_spare_qty(count, keptLvl ?? Number.NaN, leveled);
-}
-
 /** What a listing would realistically clear at: the ask, sanity-clamped
  *  against the closed-trade median. */
 export function clearingPrice(m: PricedEntry): number {

@@ -1,3 +1,4 @@
+use crate::js::JsNumber;
 use crate::limits::{MAX_PER_TRADE, MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use crate::math::sell_priority::{clearing_price, PricedEntry, LIQUID_VOL};
 use serde::{Deserialize, Serialize};
@@ -87,6 +88,68 @@ pub fn valid_session_lot(quantity: f64, lot: f64, bulk: bool) -> bool {
         && quantity % lot == 0.0
         && (bulk || lot == 1.0)
 }
+/// The fewest in-game trades that sell `quantity` copies under the lot rule
+/// [`valid_session_lot`] enforces: a bulk-tradable item moves up to
+/// `MAX_PER_TRADE` copies a trade, anything else one. Not a whole number of
+/// copies is 0.
+pub fn trades_to_sell(quantity: f64, bulk: bool) -> f64 {
+    if !safe(quantity) || quantity <= 0.0 {
+        return 0.0;
+    }
+    if bulk {
+        (quantity / f64::from(MAX_PER_TRADE)).ceil()
+    } else {
+        quantity
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, TS)]
+pub struct TradeSplitRequest {
+    /// Each row's trades, best row first.
+    pub trades: Vec<JsNumber>,
+    /// Trades left today; `null` (or not finite) is unknown.
+    pub remaining: Option<JsNumber>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TradeSplit {
+    /// Rows before this index fit today.
+    pub cut: usize,
+    pub used: f64,
+    pub later_trades: f64,
+}
+
+/// Splits a best-first list at today's trades left. Rows stay in rank order:
+/// the first row that no longer fits starts the after-the-reset part, even
+/// when a smaller row further down would still fit, so the list never
+/// reorders. An unknown allowance is not treated as zero or as unlimited:
+/// nothing splits.
+pub fn split_by_trades(request: &TradeSplitRequest) -> TradeSplit {
+    let total = request.trades.iter().fold(0.0, |sum, t| sum + t.0);
+    let Some(remaining) = request.remaining.map(|r| r.0).filter(|r| r.is_finite()) else {
+        return TradeSplit {
+            cut: request.trades.len(),
+            used: total,
+            later_trades: 0.0,
+        };
+    };
+    let mut used = 0.0;
+    let mut cut = request.trades.len();
+    for (i, need) in request.trades.iter().enumerate() {
+        if used + need.0 > remaining {
+            cut = i;
+            break;
+        }
+        used += need.0;
+    }
+    TradeSplit {
+        cut,
+        used,
+        later_trades: total - used,
+    }
+}
+
 pub fn select_session(request: SessionRequest) -> SessionPlan {
     let maximum = f64::from(MAX_PLATINUM);
     let cap = if safe(request.budget) {
@@ -653,5 +716,70 @@ mod tests {
             assert_eq!(plan.trades, 0);
             assert_eq!(plan.target, None);
         }
+    }
+
+    #[test]
+    fn trades_follow_the_lot_rule() {
+        assert_eq!(trades_to_sell(9.0, true), 2.0);
+        assert_eq!(trades_to_sell(9.0, false), 9.0);
+        assert_eq!(trades_to_sell(6.0, true), 1.0);
+        assert_eq!(trades_to_sell(0.0, true), 0.0);
+        assert_eq!(trades_to_sell(2.5, false), 0.0);
+        assert_eq!(trades_to_sell(f64::NAN, true), 0.0);
+        // The count implies a lot the planner accepts for every whole quantity.
+        for bulk in [true, false] {
+            for q in 1..=30 {
+                let q = f64::from(q);
+                let lot = if bulk {
+                    f64::from(MAX_PER_TRADE).min(q)
+                } else {
+                    1.0
+                };
+                assert!(trades_to_sell(q, bulk) >= (q / lot).ceil());
+                assert!(valid_session_lot(lot, lot, bulk));
+            }
+        }
+    }
+    #[test]
+    fn splits_at_the_trades_left_without_reordering() {
+        let split = |remaining: Option<f64>| {
+            split_by_trades(&TradeSplitRequest {
+                trades: [2.0, 3.0, 1.0].map(JsNumber).to_vec(),
+                remaining: remaining.map(JsNumber),
+            })
+        };
+        assert_eq!(
+            split(Some(4.0)),
+            TradeSplit {
+                cut: 1,
+                used: 2.0,
+                later_trades: 4.0
+            }
+        );
+        assert_eq!(
+            split(Some(6.0)),
+            TradeSplit {
+                cut: 3,
+                used: 6.0,
+                later_trades: 0.0
+            }
+        );
+        assert_eq!(split(Some(0.0)).cut, 0);
+        assert_eq!(
+            split(None),
+            TradeSplit {
+                cut: 3,
+                used: 6.0,
+                later_trades: 0.0
+            }
+        );
+        assert_eq!(
+            split(Some(f64::INFINITY)),
+            TradeSplit {
+                cut: 3,
+                used: 6.0,
+                later_trades: 0.0
+            }
+        );
     }
 }

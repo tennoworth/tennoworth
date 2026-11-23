@@ -417,9 +417,9 @@ rules over objects take one JSON request in wasm memory, typed by
 `contracts/generated/web.ts` (`selectPicks`). A TypeScript file in `domain/`
 that wraps a native rule keeps only the call and the thresholds the views
 print. The module is built from the current tree by the frontend's dev, test
-and build scripts and is never committed. It costs about 135 KB (57 KB
-gzipped), most of it number parsing, formatting and the allocator that every
-JSON rule shares. The site and the desktop policy grant `'wasm-unsafe-eval'`
+and build scripts and is never committed. It costs about 350 KB (108 KB
+gzipped), most of it the JSON parser serde instantiates for each rule's
+request type, plus the number formatting and allocator they share. The site and the desktop policy grant `'wasm-unsafe-eval'`
 for it, which allows WebAssembly compilation only; script sources stay `'self'`,
 and the private dashboard, which loads no wasm, does not grant it.
 

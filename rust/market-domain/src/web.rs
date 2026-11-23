@@ -4,6 +4,7 @@
 //! exports them as functions of numbers.
 
 use crate::math::sell_priority::{self, PickCandidate};
+use crate::{baro, inventory, ledger, sell_filter, tags, trade_session};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -37,6 +38,16 @@ pub struct PicksRequest {
     pub cap: Option<usize>,
 }
 
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct TopTagsRequest {
+    /// `[tag, count]`, most common first.
+    pub available: Vec<(String, f64)>,
+    /// Defaults to [`tags::TOP_TAGS`].
+    #[serde(default)]
+    #[ts(optional)]
+    pub limit: Option<crate::js::JsNumber>,
+}
+
 macro_rules! web_operations {
     ($($name:ident: $input:ty => $output:ty = $run:expr),+ $(,)?) => {
         #[derive(Deserialize, TS)]
@@ -61,6 +72,48 @@ web_operations! {
             &input.rows.into_iter().map(PickCandidate::from).collect::<Vec<_>>(),
             input.cap.unwrap_or(sell_priority::MAX_PICKS),
         )
+    ),
+    SellResults: sell_filter::SellFilterRequest => Vec<sell_filter::SellResult> = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
+        sell_filter::sell_results(&input)
+    ),
+    SellTags: sell_filter::SellFilterRequest => Vec<sell_filter::AvailableTag> = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
+        sell_filter::available_tags(&input)
+    ),
+    SellEmptyReason: sell_filter::SellFilterRequest => sell_filter::EmptyReason = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
+        sell_filter::empty_reason(&input)
+    ),
+    TagGroups: Vec<String> => Vec<tags::TagGroup> = |input: Vec<String>| Ok::<_, String>(
+        input.iter().map(|tag| tags::tag_group(tag)).collect()
+    ),
+    TopTags: TopTagsRequest => Vec<String> = |input: TopTagsRequest| Ok::<_, String>(
+        tags::top_tags(&input.available, input.limit.map_or(tags::TOP_TAGS, |n| n.0))
+    ),
+    SplitByTrades: trade_session::TradeSplitRequest => trade_session::TradeSplit = |input: trade_session::TradeSplitRequest| Ok::<_, String>(
+        trade_session::split_by_trades(&input)
+    ),
+    LedgerTotals: Vec<ledger::LedgerTrade> => ledger::LedgerTotals = |input: Vec<ledger::LedgerTrade>| Ok::<_, String>(
+        ledger::totals(&input)
+    ),
+    LedgerSince: ledger::LedgerSinceRequest => Vec<usize> = |input: ledger::LedgerSinceRequest| Ok::<_, String>(
+        ledger::since(&input)
+    ),
+    SoldByItem: Vec<ledger::LedgerTrade> => Vec<ledger::SoldItemTotal> = |input: Vec<ledger::LedgerTrade>| Ok::<_, String>(
+        ledger::sold_by_item(&input)
+    ),
+    TopSellers: ledger::TopSellersRequest => ledger::TopSellers = |input: ledger::TopSellersRequest| Ok::<_, String>(
+        ledger::top_sellers(&input)
+    ),
+    MedianWeek: Vec<ledger::WeekPlat> => Option<f64> = |input: Vec<ledger::WeekPlat>| Ok::<_, String>(
+        ledger::median_week(&input)
+    ),
+    DucatBasket: baro::BasketRequest => baro::DucatBasket = |input: baro::BasketRequest| Ok::<_, String>(
+        baro::ducat_basket(&input)
+    ),
+    BaroPhase: baro::PhaseRequest => baro::BaroPhase = |input: baro::PhaseRequest| Ok::<_, String>(
+        baro::baro_phase(&input)
+    ),
+    DiffOwned: inventory::DiffOwnedRequest => Vec<(String, f64)> = |input: inventory::DiffOwnedRequest| Ok::<_, String>(
+        inventory::diff_owned(&input)
     ),
 }
 

@@ -1,18 +1,16 @@
 // The Sell view's filter cascade - price / owned / type / kept-level / tag
-// chips / preset-only clauses (vault-only, ducats-only, min-volume,
-// min-median). Three call sites in App.svelte used to each re-implement this
-// same clause sequence by hand (building the results rows, counting tag-chip
-// availability, and diagnosing an empty result) - a 2026-07-24 god-object
-// audit found the drift risk real, not hypothetical. Each `passes*` clause
-// now exists in exactly one place; the three consumers below only differ in
-// how they combine and report the clauses.
+// chips / preset-only clauses. The clauses are native
+// (market_domain::sell_filter), each existing once there; the table's rows,
+// the chip counts and the empty-state diagnosis are one call each over the
+// whole inventory. This file joins each owned record to its market entry and
+// native fact for that call, and builds the table's rows from the answer.
 
-import { canonicalTags } from './tag-groups';
-import type { ScoredInventoryFact } from '../contracts/generated/domain';
+import type { ScoredInventoryFact, Verdict } from '../contracts/generated/domain';
+import type { SellFilterRow, EmptyReason as NativeEmptyReason } from '../contracts/generated/web';
 import { lookup } from './market';
 import { crowdedBook } from './book-depth';
-import { spareQty } from './sell-priority';
-import type { Verdict } from '../contracts/generated/domain';
+import { call, jsNumber } from './native';
+import { rememberTagGroups } from './tag-groups';
 import type { Market, MarketItemEntry, OwnedRecord } from '../contracts/data';
 
 export interface FilterState {
@@ -28,74 +26,54 @@ export interface FilterState {
   minMedian: number;
   /** Preset-only: restrict to any of these row types (empty = no restriction). */
   typesAny: string[];
-  /** Preset-only: Spares mode (see `spareQty`). */
+  /** Preset-only: Spares mode (market_domain::math::sell_priority::spare_qty). */
   sparesOnly: boolean;
   /** Preset-only: only rows the advisor has a verdict for. */
   adviceOnly: boolean;
 }
 
-export interface EmptyReason {
-  kind: string;
-  excluded?: number;
-  candidates: number;
-  preset?: string | null;
+export type EmptyReason = NativeEmptyReason & { preset?: string | null };
+
+interface Joined { key: string; rec: OwnedRecord; m: MarketItemEntry }
+
+const filtersFor = (f: FilterState) => ({
+  min_price: jsNumber(f.minPrice), min_owned: jsNumber(f.minOwned), type_filter: f.typeFilter,
+  hide_at_lvl: jsNumber(f.hideAtLvl), active_tags: [...f.activeTags], vault_only: !!f.vaultOnly,
+  ducats_only: !!f.ducatsOnly, min_vol: jsNumber(f.minVol), min_median: jsNumber(f.minMedian),
+  types_any: f.typesAny, spares_only: !!f.sparesOnly, advice_only: !!f.adviceOnly,
+});
+
+// The records with a market entry, each with the fields the clauses read. An
+// inventory shares a few hundred market tags across its rows, so each tag
+// travels once and rows name theirs by index.
+function join(owned: Map<string, OwnedRecord>, market: Market | null | undefined, advice?: Map<string, Verdict>) {
+  const joined: Joined[] = [];
+  const rows: SellFilterRow[] = [];
+  const tags: string[] = [];
+  const tagIds = new Map<string, number>();
+  const intern = (tag: string) => {
+    let id = tagIds.get(tag);
+    if (id === undefined) { id = tags.length; tags.push(tag); tagIds.set(tag, id); }
+    return id;
+  };
+  for (const [key, rec] of owned) {
+    const m = lookup(market, rec.slug);
+    if (!m) continue;
+    joined.push({ key, rec, m });
+    rows.push({
+      count: jsNumber(rec.count), type: rec.type ?? null,
+      kept_lvl: rec.kept_lvl === null ? null : jsNumber(rec.kept_lvl), leveled: jsNumber(rec.leveled ?? 0),
+      subtype: rec.subtype ?? null, avg: jsNumber(m.avg), vol: jsNumber(m.vol), median_90d: jsNumber(m.median_90d),
+      low5_avg: jsNumber(m.low5_avg), ducats: m.ducats == null ? null : jsNumber(m.ducats), tags: (m.tags ?? []).map(intern),
+      vault: market?.vault_status?.[rec.slug] ?? null, advice: advice?.get(rec.slug)?.advice ?? null,
+    });
+  }
+  return { joined, rows, tags };
 }
 
-function passesPrice(m: MarketItemEntry, f: FilterState): boolean {
-  return m.avg >= f.minPrice;
-}
-function passesOwned(rec: OwnedRecord, f: FilterState): boolean {
-  return rec.count >= f.minOwned;
-}
-function passesType(rec: OwnedRecord, f: FilterState): boolean {
-  if (f.typesAny.length > 0 && !f.typesAny.includes(rec.type)) return false;
-  return f.typeFilter === 'all' || rec.type === f.typeFilter;
-}
-function passesAdvice(rec: OwnedRecord, f: FilterState, advice?: Map<string, Verdict>): boolean {
-  if (!f.adviceOnly) return true;
-  return !!advice?.has(rec.slug);
-}
-function passesSpares(rec: OwnedRecord, f: FilterState): boolean {
-  if (!f.sparesOnly) return true;
-  return spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0) >= 1;
-}
-function passesKept(rec: OwnedRecord, f: FilterState): boolean {
-  // null kept_lvl = no individualised instance at all (always show).
-  return rec.kept_lvl === null || rec.kept_lvl < f.hideAtLvl;
-}
-function passesTag(m: MarketItemEntry, f: FilterState): boolean {
-  if (f.activeTags.size === 0) return true;
-  return canonicalTags(m.tags).some((t) => f.activeTags.has(t));
-}
-function passesVault(market: Market, rec: OwnedRecord, f: FilterState): boolean {
-  if (!f.vaultOnly) return true;
-  const status = market.vault_status?.[rec.slug];
-  return status === 'vaulted' || status === 'vaulting-soon';
-}
-function passesDucats(rec: OwnedRecord, m: MarketItemEntry, f: FilterState): boolean {
-  // The 'prime' tag alone also matches syndicate augments for prime weapons
-  // (gilded_truth is tagged burston_prime), which have no ducat value - a
-  // "best ducat value" list showing "Ducats: -" rows is nonsense.
-  if (!f.ducatsOnly) return true;
-  return !rec.subtype && m.ducats != null;
-}
-function passesVol(m: MarketItemEntry, f: FilterState): boolean {
-  return f.minVol <= 0 || (m.vol || 0) >= f.minVol;
-}
-function passesMedian(m: MarketItemEntry, f: FilterState): boolean {
-  return f.minMedian <= 0 || (m.median_90d || 0) >= f.minMedian;
-}
-
-// Row enrichment over the native facts (score, timing, ducat-trade math come
-// from score_inventory). Runs only for rows that already passed every clause
-// above.
-function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, original: ScoredInventoryFact, verdict?: Verdict, allocation?: number) {
-  const safeQuantity = Math.min(original.sellable, allocation ?? Infinity);
-  const facts = { ...original, sellable: safeQuantity,
-    potential_plat: safeQuantity * m.avg,
-    raw_value: safeQuantity * ((m.low5_avg || 0) > 0 ? m.low5_avg! : m.avg) };
-  const { sellable, clearing_price: row_price, sell_score, patience, ducats, plat_per_100d,
-    medians_7d: medians, median_90d, delta_90d_pct, timing, demand } = facts;
+function buildRow({ key, rec, m }: Joined, market: Market | null | undefined, fact: ScoredInventoryFact, native: { sellable: number; potential_plat: number; raw_value: number; timing: ScoredInventoryFact['timing'] }, verdict?: Verdict) {
+  const { clearing_price: row_price, sell_score, patience, ducats, plat_per_100d,
+    medians_7d: medians, median_90d, delta_90d_pct, demand } = fact;
   const tags = Array.isArray(m.tags) ? m.tags : [];
   return {
     key,
@@ -103,7 +81,7 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     subtype: rec.subtype ?? null,
     name: rec.name,
     owned: rec.count,
-    sellable,
+    sellable: native.sellable,
     leveled: rec.leveled ?? 0,
     type: rec.type,
     kept_lvl: rec.kept_lvl,
@@ -119,20 +97,15 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     top_buy: m.top_buy,
     volume_48h: m.vol,
     ratio: m.ratio,
-    potential_plat: facts.potential_plat,
+    potential_plat: native.potential_plat,
     // Raw stack value: owned × the avg of the ~5 cheapest live asks - "what
     // is this pile worth at current listings", no liquidity discounting
-    // (that's sell_score's job). Falls back to the 48h closed avg on
-    // snapshots that predate low5_avg.
-    raw_value: facts.raw_value,
+    // (that's sell_score's job).
+    raw_value: native.raw_value,
     sell_score,
     patience,
     crowded: crowdedBook(m),
-    // Near its 90-day low usually means "wait": over the year to 2026-10, a dip
-    // won back ~20% within four weeks. Where the advisor says sell now (a new
-    // prime, or a Resurgence reprint and its relic companions) the same dip
-    // kept falling instead, so the generic hold would contradict it.
-    timing: timing === 'hold' && verdict?.advice === 'sell_now' ? 'neutral' : timing,
+    timing: native.timing,
     medians_7d: medians,
     median_90d,
     delta_90d_pct,
@@ -143,7 +116,7 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     // implicitly.
     tags,
     is_augment: tags.includes('augment'),
-    vault_status: market.vault_status?.[rec.slug] ?? null,
+    vault_status: market?.vault_status?.[rec.slug] ?? null,
     // Advisor verdict for calendar-dated primes; null on everything else.
     advice: verdict?.advice ?? null,
     advice_reasons: verdict?.reasons ?? [],
@@ -163,61 +136,38 @@ export function computeResults(
   advice?: Map<string, Verdict>,
   availability?: ReadonlyMap<string, number>,
 ) {
-  const out: ReturnType<typeof buildRow>[] = [];
-  for (const [key, rec] of owned) {
-    const m = lookup(market, rec.slug);
-    if (!m) continue;
-    if (!passesPrice(m, filters)) continue;
-    if (!passesOwned(rec, filters)) continue;
-    if (!passesType(rec, filters)) continue;
-    if (!passesKept(rec, filters)) continue;
-    if (!passesTag(m, filters)) continue;
-    if (!market || !passesVault(market, rec, filters)) continue;
-    if (!passesDucats(rec, m, filters)) continue;
-    if (!passesVol(m, filters)) continue;
-    if (!passesMedian(m, filters)) continue;
-    if (!passesSpares(rec, filters)) continue;
-    if (!passesAdvice(rec, filters, advice)) continue;
+  const { joined, rows, tags } = join(owned, market, advice);
+  if (rows.length === 0) return [];
+  joined.forEach(({ key }, i) => {
     const fact = nativeFacts.get(key);
-    if (!fact) continue;
-    out.push(buildRow(key, rec, m, market, fact, advice?.get(rec.slug), availability ? availability.get(key) ?? 0 : undefined));
-  }
-  out.sort((a, b) => b.sell_score - a.sell_score);
-  return out;
+    if (fact) rows[i]!.fact = { sellable: jsNumber(fact.sellable), sell_score: jsNumber(fact.sell_score), timing: fact.timing };
+    if (availability) rows[i]!.allocation = jsNumber(availability.get(key) ?? 0);
+  });
+  return call({ op: 'sell_results', input: { tags, rows, filters: filtersFor(filters) } }).map((native) => {
+    const row = joined[native.index]!;
+    return buildRow(row, market, nativeFacts.get(row.key)!, native, advice?.get(row.rec.slug));
+  });
 }
 
-/** Tag → count, for the chip row. Mirrors every clause `computeResults`
- * applies EXCEPT the tag clause itself - otherwise chip counts would
- * overstate what clicking actually yields. */
+/** Tag → count, for the chip row: every clause `computeResults` applies
+ *  except the tag clause itself, so a chip's count is what clicking it
+ *  yields. Most common first, then by name. */
 export function computeAvailableTags(
   owned: Map<string, OwnedRecord>,
   market: Market | null | undefined,
   filters: FilterState,
   advice?: Map<string, Verdict>,
 ): Array<[string, number]> {
-  const counts = new Map<string, number>();
-  for (const rec of owned.values()) {
-    const m = lookup(market, rec.slug);
-    if (!m) continue;
-    if (!passesPrice(m, filters)) continue;
-    if (!passesOwned(rec, filters)) continue;
-    if (!passesType(rec, filters)) continue;
-    if (!passesKept(rec, filters)) continue;
-    if (!market || !passesVault(market, rec, filters)) continue;
-    if (!passesDucats(rec, m, filters)) continue;
-    if (!passesVol(m, filters)) continue;
-    if (!passesMedian(m, filters)) continue;
-    if (!passesSpares(rec, filters)) continue;
-    if (!passesAdvice(rec, filters, advice)) continue;
-    for (const t of canonicalTags(m.tags)) counts.set(t, (counts.get(t) || 0) + 1);
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const { rows, tags } = join(owned, market, advice);
+  if (rows.length === 0) return [];
+  const available = call({ op: 'sell_tags', input: { tags, rows, filters: filtersFor(filters) } });
+  rememberTagGroups(available);
+  // The name order is the locale's, so it stays with the page.
+  return available.map(({ tag, count }): [string, number] => [tag, count]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
 }
 
 /** Why the Sell table is empty: which single clause excludes the most
- * candidates, for the empty-state's "relax this filter" suggestion. Walks
- * every clause independently (not short-circuited) so a row can count
- * against more than one bucket - this is a diagnostic, not a filter. */
+ * candidates, for the empty-state's "relax this filter" suggestion. */
 export function computeEmptyReason(
   owned: Map<string, OwnedRecord>,
   market: Market | null | undefined,
@@ -227,29 +177,7 @@ export function computeEmptyReason(
   advice?: Map<string, Verdict>,
 ): EmptyReason | null {
   if (resultsLength > 0 || !owned.size) return null;
-  let candidates = 0, byPrice = 0, byOwned = 0, byType = 0, byKept = 0,
-      byTag = 0, byVault = 0, byDucats = 0, byVol = 0, byMedian = 0, bySpares = 0, byAdvice = 0;
-  for (const rec of owned.values()) {
-    const m = lookup(market, rec.slug);
-    if (!m) continue;
-    candidates += 1;
-    if (!passesPrice(m, filters)) byPrice += 1;
-    if (!passesOwned(rec, filters)) byOwned += 1;
-    if (!passesType(rec, filters)) byType += 1;
-    if (!passesKept(rec, filters)) byKept += 1;
-    if (!passesTag(m, filters)) byTag += 1;
-    if (market && !passesVault(market, rec, filters)) byVault += 1;
-    if (!passesDucats(rec, m, filters)) byDucats += 1;
-    if (!passesVol(m, filters)) byVol += 1;
-    if (!passesMedian(m, filters)) byMedian += 1;
-    if (!passesSpares(rec, filters)) bySpares += 1;
-    if (!passesAdvice(rec, filters, advice)) byAdvice += 1;
-  }
-  if (candidates === 0) return { kind: 'no-market', candidates };
-  const top = ([
-    ['price', byPrice], ['owned', byOwned], ['type', byType], ['kept', byKept],
-    ['tag', byTag], ['vault', byVault], ['ducats', byDucats], ['vol', byVol], ['median', byMedian],
-    ['spares', bySpares], ['advice', byAdvice],
-  ] as Array<[string, number]>).sort((a, b) => b[1] - a[1])[0];
-  return { kind: top[0], excluded: top[1], candidates, preset: activePreset };
+  const { rows, tags } = join(owned, market, advice);
+  const reason = call({ op: 'sell_empty_reason', input: { tags, rows, filters: filtersFor(filters) } });
+  return reason.kind === 'no-market' ? reason : { ...reason, preset: activePreset };
 }

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 //
 // The rules are native; these run them through the view module, so they also
 // check what the wrappers hand it (missing fields, a null kept_lvl, hold rows).
-import { clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE } from './sell-priority.js';
+import { clearingPrice, sellableQty, selectPicks, MIN_PICK_SCORE } from './sell-priority.js';
 import pickFloor from '../../../tests/fixtures/sell-priority/pick-floor.json';
 
 describe('clearingPrice', () => {
@@ -150,23 +150,5 @@ describe('selectPicks', () => {
     const rows = [row({ sell_score: 30, key: 'low' }), row({ sell_score: 90, key: 'high' })];
     const picks = selectPicks(rows);
     expect(picks.map((r) => r.key)).toEqual(['low', 'high']);
-  });
-});
-
-describe('spareQty', () => {
-  it('all unranked copies are spare when a ranked copy is owned', () => {
-    expect(spareQty(4, 5)).toBe(4);
-    expect(spareQty(4, 1)).toBe(4);
-  });
-  it('keeps one copy when no ranked copy is owned (kept_lvl null or 0)', () => {
-    expect(spareQty(4, null)).toBe(3);
-    expect(spareQty(4, 0)).toBe(3);
-    expect(spareQty(1, null)).toBe(0);
-    expect(spareQty(0, null)).toBe(0);
-  });
-  it('leveled copies are never spare', () => {
-    expect(spareQty(3, 5, 3)).toBe(0);
-    expect(spareQty(3, 5, 1)).toBe(2);
-    expect(spareQty(3, null, 1)).toBe(1);
   });
 });

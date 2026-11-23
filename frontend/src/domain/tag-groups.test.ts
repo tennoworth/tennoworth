@@ -1,20 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalTag, canonicalTags, tagGroup, topTags } from './tag-groups';
+import { tagGroup, topTags } from './tag-groups';
 import { tagLabel, tagMatches } from '../desktop/selling/tag-labels';
 
+// The vocabularies and the canonical form are native (market_domain::tags,
+// tested there); these run through the view module.
 describe('tag groups', () => {
-  it('folds every breed into its species, and nothing else', () => {
-    expect(canonicalTags(['mod', 'huras_kubrow', 'kubrow', 'smeeta_kavat', 'panzer_vulpaphyla'])).toEqual(['mod', 'kubrow', 'kavat', 'vulpaphyla']);
-    expect(canonicalTag('kubrow_claws')).toBe('kubrow_claws');
-    expect(canonicalTag('void key')).toBe('void_key');
-  });
-
   it('sorts tags the way the game does, with names last', () => {
     expect(tagGroup('relic')).toBe('type');
     expect(tagGroup('nikanas')).toBe('slot');
     expect(tagGroup('rare')).toBe('rarity');
     expect(tagGroup('axi')).toBe('era');
     expect(tagGroup('sunika_kubrow')).toBe('companion');
+    expect(tagGroup('void key')).toBe('type');
     expect(tagGroup('nyx')).toBe('name');
     expect(tagGroup('ax_52')).toBe('name');
   });
@@ -23,6 +20,7 @@ describe('tag groups', () => {
     const available = [['mod', 321], ['rare', 240], ['warframe', 127], ['weapon', 68], ['melee', 46], ['nyx', 40], ['relic', 16], ['empty', 0]] as const;
     expect(topTags(available)).toEqual(['mod', 'warframe', 'melee', 'relic']);
     expect(topTags(available, 2)).toEqual(['mod', 'warframe']);
+    expect(topTags([])).toEqual([]);
   });
 
   it('reads category tags as words and names as the game writes them', () => {
