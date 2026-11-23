@@ -4,6 +4,31 @@ export type Advice = "sell_now" | "hold" | "neutral";
 
 export type AlertReward = { item: string, count: number, };
 
+export type Appraisal = { dist: Distribution | null,
+/**
+ * Set when DE published no usable price for this tier.
+ */
+unavailable?: Unavailable, placement: Placement | null, verdict: PriceVerdict | null, reroll: RerollRead | null,
+/**
+ * True when the average is dragged well above the median - the average is
+ * then not a typical price and the UI must lead with the median.
+ */
+skewed: boolean,
+/**
+ * Notes the UI must show alongside any number - the limits of the model.
+ */
+caveats: Array<AppraisalCaveat>, };
+
+export type AppraisalCaveat = "no-data" | "band" | "desirability" | "spliced" | "rare" | "skewed";
+
+export type AppraiseRequest = { price: number | null, tier: RivenTier | null,
+/**
+ * Null reads as a fresh riven.
+ */
+rerolls: number | null, locked: boolean, };
+
+export type AuctionStatSign = { url_name: string, positive: boolean, };
+
 export type AvailableTag = { tag: string, count: number, group: TagGroup, };
 
 export type BargainItem = { ask: number, bid: number, median: number, vol: number, low5: number, };
@@ -137,6 +162,12 @@ feed?: unknown,
  */
 owned?: Array<CalendarHolding> | null, now: number, };
 
+export type CompAsk = { owner_status: string | null, created_ms: number | null, };
+
+export type CompsSampleRead = { size: number, dated: number, oldestAskDays: number | null, newestAskDays: number | null, status: CompsStatusCounts, };
+
+export type CompsStatusCounts = { online: number, ingame: number, offline: number, unknown: number, };
+
 export type DatedEvent = {
 /**
  * Stable across refreshes of the same snapshot, so a selection survives.
@@ -161,6 +192,8 @@ export type DatedSource = "worldstate" | "estimate" | "notice" | "official";
 
 export type DatedText = { "kind": "baro", where: string | null, } | { "kind": "baro-estimate" } | { "kind": "resurgence", sets: Array<string>, } | { "kind": "vault", sets: Array<string>, } | { "kind": "deal", item: string, discount: number | null, price: number | null, } | { "kind": "event", title: string, rewards: Array<string>, } | { "kind": "alert", rewards: Array<AlertReward>, credits: number | null, } | { "kind": "booster", boost: Boost, factor: number | null, } | { "kind": "nightwave", intermission: boolean, } | { "kind": "official", title: string, note: string | null, type: string, } | { "kind": "given", title: string, detail: string, };
 
+export type DescribeCompsRequest = { comps: Array<CompAsk>, now_ms: number | null, };
+
 export type DiffOwnedRequest = {
 /**
  * The last scan's `[key, count]` pairs; `null` when there is none.
@@ -176,6 +209,12 @@ changes: unknown,
  * Defaults to 12.
  */
 limit?: number, };
+
+export type Distribution = { median: number, avg: number, min: number, max: number, stddev: number,
+/**
+ * DE's 0-100 relative popularity - see [`LOW_POPULARITY`].
+ */
+pop: number, };
 
 export type DriftInput = { id: string, slug: string, name: string, platinum: number,
 /**
@@ -240,6 +279,12 @@ resale: number, };
 export type EmptyKind = "no-market" | "price" | "owned" | "type" | "kept" | "tag" | "vault" | "ducats" | "vol" | "median" | "spares" | "advice";
 
 export type EmptyReason = { kind: EmptyKind, excluded?: number, candidates: number, };
+
+export type ExtractRivensRequest = {
+/**
+ * The inventory's `Upgrades`, as DE wrote it.
+ */
+upgrades: unknown, };
 
 export type FeedCoverage = "complete" | "partial" | "unknown";
 
@@ -480,6 +525,35 @@ export type OrderSide = "sell" | "buy";
 
 export type OtherSellers = { items: number, plat: number, };
 
+export type OwnedRiven = {
+/**
+ * The full /Lotus/Upgrades/Mods/Randomized/... path.
+ */
+path: string,
+/**
+ * Weapon /Lotus/... path from the fingerprint; null on veiled rivens.
+ */
+compat: string | null,
+/**
+ * WFM weapon slug, resolved via the weapons manifest's `game_ref`.
+ */
+slug: string | null,
+/**
+ * WFM weapon display name once resolved.
+ */
+weaponName: string | null, rerolls: number, lvl: number, pol: string | null, buffs: Array<RivenFingerprintStat>, curses: Array<RivenFingerprintStat>,
+/**
+ * A challenge instead of stats - the riven is veiled.
+ */
+veiled: boolean,
+/**
+ * DE's fingerprint string exactly as scanned. Kept because DE adds riven
+ * state (locks, splices) before anyone knows its keys, and the parsed
+ * fields above drop what they do not name. Absent on snapshots saved
+ * before it was kept.
+ */
+raw?: string, };
+
 export type PhaseRequest = {
 /**
  * Arrival and departure in epoch ms; `NaN` when unknown.
@@ -497,6 +571,8 @@ export type PicksRequest = { rows: Array<PickRow>,
  * Defaults to [`sell_priority::MAX_PICKS`].
  */
 cap?: number, };
+
+export type Placement = "below-observed" | "bottom" | "middle" | "upper" | "above-observed";
 
 export type PriceBasis = "lowest-ask" | "low5-avg" | "low20-avg" | "avg-48h" | "median-90d";
 
@@ -518,6 +594,66 @@ export type PriceRule = {
 basis: PriceBasis, offset: number, };
 
 export type PriceRuleRequest = { rule: PriceRule, evidence: PriceEvidence, };
+
+export type PriceVerdict = "below" | "fair" | "above" | "outlier";
+
+export type RerollRead = {
+/**
+ * Kuva this spin costs.
+ */
+kuva: number,
+/**
+ * The weapon's median trade.
+ */
+median: number,
+/**
+ * Whether the offer is above that median. A fact about two published
+ * numbers, not a forecast.
+ */
+aboveMedian: boolean, };
+
+export type ResolveRivensRequest = { rivens: Array<RivenCompat>,
+/**
+ * Each manifest weapon's `game_ref`, in manifest order.
+ */
+game_refs: Array<string | null>, };
+
+export type RivenAttributeRef = { game_ref?: string, slug?: string, name?: string, };
+
+export type RivenCompat = { compat: string | null, veiled: boolean, };
+
+export type RivenFingerprintStat = { tag: string, value: number, };
+
+export type RivenRow = { stats: Array<RivenStatRead>, splices: Array<SpliceChoice>, filter: RivenStatFilterPlan | null, unread: Array<string>, };
+
+export type RivenRowInput = { buffs: Array<RivenStatTag>, curses: Array<RivenStatTag>, raw?: string, veiled: boolean,
+/**
+ * The weapon's WFM `riven_type`, which picks the splice recipes.
+ */
+riven_type?: string, };
+
+export type RivenRowsRequest = { attributes: Array<RivenAttributeRef>, rivens: Array<RivenRowInput>, };
+
+export type RivenSimilarityRequest = { attributes: Array<RivenAttributeRef>, buffs: Array<RivenStatTag>, curses: Array<RivenStatTag>,
+/**
+ * Each auction's stats.
+ */
+auctions: Array<Array<AuctionStatSign>>, };
+
+export type RivenStatFilter = { positive: Array<string>, negative: Array<string>, };
+
+export type RivenStatFilterPlan = { filter: RivenStatFilter,
+/**
+ * False when a positive stat could not be resolved to a WFM slug, so the
+ * filter is broader than the riven.
+ */
+complete: boolean, };
+
+export type RivenStatRead = { tag: string, slug: string | null, positive: boolean, name: string | null, spliced: boolean, };
+
+export type RivenStatTag = { tag: string, };
+
+export type RivenTier = { avg: number, median: number, min: number, max: number, stddev: number, pop: number, };
 
 export type SearchRequest = {
 /**
@@ -572,6 +708,27 @@ export type SoldItemTotal = { name: string, qty: number,
  */
 plat: number, trades: number, };
 
+export type SpliceChoice = { recipe: SpliceRecipe,
+/**
+ * The ingredients as they sit on the riven, in recipe order: indexes into
+ * the row's stats.
+ */
+consumed: [number, number],
+/**
+ * DE: "if one of the consumed traits was a negative bonus, the random
+ * trait will also be a negative".
+ */
+randomIsNegative: boolean, };
+
+export type SpliceRecipe = { result: string,
+/**
+ * DE's name for the spliced trait, for when the snapshot's manifest
+ * predates it.
+ */
+name: string, ingredients: [string, string], scope: SpliceScope, };
+
+export type SpliceScope = "ranged" | "melee" | "all";
+
 export type TagGroup = "type" | "slot" | "rarity" | "era" | "companion" | "name";
 
 export type Timing = "hold" | "drop" | "peak" | "neutral";
@@ -616,6 +773,8 @@ trades: Array<JsNumber>,
  */
 remaining: JsNumber | null, };
 
+export type Unavailable = "no-data";
+
 export type VaultedRequest = {
 /**
  * `vault_status` in snapshot order.
@@ -638,9 +797,9 @@ avg: number | null, };
 
 export type VisitPhase = "here" | "incoming" | "unknown";
 
-export type WebRequest = { "op": "select_picks", "input": PicksRequest } | { "op": "browse_index", "input": BrowseIndexRequest } | { "op": "slug_name", "input": string } | { "op": "search_items", "input": SearchRequest } | { "op": "top_movers", "input": MoversRequest } | { "op": "vaulted_top", "input": VaultedRequest } | { "op": "disposition_changes", "input": DispositionRequest } | { "op": "handoff_sample", "input": HandoffRequest } | { "op": "find_bargains", "input": BargainsRequest } | { "op": "meta_drift", "input": MetaDriftRequest } | { "op": "year_views", "input": YearViewsRequest } | { "op": "price_from_rule", "input": PriceRuleRequest } | { "op": "reasonable_lowest_ask", "input": LiveAskRequest } | { "op": "assess_listings", "input": HealthRequest } | { "op": "select_drifted", "input": DriftRequest } | { "op": "interrupted_batch", "input": BatchRequest } | { "op": "compare_buyers", "input": BuyerCompareRequest } | { "op": "calendar_feed", "input": CalendarRequest } | { "op": "calendar_events", "input": CalendarRequest } | { "op": "sell_results", "input": SellFilterRequest } | { "op": "sell_tags", "input": SellFilterRequest } | { "op": "sell_empty_reason", "input": SellFilterRequest } | { "op": "tag_groups", "input": Array<string> } | { "op": "top_tags", "input": TopTagsRequest } | { "op": "split_by_trades", "input": TradeSplitRequest } | { "op": "ledger_totals", "input": Array<LedgerTrade> } | { "op": "ledger_since", "input": LedgerSinceRequest } | { "op": "sold_by_item", "input": Array<LedgerTrade> } | { "op": "top_sellers", "input": TopSellersRequest } | { "op": "median_week", "input": Array<WeekPlat> } | { "op": "ducat_basket", "input": BasketRequest } | { "op": "baro_phase", "input": PhaseRequest } | { "op": "diff_owned", "input": DiffOwnedRequest };
+export type WebRequest = { "op": "select_picks", "input": PicksRequest } | { "op": "browse_index", "input": BrowseIndexRequest } | { "op": "slug_name", "input": string } | { "op": "search_items", "input": SearchRequest } | { "op": "top_movers", "input": MoversRequest } | { "op": "vaulted_top", "input": VaultedRequest } | { "op": "disposition_changes", "input": DispositionRequest } | { "op": "handoff_sample", "input": HandoffRequest } | { "op": "find_bargains", "input": BargainsRequest } | { "op": "meta_drift", "input": MetaDriftRequest } | { "op": "year_views", "input": YearViewsRequest } | { "op": "price_from_rule", "input": PriceRuleRequest } | { "op": "reasonable_lowest_ask", "input": LiveAskRequest } | { "op": "assess_listings", "input": HealthRequest } | { "op": "select_drifted", "input": DriftRequest } | { "op": "interrupted_batch", "input": BatchRequest } | { "op": "compare_buyers", "input": BuyerCompareRequest } | { "op": "calendar_feed", "input": CalendarRequest } | { "op": "calendar_events", "input": CalendarRequest } | { "op": "sell_results", "input": SellFilterRequest } | { "op": "sell_tags", "input": SellFilterRequest } | { "op": "sell_empty_reason", "input": SellFilterRequest } | { "op": "tag_groups", "input": Array<string> } | { "op": "top_tags", "input": TopTagsRequest } | { "op": "split_by_trades", "input": TradeSplitRequest } | { "op": "ledger_totals", "input": Array<LedgerTrade> } | { "op": "ledger_since", "input": LedgerSinceRequest } | { "op": "sold_by_item", "input": Array<LedgerTrade> } | { "op": "top_sellers", "input": TopSellersRequest } | { "op": "median_week", "input": Array<WeekPlat> } | { "op": "ducat_basket", "input": BasketRequest } | { "op": "baro_phase", "input": PhaseRequest } | { "op": "diff_owned", "input": DiffOwnedRequest } | { "op": "extract_rivens", "input": ExtractRivensRequest } | { "op": "resolve_rivens", "input": ResolveRivensRequest } | { "op": "riven_rows", "input": RivenRowsRequest } | { "op": "riven_similarity", "input": RivenSimilarityRequest } | { "op": "spliced_traits", "input": null } | { "op": "appraise_riven", "input": AppraiseRequest } | { "op": "describe_riven_comps", "input": DescribeCompsRequest };
 
-export type WebResponse = { "op": "select_picks", "result": Array<number> } | { "op": "browse_index", "result": BrowseNames } | { "op": "slug_name", "result": string } | { "op": "search_items", "result": Array<number> } | { "op": "top_movers", "result": Movers } | { "op": "vaulted_top", "result": Array<number> } | { "op": "disposition_changes", "result": Array<number> } | { "op": "handoff_sample", "result": Array<HandoffPick> } | { "op": "find_bargains", "result": Array<BargainLead> } | { "op": "meta_drift", "result": MetaDrift | null } | { "op": "year_views", "result": Array<YearView> } | { "op": "price_from_rule", "result": number | null } | { "op": "reasonable_lowest_ask", "result": LiveAskRead } | { "op": "assess_listings", "result": HealthReport } | { "op": "select_drifted", "result": Array<DriftRow> } | { "op": "interrupted_batch", "result": InterruptedBatch | null } | { "op": "compare_buyers", "result": BuyerComparison } | { "op": "calendar_feed", "result": Array<FeedItem> } | { "op": "calendar_events", "result": Array<DatedEvent> } | { "op": "sell_results", "result": Array<SellResult> } | { "op": "sell_tags", "result": Array<AvailableTag> } | { "op": "sell_empty_reason", "result": EmptyReason } | { "op": "tag_groups", "result": Array<TagGroup> } | { "op": "top_tags", "result": Array<string> } | { "op": "split_by_trades", "result": TradeSplit } | { "op": "ledger_totals", "result": LedgerTotals } | { "op": "ledger_since", "result": Array<number> } | { "op": "sold_by_item", "result": Array<SoldItemTotal> } | { "op": "top_sellers", "result": TopSellers } | { "op": "median_week", "result": number | null } | { "op": "ducat_basket", "result": DucatBasket } | { "op": "baro_phase", "result": BaroPhase } | { "op": "diff_owned", "result": Array<[string, number]> };
+export type WebResponse = { "op": "select_picks", "result": Array<number> } | { "op": "browse_index", "result": BrowseNames } | { "op": "slug_name", "result": string } | { "op": "search_items", "result": Array<number> } | { "op": "top_movers", "result": Movers } | { "op": "vaulted_top", "result": Array<number> } | { "op": "disposition_changes", "result": Array<number> } | { "op": "handoff_sample", "result": Array<HandoffPick> } | { "op": "find_bargains", "result": Array<BargainLead> } | { "op": "meta_drift", "result": MetaDrift | null } | { "op": "year_views", "result": Array<YearView> } | { "op": "price_from_rule", "result": number | null } | { "op": "reasonable_lowest_ask", "result": LiveAskRead } | { "op": "assess_listings", "result": HealthReport } | { "op": "select_drifted", "result": Array<DriftRow> } | { "op": "interrupted_batch", "result": InterruptedBatch | null } | { "op": "compare_buyers", "result": BuyerComparison } | { "op": "calendar_feed", "result": Array<FeedItem> } | { "op": "calendar_events", "result": Array<DatedEvent> } | { "op": "sell_results", "result": Array<SellResult> } | { "op": "sell_tags", "result": Array<AvailableTag> } | { "op": "sell_empty_reason", "result": EmptyReason } | { "op": "tag_groups", "result": Array<TagGroup> } | { "op": "top_tags", "result": Array<string> } | { "op": "split_by_trades", "result": TradeSplit } | { "op": "ledger_totals", "result": LedgerTotals } | { "op": "ledger_since", "result": Array<number> } | { "op": "sold_by_item", "result": Array<SoldItemTotal> } | { "op": "top_sellers", "result": TopSellers } | { "op": "median_week", "result": number | null } | { "op": "ducat_basket", "result": DucatBasket } | { "op": "baro_phase", "result": BaroPhase } | { "op": "diff_owned", "result": Array<[string, number]> } | { "op": "extract_rivens", "result": Array<OwnedRiven> } | { "op": "resolve_rivens", "result": Array<number | null> } | { "op": "riven_rows", "result": Array<RivenRow> } | { "op": "riven_similarity", "result": Array<number | null> } | { "op": "spliced_traits", "result": Array<string> } | { "op": "appraise_riven", "result": Appraisal } | { "op": "describe_riven_comps", "result": CompsSampleRead };
 
 export type WeekPlat = { plat: number,
 /**

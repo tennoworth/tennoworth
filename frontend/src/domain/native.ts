@@ -25,6 +25,8 @@ interface WebExports {
   web_weekend_nudge(weekday: number): number;
   web_valid_session_lot(quantity: number, lot: number, bulk: number): number;
   web_trades_to_sell(quantity: number, bulk: number): number;
+  web_riven_band(rerolls: number, hasUnrolled: number, hasRolled: number): number;
+  web_riven_rerolled_discount(unrolledMedian: number, rolledMedian: number): number;
 }
 
 let exports: WebExports | null = null;

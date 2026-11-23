@@ -24,5 +24,6 @@ pub mod ledger;
 pub mod listing;
 pub mod meta_drift;
 mod page;
+pub mod rivens;
 pub mod sell_filter;
 pub mod tags;

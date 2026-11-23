@@ -12,8 +12,10 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 market-domain = { path = "../market-domain" }
-# The page's numbers must come back bit-identical: JSON.parse rounds exactly,
-# and serde_json's default float parser can be one ulp off.
+# Requests carry the page's numbers as JSON.stringify printed them, the
+# shortest text that reads back to the same double; the default parser can
+# land one unit in the last place away, and a view rule then disagrees with
+# the number on screen.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 
 [lints]

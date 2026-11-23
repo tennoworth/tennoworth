@@ -1,23 +1,17 @@
 // @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
 import {
-  attributeForTag,
   bandForRiven,
-  buildWeaponIndex,
-  compsFilterFor,
   dispoChangeFor,
   extractRivens,
   formatAuctionStat,
-  formatRivenStat,
   isSplicedStat,
-  resolveRivenStats,
-  rivenSimilarity,
+  readRivenRows,
   resolveRivens,
   rivenReport,
-  SPLICE_RECIPES,
-  unreadFingerprintKeys,
-  spliceOptions,
+  rivenSimilarities,
 } from './rivens.js';
+import fixture from '../../../tests/fixtures/rivens/rivens.json';
 
 // Real fingerprint shapes from a DE inventory: a revealed shotgun riven, a
 // veiled melee riven, and a non-riven Upgrade (railjack avionics) that must
@@ -50,6 +44,14 @@ const ATTRS = [
   { game_ref: 'WeaponProcTimeMod', slug: 'status_duration', name: 'Status Duration', unit: 'percent' },
   { game_ref: 'WeaponPunctureDepthMod', slug: 'punch_through', name: 'Punch Through' },
 ];
+
+function row(riven, attrs, rivenType) {
+  return readRivenRows([{ riven: { veiled: false, ...riven }, rivenType }], attrs)[0];
+}
+
+function similarity(riven, auction, attrs) {
+  return rivenSimilarities(riven, [auction], attrs)[0];
+}
 
 describe('extractRivens', () => {
   it('parses a revealed riven from its fingerprint', () => {
@@ -87,15 +89,16 @@ describe('extractRivens', () => {
       UpgradeFingerprint: JSON.parse(withLock),
     });
     expect(rivenReport(r)).not.toContain('abc');
+    expect(row(r, ATTRS).unread).toEqual(['someFutureLockKey']);
   });
 
   it('names fingerprint keys the app does not read, and none for a known shape', () => {
-    expect(unreadFingerprintKeys({ raw: REVEALED_FP })).toEqual([]);
-    expect(unreadFingerprintKeys({ raw: VEILED_FP })).toEqual([]);
+    expect(row({ buffs: [], curses: [], raw: REVEALED_FP }, ATTRS).unread).toEqual([]);
+    expect(row({ buffs: [], curses: [], raw: VEILED_FP }, ATTRS).unread).toEqual([]);
     const spliced = JSON.stringify({ ...JSON.parse(REVEALED_FP), advancedTrait: { Tag: 'X', Value: 1 } });
-    expect(unreadFingerprintKeys({ raw: spliced })).toEqual(['advancedTrait']);
-    expect(unreadFingerprintKeys({ raw: '{broken' })).toEqual([]);
-    expect(unreadFingerprintKeys({})).toEqual([]);
+    expect(row({ buffs: [], curses: [], raw: spliced }, ATTRS).unread).toEqual(['advancedTrait']);
+    expect(row({ buffs: [], curses: [], raw: '{broken' }, ATTRS).unread).toEqual([]);
+    expect(row({ buffs: [], curses: [] }, ATTRS).unread).toEqual([]);
   });
 
   it('reports a malformed fingerprint verbatim, and nothing for a riven saved without one', () => {
@@ -140,14 +143,15 @@ describe('extractRivens', () => {
   });
 });
 
-describe('formatRivenStat', () => {
+describe('stat labels', () => {
   it('renders signed stat names without inventing values from roll seeds', () => {
-    expect(formatRivenStat('WeaponCritDamageMod', true, ATTRS)).toBe('+Critical Damage');
-    expect(formatRivenStat('WeaponProcTimeMod', false, ATTRS)).toBe('-Status Duration');
+    const r = row({ buffs: [{ tag: 'WeaponCritDamageMod', value: 1 }], curses: [{ tag: 'WeaponProcTimeMod', value: 1 }] }, ATTRS);
+    expect(r.stats.map((s) => s.label)).toEqual(['+Critical Damage', '-Status Duration']);
   });
 
   it('keeps an unknown tag visible and says it is unrecognised', () => {
-    expect(formatRivenStat('WeaponMysteryMod', true, ATTRS)).toBe('+WeaponMysteryMod (unrecognised)');
+    const r = row({ buffs: [{ tag: 'WeaponMysteryMod', value: 1 }], curses: [] }, ATTRS);
+    expect(r.stats[0]).toEqual({ tag: 'WeaponMysteryMod', slug: null, positive: true, label: '+WeaponMysteryMod (unrecognised)', spliced: false });
   });
 
   it('writes faction damage as the multiplier WFM sends, never as a signed number', () => {
@@ -165,9 +169,14 @@ describe('formatRivenStat', () => {
     expect(formatAuctionStat('punch_through', 1.5, false, ATTRS)).toBe('-1.50 Punch Through');
     expect(formatAuctionStat('status_duration', 90, false, ATTRS)).toBe('-90.0% Status Duration');
   });
+
+  it('writes WFM-quoted negative values with one sign', () => {
+    const attrs = [{ game_ref: '/Lotus/x/FireRate', slug: 'fire_rate', name: 'Fire Rate / Attack Speed', unit: 'percent' }];
+    expect(formatAuctionStat('fire_rate', -27.9, false, attrs)).toBe('-27.9% Fire Rate / Attack Speed');
+  });
 });
 
-describe('resolveRivens / buildWeaponIndex', () => {
+describe('resolveRivens', () => {
   const market = {
     rivens: {
       weapons: {
@@ -189,10 +198,10 @@ describe('resolveRivens / buildWeaponIndex', () => {
     expect(resolved[1].slug).toBeNull(); // veiled - nothing to resolve
   });
 
-  it('index skips weapons without a game_ref', () => {
-    const idx = buildWeaponIndex(market.rivens);
-    expect(idx.has('/Lotus/Weapons/Grineer/Pistols/GrnTorpedoPistol/GrnTorpedoPistol')).toBe(true);
-    expect(idx.size).toBe(2);
+  it('joins only weapons that carry a game_ref', () => {
+    const [r] = extractRivens(inventory([{ ItemType: '/Lotus/Upgrades/Mods/Randomized/x', UpgradeFingerprint: JSON.stringify({ buffs: [{ Tag: 'x', Value: 1 }] }) }]));
+    expect(resolveRivens([{ ...r, compat: '/Lotus/Weapons/Grineer/Pistols/GrnTorpedoPistol/GrnTorpedoPistol' }], market)[0].slug).toBe('kulstar');
+    expect(resolveRivens([{ ...r, compat: 'undefined' }], market)[0].slug).toBeNull();
   });
 
   it('unresolvable rivens stay unresolved instead of crashing', () => {
@@ -200,7 +209,7 @@ describe('resolveRivens / buildWeaponIndex', () => {
       { ItemType: '/Lotus/Upgrades/Mods/Randomized/z', UpgradeFingerprint: JSON.stringify({ compat: '/Lotus/Brand/New', buffs: [{ Tag: 'x', Value: 1 }] }) },
     ]));
     const resolved = resolveRivens(raw, market);
-    expect(resolved[0].slug).toBeNull();
+    expect(resolved[0]).toBe(raw[0]);
     expect(resolved[0].compat).toBe('/Lotus/Brand/New');
   });
 });
@@ -231,7 +240,7 @@ describe('bandForRiven', () => {
   });
 });
 
-describe('dispoChangeFor / attributeForTag', () => {
+describe('dispoChangeFor', () => {
   it('finds the latest change for a slug', () => {
     const surface = {
       changes: [
@@ -243,25 +252,9 @@ describe('dispoChangeFor / attributeForTag', () => {
     expect(dispoChangeFor('lato', surface)).toBeUndefined();
     expect(dispoChangeFor(null, surface)).toBeUndefined();
   });
-
-  it('looks attributes up by the fingerprint tag', () => {
-    expect(attributeForTag('WeaponCritDamageMod', ATTRS).slug).toBe('critical_damage');
-    expect(attributeForTag('WeaponPunctureDepthMod', ATTRS).unit).toBeUndefined();
-    expect(attributeForTag('WeaponNopeMod', ATTRS)).toBeUndefined();
-  });
 });
 
-describe('auction single-sign rule', () => {
-  const attrs = [
-    { game_ref: '/Lotus/x/FireRate', slug: 'fire_rate', name: 'Fire Rate / Attack Speed', unit: 'percent' },
-  ];
-  it('formatAuctionStat likewise for WFM-quoted negative values', () => {
-    const out = formatAuctionStat('fire_rate', -27.9, false, attrs as never);
-    expect(out).toBe('-27.9% Fire Rate / Attack Speed');
-  });
-});
-
-describe('rivenSimilarity', () => {
+describe('rivenSimilarities', () => {
   const owned = {
     buffs: [
       { tag: 'WeaponCritDamageMod', value: Math.round(0.9 * 1073741824) },
@@ -271,41 +264,37 @@ describe('rivenSimilarity', () => {
       { tag: 'WeaponProcTimeMod', value: Math.round(-0.4 * 1073741824) },
     ],
   };
+  const full = [
+    { url_name: 'critical_damage', value: 90, positive: true },
+    { url_name: 'punch_through', value: 1.5, positive: true },
+    { url_name: 'status_duration', value: 40, positive: false },
+  ];
 
   it('scores identical signed stat sets at 100%', () => {
-    expect(rivenSimilarity(owned, [
-      { url_name: 'critical_damage', value: 90, positive: true },
-      { url_name: 'punch_through', value: 1.5, positive: true },
-      { url_name: 'status_duration', value: 40, positive: false },
-    ], ATTRS)).toBe(100);
+    expect(similarity(owned, full, ATTRS)).toBe(100);
   });
 
   it('penalizes missing and opposite-sign stats without comparing roll strength', () => {
-    const score = rivenSimilarity(owned, [
+    expect(similarity(owned, [
       { url_name: 'critical_damage', value: 45, positive: true },
       { url_name: 'punch_through', value: 1.5, positive: false },
-    ], ATTRS);
-    expect(score).toBe(25);
+    ], ATTRS)).toBe(25);
   });
 
   it('returns null when no stats can be compared', () => {
-    expect(rivenSimilarity({ buffs: [], curses: [] }, [], ATTRS)).toBeNull();
+    expect(similarity({ buffs: [], curses: [] }, [], ATTRS)).toBeNull();
   });
 
   it('counts a stat the manifest cannot name instead of shrinking the riven', () => {
     const withUnknown = { ...owned, buffs: [...owned.buffs, { tag: 'WeaponBrandNewMod', value: 1 }] };
-    expect(rivenSimilarity(withUnknown, [
-      { url_name: 'critical_damage', value: 90, positive: true },
-      { url_name: 'punch_through', value: 1.5, positive: true },
-      { url_name: 'status_duration', value: 40, positive: false },
-    ], ATTRS)).toBe(75);
+    expect(similarity(withUnknown, full, ATTRS)).toBe(75);
+  });
+
+  it('scores a whole comps sample in order', () => {
+    expect(rivenSimilarities(owned, [full, [], full.slice(0, 1)], ATTRS)).toEqual([100, null, 33]);
+    expect(rivenSimilarities(owned, [], ATTRS)).toEqual([]);
   });
 });
-
-// WFM /v2/riven/attributes slugs as served on 2026-10-08, after the Update
-// 44.1 traits were added. Guards the recipe table against a typo'd slug, which
-// would otherwise silently never match.
-const WFM_ATTRIBUTE_SLUGS = new Set(["ammo_efficiency", "ammo_maximum", "base_damage_/_melee_damage", "blast", "chance_to_gain_combo_count", "chance_to_gain_extra_combo_count", "channeling_damage", "channeling_efficiency", "cold_damage", "combo_duration", "corrosive", "critical_chance", "critical_chance_on_slide_attack", "critical_damage", "damage_to_orokin", "damage_to_scaldra", "damage_to_techrot", "damage_vs_corpus", "damage_vs_grineer", "damage_vs_infested", "electric_damage", "finisher_damage", "fire_rate_/_attack_speed", "gas", "heat_damage", "heavy_attack_wind_up_speed", "impact_damage", "magazine_capacity", "magazine_reloaded_s_when_holstered", "magnetic", "melee_damage_on_heavy_attack", "multishot", "parry_angle", "projectile_speed", "punch_through", "puncture_damage", "radiation", "range", "recoil", "reload_speed", "slam_attack_damage", "slash_damage", "status_chance", "status_damage", "status_duration", "toxin_damage", "viral", "weak_point_critical_chance", "weak_point_damage", "zoom"]);
 
 const SPLICE_ATTRS = [
   ['WeaponDamageAmountMod', 'base_damage_/_melee_damage', 'Damage'],
@@ -327,81 +316,120 @@ function riven(buffs, curses = []) {
   return { buffs: buffs.map((tag) => ({ tag, value: 1 })), curses: curses.map((tag) => ({ tag, value: 1 })) };
 }
 
+function splices(r, rivenType) {
+  return row(r, SPLICE_ATTRS, rivenType).splices;
+}
+
 function results(options) {
   return options.map((o) => o.recipe.result).sort();
 }
 
 describe('splicing', () => {
-  it('names only attributes WFM actually lists', () => {
-    for (const r of SPLICE_RECIPES) {
-      expect(WFM_ATTRIBUTE_SLUGS.has(r.result), r.result).toBe(true);
-      for (const slug of r.ingredients) expect(WFM_ATTRIBUTE_SLUGS.has(slug), slug).toBe(true);
-    }
-  });
-
   it('marks spliced traits on a riven and in a listing', () => {
-    const stats = resolveRivenStats(riven(['WeaponBlastDamageMod', 'WeaponCritChanceMod']), SPLICE_ATTRS);
-    expect(stats.map((s) => s.spliced)).toEqual([true, false]);
+    expect(row(riven(['WeaponBlastDamageMod', 'WeaponCritChanceMod']), SPLICE_ATTRS).stats.map((s) => s.spliced)).toEqual([true, false]);
     expect(isSplicedStat('viral')).toBe(true);
     expect(isSplicedStat('cold_damage')).toBe(false);
   });
 
   it('offers the elemental and ranged splices a rifle riven qualifies for', () => {
-    const stats = resolveRivenStats(riven(['WeaponFireDamageMod', 'WeaponFreezeDamageMod', 'WeaponDamageAmountMod'], ['WeaponZoomFovMod']), SPLICE_ATTRS);
-    const options = spliceOptions(stats, 'rifle');
-    expect(results(options)).toEqual(['blast', 'weak_point_damage']);
-    const wpd = options.find((o) => o.recipe.result === 'weak_point_damage');
+    const r = row(riven(['WeaponFireDamageMod', 'WeaponFreezeDamageMod', 'WeaponDamageAmountMod'], ['WeaponZoomFovMod']), SPLICE_ATTRS, 'rifle');
+    expect(results(r.splices)).toEqual(['blast', 'weak_point_damage']);
+    const wpd = r.splices.find((o) => o.recipe.result === 'weak_point_damage');
     expect(wpd.randomIsNegative).toBe(true);
-    expect(options.find((o) => o.recipe.result === 'blast').randomIsNegative).toBe(false);
+    // The consumed stats are the row's own, in recipe order.
+    expect(wpd.consumed).toEqual([r.stats[2], r.stats[3]]);
+    expect(wpd.consumed[0]).toBe(r.stats[2]);
+    expect(r.splices.find((o) => o.recipe.result === 'blast').randomIsNegative).toBe(false);
   });
 
   it('keeps ranged recipes off melee and melee recipes off guns', () => {
-    const gun = resolveRivenStats(riven(['WeaponFireRateMod', 'WeaponDamageAmountMod', 'WeaponFireIterationsMod']), SPLICE_ATTRS);
-    expect(results(spliceOptions(gun, 'pistol'))).toEqual(['weak_point_damage']);
-    const sword = resolveRivenStats(riven(['WeaponFireRateMod', 'WeaponDamageAmountMod', 'WeaponMeleeRangeIncMod']), SPLICE_ATTRS);
-    expect(results(spliceOptions(sword, 'melee'))).toEqual(['parry_angle', 'slam_attack_damage']);
-    expect(results(spliceOptions(sword, 'zaw'))).toEqual(['parry_angle', 'slam_attack_damage']);
+    expect(results(splices(riven(['WeaponFireRateMod', 'WeaponDamageAmountMod', 'WeaponFireIterationsMod']), 'pistol'))).toEqual(['weak_point_damage']);
+    const sword = riven(['WeaponFireRateMod', 'WeaponDamageAmountMod', 'WeaponMeleeRangeIncMod']);
+    expect(results(splices(sword, 'melee'))).toEqual(['parry_angle', 'slam_attack_damage']);
+    expect(results(splices(sword, 'zaw'))).toEqual(['parry_angle', 'slam_attack_damage']);
   });
 
   it('limits a riven of unknown class to the all-class recipes', () => {
-    const stats = resolveRivenStats(riven(['WeaponFireDamageMod', 'WeaponFreezeDamageMod', 'WeaponDamageAmountMod', 'WeaponZoomFovMod']), SPLICE_ATTRS);
-    expect(results(spliceOptions(stats, undefined))).toEqual(['blast']);
+    expect(results(splices(riven(['WeaponFireDamageMod', 'WeaponFreezeDamageMod', 'WeaponDamageAmountMod', 'WeaponZoomFovMod']), undefined))).toEqual(['blast']);
   });
 
   it('accepts a faction curse beside a faction buff, never two curses', () => {
-    const mixed = resolveRivenStats(riven(['WeaponFactionDamageGrineer'], ['WeaponFactionDamageCorpus']), SPLICE_ATTRS);
-    expect(results(spliceOptions(mixed, 'rifle'))).toEqual(['damage_to_orokin']);
-    const cursed = resolveRivenStats(riven(['WeaponCritChanceMod'], ['WeaponFactionDamageGrineer', 'WeaponFactionDamageCorpus']), SPLICE_ATTRS);
-    expect(spliceOptions(cursed, 'rifle')).toEqual([]);
+    expect(results(splices(riven(['WeaponFactionDamageGrineer'], ['WeaponFactionDamageCorpus']), 'rifle'))).toEqual(['damage_to_orokin']);
+    expect(splices(riven(['WeaponCritChanceMod'], ['WeaponFactionDamageGrineer', 'WeaponFactionDamageCorpus']), 'rifle')).toEqual([]);
   });
 
   it('offers nothing once a riven carries its one spliced trait', () => {
-    const stats = resolveRivenStats(riven(['WeaponWeakpointDamage', 'WeaponFireDamageMod', 'WeaponFreezeDamageMod']), SPLICE_ATTRS);
-    expect(spliceOptions(stats, 'rifle')).toEqual([]);
+    expect(splices(riven(['WeaponWeakpointDamage', 'WeaponFireDamageMod', 'WeaponFreezeDamageMod']), 'rifle')).toEqual([]);
+  });
+
+  it('offers nothing on a veiled riven', () => {
+    expect(row({ ...riven(['WeaponFireDamageMod', 'WeaponFreezeDamageMod']), veiled: true }, SPLICE_ATTRS, 'rifle').splices).toEqual([]);
   });
 
   it('ignores stats the manifest cannot name', () => {
-    const stats = resolveRivenStats(riven(['WeaponFireDamageMod', 'WeaponUnknownMod']), SPLICE_ATTRS);
-    expect(spliceOptions(stats, 'rifle')).toEqual([]);
+    expect(splices(riven(['WeaponFireDamageMod', 'WeaponUnknownMod']), 'rifle')).toEqual([]);
   });
 });
 
-describe('compsFilterFor', () => {
+describe('comps filter', () => {
   it('filters on the resolved positive stats only', () => {
-    const stats = resolveRivenStats(riven(['WeaponCritChanceMod', 'WeaponFireIterationsMod'], ['WeaponZoomFovMod']), SPLICE_ATTRS);
-    expect(compsFilterFor(stats)).toEqual({
+    expect(row(riven(['WeaponCritChanceMod', 'WeaponFireIterationsMod'], ['WeaponZoomFovMod']), SPLICE_ATTRS).filter).toEqual({
       filter: { positive: ['critical_chance', 'multishot'], negative: [] },
       complete: true,
     });
   });
 
   it('says when an unrecognised positive was left out', () => {
-    const stats = resolveRivenStats(riven(['WeaponCritChanceMod', 'WeaponUnknownMod']), SPLICE_ATTRS);
-    expect(compsFilterFor(stats)).toEqual({ filter: { positive: ['critical_chance'], negative: [] }, complete: false });
+    expect(row(riven(['WeaponCritChanceMod', 'WeaponUnknownMod']), SPLICE_ATTRS).filter).toEqual({ filter: { positive: ['critical_chance'], negative: [] }, complete: false });
   });
 
   it('is null when no positive stat resolves', () => {
-    expect(compsFilterFor(resolveRivenStats(riven(['WeaponUnknownMod'], ['WeaponZoomFovMod']), SPLICE_ATTRS))).toBeNull();
-    expect(compsFilterFor([])).toBeNull();
+    expect(row(riven(['WeaponUnknownMod'], ['WeaponZoomFovMod']), SPLICE_ATTRS).filter).toBeNull();
+    expect(row(riven([]), SPLICE_ATTRS).filter).toBeNull();
+  });
+});
+
+// The outputs the TypeScript rules gave before they moved native.
+describe('shared fixture', () => {
+  const attrsOf = (key) => fixture.attribute_sets[key] ?? undefined;
+
+  it('extracts rivens as before', () => {
+    for (const c of fixture.extract) expect(extractRivens(c.inventory), c.name).toEqual(c.expected);
+  });
+
+  it('joins weapons as before', () => {
+    for (const c of fixture.resolve) {
+      const market = c.weapons === undefined ? undefined : { rivens: c.weapons === null ? null : { weapons: c.weapons } };
+      const got = resolveRivens(c.rivens, market);
+      c.expected.forEach((want, i) => {
+        if (want === null) expect(got[i], c.name).toBe(c.rivens[i]);
+        else expect(got[i], c.name).toEqual({ ...c.rivens[i], ...want });
+      });
+    }
+  });
+
+  it('picks bands as before', () => {
+    for (const c of fixture.band) expect(bandForRiven(c.riven, fixture.band_stats[c.stats]), c.name).toEqual(c.expected);
+  });
+
+  it('reads rows as before', () => {
+    const recipes = fixture.recipes.map((r) => JSON.stringify(r));
+    for (const c of fixture.rows) {
+      const [got] = readRivenRows([{ riven: c.riven, rivenType: c.riven_type }], attrsOf(c.attributes));
+      expect({
+        stats: got.stats,
+        splices: got.splices.map((o) => ({ recipe: recipes.indexOf(JSON.stringify(o.recipe)), consumed: o.consumed.map((s) => got.stats.indexOf(s)), randomIsNegative: o.randomIsNegative })),
+        filter: got.filter,
+        unread: got.unread,
+      }, c.name).toEqual(c.expected);
+    }
+  });
+
+  it('scores similarity as before', () => {
+    for (const c of fixture.similarity) expect(similarity(c.riven, c.auction, attrsOf(c.attributes)), c.name).toBe(c.expected);
+  });
+
+  it('marks spliced traits as before', () => {
+    for (const c of fixture.spliced) expect(isSplicedStat(c.slug), c.slug).toBe(c.expected);
   });
 });
