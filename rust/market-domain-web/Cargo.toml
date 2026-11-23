@@ -12,7 +12,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 market-domain = { path = "../market-domain" }
-serde_json = { workspace = true }
+# The page's numbers must come back bit-identical: JSON.parse rounds exactly,
+# and serde_json's default float parser can be one ulp off.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 
 [lints]
 workspace = true

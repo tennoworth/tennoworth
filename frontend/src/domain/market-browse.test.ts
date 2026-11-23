@@ -1,9 +1,7 @@
 // @ts-nocheck - hand-built market fixtures; full TS shapes would be busy-work.
 import { describe, it, expect } from 'vitest';
 import {
-  titleCase,
   buildBrowseIndex,
-  itemDeltaPct,
   searchItems,
   topMovers,
   vaultedTop,
@@ -11,6 +9,7 @@ import {
   handoffSample,
 } from './market-browse.js';
 import type { Market } from '../contracts/data';
+import collation from '../../../tests/fixtures/collation/ascii.json';
 
 // Minimal snapshot: catalog (name→slug), items (stats), vault_status.
 function fixture() {
@@ -48,10 +47,16 @@ function fixture() {
   };
 }
 
-describe('titleCase', () => {
-  it('upper-cases each word, including inside parens', () => {
-    expect(titleCase('mag prime set')).toBe('Mag Prime Set');
-    expect(titleCase('mutalist alad v assassinate (key)')).toBe('Mutalist Alad V Assassinate (Key)');
+describe('names', () => {
+  it('upper-cases each word, including inside parens, with the ASCII word rule', () => {
+    const idx = buildBrowseIndex({ catalog: { 'mutalist alad v assassinate (key)': 'key', 'höllvanian old town': 'town' }, items: { key: {}, town: {} } });
+    expect(idx.nameOf('key')).toBe('Mutalist Alad V Assassinate (Key)');
+    expect(idx.nameOf('town')).toBe('HöLlvanian Old Town');
+  });
+
+  // The native sorts reproduce this order (math::collate); this pins it to the engine.
+  it('the collation fixture is the order localeCompare gives', () => {
+    expect([...collation].reverse().sort((a, b) => a.localeCompare(b))).toEqual(collation);
   });
 });
 
@@ -75,22 +80,26 @@ describe('buildBrowseIndex', () => {
   });
 });
 
-describe('itemDeltaPct', () => {
+describe('row delta', () => {
+  const delta = (entry) => {
+    const m = { catalog: { 'x item': 'x' }, items: { x: { vol: 1, ...entry } } };
+    return searchItems(m, buildBrowseIndex(m), 'x')[0].deltaPct;
+  };
+
   it('computes (now - base) / base * 100', () => {
-    expect(itemDeltaPct({ median_now: 60, median_90d: 50 })).toBeCloseTo(20);
-    expect(itemDeltaPct({ median_now: 30, median_90d: 40 })).toBeCloseTo(-25);
+    expect(delta({ median_now: 60, median_90d: 50 })).toBeCloseTo(20);
+    expect(delta({ median_now: 30, median_90d: 40 })).toBeCloseTo(-25);
   });
 
-  it('returns null when median_90d is missing or zero (no divide-by-junk)', () => {
-    expect(itemDeltaPct({ median_now: 25 })).toBeNull();
-    expect(itemDeltaPct({ median_now: 25, median_90d: 0 })).toBeNull();
-    expect(itemDeltaPct({ median_now: 25, median_90d: -5 })).toBeNull();
+  it('is null when median_90d is missing or zero (no divide-by-junk)', () => {
+    expect(delta({ median_now: 25 })).toBeNull();
+    expect(delta({ median_now: 25, median_90d: 0 })).toBeNull();
+    expect(delta({ median_now: 25, median_90d: -5 })).toBeNull();
+    expect(delta({ median_now: 25, median_90d: '40' })).toBeNull();
   });
 
-  it('returns null when median_now is missing, and on null input', () => {
-    expect(itemDeltaPct({ median_90d: 40 })).toBeNull();
-    expect(itemDeltaPct(null)).toBeNull();
-    expect(itemDeltaPct(undefined)).toBeNull();
+  it('is null when median_now is missing', () => {
+    expect(delta({ median_90d: 40 })).toBeNull();
   });
 });
 
@@ -116,6 +125,11 @@ describe('searchItems', () => {
     const rows = searchItems(m, idx, 'primed');
     expect(rows[0].slug).toBe('primed_flow');
     expect(rows[1].slug).toBe('primed_continuity');
+  });
+
+  it('puts a prefix match above a busier mid-word match', () => {
+    const market = { catalog: { 'mag set': 'busy', 'set mag': 'quiet' }, items: { busy: { vol: 100 }, quiet: { vol: 1 } } };
+    expect(searchItems(market, buildBrowseIndex(market), 'set').map((r) => r.slug)).toEqual(['quiet', 'busy']);
   });
 
   it('carries vault status and delta onto rows', () => {
@@ -187,6 +201,11 @@ describe('dispositionChanges', () => {
     expect(dispositionChanges(market).map((c) => c.slug)).toEqual(['braton', 'kulstar', 'lato']);
     expect(dispositionChanges(market, 1).map((c) => c.slug)).toEqual(['braton']);
   });
+  it('breaks seen_at ties by slug in localeCompare order', () => {
+    const changes = [...collation].reverse().map((slug) => ({ slug, name: slug, from: 1, to: 2, seen_at: '2026-08-16T12:00:00Z' }));
+    const market = { items: {}, rivens: { changes } } as unknown as Market;
+    expect(dispositionChanges(market, collation.length).map((c) => c.slug)).toEqual(collation);
+  });
   it('is empty without the surface', () => {
     expect(dispositionChanges({ items: {} } as unknown as Market)).toEqual([]);
     expect(dispositionChanges(null)).toEqual([]);
@@ -242,10 +261,17 @@ describe('handoffSample', () => {
       { slug: 'rare_thing', owned: 1.5, score: 10 },
       { slug: 'primed_continuity', owned: 1, score: Number.NaN },
       { slug: 'primed_continuity', owned: 1, score: -1 },
+      { slug: 'primed_continuity', score: 10 },
+      { slug: 'primed_continuity', owned: 1 },
       null,
       { slug: 'mag_prime_set', owned: 2, score: 0 },
     ] }, idx);
     expect(rows.map((r) => r.slug)).toEqual(['mag_prime_set']);
+  });
+
+  it('rounds the stack value half up, as Math.round does', () => {
+    const market = { ...m, items: { ...m.items, rare_thing: { ...m.items.rare_thing, avg: 2.25 } }, handoff_sample: [{ slug: 'rare_thing', owned: 2, score: 5 }] };
+    expect(handoffSample(market, idx)[0].potential).toBe(5);
   });
 
   it('is empty on a snapshot without picks', () => {

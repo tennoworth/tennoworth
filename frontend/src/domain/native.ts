@@ -18,6 +18,9 @@ interface WebExports {
   web_sellable_qty(count: number, reserve: number, leveled: number): number;
   web_spare_qty(count: number, keptLvl: number, leveled: number): number;
   web_clearing_price(vol: number, lowSell: number, avg: number, medianNow: number, median90d: number): number;
+  web_crowded_book(low5: number, low20: number, sells: number): number;
+  web_delta_pct(medianNow: number, median90d: number): number;
+  web_bargain_holds(flip: boolean, seenAsk: number, ask: number, bid: number): number;
 }
 
 let exports: WebExports | null = null;

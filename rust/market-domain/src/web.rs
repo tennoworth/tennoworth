@@ -7,6 +7,12 @@ use crate::math::sell_priority::{self, PickCandidate};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::browse::{
+    self, BargainLead, BargainsRequest, BrowseIndexRequest, BrowseNames, DispositionRequest,
+    HandoffPick, HandoffRequest, Movers, MoversRequest, SearchRequest, VaultedRequest,
+};
+use crate::meta_drift::{self, MetaDrift, MetaDriftRequest};
+
 /// One row as the picks rule reads it.
 #[derive(Debug, Clone, Copy, Deserialize, TS)]
 pub struct PickRow {
@@ -83,6 +89,15 @@ web_operations! {
             input.cap.unwrap_or(sell_priority::MAX_PICKS),
         )
     ),
+    BrowseIndex: BrowseIndexRequest => BrowseNames = |input| Ok::<_, String>(browse::browse_index(input)),
+    SlugName: String => String = |slug: String| Ok::<_, String>(browse::slug_name(&slug)),
+    SearchItems: SearchRequest => Vec<usize> = |input: SearchRequest| Ok::<_, String>(browse::search(&input)),
+    TopMovers: MoversRequest => Movers = |input: MoversRequest| Ok::<_, String>(browse::top_movers(&input)),
+    VaultedTop: VaultedRequest => Vec<usize> = |input: VaultedRequest| Ok::<_, String>(browse::vaulted_top(&input)),
+    DispositionChanges: DispositionRequest => Vec<usize> = |input: DispositionRequest| browse::disposition_changes(&input),
+    HandoffSample: HandoffRequest => Vec<HandoffPick> = |input: HandoffRequest| Ok::<_, String>(browse::handoff_sample(&input)),
+    FindBargains: BargainsRequest => Vec<BargainLead> = |input: BargainsRequest| Ok::<_, String>(browse::find_bargains(&input)),
+    MetaDrift: MetaDriftRequest => Option<MetaDrift> = |input: MetaDriftRequest| meta_drift::meta_drift(&input),
 }
 
 #[cfg(test)]
@@ -106,6 +121,24 @@ mod tests {
         assert_eq!(
             call(json!({ "op": "select_picks", "input": { "rows": rows, "cap": 2 } })),
             json!({ "op": "select_picks", "result": [0, 2] })
+        );
+    }
+
+    #[test]
+    fn the_market_lists_answer_through_the_channel() {
+        assert_eq!(
+            call(
+                json!({ "op": "search_items", "input": { "query": "prime", "limit": 5, "names": [["mag prime", 5], ["prime set", 1], ["prime x", null]] } })
+            ),
+            json!({ "op": "search_items", "result": [1, 2, 0] })
+        );
+        assert_eq!(
+            call(json!({ "op": "slug_name", "input": "lato_prime" })),
+            json!({ "op": "slug_name", "result": "Lato Prime" })
+        );
+        assert_eq!(
+            call(json!({ "op": "meta_drift", "input": { "usage_history": null } })),
+            json!({ "op": "meta_drift", "result": null })
         );
     }
 

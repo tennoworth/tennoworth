@@ -414,13 +414,19 @@ startup work; the prerender and the unit suite pass its bytes to
 plain numbers are wasm functions of numbers (`clearingPrice`, `sellableQty`);
 rules over objects take one JSON request in wasm memory, typed by
 `WebRequest` in `rust/market-domain/src/web.rs` and its generated
-`contracts/generated/web.ts` (`selectPicks`). A TypeScript file in `domain/`
-that wraps a native rule keeps only the call and the thresholds the views
-print. The module is built from the current tree by the frontend's dev, test
-and build scripts and is never committed. It costs about 135 KB (57 KB
-gzipped), most of it number parsing, formatting and the allocator that every
-JSON rule shares. The site and the desktop policy grant `'wasm-unsafe-eval'`
-for it, which allows WebAssembly compilation only; script sources stay `'self'`,
+`contracts/generated/web.ts` (`selectPicks`). A list is one request over
+the rows it reads, answered with positions into them, so the market browser's
+search, movers, Meta Drift and bargains each cost one call however many rows
+the snapshot holds, and the rendered rows stay the snapshot's own objects. A
+TypeScript file in `domain/` that wraps a native rule keeps only the call,
+how the page reads its fields, and the thresholds the views print. Ties
+that the page broke with `localeCompare` are broken by `math::collate`,
+pinned to the engines by `tests/fixtures/collation/ascii.json`. The module is
+built from the current tree by the frontend's dev, test and build scripts and
+is never committed. It costs about 280 KB (101 KB gzipped): each JSON rule's
+typed reader, plus the number parsing, formatting and allocator they share.
+`WebRequest` reads its input after its op so each reader is compiled once.
+The site and the desktop policy grant `'wasm-unsafe-eval'` for it, which allows WebAssembly compilation only; script sources stay `'self'`,
 and the private dashboard, which loads no wasm, does not grant it.
 
 Market-only browsing keeps the history chart shaping. The `?preview-desktop` development host
