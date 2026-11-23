@@ -3,13 +3,14 @@
 // (market_domain::sell_filter), each existing once there; the table's rows,
 // the chip counts and the empty-state diagnosis are one call each over the
 // whole inventory. This file joins each owned record to its market entry and
-// native fact for that call, and builds the table's rows from the answer.
+// native fact, hands that row set to the module once, and builds the table's
+// rows from each answer.
 
 import type { ScoredInventoryFact, Verdict } from '../contracts/generated/domain';
 import type { SellFilterRow, EmptyReason as NativeEmptyReason } from '../contracts/generated/web';
 import { lookup } from './market';
 import { crowdedBook } from './book-depth';
-import { call, jsNumber } from './native';
+import { call, jsNumber, native } from './native';
 import { rememberTagGroups } from './tag-groups';
 import type { Market, MarketItemEntry, OwnedRecord } from '../contracts/data';
 
@@ -69,6 +70,52 @@ function join(owned: Map<string, OwnedRecord>, market: Market | null | undefined
     });
   }
   return { joined, rows, tags };
+}
+
+// Row sets the module holds, most recently used first. A filter change re-runs
+// the table, the chip counts and the previous scan's summary over unchanged
+// rows; sending them again each time spent most of a keystroke re-reading the
+// inventory (about 4 of 5.5 ms on 1,500 items). Every input is replaced, never
+// mutated, when it changes (the market is `$state.raw`, the maps are derived),
+// so identity says whether a held set still describes them. Room for the
+// workspace's three sets plus the trade-session pane's.
+const HELD_SETS = 4;
+interface Held {
+  module: object;
+  inputs: readonly unknown[];
+  joined: Joined[];
+  id: number;
+}
+const held: Held[] = [];
+
+function rowSet(
+  owned: Map<string, OwnedRecord>,
+  market: Market | null | undefined,
+  advice?: Map<string, Verdict>,
+  nativeFacts?: ReadonlyMap<string, ScoredInventoryFact>,
+  availability?: ReadonlyMap<string, number>,
+): Held {
+  const module = native();
+  const inputs = [owned, market, advice, nativeFacts, availability];
+  const at = held.findIndex(h => h.module === module && h.inputs.every((input, i) => input === inputs[i]));
+  if (at >= 0) {
+    const [hit] = held.splice(at, 1);
+    held.unshift(hit!);
+    return hit!;
+  }
+  const { joined, rows, tags } = join(owned, market, advice);
+  if (nativeFacts) {
+    joined.forEach(({ key }, i) => {
+      const fact = nativeFacts.get(key);
+      if (fact) rows[i]!.fact = { sellable: jsNumber(fact.sellable), sell_score: jsNumber(fact.sell_score), timing: fact.timing };
+      if (availability) rows[i]!.allocation = jsNumber(availability.get(key) ?? 0);
+    });
+  }
+  const set: Held = { module, inputs, joined, id: call({ op: 'sell_rows_put', input: { tags, rows } }) };
+  held.unshift(set);
+  // A set from an earlier module instance went with it.
+  for (const old of held.splice(HELD_SETS)) if (old.module === module) call({ op: 'sell_rows_drop', input: old.id });
+  return set;
 }
 
 function buildRow({ key, rec, m }: Joined, market: Market | null | undefined, fact: ScoredInventoryFact, native: { sellable: number; potential_plat: number; raw_value: number; timing: ScoredInventoryFact['timing'] }, verdict?: Verdict) {
@@ -136,16 +183,11 @@ export function computeResults(
   advice?: Map<string, Verdict>,
   availability?: ReadonlyMap<string, number>,
 ) {
-  const { joined, rows, tags } = join(owned, market, advice);
-  if (rows.length === 0) return [];
-  joined.forEach(({ key }, i) => {
-    const fact = nativeFacts.get(key);
-    if (fact) rows[i]!.fact = { sellable: jsNumber(fact.sellable), sell_score: jsNumber(fact.sell_score), timing: fact.timing };
-    if (availability) rows[i]!.allocation = jsNumber(availability.get(key) ?? 0);
-  });
-  return call({ op: 'sell_results', input: { tags, rows, filters: filtersFor(filters) } }).map((native) => {
-    const row = joined[native.index]!;
-    return buildRow(row, market, nativeFacts.get(row.key)!, native, advice?.get(row.rec.slug));
+  const { joined, id } = rowSet(owned, market, advice, nativeFacts, availability);
+  if (joined.length === 0) return [];
+  return call({ op: 'sell_results', input: { rows: id, filters: filtersFor(filters) } }).map((answer) => {
+    const row = joined[answer.index]!;
+    return buildRow(row, market, nativeFacts.get(row.key)!, answer, advice?.get(row.rec.slug));
   });
 }
 
@@ -158,9 +200,9 @@ export function computeAvailableTags(
   filters: FilterState,
   advice?: Map<string, Verdict>,
 ): Array<[string, number]> {
-  const { rows, tags } = join(owned, market, advice);
-  if (rows.length === 0) return [];
-  const available = call({ op: 'sell_tags', input: { tags, rows, filters: filtersFor(filters) } });
+  const { joined, id } = rowSet(owned, market, advice);
+  if (joined.length === 0) return [];
+  const available = call({ op: 'sell_tags', input: { rows: id, filters: filtersFor(filters) } });
   rememberTagGroups(available);
   // The name order is the locale's, so it stays with the page.
   return available.map(({ tag, count }): [string, number] => [tag, count]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -177,7 +219,6 @@ export function computeEmptyReason(
   advice?: Map<string, Verdict>,
 ): EmptyReason | null {
   if (resultsLength > 0 || !owned.size) return null;
-  const { rows, tags } = join(owned, market, advice);
-  const reason = call({ op: 'sell_empty_reason', input: { tags, rows, filters: filtersFor(filters) } });
+  const reason = call({ op: 'sell_empty_reason', input: { rows: rowSet(owned, market, advice).id, filters: filtersFor(filters) } });
   return reason.kind === 'no-market' ? reason : { ...reason, preset: activePreset };
 }

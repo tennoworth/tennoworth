@@ -73,13 +73,14 @@ pub struct SellFilterRow {
     pub allocation: Option<JsNumber>,
 }
 
-/// The rows' market tags each once: an inventory shares a few hundred tags
-/// across its rows, so each is sent and folded once.
+/// The rows the filters run over, with their market tags each once: an
+/// inventory shares a few hundred tags across its rows, so each is sent and
+/// folded once. The rows change with the inventory, the market or the scores;
+/// the filters change on every keystroke, so they travel separately.
 #[derive(Debug, Clone, Deserialize, TS)]
-pub struct SellFilterRequest {
+pub struct SellRowSet {
     pub tags: Vec<String>,
     pub rows: Vec<SellFilterRow>,
-    pub filters: SellFilters,
 }
 
 /// A row that passed, by its index in the request.
@@ -135,11 +136,10 @@ struct Cascade<'a> {
 }
 
 impl<'a> Cascade<'a> {
-    fn new(request: &'a SellFilterRequest) -> Self {
-        let f = &request.filters;
+    fn new(set: &SellRowSet, f: &'a SellFilters) -> Self {
         let mut names: Vec<String> = Vec::new();
         let mut ids: HashMap<String, usize> = HashMap::new();
-        let canonical = request
+        let canonical = set
             .tags
             .iter()
             .map(|tag| {
@@ -249,10 +249,10 @@ fn passes_except_tag(r: &SellFilterRow, c: &Cascade) -> bool {
 /// The Sell table's rows, best native score first (ties keep request order).
 /// A row the native scorer has not answered for is not shown: the table never
 /// scores on its own.
-pub fn sell_results(request: &SellFilterRequest) -> Vec<SellResult> {
-    let c = Cascade::new(request);
+pub fn sell_results(set: &SellRowSet, filters: &SellFilters) -> Vec<SellResult> {
+    let c = Cascade::new(set, filters);
     let mut out: Vec<(f64, SellResult)> = Vec::new();
-    for (index, r) in request.rows.iter().enumerate() {
+    for (index, r) in set.rows.iter().enumerate() {
         if !passes_except_tag(r, &c) || !passes_tag(r, &c) {
             continue;
         }
@@ -301,11 +301,11 @@ pub fn sell_results(request: &SellFilterRequest) -> Vec<SellResult> {
 
 /// Each canonical tag on a row that passes every other clause, with its row
 /// count, in first-seen order. The page orders them for its locale.
-pub fn available_tags(request: &SellFilterRequest) -> Vec<AvailableTag> {
-    let c = Cascade::new(request);
+pub fn available_tags(set: &SellRowSet, filters: &SellFilters) -> Vec<AvailableTag> {
+    let c = Cascade::new(set, filters);
     let mut counts = vec![0_usize; c.names.len()];
     let mut order: Vec<usize> = Vec::new();
-    for r in request.rows.iter().filter(|r| passes_except_tag(r, &c)) {
+    for r in set.rows.iter().filter(|r| passes_except_tag(r, &c)) {
         for id in c.row_tags(r) {
             if let Some(count) = counts.get_mut(id) {
                 if *count == 0 {
@@ -331,9 +331,9 @@ pub fn available_tags(request: &SellFilterRequest) -> Vec<AvailableTag> {
 /// Which single clause excludes the most rows, for the empty state's "relax
 /// this filter". Every clause is walked on every row, so a row counts against
 /// each clause it fails: a diagnostic, not a filter.
-pub fn empty_reason(request: &SellFilterRequest) -> EmptyReason {
-    let c = Cascade::new(request);
-    let candidates = request.rows.len();
+pub fn empty_reason(set: &SellRowSet, filters: &SellFilters) -> EmptyReason {
+    let c = Cascade::new(set, filters);
+    let candidates = set.rows.len();
     if candidates == 0 {
         return EmptyReason {
             kind: EmptyKind::NoMarket,
@@ -343,7 +343,7 @@ pub fn empty_reason(request: &SellFilterRequest) -> EmptyReason {
     }
     let mut top = (EmptyKind::Price, 0);
     for (index, (kind, passes)) in CLAUSES.iter().enumerate() {
-        let excluded = request.rows.iter().filter(|r| !passes(r, &c)).count();
+        let excluded = set.rows.iter().filter(|r| !passes(r, &c)).count();
         if index == 0 || excluded > top.1 {
             top = (*kind, excluded);
         }
@@ -386,7 +386,7 @@ mod tests {
     }
 
     // Rows give their tags by name; the request interns them.
-    fn request(rows: &[Value], f: &SellFilters) -> SellFilterRequest {
+    fn set(rows: &[Value]) -> SellRowSet {
         let mut names: Vec<String> = Vec::new();
         let rows = rows
             .iter()
@@ -408,15 +408,11 @@ mod tests {
                 serde_json::from_value(r).unwrap()
             })
             .collect();
-        SellFilterRequest {
-            tags: names,
-            rows,
-            filters: f.clone(),
-        }
+        SellRowSet { tags: names, rows }
     }
 
     fn results(rows: &[Value], f: &SellFilters) -> Vec<SellResult> {
-        sell_results(&request(rows, f))
+        sell_results(&set(rows), f)
     }
 
     fn indices(rows: &[Value], f: &SellFilters) -> Vec<usize> {
@@ -535,10 +531,7 @@ mod tests {
         let spares = filters(json!({"types_any": ["Mods", "Arcanes"], "spares_only": true}));
         assert_eq!(indices(&rows, &spares), [0, 1, 3]);
         let lonely = [row(json!({"count": 1})), row(json!({"count": 1}))];
-        assert_eq!(
-            empty_reason(&request(&lonely, &spares)).kind,
-            EmptyKind::Spares
-        );
+        assert_eq!(empty_reason(&set(&lonely), &spares).kind, EmptyKind::Spares);
     }
 
     #[test]
@@ -566,7 +559,7 @@ mod tests {
             row(json!({"tags": ["prime"], "avg": 1})),
         ];
         let f = filters(json!({"active_tags": ["kubrow"], "min_price": 5}));
-        let counts: Vec<_> = available_tags(&request(&rows, &f))
+        let counts: Vec<_> = available_tags(&set(&rows), &f)
             .into_iter()
             .map(|t| (t.tag, t.count, t.group))
             .collect();
@@ -584,7 +577,7 @@ mod tests {
     #[test]
     fn the_empty_reason_names_the_clause_excluding_the_most() {
         assert_eq!(
-            empty_reason(&request(&[], &filters(json!({})))),
+            empty_reason(&set(&[]), &filters(json!({}))),
             EmptyReason {
                 kind: EmptyKind::NoMarket,
                 excluded: None,
@@ -593,7 +586,7 @@ mod tests {
         );
         let rows = [row(json!({"avg": 5})), row(json!({"avg": 5}))];
         assert_eq!(
-            empty_reason(&request(&rows, &filters(json!({"min_price": 999})))),
+            empty_reason(&set(&rows), &filters(json!({"min_price": 999}))),
             EmptyReason {
                 kind: EmptyKind::Price,
                 excluded: Some(2),
@@ -601,12 +594,12 @@ mod tests {
             }
         );
         assert_eq!(
-            empty_reason(&request(&rows, &filters(json!({"advice_only": true})))).kind,
+            empty_reason(&set(&rows), &filters(json!({"advice_only": true}))).kind,
             EmptyKind::Advice
         );
         // Nothing excluded at all still names the first clause.
         assert_eq!(
-            empty_reason(&request(&rows, &filters(json!({})))),
+            empty_reason(&set(&rows), &filters(json!({}))),
             EmptyReason {
                 kind: EmptyKind::Price,
                 excluded: Some(0),
@@ -616,7 +609,7 @@ mod tests {
         // A tie goes to the earlier clause.
         let tie = [row(json!({"avg": 1, "count": 0}))];
         assert_eq!(
-            empty_reason(&request(&tie, &filters(json!({"min_price": 5})))).kind,
+            empty_reason(&set(&tie), &filters(json!({"min_price": 5}))).kind,
             EmptyKind::Price
         );
     }

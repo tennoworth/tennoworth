@@ -71,6 +71,51 @@ pub struct TopTagsRequest {
     pub limit: Option<crate::js::JsNumber>,
 }
 
+/// The Sell filters over a row set held by [`sell_rows`].
+#[cfg(feature = "desktop-views")]
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct SellRowsQuery {
+    /// An id from `sell_rows_put`.
+    pub rows: u32,
+    pub filters: sell_filter::SellFilters,
+}
+
+/// Sell row sets held between calls. A filter change re-runs the table, the
+/// chip counts and the previous scan's summary; re-sending their rows each time
+/// spent most of a keystroke reading the same inventory again. The page puts a
+/// set once per inventory, market and scores, queries it by id, and drops the
+/// ones it no longer holds.
+#[cfg(feature = "desktop-views")]
+mod sell_rows {
+    use crate::sell_filter::SellRowSet;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    thread_local! {
+        static SETS: RefCell<(u32, HashMap<u32, SellRowSet>)> = RefCell::new((0, HashMap::new()));
+    }
+
+    pub fn put(set: SellRowSet) -> u32 {
+        SETS.with_borrow_mut(|(last, sets)| {
+            *last = last.wrapping_add(1);
+            sets.insert(*last, set);
+            *last
+        })
+    }
+
+    pub fn remove(id: u32) -> bool {
+        SETS.with_borrow_mut(|(_, sets)| sets.remove(&id).is_some())
+    }
+
+    pub fn with<T>(id: u32, read: impl FnOnce(&SellRowSet) -> T) -> Result<T, String> {
+        SETS.with_borrow(|(_, sets)| {
+            sets.get(&id)
+                .map(read)
+                .ok_or_else(|| format!("Sell row set {id} is not held."))
+        })
+    }
+}
+
 macro_rules! web_operations {
     ($($(#[$gate:meta])* $name:ident: $input:ty => $output:ty = $run:expr),+ $(,)?) => {
         #[derive(TS)]
@@ -160,17 +205,22 @@ web_operations! {
         calendar::events::build(&input.market, &input.feed, input.owned.as_deref(), input.now)
     ),
     #[cfg(feature = "desktop-views")]
-    SellResults: sell_filter::SellFilterRequest => Vec<sell_filter::SellResult> = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
-        sell_filter::sell_results(&input)
+    SellRowsPut: sell_filter::SellRowSet => u32 = |input: sell_filter::SellRowSet| Ok::<_, String>(
+        sell_rows::put(input)
     ),
     #[cfg(feature = "desktop-views")]
-    SellTags: sell_filter::SellFilterRequest => Vec<sell_filter::AvailableTag> = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
-        sell_filter::available_tags(&input)
+    SellRowsDrop: u32 => bool = |input: u32| Ok::<_, String>(
+        sell_rows::remove(input)
     ),
     #[cfg(feature = "desktop-views")]
-    SellEmptyReason: sell_filter::SellFilterRequest => sell_filter::EmptyReason = |input: sell_filter::SellFilterRequest| Ok::<_, String>(
-        sell_filter::empty_reason(&input)
-    ),
+    SellResults: SellRowsQuery => Vec<sell_filter::SellResult> = |input: SellRowsQuery|
+        sell_rows::with(input.rows, |set| sell_filter::sell_results(set, &input.filters)),
+    #[cfg(feature = "desktop-views")]
+    SellTags: SellRowsQuery => Vec<sell_filter::AvailableTag> = |input: SellRowsQuery|
+        sell_rows::with(input.rows, |set| sell_filter::available_tags(set, &input.filters)),
+    #[cfg(feature = "desktop-views")]
+    SellEmptyReason: SellRowsQuery => sell_filter::EmptyReason = |input: SellRowsQuery|
+        sell_rows::with(input.rows, |set| sell_filter::empty_reason(set, &input.filters)),
     #[cfg(feature = "desktop-views")]
     TagGroups: Vec<String> => Vec<tags::TagGroup> = |input: Vec<String>| Ok::<_, String>(
         input.iter().map(|tag| tags::tag_group(tag)).collect()
@@ -243,6 +293,46 @@ mod tests {
     fn call(request: serde_json::Value) -> serde_json::Value {
         let request: WebRequest = serde_json::from_str(&request.to_string()).unwrap();
         serde_json::to_value(request.execute().unwrap()).unwrap()
+    }
+
+    #[cfg(feature = "desktop-views")]
+    #[test]
+    fn a_held_sell_row_set_answers_each_filter_until_dropped() {
+        let row = |avg: f64| {
+            json!({ "count": 1, "type": "Mods", "kept_lvl": null, "leveled": 0, "subtype": null,
+            "avg": avg, "vol": 10, "median_90d": 0, "low5_avg": 0, "ducats": null, "tags": [0], "vault": null,
+            "advice": null, "fact": { "sellable": 1, "sell_score": avg, "timing": "neutral" } })
+        };
+        let filters = |min_price: f64| {
+            json!({ "min_price": min_price, "min_owned": 1, "type_filter": "all",
+            "hide_at_lvl": 11, "active_tags": [], "vault_only": false, "ducats_only": false, "min_vol": 0,
+            "min_median": 0, "types_any": [], "spares_only": false, "advice_only": false })
+        };
+        let put = call(
+            json!({ "op": "sell_rows_put", "input": { "tags": ["mod"], "rows": [row(5.0), row(50.0)] } }),
+        );
+        let id = put["result"].clone();
+        let indices = |min_price: f64| -> Vec<Value> {
+            call(json!({ "op": "sell_results", "input": { "rows": id, "filters": filters(min_price) } }))["result"]
+                .as_array().unwrap().iter().map(|r| r["index"].clone()).collect()
+        };
+        assert_eq!(indices(0.0), [json!(1), json!(0)]);
+        assert_eq!(indices(10.0), [json!(1)]);
+        assert_eq!(
+            call(json!({ "op": "sell_tags", "input": { "rows": id, "filters": filters(10.0) } }))
+                ["result"][0]["count"],
+            json!(1)
+        );
+        assert_eq!(
+            call(json!({ "op": "sell_rows_drop", "input": id })),
+            json!({ "op": "sell_rows_drop", "result": true })
+        );
+        let request: WebRequest = serde_json::from_str(
+            &json!({ "op": "sell_results", "input": { "rows": id, "filters": filters(0.0) } })
+                .to_string(),
+        )
+        .unwrap();
+        assert!(matches!(request.execute(), Err(error) if error.contains("not held")));
     }
 
     #[test]

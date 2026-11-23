@@ -35,6 +35,30 @@ const results = (recs, mkt, filters, overrides, advice, availability) =>
   computeResults(recs, mkt, filters, factsFor(recs, overrides), advice, availability);
 
 describe('computeResults', () => {
+  // The rows stay in the module between filter changes, keyed by their inputs.
+  it('answers a new inventory, new scores or a new market with their own rows', () => {
+    const mkt = market({ a: item(), b: item() });
+    const first = owned(rec('a'));
+    const firstFacts = factsFor(first);
+    expect(computeResults(first, mkt, baseFilters(), firstFacts).map(r => r.slug)).toEqual(['a']);
+    const second = owned(rec('a'), rec('b'));
+    expect(computeResults(second, mkt, baseFilters(), factsFor(second)).map(r => r.slug)).toEqual(['a', 'b']);
+    expect(computeResults(first, mkt, baseFilters(), factsFor(first, { a: { sell_score: 99, sellable: 3 } }))[0].sellable).toBe(3);
+    expect(computeResults(first, market({ a: item({ avg: 1 }) }), { ...baseFilters(), minPrice: 5 }, firstFacts)).toEqual([]);
+    // The same inputs again, under another filter, read the rows they put.
+    expect(computeResults(first, mkt, { ...baseFilters(), minPrice: 60 }, firstFacts)).toEqual([]);
+    expect(computeResults(first, mkt, baseFilters(), firstFacts).map(r => r.slug)).toEqual(['a']);
+  });
+
+  it('rebuilds a row set it let go of', () => {
+    const mkt = market({ a: item() });
+    const inventories = Array.from({ length: 8 }, (_, i) => owned(rec('a', { count: i + 1 })));
+    const facts = inventories.map(o => factsFor(o));
+    inventories.forEach((o, i) => computeResults(o, mkt, baseFilters(), facts[i]));
+    expect(computeResults(inventories[0], mkt, { ...baseFilters(), minOwned: 1 }, facts[0])[0].owned).toBe(1);
+    expect(computeAvailableTags(inventories[7], market({ a: item({ tags: ['mod'] }) }), baseFilters())).toEqual([['mod', 1]]);
+  });
+
   it('excludes rows below minPrice', () => {
     const out = results(
       owned(rec('a')),
