@@ -23,13 +23,10 @@
     market: Market | null;
   } = $props();
 
-  // Kept as a string so an empty box is empty rather than 0 - an offer of
-  // "0p" and "no offer entered" are different questions.
-  let offerText = $state('');
-  let offer = $derived.by(() => {
-    const n = Number(offerText.trim());
-    return offerText.trim() !== '' && Number.isFinite(n) && n > 0 ? n : null;
-  });
+  // A number input binds a number, or null while the box is empty or not a
+  // number, so "no offer entered" stays distinct from an offer of 0p.
+  let offerValue = $state<number | null>(null);
+  let offer = $derived(offerValue != null && Number.isFinite(offerValue) && offerValue > 0 ? offerValue : null);
 
   // DE's inventory data has not yet been seen carrying a lock, so the owner
   // says whether one is set. A spliced trait does not count: it stays in place
@@ -77,7 +74,7 @@
       min="1"
       step="1"
       placeholder={t('offer.plat')}
-      bind:value={offerText}
+      bind:value={offerValue}
     />
   </label>
   <label class="lock">

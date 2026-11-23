@@ -123,6 +123,17 @@ describe('RivensPanel', () => {
     expect(screen.getByText('challenge to reveal')).toBeTruthy();
   });
 
+  it('reads a typed offer against the weapon band, and an emptied box as no offer', async () => {
+    installTauri(makeInvoke(), undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    const [offer] = await screen.findAllByRole('spinbutton');
+    await fireEvent.input(offer!, { target: { value: '200' } });
+    // 200p against the rerolled band: over the 100p median, under the ~267p average.
+    expect(await screen.findByText('Between median and average')).toBeTruthy();
+    await fireEvent.input(offer!, { target: { value: '' } });
+    await waitFor(() => expect(screen.queryByText('Between median and average')).toBeNull());
+  });
+
   it('lists the splices a riven qualifies for, and none for one that has no pair', async () => {
     installTauri(makeInvoke(), undefined);
     render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
