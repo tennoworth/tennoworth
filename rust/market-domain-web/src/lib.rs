@@ -10,6 +10,9 @@ use market_domain::math::sell_priority;
 use market_domain::web::WebRequest;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use market_domain::browse::{self, BargainKind};
+use market_domain::math::book_depth;
+
 /// Answer one [`WebRequest`]: `{"ok": <response>}` or `{"error": "<message>"}`.
 pub fn call_json(request: &str) -> String {
     let outcome = serde_json::from_str::<WebRequest>(request)
@@ -56,6 +59,32 @@ pub extern "C" fn web_clearing_price(
         median_now,
         median_90d,
     })
+}
+
+/// Whether a book is a queue at one price (`book_depth::crowded_book`); the
+/// page passes its fields as `Number(x) || 0` would read them.
+#[no_mangle]
+pub extern "C" fn web_crowded_book(low5: f64, low20: f64, sells: f64) -> bool {
+    book_depth::crowded_book(low5, low20, sells)
+}
+
+/// Move vs the 90-day baseline in percent; `NaN` in either is "not a number"
+/// and `NaN` out is "no move to show".
+#[no_mangle]
+pub extern "C" fn web_delta_pct(median_now: f64, median_90d: f64) -> f64 {
+    let read = |v: f64| (!v.is_nan()).then_some(v);
+    browse::delta_pct(read(median_now), read(median_90d)).unwrap_or(f64::NAN)
+}
+
+/// Whether a bargain still holds on the live book; a `NaN` bid is no bid.
+#[no_mangle]
+pub extern "C" fn web_bargain_holds(flip: bool, seen_ask: f64, ask: f64, bid: f64) -> bool {
+    let kind = if flip {
+        BargainKind::Flip
+    } else {
+        BargainKind::Cheap
+    };
+    browse::bargain_holds(kind, seen_ask, ask, (!bid.is_nan()).then_some(bid))
 }
 
 static RESULT_LEN: AtomicUsize = AtomicUsize::new(0);
@@ -124,5 +153,13 @@ mod tests {
         assert_eq!(web_spare_qty(4.0, 5.0, 0.0), 4.0);
         assert_eq!(web_spare_qty(4.0, f64::NAN, 0.0), 3.0);
         assert_eq!(web_clearing_price(20.0, 1.0, 0.0, 38.0, 0.0), 38.0);
+        assert!(web_crowded_book(69.0, 70.0, 50.0));
+        assert!(!web_crowded_book(50.0, 55.5, 40.0));
+        assert_eq!(web_delta_pct(60.0, 50.0), 20.0);
+        assert!(web_delta_pct(f64::NAN, 50.0).is_nan());
+        assert!(web_delta_pct(25.0, 0.0).is_nan());
+        assert!(web_bargain_holds(true, 30.0, 31.0, 38.0));
+        assert!(!web_bargain_holds(true, 30.0, 31.0, f64::NAN));
+        assert!(web_bargain_holds(false, 14.0, 14.0, f64::NAN));
     }
 }

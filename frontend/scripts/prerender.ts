@@ -5,13 +5,18 @@ import { pathToFileURL } from 'node:url';
 import { pages, pilotItems, itemPath } from '../src/features/market/pages';
 import { activityCandidates, decisionAnswer, decisionText, ducatParts, publicData } from '../src/site/pages/model';
 import type { Market } from '../src/contracts/data';
+import { installNative as installScriptNative } from '../src/domain/native';
 
 const root = resolve(import.meta.dirname, '..');
 const renderDir = resolve(root, 'target/public-render');
 await build({ root, logLevel: 'warn', build: { ssr: resolve(root, 'src/site/pages/render.ts'), outDir: renderDir, emptyOutDir: true, copyPublicDir: false } });
 try {
   const { render, PublicPage, PublicHome, installNative } = await import(pathToFileURL(resolve(renderDir, 'render.js')).href);
-  installNative(new Uint8Array(await readFile(resolve(root, 'src/generated/market-domain-web.wasm'))));
+  // The page model below is this script's own import, not the bundle's, so
+  // each copy of the native module needs the rules installed.
+  const rules = new Uint8Array(await readFile(resolve(root, 'src/generated/market-domain-web.wasm')));
+  installNative(rules);
+  installScriptNative(rules);
   const market = JSON.parse(await readFile(resolve(root, 'public/market.json'), 'utf8')) as Market;
   const selected = pilotItems;
   if (selected.length < 10 || selected.some(slug => !market.items[slug])) throw new Error('Item pilot has incomplete snapshot coverage');

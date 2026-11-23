@@ -2,6 +2,10 @@ import { test, expect } from '@playwright/test';
 import { pages, pilotItems, pilotSets, itemPath } from '../../src/features/market/pages';
 import { readFileSync } from 'node:fs';
 import { decisionAnswer, decisionText, formatStampUtc, priceText, publicData } from '../../src/site/pages/model';
+import { installNative } from '../../src/domain/native';
+
+// The expected text is computed here with the same native rules the build ran.
+installNative(readFileSync('src/generated/market-domain-web.wasm'));
 
 // The built pages carry the bundled snapshot, which every desktop release
 // refreshes. Expected text comes from it; model.test.ts pins the arithmetic.

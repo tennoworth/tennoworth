@@ -5,6 +5,7 @@ describe('crowdedBook', () => {
   it('flags twenty asks within a tenth of the cheapest five', () => {
     expect(crowdedBook({ low5_avg: 69, low20_avg: 70, sells: 50 })).toBe(true);
     expect(crowdedBook({ low5_avg: 50, low20_avg: 55, sells: 20 })).toBe(true);
+    expect(crowdedBook({ low5_avg: 50, low20_avg: 50 * 1.1, sells: 20 })).toBe(true);
   });
 
   it('leaves a steep book alone', () => {

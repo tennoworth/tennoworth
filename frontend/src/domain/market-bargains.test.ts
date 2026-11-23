@@ -17,6 +17,10 @@ describe('findBargains', () => {
     expect(b).toEqual({ slug: 'wolf_sledge_set', name: 'Wolf Sledge Set', kind: 'flip', ask: 30, resale: 40, margin: 10, vol: 40 });
   });
 
+  it('takes a flip at exactly the minimum margin', () => {
+    expect(findBargains(market({ edge: { low_sell: 30, top_buy: 33, median_90d: 49, vol: 40 } }))).toMatchObject([{ kind: 'flip', margin: 3 }]);
+  });
+
   it('ignores a fantasy bid far over the usual price', () => {
     expect(findBargains(market({ core: { low_sell: 999, top_buy: 2000, median_90d: 1000, vol: 40 } }))).toEqual([]);
   });

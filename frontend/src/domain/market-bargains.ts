@@ -1,25 +1,10 @@
+// Mispriced books in the snapshot (market_domain::browse::find_bargains, which
+// documents the two shapes and their floors). A row is a lead to check live.
 import type { Market } from '../contracts/data';
 import type { LiveTop } from '../contracts/desktop';
+import type { BargainKind } from '../contracts/generated/web';
 import { buildBrowseIndex } from './market-browse';
-
-// Two shapes of mispriced book in the snapshot, sized on 2026-11-17 (16 rows):
-// - flip: a live bid at least BARGAIN_MIN_MARGIN over the cheapest ask, so the
-//   item can be bought and sold straight to that buyer;
-// - cheap: one ask at most CHEAP_AT of the 90-day median while the five
-//   cheapest still average CHEAP_BOOK of it, so the rest of the book agrees
-//   on the usual price and one seller is far under it.
-// Thin items carry the fantasy bids and wrong-rank asks, so both need trades
-// behind them, and a flip's bid must be believable against the median.
-// A snapshot is hours old and these close fast: a row is a lead to check live,
-// never a promise.
-export const BARGAIN_MIN_VOL = 10;
-export const BARGAIN_MIN_MARGIN = 3;
-export const FLIP_MAX_BID = 1.5;
-export const CHEAP_AT = 0.6;
-export const CHEAP_BOOK = 0.85;
-export const CHEAP_MIN_MEDIAN = 10;
-
-export type BargainKind = 'flip' | 'cheap';
+import { call, native } from './native';
 
 export interface Bargain {
   slug: string;
@@ -32,26 +17,24 @@ export interface Bargain {
   vol: number;
 }
 
+const num = (v: unknown) => Number(v) || 0;
+
 export function findBargains(market: Pick<Market, 'items' | 'catalog'> | null | undefined, limit = 12): Bargain[] {
   const items = market?.items;
   if (!items) return [];
+  const entries = Object.entries(items);
+  const leads = call({ op: 'find_bargains', input: {
+    items: entries.map(([, e]) => ({
+      ask: num(e?.low_sell), bid: num(e?.top_buy), median: num(e?.median_90d), vol: num(e?.vol), low5: num(e?.low5_avg),
+    })),
+    limit,
+  } });
+  if (leads.length === 0) return [];
   const index = buildBrowseIndex(market);
-  const out: Bargain[] = [];
-  for (const [slug, e] of Object.entries(items)) {
-    const ask = Number(e?.low_sell) || 0;
-    const bid = Number(e?.top_buy) || 0;
-    const median = Number(e?.median_90d) || 0;
-    const vol = Number(e?.vol) || 0;
-    const low5 = Number(e?.low5_avg) || 0;
-    if (ask <= 0 || median <= 0 || vol < BARGAIN_MIN_VOL) continue;
-    const row = { slug, name: index.nameOf(slug), ask, vol };
-    if (bid - ask >= BARGAIN_MIN_MARGIN && bid <= median * FLIP_MAX_BID) {
-      out.push({ ...row, kind: 'flip', resale: bid, margin: bid - ask });
-    } else if (median >= CHEAP_MIN_MEDIAN && ask <= median * CHEAP_AT && low5 >= median * CHEAP_BOOK && median - ask >= BARGAIN_MIN_MARGIN) {
-      out.push({ ...row, kind: 'cheap', resale: median, margin: median - ask });
-    }
-  }
-  return out.sort((a, b) => b.margin - a.margin || b.vol - a.vol).slice(0, limit);
+  return leads.map(({ at, kind, ask, resale, margin, vol }) => {
+    const slug = entries[at]![0];
+    return { slug, name: index.nameOf(slug), kind, ask, resale, margin, vol };
+  });
 }
 
 export type LiveBargain =
@@ -65,8 +48,6 @@ export function liveBargain(b: Bargain, quote: LiveTop | undefined): LiveBargain
   if (quote.error) return { state: 'failed' };
   const ask = quote.low_sell;
   if (ask == null) return { state: 'gone', ask: null };
-  const holds = b.kind === 'flip'
-    ? quote.top_buy != null && quote.top_buy - ask >= BARGAIN_MIN_MARGIN
-    : ask <= b.ask;
+  const holds = native().web_bargain_holds(b.kind === 'flip', b.ask, ask, quote.top_buy ?? Number.NaN);
   return holds ? { state: 'holds', ask, seller: quote.low_sell_by ?? null } : { state: 'gone', ask };
 }

@@ -13,6 +13,9 @@
 
 pub mod sell_priority;
 
+pub mod book_depth;
+pub mod collate;
+
 /// Wash-trade cap: WFM clamps prices at 99,999p; a daily median or max at
 /// (near) the cap is manipulation, not trade.
 pub const PLAT_CAP: f64 = 99_999.0;

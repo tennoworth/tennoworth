@@ -1,8 +1,10 @@
-// Pure data-shaping for the no-inventory landing browser (MarketBrowser.svelte).
-// Everything here reads ONLY the baked market.json snapshot - no fetches, no
-// DOM - so the search / movers / vault joins stay unit-testable in isolation.
+// The no-inventory landing browser's lists (MarketBrowser.svelte). Each list
+// is one native call (market_domain::browse, documented there) over the rows
+// of the baked market.json it reads; this file sends those rows in snapshot
+// order and builds the rendered rows from the snapshot's own entries.
 
 import type { Market, MarketItemEntry, RivenDispoChange, VaultStatus } from '../contracts/data';
+import { call, native } from './native';
 
 /** A single item row rendered by the browser (search, movers, vaulted). */
 export interface BrowseRow {
@@ -31,51 +33,27 @@ export interface BrowseIndex {
   nameOf(slug: string): string;
 }
 
-// The catalog stores display names lowercased (it's the WFM name→slug join
-// key). We only need a readable label, so upper-case each word's first char.
-export function titleCase(name: string): string {
-  return name.replace(/\b\w/g, (c) => c.toUpperCase());
-}
+type Items = Record<string, unknown> | null | undefined;
+const asNumber = (v: unknown): number | null => typeof v === 'number' ? v : null;
+// What `<` and `-` read; JSON carries NaN as null, which the rules read as NaN.
+const toNumber = (v: unknown): number => Number(v);
+const positive = (v: unknown): number | null => typeof v === 'number' && v > 0 ? v : null;
 
-export function buildBrowseIndex(market: { catalog?: Market['catalog'] | null; items?: Record<string, unknown> } | null | undefined): BrowseIndex {
-  const names: BrowseIndex['names'] = [];
-  const bySlug = new Map<string, string>();
-  const catalog = market?.catalog;
+export function buildBrowseIndex(market: { catalog?: Market['catalog'] | null; items?: Items } | null | undefined): BrowseIndex {
   const items = market?.items;
-  if (catalog) {
-    for (const [nameLower, slug] of Object.entries(catalog)) {
-      // Only surface items we can actually price - search is a sell tool, an
-      // un-priceable quest key is noise.
-      if (items && !items[slug]) continue;
-      const name = titleCase(nameLower);
-      bySlug.set(slug, name);
-      names.push({ slug, name, nameLower });
-    }
-  }
+  const { names, labels } = call({ op: 'browse_index', input: {
+    catalog: market?.catalog ? Object.entries(market.catalog) : null,
+    items: items ? Object.entries(items).map(([slug, e]) => [slug, !!e]) : null,
+  } });
+  const bySlug = new Map(labels);
   return {
     names,
-    nameOf: (slug) => bySlug.get(slug) ?? titleCase(slug.replace(/_/g, ' ')),
+    nameOf: (slug) => bySlug.get(slug) ?? call({ op: 'slug_name', input: slug }),
   };
 }
 
-// Δ% vs the 90-day baseline. null when it can't be computed meaningfully:
-// missing median_now, or a missing/zero median_90d (dividing by it is junk -
-// pre-split snapshots and brand-new items land here).
-export function itemDeltaPct(e: MarketItemEntry | null | undefined): number | null {
-  if (!e) return null;
-  const base = e.median_90d;
-  const now = e.median_now;
-  if (typeof base !== 'number' || base <= 0) return null;
-  if (typeof now !== 'number') return null;
-  return ((now - base) / base) * 100;
-}
-
-function toRow(
-  index: BrowseIndex,
-  slug: string,
-  e: MarketItemEntry,
-  vault?: VaultStatus
-): BrowseRow {
+function toRow(index: BrowseIndex, slug: string, e: MarketItemEntry, vault?: VaultStatus): BrowseRow {
+  const delta = native().web_delta_pct(asNumber(e.median_now) ?? Number.NaN, asNumber(e.median_90d) ?? Number.NaN);
   return {
     slug,
     name: index.nameOf(slug),
@@ -83,12 +61,12 @@ function toRow(
     vol: e.vol,
     medians_7d: e.medians_7d,
     vault,
-    deltaPct: itemDeltaPct(e),
-    median90: typeof e.median_90d === 'number' && e.median_90d > 0 ? e.median_90d : null,
+    deltaPct: Number.isNaN(delta) ? null : delta,
+    median90: positive(e.median_90d),
     lowSell: e.low_sell,
     topBuy: e.top_buy,
     ratio: e.ratio,
-    ducats: typeof e.ducats === 'number' && e.ducats > 0 ? e.ducats : null,
+    ducats: positive(e.ducats),
   };
 }
 
@@ -102,27 +80,16 @@ export function searchItems(
   const items = market?.items;
   if (!q || !items) return [];
   const vault = market?.vault_status;
-  // Linear scan, deliberately. Measured 2026-08-01 against the real
-  // market.json: 0.2 ms median / 0.3 ms max per keystroke over its 2,549
-  // entries. A prefix index would save a fraction of a millisecond and add a
-  // structure to keep in sync with the snapshot. (The ~17k figure that makes
-  // this look expensive is the wfstat RESOLVER catalog, a different thing -
-  // this iterates market items.)
-  //
-  // Rank prefix matches above mid-word substring matches, then by volume, so
-  // "primed" surfaces the "Primed …" mods before "… Primed …" parts.
-  const starts: BrowseRow[] = [];
-  const contains: BrowseRow[] = [];
-  for (const { slug, nameLower } of index.names) {
-    const at = nameLower.indexOf(q);
-    if (at < 0) continue;
-    const e = items[slug];
-    if (!e) continue;
-    (at === 0 ? starts : contains).push(toRow(index, slug, e, vault?.[slug]));
-  }
-  starts.sort((a, b) => b.vol - a.vol);
-  contains.sort((a, b) => b.vol - a.vol);
-  return starts.concat(contains).slice(0, limit);
+  // One call per keystroke over every priced name. Measured 2026-11-23 against
+  // the real market.json (3,893 names): ~1 ms with the request's encoding.
+  const listed = index.names.filter((n) => items[n.slug]);
+  const hits = call({ op: 'search_items', input: {
+    query: q, limit, names: listed.map((n) => [n.nameLower, toNumber(items[n.slug]!.vol)]),
+  } });
+  return hits.map((i) => {
+    const { slug } = listed[i]!;
+    return toRow(index, slug, items[slug]!, vault?.[slug]);
+  });
 }
 
 export interface MoversOpts {
@@ -131,42 +98,31 @@ export interface MoversOpts {
   limit?: number;
 }
 
-// Top risers/fallers by Δ% vs the 90-day median. Two floors keep the flagship
-// list honest: the volume floor drops thin books (a 200% "move" on 3 trades is
-// noise), and the price floor drops cheap junk (a ±100% swing on a 3p relic
-// isn't worth plat - the move has to be on an item where plat is at stake).
 export function topMovers(
   market: Market | null | undefined,
   index: BrowseIndex,
   opts: MoversOpts = {}
 ): { risers: BrowseRow[]; fallers: BrowseRow[] } {
-  const minVol = opts.minVol ?? 20;
-  const minPrice = opts.minPrice ?? 10;
-  const limit = opts.limit ?? 8;
   const items = market?.items;
   if (!items) return { risers: [], fallers: [] };
   const vault = market?.vault_status;
-  const rows: BrowseRow[] = [];
-  for (const [slug, e] of Object.entries(items)) {
-    if (!e || e.vol < minVol) continue;
-    if (typeof e.avg !== 'number' || e.avg < minPrice) continue;
-    const d = itemDeltaPct(e);
-    if (d == null || d === 0) continue;
-    rows.push(toRow(index, slug, e, vault?.[slug]));
-  }
-  const risers = rows
-    .filter((r) => (r.deltaPct as number) > 0)
-    .sort((a, b) => (b.deltaPct as number) - (a.deltaPct as number))
-    .slice(0, limit);
-  const fallers = rows
-    .filter((r) => (r.deltaPct as number) < 0)
-    .sort((a, b) => (a.deltaPct as number) - (b.deltaPct as number))
-    .slice(0, limit);
-  return { risers, fallers };
+  const entries = Object.entries(items).filter(([, e]) => e);
+  const { risers, fallers } = call({ op: 'top_movers', input: {
+    items: entries.map(([, e]) => ({
+      avg: asNumber(e.avg), vol: toNumber(e.vol), median_now: asNumber(e.median_now), median_90d: asNumber(e.median_90d),
+    })),
+    ...(opts.minVol === undefined ? {} : { min_vol: opts.minVol }),
+    ...(opts.minPrice === undefined ? {} : { min_price: opts.minPrice }),
+    ...(opts.limit === undefined ? {} : { limit: opts.limit }),
+  } });
+  const rows = (at: number[]) => at.map((i) => {
+    const [slug, e] = entries[i]!;
+    return toRow(index, slug, e, vault?.[slug]);
+  });
+  return { risers: rows(risers), fallers: rows(fallers) };
 }
 
-// Highest-value currently-vaulted items (vault_status × items). Only 'vaulted'
-// - 'vaulting-soon' and 'available' are different signals.
+// The highest-value currently-vaulted items (vault_status × items).
 export function vaultedTop(
   market: Market | null | undefined,
   index: BrowseIndex,
@@ -175,27 +131,25 @@ export function vaultedTop(
   const items = market?.items;
   const vault = market?.vault_status;
   if (!items || !vault) return [];
-  const rows: BrowseRow[] = [];
-  for (const [slug, status] of Object.entries(vault)) {
-    if (status !== 'vaulted') continue;
-    const e = items[slug];
-    if (!e || typeof e.avg !== 'number' || e.avg <= 0) continue;
-    rows.push(toRow(index, slug, e, status));
-  }
-  rows.sort((a, b) => b.avg - a.avg);
-  return rows.slice(0, limit);
+  const entries = Object.entries(vault);
+  const picked = call({ op: 'vaulted_top', input: {
+    rows: entries.map(([slug, status]) => ({
+      status: typeof status === 'string' ? status : null,
+      avg: items[slug] ? asNumber(items[slug].avg) : null,
+    })),
+    limit,
+  } });
+  return picked.map((i) => {
+    const [slug, status] = entries[i]!;
+    return toRow(index, slug, items[slug]!, status);
+  });
 }
 
-/** Disposition changes from the snapshot's rolling log, newest first, capped.
- *  Raises and cuts are both kept - DE says it only raises now, but if a cut
- *  ever ships, hiding it would be the wrong call. */
+/** Disposition changes from the snapshot's rolling log, newest first, capped. */
 export function dispositionChanges(market: Market | null | undefined, limit = 12): RivenDispoChange[] {
-  const ch = market?.rivens?.changes;
-  if (!Array.isArray(ch)) return [];
-  return [...ch]
-    .filter((c) => c && typeof c.slug === 'string' && Number.isFinite(c.from) && Number.isFinite(c.to))
-    .sort((a, b) => (b.seen_at ?? '').localeCompare(a.seen_at ?? '') || a.slug.localeCompare(b.slug))
-    .slice(0, limit);
+  const changes = market?.rivens?.changes;
+  if (!Array.isArray(changes)) return [];
+  return call({ op: 'disposition_changes', input: { changes, limit } }).map((i) => changes[i]!);
 }
 
 /** A hand-off row: a market row plus the three numbers only the desktop app can
@@ -209,8 +163,6 @@ export interface HandoffRow extends BrowseRow {
   potential: number;
 }
 
-// A pick the page cannot back with a priced row, or whose numbers are not a
-// count and a score, is left out rather than shown as a plausible zero.
 export function handoffSample(
   market: Market | null | undefined,
   index: BrowseIndex,
@@ -218,10 +170,13 @@ export function handoffSample(
   const items = market?.items;
   const picks = market?.handoff_sample;
   if (!items || !Array.isArray(picks)) return [];
-  return picks.flatMap((pick) => {
-    const e = pick && typeof pick.slug === 'string' ? items[pick.slug] : undefined;
-    if (!e || !Number.isSafeInteger(pick.owned) || pick.owned <= 0 || !Number.isFinite(pick.score) || pick.score < 0) return [];
-    const row = toRow(index, pick.slug, e, market?.vault_status?.[pick.slug]);
-    return [{ ...row, owned: pick.owned, score: pick.score, potential: Math.round(pick.owned * row.avg) }];
+  const backed = picks.filter((pick) => pick && typeof pick.slug === 'string' && items[pick.slug]);
+  const kept = call({ op: 'handoff_sample', input: {
+    picks: backed.map((pick) => ({ owned: pick.owned, score: pick.score, avg: toNumber(items[pick.slug]!.avg) })),
+  } });
+  return kept.map(({ at, owned, score, potential }) => {
+    const { slug } = backed[at]!;
+    // A non-numeric avg multiplies to NaN, which JSON carries as null.
+    return { ...toRow(index, slug, items[slug]!, market?.vault_status?.[slug]), owned, score, potential: potential ?? Number.NaN };
   });
 }
