@@ -54,6 +54,32 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.10.107 - 2026-11-23
+
+# 🎲 TennoWorth Desktop 0.10.107
+
+TennoWorth Desktop 0.10.107 is ready.
+
+This release is for anyone who trades rivens. The Rivens screen tells you again whether an offer is fair. Sell now and the market views now share the app's own calculation engine, and the release includes security fixes.
+
+## Changelog (3)
+
+### Rivens
+
+- **Checking an offer works again** Typing a price into "check an offer" on the Rivens screen showed no verdict. It now tells you again how the offer compares with the market. <!-- app-note {"id":"riven-offer-verdict","kind":"fixed"} -->
+
+### Selling
+
+- **One calculation engine for every view** Sell now's rankings and the other market views are now calculated by the same built-in engine the rest of the app uses, so they all follow one set of rules. <!-- app-note {"id":"native-view-rules","kind":"improved"} -->
+
+### Security fixes
+
+- **Updated dependencies** A library the app relies on is updated to fix a published vulnerability (RUSTSEC-2026-0594). <!-- app-note {"id":"security-fixes-0107","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux, including Steam Deck, are available in the assets below.
+
 ## 0.10.106 - 2026-11-22
 
 # 🎮 TennoWorth Desktop 0.10.106

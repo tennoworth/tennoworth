@@ -1,5 +1,5 @@
 {
-  "version": "0.10.106",
+  "version": "0.10.107",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -2412,6 +2412,45 @@
           "kind": "improved",
           "title": "Alerts, boosters and Nightwave on the Calendar",
           "body": "The Calendar now shows the game's alerts with their rewards, such as Kuva or an Exilus Adapter, and game-wide boosters such as double resource drops, both under In-game events. The running Nightwave season and when it ends have their own filter.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.10.107",
+      "date": "2026-11-23",
+      "changes": [
+        {
+          "id": "riven-offer-verdict",
+          "kind": "fixed",
+          "title": "Checking an offer works again",
+          "body": "Typing a price into \"check an offer\" on the Rivens screen showed no verdict. It now tells you again how the offer compares with the market.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "native-view-rules",
+          "kind": "improved",
+          "title": "One calculation engine for every view",
+          "body": "Sell now's rankings and the other market views are now calculated by the same built-in engine the rest of the app uses, so they all follow one set of rules.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "security-fixes-0107",
+          "kind": "fixed",
+          "title": "Updated dependencies",
+          "body": "A library the app relies on is updated to fix a published vulnerability (RUSTSEC-2026-0594).",
           "platforms": [
             "windows",
             "linux"
