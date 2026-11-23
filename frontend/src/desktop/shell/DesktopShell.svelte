@@ -716,7 +716,7 @@ import { ALLOWANCE_CHANGED_EVENT, ANNOUNCEMENTS_CHANGED_EVENT } from '../../cont
       {:else if defaultFacts.error}
         <div class="ui-notice" data-tone="bad" role="alert">{t('shell.salesUnavailable', { error: defaultFacts.error })} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>{t('shell.retryCalculations')}</button></div>
       {/if}
-      <TradeSessionPane active={effectiveView === 'session'} sessionEpoch={listing.sessionEpoch} keep={keepSection} {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
+      <TradeSessionPane active={effectiveView === 'session'} sessionEpoch={listing.sessionEpoch} keep={keepSection} {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
         scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => { if (!listingQuantitiesKnown) return; listing.openListingFlow(rows.map(r => ({
           ...r, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },

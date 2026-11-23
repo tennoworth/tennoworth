@@ -25,7 +25,7 @@ async function mountPane() {
   services.desktopTradeSessionState.mockResolvedValue({ allowance: { remaining: 8, snapshot_id: 'one' }, quantities: {}, bulk_slugs: [] });
   services.evaluateTradeSession.mockImplementation(async () => plan('Initial'));
   const onreview = vi.fn();
-  const view = render(TradeSessionPane, { props: { owned: new Map(), market: null, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview } });
+  const view = render(TradeSessionPane, { props: { owned: new Map(), market: null, advice: new Map(), scanning: false, onscan: async () => {}, onreview } });
   await waitFor(() => expect((screen.getByRole('button', { name: 'Review batch' }) as HTMLButtonElement).disabled).toBe(false));
   return { ...view, onreview };
 }
@@ -41,7 +41,7 @@ describe('native Trade Session planning', () => {
     const session = deferred<{ allowance: { remaining: number; snapshot_id: string }; quantities: Record<string, number>; bulk_slugs: string[] }>();
     services.desktopTradeSessionState.mockReturnValue(session.promise);
     services.evaluateTradeSession.mockImplementation(async () => plan('Initial'));
-    render(TradeSessionPane, { props: { owned: new Map(), market: null, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
+    render(TradeSessionPane, { props: { owned: new Map(), market: null, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(services.evaluateTradeSession).not.toHaveBeenCalled();
     session.resolve({ allowance: { remaining: 8, snapshot_id: 'one' }, quantities: {}, bulk_slugs: [] });
@@ -58,7 +58,7 @@ describe('native Trade Session planning', () => {
   it('names the per-batch cap when it is lower than the daily allowance', async () => {
     services.desktopTradeSessionState.mockResolvedValue({ allowance: { remaining: 80, snapshot_id: 'one' }, quantities: {}, bulk_slugs: [] });
     services.evaluateTradeSession.mockImplementation(async () => plan('Initial'));
-    render(TradeSessionPane, { props: { owned: new Map(), market: null, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
+    render(TradeSessionPane, { props: { owned: new Map(), market: null, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
     expect(await screen.findByText('Up to 50 estimated trades per batch.')).toBeTruthy();
   });
 
@@ -142,7 +142,7 @@ it.each([
     medians_7d: [], median_90d: null, delta_90d_pct: null, timing: 'neutral',
     demand: { usage: null, inherited: false, liquidity: 'sells-today', band: null },
   }]]);
-  render(TradeSessionPane, { props: { owned, market, nativeFacts, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
+  render(TradeSessionPane, { props: { owned, market, nativeFacts, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
   const check = screen.getByRole('button', { name: 'Check live prices' });
   await waitFor(() => expect((check as HTMLButtonElement).disabled).toBe(false));
   const previousCalls = services.evaluateTradeSession.mock.calls.length;
@@ -166,7 +166,7 @@ it('drops live prices from the previous session when the account changes', async
     medians_7d: [], median_90d: null, delta_90d_pct: null, timing: 'neutral',
     demand: { usage: null, inherited: false, liquidity: 'sells-today', band: null },
   }]]);
-  const view = render(TradeSessionPane, { props: { owned, market, nativeFacts, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn(), sessionEpoch: 0 } });
+  const view = render(TradeSessionPane, { props: { owned, market, nativeFacts, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn(), sessionEpoch: 0 } });
   const check = screen.getByRole('button', { name: 'Check live prices' });
   await waitFor(() => expect((check as HTMLButtonElement).disabled).toBe(false));
   await fireEvent.click(check);

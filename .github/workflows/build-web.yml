@@ -60,6 +60,12 @@ jobs:
               - 'scripts/release/snapshot.ts'
               - 'scripts/release/files.ts'
               - 'deploy/cloudflare-web/**'
+              # Compiled into the bundle as the view rules (market-domain-web).
+              - 'rust/market-domain/**'
+              - 'rust/market-domain-web/**'
+              - 'rust/Cargo.lock'
+              - 'rust/Cargo.toml'
+              - 'scripts/build-domain-wasm.ts'
 
       # `build` covers the application inputs to the bundle, not a fail-closed
       # net: an unrelated change - a Rust-only promotion - must not republish the
@@ -128,6 +134,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
+
+      # The bundle carries the view rules, rust/market-domain-web for wasm32;
+      # the frontend's test and build scripts compile them from this tree.
+      - uses: ./.github/actions/setup-rust
+        with:
+          targets: wasm32-unknown-unknown
 
       # The browser suite is not repeated here. main advances only by
       # fast-forwarding a promotion PR that must be up to date and pass

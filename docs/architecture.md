@@ -72,6 +72,7 @@ rust/
     pipeline/                build: CSV input, render, reconcile, history, publication
   market-domain/             market heuristics (math), inventory, scoring, advisor, planners
   market-domain-wasm/        market-domain for the browser desktop preview (wasm32)
+  market-domain-web/         the view rules every surface loads before rendering (wasm32)
   wfm-client/                shared request policy and transport primitives
   announcement-feed/         pure curated announcement feed contract
   tennoworth-publisher/      private publisher API, SQLite history and feed export
@@ -197,6 +198,7 @@ flowchart TD
   Core --> Client
   Core --> Market
   Wasm[market-domain-wasm] --> Market
+  Web[market-domain-web] --> Market
   Scrape[wfm-scrape] --> Market
   Scrape --> Client
   Publisher[tennoworth-publisher] --> Feed
@@ -400,15 +402,49 @@ the authority for mutations.
 Frontend adapters serialize Maps and optional fields explicitly. Feature
 controllers guard response generations, clear obsolete evidence, expose pending
 or failed calculations, and preserve local editing state. UI filtering stays
-synchronous over native facts. Market-only browsing keeps fixture-gated
-TypeScript sell-priority scoring and history; these are not production desktop
-fallbacks when native computation fails. The `?preview-desktop` development host
-has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
+synchronous over native facts. There is no TypeScript sell score: the Sell
+table shows score_inventory's facts, and the homepage's hand-off sample is
+scored by the pipeline (`handoff_sample`).
+
+Rules the views apply synchronously, per row inside `$derived`, run from
+`market-domain-web`: market-domain compiled to wasm32 and instantiated before
+any surface mounts. `main.ts` fetches the module beside each surface's own
+startup work; the prerender and the unit suite pass its bytes to
+`installNative` in `frontend/src/domain/native.ts`, the page side. Rules over
+plain numbers are wasm functions of numbers (`clearingPrice`, `sellableQty`);
+rules over objects take one JSON request in wasm memory, typed by
+`WebRequest` in `rust/market-domain/src/web.rs` and its generated
+`contracts/generated/web.ts` (`selectPicks`). A list is one request over
+the rows it reads, answered with positions into them, so the market browser's
+search, movers, Meta Drift and bargains each cost one call however many rows
+the snapshot holds, and the rendered rows stay the snapshot's own objects. A
+TypeScript file in `domain/` that wraps a native rule keeps only the call,
+how the page reads its fields, and the thresholds the views print. Ties
+that the page broke with `localeCompare` are broken by `math::collate`,
+pinned to the engines by `tests/fixtures/collation/ascii.json`. The module is
+built from the current tree by the frontend's dev, test and build scripts and
+is never committed, in two builds: the hosted site and its prerender load
+one without the ops gated on `desktop-views` (orders, rivens, the Sell
+workspace, ledger, Baro planning), about 325 KB (117 KB gzipped); the desktop,
+overlay and unit suite load every op, about 580 KB (177 KB gzipped). Most of
+either is serde: each op's request reader and response writer, plus the number
+formatting and allocator they share. `WebRequest` reads its input after its op
+so each reader is compiled once. A rule over snapshot surfaces reads them as JSON, field by
+field (`market_domain::calendar`): derived deserialization of the calendar's
+surfaces alone cost the module over 200 KB more. The announcement feed's
+reader (`domain/announcements.ts`) stays TypeScript beside its Rust twin,
+`announcement-feed`, both held to `tests/fixtures/announcements/`: it guards
+a fetched input on every surface including the private dashboard, and sharing
+the crate would add its URL and date parsers to the module, about 400 KB. The
+site and the desktop policy grant `'wasm-unsafe-eval'` for it, which allows
+WebAssembly compilation only; script sources stay `'self'`, and the private
+dashboard, which loads no wasm, does not grant it.
+
+Market-only browsing's one-year columns are native too (`yearViews`). The
+`?preview-desktop` development host has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
 `DomainRequest::execute`, compiled to wasm32 by `scripts/build-domain-wasm.ts`
 and loaded by `frontend/src/dev/preview/domain-wasm.ts`. The preview therefore shows
 native results and there is no TypeScript copy of the planners to keep in step.
-The dev server alone grants the page `'wasm-unsafe-eval'`; the shipped CSP
-copies do not.
 
 `frontend/src/contracts/generated/` contains Rust-derived declarations. The
 ordinary Rust tests compare them against current types. To update intentionally:

@@ -84,6 +84,11 @@ pub enum Liquidity {
     Thin,
     Unknown,
 }
+/// Demand from DE's own telemetry. Spread and volume say what is traded, not
+/// what is wanted: two 12p parts can look alike while one belongs to a weapon
+/// 5% of players run. Two honesties the views must carry: usage is measured on
+/// the parent, so a part's figure is inherited (`inherited`), and it is annual
+/// and published in arrears (`usage.year`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct DemandRead {
     pub usage: Option<UsageEntry>,
@@ -131,6 +136,39 @@ pub fn valid_usage(value: &Value) -> Option<UsageEntry> {
         && !row.by_mr.is_empty()
         && row.by_mr.iter().all(|v| v.is_finite() && *v >= 0.0))
     .then_some(row)
+}
+
+/// Usage rows and the set each part inherits from: a part listed by exactly one
+/// set takes that set's row; a part two sets claim takes none.
+pub struct UsageIndex<'a> {
+    usage: &'a BTreeMap<String, Value>,
+    parents: BTreeMap<String, Option<String>>,
+}
+
+impl<'a> UsageIndex<'a> {
+    pub fn new(usage: &'a BTreeMap<String, Value>, sets: &BTreeMap<String, UsageSet>) -> Self {
+        Self {
+            usage,
+            parents: parent_index(sets),
+        }
+    }
+
+    /// The usage `slug` is scored with, and whether it came from its set. A
+    /// row of its own that is invalid stops inheritance rather than falling
+    /// through to the set's.
+    pub fn resolve(&self, slug: &str) -> (Option<UsageEntry>, bool) {
+        if let Some(value) = self.usage.get(slug) {
+            return (valid_usage(value), false);
+        }
+        let usage = self
+            .parents
+            .get(slug)
+            .and_then(|p| p.as_ref())
+            .and_then(|parent| self.usage.get(parent))
+            .and_then(valid_usage);
+        let inherited = usage.is_some();
+        (usage, inherited)
+    }
 }
 
 fn parent_index(sets: &BTreeMap<String, UsageSet>) -> BTreeMap<String, Option<String>> {
@@ -230,7 +268,7 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
     if !request.reserve_copies.is_finite() || request.reserve_copies < 0.0 {
         return Err("Reserve must be a nonnegative number".into());
     }
-    let parents = parent_index(&request.market.set_to_parts);
+    let usage_index = UsageIndex::new(&request.market.usage, &request.market.set_to_parts);
     let mut out = Vec::new();
     for (key, owned) in request.owned {
         if !owned.count.is_finite()
@@ -250,8 +288,7 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
             median_now: m.median_now.unwrap_or(0.0),
             median_90d: m.median_90d.unwrap_or(0.0),
         };
-        let available = (owned.count - request.reserve_copies.max(owned.leveled))
-            .max(0.0)
+        let available = sell_priority::sellable(owned.count, request.reserve_copies, owned.leveled)
             .min(
                 request
                     .availability
@@ -266,27 +303,12 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
                     .unwrap_or(f64::INFINITY),
             );
         let sellable = if request.spares_only {
-            let tradeable = (owned.count - owned.leveled).max(0.0);
-            if owned.kept_lvl.is_some_and(|v| v > 0.0) {
-                tradeable.min(available)
-            } else {
-                (tradeable - 1.0).max(0.0).min(available)
-            }
+            sell_priority::spare_qty(owned.count, owned.kept_lvl, owned.leveled).min(available)
         } else {
             available
         };
         let clearing_price = sell_priority::clearing_price(&priced);
-        let (usage, inherited) = if let Some(value) = request.market.usage.get(&owned.slug) {
-            (valid_usage(value), false)
-        } else {
-            let usage = parents
-                .get(&owned.slug)
-                .and_then(|p| p.as_ref())
-                .and_then(|parent| request.market.usage.get(parent))
-                .and_then(valid_usage);
-            let inherited = usage.is_some();
-            (usage, inherited)
-        };
+        let (usage, inherited) = usage_index.resolve(&owned.slug);
         let liquidity = if priced.vol < sell_priority::LIQUID_VOL {
             Liquidity::Thin
         } else if let Some(usage) = &usage {
@@ -435,6 +457,78 @@ mod tests {
         request.owned.first_mut().unwrap().1.count = f64::MAX;
         request.market.items.get_mut("item").unwrap().avg = Some(f64::MAX);
         assert!(score_inventory(request).is_err());
+    }
+
+    /// A usage curve peaking at `peak`, with a little mass either side.
+    fn curve(peak: f64) -> Vec<f64> {
+        (0..34)
+            .map(|mr| (9.0 - (f64::from(mr) - peak).abs() * 1.2).max(0.0))
+            .collect()
+    }
+
+    #[test]
+    fn the_mastery_band_brackets_the_peak_and_clamps_at_the_ends() {
+        let band = mastery_band(&curve(10.0)).unwrap();
+        assert!(band.from < 10 && band.to > 10);
+        let (low, high) = (
+            mastery_band(&curve(5.0)).unwrap(),
+            mastery_band(&curve(28.0)).unwrap(),
+        );
+        assert!(low.to < high.from);
+        assert_eq!(mastery_band(&curve(0.0)).unwrap().from, 0);
+        assert_eq!(mastery_band(&curve(33.0)).unwrap().to, 33);
+        assert_eq!(mastery_band(&[0.0; 34]), None);
+        assert_eq!(mastery_band(&[]), None);
+    }
+
+    /// The table half of the shared scan: what score_inventory answers for the
+    /// composed rows before local protection (the tray half is sellables.rs).
+    #[test]
+    fn scores_the_shared_scan_into_the_table() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/tray-table-composition.json"
+        ))
+        .unwrap();
+        let mut owned = BTreeMap::<String, OwnedItem>::new();
+        for row in fixture["inventory"].as_array().unwrap() {
+            let slug = row["slug"].as_str().unwrap();
+            let count = row["count"].as_f64().unwrap();
+            let rec = owned
+                .entry(format!("{slug}|"))
+                .or_insert_with(|| OwnedItem {
+                    count: 0.0,
+                    name: row["name"].as_str().unwrap().into(),
+                    item_type: row["category"].as_str().unwrap().into(),
+                    slug: slug.into(),
+                    subtype: None,
+                    kept_lvl: None,
+                    leveled: 0.0,
+                });
+            rec.count += count;
+            if row["xp"].as_f64().unwrap() > 0.0 {
+                rec.leveled += count;
+            }
+        }
+        let mut facts = score_inventory(ScoreInventoryRequest {
+            owned: owned.into_iter().collect(),
+            market: serde_json::from_value(fixture["market"].clone()).unwrap(),
+            reserve_copies: fixture["reserve_copies"].as_f64().unwrap(),
+            spares_only: false,
+            availability: None,
+        })
+        .unwrap();
+        facts.sort_by(|a, b| b.sell_score.total_cmp(&a.sell_score));
+        let table: Vec<Value> = facts
+            .iter()
+            .map(|f| serde_json::json!({ "slug": f.key.trim_end_matches('|'), "sellable": f.sellable }))
+            .collect();
+        let expected: Vec<Value> = fixture["expected"]["table"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| serde_json::json!({ "slug": row["slug"], "sellable": row["sellable"].as_f64() }))
+            .collect();
+        assert_eq!(table, expected);
     }
 
     #[test]

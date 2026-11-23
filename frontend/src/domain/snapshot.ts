@@ -26,6 +26,8 @@
 // reloading the inventory recomputes `rivens` fresh.
 import type { OwnedRiven } from './rivens';
 import type { OwnedRecord } from '../contracts/data';
+import type { JsNumber } from '../contracts/generated/web';
+import { call, jsNumber } from './native';
 
 export interface Snapshot {
   nativeSnapshotId: number | null;
@@ -93,20 +95,13 @@ export function deserializeSnapshot(raw: string | null): Snapshot | null {
   };
 }
 
-// owned is Map<key, {count, slug, subtype, ...}> where key encodes both
-// the slug and the subtype (so each relic refinement is its own entry).
-// Returns Map<key, delta> for keys present in `current` whose count
-// differs from `previous`. Negative delta = sold/consumed; positive = farmed.
+/** Count changes since the previous scan, for keys of `current`
+ *  (market_domain::inventory::diff_owned). */
 export function diffOwned(
   previous: Map<string, OwnedRecord> | null | undefined,
   current: Map<string, OwnedRecord>,
 ): Map<string, number> {
-  const out = new Map<string, number>();
-  if (!previous) return out;
-  for (const [key, rec] of current) {
-    const prev = previous.get(key);
-    const before = prev ? prev.count : 0;
-    if (rec.count !== before) out.set(key, rec.count - before);
-  }
-  return out;
+  if (!previous) return new Map();
+  const counts = (owned: Map<string, OwnedRecord>) => [...owned].map(([key, rec]): [string, JsNumber] => [key, jsNumber(rec.count)]);
+  return new Map(call({ op: 'diff_owned', input: { previous: counts(previous), current: counts(current) } }));
 }

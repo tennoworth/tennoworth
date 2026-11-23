@@ -1,0 +1,28 @@
+[package]
+name = "market-domain-web"
+version = "0.1.0"
+edition = "2021"
+description = "The synchronous view rules of market-domain, compiled for the site and the desktop webview."
+license = "MIT"
+publish = false
+
+[lib]
+# cdylib is the wasm32 module the views load; rlib lets the host suite test it.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+market-domain = { path = "../market-domain", default-features = false }
+# Requests carry the page's numbers as JSON.stringify printed them, the
+# shortest text that reads back to the same double; the default parser can
+# land one unit in the last place away, and a view rule then disagrees with
+# the number on screen.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+
+[features]
+default = ["desktop"]
+# Every op. The hosted site's build (scripts/build-domain-wasm.ts) turns this
+# off and gets the ops the site calls only.
+desktop = ["market-domain/desktop-views"]
+
+[lints]
+workspace = true

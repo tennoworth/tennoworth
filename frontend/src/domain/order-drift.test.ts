@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectDrifted, DRIFT_PCT, MIN_DRIFT_PLAT } from './order-drift';
+import { selectDrifted } from './order-drift';
 import type { DriftInput } from './order-drift';
 
 /** A liquid book whose clearing price is `price`: vol clears LIQUID_VOL and
@@ -44,14 +44,12 @@ describe('selectDrifted', () => {
   });
 
   it('ignores moves under the percentage floor', () => {
-    // 100 -> 110 is 10%, below DRIFT_PCT, even though it clears MIN_DRIFT_PLAT.
-    expect(DRIFT_PCT).toBe(0.2);
+    // 100 -> 110 is 10%, below the 20% floor, even though it clears the 3p one.
     expect(selectDrifted([order({ platinum: 100, m: liquid(110) })])).toEqual([]);
   });
 
   it('ignores moves under the absolute plat floor even when the percentage is large', () => {
     // 5 -> 7 is 40% but only 2p: percentage alone would surface pure churn.
-    expect(MIN_DRIFT_PLAT).toBe(3);
     expect(selectDrifted([order({ platinum: 5, m: liquid(7) })])).toEqual([]);
   });
 

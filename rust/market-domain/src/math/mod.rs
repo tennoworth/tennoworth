@@ -7,12 +7,14 @@
 //!   insertion-order tie-breaks) are part of the frozen fixtures' contract and
 //!   are kept DELIBERATELY; each site says so. Changing one is a decision.
 //!
-//! The [`sell_priority`] submodule is the client scoring shared with
-//! `frontend/src/domain/sell-priority.ts`, so the desktop tray and notification
-//! rank with the formula the SPA table uses; it is parity-tested against the
-//! TypeScript on a shared fixture.
+//! The [`sell_priority`] submodule is the one sell score: the desktop table,
+//! tray and notifications rank with it, and the pipeline scores the homepage's
+//! hand-off sample with it.
 
 pub mod sell_priority;
+
+pub mod book_depth;
+pub mod collate;
 
 /// Wash-trade cap: WFM clamps prices at 99,999p; a daily median or max at
 /// (near) the cap is manipulation, not trade.

@@ -29,9 +29,10 @@
   // a real import and ignores the query, so as entries they marked every
   // export in src/ as used and the gate above passed without seeing anything -
   // from 2026-09-07 until this exclusion. They are not entries, and not unused
-  // files either: vitest runs them.
+  // files either: vitest runs them. Overriding the entries drops the ones the
+  // plugin reads from vitest.config.ts, so its setup file is listed here.
   "vitest": {
-    "entry": ["src/**/*.test.{ts,svelte}", "!src/dev/gates/architecture.test.ts", "!src/dev/gates/design-system.test.ts"]
+    "entry": ["src/dev/testing/native-setup.ts", "src/**/*.test.{ts,svelte}", "!src/dev/gates/architecture.test.ts", "!src/dev/gates/design-system.test.ts"]
   },
   "ignore": ["src/dev/gates/architecture.test.ts", "src/dev/gates/design-system.test.ts"],
 
@@ -42,5 +43,5 @@
   // theme-boot.js by URL, scripts/i18n.ts maintains the translation catalogs,
   // and the dev helpers exist only for tests.
   "entry": ["public/theme-boot.js!", "src/admin/main.ts!", "src/site/pages/render.ts!", "scripts/i18n.ts!"],
-  "project": ["src/**/*.{ts,svelte}!", "public/**/*.js!", "*.ts", "!src/dev/testing/test-utils.ts!", "!src/dev/preview/render-desktop.ts!", "!src/dev/testing/controller-test-root.svelte.ts!"]
+  "project": ["src/**/*.{ts,svelte}!", "public/**/*.js!", "*.ts", "!src/dev/testing/test-utils.ts!", "!src/dev/testing/native-setup.ts!", "!src/dev/preview/render-desktop.ts!", "!src/dev/testing/controller-test-root.svelte.ts!"]
 }

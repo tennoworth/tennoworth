@@ -32,6 +32,10 @@ describe('quantity-aware buyer alternatives', () => {
       { order: { id: 'b', per_trade: 1 }, quantity: 1, value: 10 },
     ] });
   });
+  it('breaks a unit-price tie by order id', () => {
+    const result = compareBuyers(quote([buyer('b', 1, 10), buyer('a', 1, 10)]), 1, 15, now);
+    expect(result).toMatchObject({ rows: [{ order: { id: 'a' } }] });
+  });
   it('leaves a smaller remainder uncovered when no whole lot fits', () => {
     expect(compareBuyers(quote([buyer('a', 6, 24, 2)]), 1, 15, now)).toMatchObject({ covered: 0, uncovered: 1, value: 0 });
   });

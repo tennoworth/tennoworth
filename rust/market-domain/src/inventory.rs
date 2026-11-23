@@ -1,6 +1,7 @@
+use crate::js::JsNumber;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use ts_rs::TS;
 
 pub const TRADEABLE_CATEGORIES: &[&str] = &[
@@ -400,6 +401,34 @@ pub fn slug_guess(name: &str) -> String {
         .to_lowercase()
 }
 
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct DiffOwnedRequest {
+    /// The last scan's `[key, count]` pairs; `null` when there is none.
+    pub previous: Option<Vec<(String, JsNumber)>>,
+    pub current: Vec<(String, JsNumber)>,
+}
+
+/// `[key, delta]` for each key of the current scan whose count moved since
+/// the previous one, in the current scan's order. A key encodes the slug and
+/// the subtype, so each relic refinement is its own entry. Negative is sold
+/// or consumed, positive farmed; a new key's delta is its whole count.
+pub fn diff_owned(request: &DiffOwnedRequest) -> Vec<(String, f64)> {
+    let Some(previous) = &request.previous else {
+        return Vec::new();
+    };
+    let before: HashMap<&str, f64> = previous.iter().map(|(k, n)| (k.as_str(), n.0)).collect();
+    request
+        .current
+        .iter()
+        .filter_map(|(key, count)| {
+            let before = before.get(key.as_str()).copied().unwrap_or(0.0);
+            #[allow(clippy::float_cmp, reason = "the views compare counts with !==")]
+            let moved = count.0 != before;
+            moved.then(|| (key.clone(), count.0 - before))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,5 +472,38 @@ mod tests {
                 case.name
             );
         }
+    }
+
+    #[test]
+    fn diff_owned_reports_moved_counts_of_the_current_scan() {
+        let pairs = |p: &[(&str, f64)]| {
+            p.iter()
+                .map(|(k, n)| ((*k).to_owned(), JsNumber(*n)))
+                .collect::<Vec<_>>()
+        };
+        let diff = |previous: Option<&[(&str, f64)]>, current: &[(&str, f64)]| {
+            diff_owned(&DiffOwnedRequest {
+                previous: previous.map(pairs),
+                current: pairs(current),
+            })
+        };
+        assert!(diff(None, &[("a", 5.0)]).is_empty());
+        assert_eq!(
+            diff(Some(&[("axi", 3.0)]), &[("axi", 10.0)]),
+            [("axi".to_owned(), 7.0)]
+        );
+        assert_eq!(
+            diff(Some(&[("vitality", 51.0)]), &[("vitality", 48.0)]),
+            [("vitality".to_owned(), -3.0)]
+        );
+        assert_eq!(
+            diff(Some(&[]), &[("new_item", 4.0)]),
+            [("new_item".to_owned(), 4.0)]
+        );
+        assert!(diff(Some(&[("x", 5.0)]), &[("x", 5.0)]).is_empty());
+        assert_eq!(
+            diff(Some(&[("gone", 5.0)]), &[("kept", 5.0)]),
+            [("kept".to_owned(), 5.0)]
+        );
     }
 }

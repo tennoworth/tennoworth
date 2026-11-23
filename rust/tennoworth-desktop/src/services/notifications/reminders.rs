@@ -369,12 +369,12 @@ pub fn digest(
     local_day: &str,
     local_hour: u32,
 ) -> Option<Candidate> {
-    // The same bar as Top picks: a slow book, a price near its 90-day low or a
+    // The same rule as Top picks: a slow book, a price near its 90-day low or a
     // long-tail score is not an evening "sell this" line.
     let picks: Vec<_> = rows
         .iter()
-        .filter(|r| !r.patience && !r.hold && r.score >= sell_priority::MIN_PICK_SCORE)
-        .take(5)
+        .filter(|r| sell_priority::is_pick(r.sellable_qty as f64, r.patience, r.hold, r.score))
+        .take(sell_priority::MAX_PICKS)
         .collect();
     if local_hour < 18
         || picks.is_empty()

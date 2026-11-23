@@ -8,6 +8,12 @@ inputs:
     description: Compatibility group shared across jobs; empty preserves the job-based key.
     required: false
     default: ''
+  targets:
+    description: >
+      Extra target triples, comma-separated. A job that builds the frontend
+      needs wasm32-unknown-unknown: its view rules are rust/market-domain-web.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -23,6 +29,7 @@ runs:
       # both today; audit.yml's lint job runs each.
       with:
         components: clippy, rustfmt
+        targets: ${{ inputs.targets }}
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         workspaces: rust

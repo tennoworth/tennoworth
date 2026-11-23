@@ -1,32 +1,19 @@
 // @ts-nocheck - fixture-driven parity check; full TS shapes here would be busy-work.
 //
-// Desktop ranking is native; hosted browsing and development previews still
-// need this counterpart. Both implementations consume the same expected order
-// so a one-sided formula change cannot silently alter their recommendations.
+// The score is native; these are the pieces of its rules the views still
+// apply synchronously, pinned to the values the native side uses.
 import { describe, it, expect } from 'vitest';
-import { bandSignal, clearingPrice, FLOOD_MIN_DAILY, FLOOD_RATIO, LIQUID_VOL, MIN_PICK_SCORE, scoreRow, sellableQty } from './sell-priority.js';
+import { clearingPrice, LIQUID_VOL, MIN_PICK_SCORE, selectPicks, sellableQty } from './sell-priority.js';
 import fixture from '../../../tests/fixtures/sell-priority/cases.json';
 import boundary from '../../../tests/fixtures/sell-priority/liquidity-boundary.json';
 import pickFloor from '../../../tests/fixtures/sell-priority/pick-floor.json';
-import timing from '../../../tests/fixtures/sell-priority/timing.json';
 
-describe('sell-priority ranking parity (hosted and preview side)', () => {
-  it('ranks the shared fixture into the golden order', () => {
-    const ranked = fixture.cases
-      .map((c) => {
-        const sellable = sellableQty(c.count, c.reserve, c.leveled);
-        const { sell_score } = scoreRow({ owned: sellable, m: c.market });
-        return { slug: c.slug, sellable, sell_score };
-      })
-      .filter((r) => r.sellable > 0)
-      .sort((a, b) => b.sell_score - a.sell_score)
-      .map((r) => r.slug);
-
-    expect(ranked).toEqual(fixture.expected_order);
-  });
-
-  it('sets the Top picks bar where the native digest does', () => {
+describe('sell-priority rules the views share with the native side', () => {
+  it('picks the rows the native digest does', () => {
     expect(MIN_PICK_SCORE).toBe(pickFloor.min_pick_score);
+    for (const c of pickFloor.cases) {
+      expect(selectPicks([{ sellable: c.sellable, patience: c.patience, timing: c.timing, sell_score: c.score }]).length, c.name).toBe(c.pick ? 1 : 0);
+    }
   });
 
   it('draws the thin-book line where the native side does', () => {
@@ -43,20 +30,6 @@ describe('sell-priority ranking parity (hosted and preview side)', () => {
     expect(zeroed).toContain('reserve_zeroes');
     for (const slug of zeroed) {
       expect(fixture.expected_order).not.toContain(slug);
-    }
-  });
-});
-
-describe('timing parity (hosted and preview side)', () => {
-  it('reads the shared channel cases as the native scorer does', () => {
-    expect(FLOOD_RATIO).toBe(timing.flood_ratio);
-    expect(FLOOD_MIN_DAILY).toBe(timing.flood_min_daily);
-    for (const c of timing.cases) {
-      const got = bandSignal({
-        price: c.price, donchTop: c.top, donchBot: c.bot, lowSell: c.low_sell,
-        topBuy: c.top_buy, vol: c.vol, vol28d: c.vol_28d,
-      });
-      expect(got, c.name).toBe(c.expected);
     }
   });
 });

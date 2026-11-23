@@ -1,4 +1,5 @@
 //! Baro stock decisions and inventory yield use the same snapshot on every surface.
+use crate::js::{self, JsNumber};
 use crate::math::sell_priority::LIQUID_VOL;
 use crate::planners::{validate_owned, PlannerOwned};
 use serde::{Deserialize, Serialize};
@@ -184,6 +185,136 @@ pub fn baro_value(request: &BaroRequest) -> Result<BaroValue, String> {
     })
 }
 
+/// A board row as the basket reads it; the page hands back the rows
+/// [`baro_value`] ranked.
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct BasketRow {
+    pub verdict: BaroVerdict,
+    #[serde(default)]
+    pub ducats: Option<f64>,
+    #[serde(default)]
+    pub baseline: Option<f64>,
+    #[serde(default)]
+    pub price: Option<f64>,
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct BasketRequest {
+    pub rows: Vec<BasketRow>,
+    /// Ducats scrapping every spare part would yield.
+    pub scrap_potential: JsNumber,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DucatBasket {
+    /// Ducats the worthwhile items cost, all together.
+    pub needed: f64,
+    /// How many items that is.
+    pub count: usize,
+    /// How many of them scrapping every spare part would cover, best value first.
+    pub covered_by_scrapping: usize,
+    /// What the basket resells for at 90-day baselines.
+    pub resale: f64,
+}
+
+/// What his stock costs, and how far your spare parts would go toward it.
+///
+/// **There is no ducat balance here, because we cannot see one.** Ducats are
+/// account state, not an item, so an inventory scan never observes them - the
+/// only ducat figure a scan can derive is what your spare prime parts would
+/// yield IF you scrapped them. An earlier version treated that potential as
+/// money already banked, then proposed scrapping those very same parts to
+/// cover the remainder: the same ducats counted twice, and a plan wrong in the
+/// user's favour. So this takes the potential explicitly and reports
+/// COVERAGE, never affordability.
+///
+/// "Worthwhile" is flip-or-hold: skip and thin rows are left out, because
+/// sizing the basket with items the board just told the user not to buy would
+/// inflate it.
+pub fn ducat_basket(request: &BasketRequest) -> DucatBasket {
+    let basket: Vec<&BasketRow> = request
+        .rows
+        .iter()
+        .filter(|r| {
+            matches!(r.verdict, BaroVerdict::Flip | BaroVerdict::Hold)
+                && r.ducats.unwrap_or(0.0) > 0.0
+        })
+        .collect();
+    let needed = basket
+        .iter()
+        .fold(0.0, |sum, r| sum + r.ducats.unwrap_or(0.0));
+    let mut spent = 0.0;
+    let mut covered_by_scrapping = 0;
+    for r in &basket {
+        let cost = r.ducats.unwrap_or(0.0);
+        if spent + cost > request.scrap_potential.0 {
+            break;
+        }
+        spent += cost;
+        covered_by_scrapping += 1;
+    }
+    let resale = basket
+        .iter()
+        .fold(0.0, |sum, r| sum + r.baseline.or(r.price).unwrap_or(0.0));
+    DucatBasket {
+        needed,
+        count: basket.len(),
+        covered_by_scrapping,
+        resale: js::round(resale),
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct PhaseRequest {
+    /// Arrival and departure in epoch ms; `NaN` when unknown.
+    pub activation_ms: JsNumber,
+    pub expiry_ms: JsNumber,
+    pub now_ms: JsNumber,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+#[serde(rename_all = "lowercase")]
+pub enum VisitPhase {
+    Here,
+    Incoming,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BaroPhase {
+    pub phase: VisitPhase,
+    /// Time left in this phase.
+    pub window_ms: Option<f64>,
+}
+
+/// Where a visit sits relative to `now_ms`. The caller passes its ticking
+/// clock: a view reading the time inside a `$derived` froze the countdown.
+pub fn baro_phase(request: &PhaseRequest) -> BaroPhase {
+    let (start, end, now) = (
+        request.activation_ms.0,
+        request.expiry_ms.0,
+        request.now_ms.0,
+    );
+    if end.is_finite() && now < end && start.is_finite() && now >= start {
+        BaroPhase {
+            phase: VisitPhase::Here,
+            window_ms: Some(end - now),
+        }
+    } else if start.is_finite() && now < start {
+        BaroPhase {
+            phase: VisitPhase::Incoming,
+            window_ms: Some(start - now),
+        }
+    } else {
+        BaroPhase {
+            phase: VisitPhase::Unknown,
+            window_ms: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,5 +457,82 @@ mod tests {
         assert_eq!(current_price(&json!({"low5_avg":-2,"low_sell":0})), None);
         let request: BaroRequest = serde_json::from_value(json!({"stock":[],"market":{"items":{"part":{"ducats":100}}},"owned":[{"slug":"part","name":"Part","count":9_007_199_254_740_991_u64}]})).unwrap();
         assert!(baro_value(&request).is_err());
+    }
+
+    fn basket(scrap: impl Into<Value>) -> DucatBasket {
+        let scrap: Value = scrap.into();
+        let request: BasketRequest = serde_json::from_value(json!({
+            "rows": [
+                {"item": "A", "ducats": 350, "platPerDucat": 0.41, "baseline": 128, "verdict": "flip"},
+                {"item": "B", "ducats": 500, "platPerDucat": 0.34, "baseline": 151, "verdict": "flip"},
+                {"item": "C", "ducats": 375, "platPerDucat": 0.26, "baseline": 104, "verdict": "hold"},
+                {"item": "D", "ducats": 400, "platPerDucat": 0.18, "baseline": 75, "verdict": "thin"},
+                {"item": "E", "price": 9, "verdict": "hold"}
+            ],
+            "scrap_potential": scrap,
+        }))
+        .unwrap();
+        ducat_basket(&request)
+    }
+    #[test]
+    fn the_basket_counts_only_what_the_board_recommends_buying() {
+        assert_eq!((basket(0.0).needed, basket(0.0).count), (1225.0, 3));
+        assert_eq!(basket(900.0).covered_by_scrapping, 2);
+        assert_eq!(basket(2000.0).covered_by_scrapping, 3);
+        assert_eq!(basket(2000.0).resale, 383.0);
+        // Not a number compares false, so nothing stops the coverage.
+        assert_eq!(basket("NaN").covered_by_scrapping, 3);
+    }
+    #[test]
+    fn the_phase_counts_down_to_arrival_then_departure() {
+        let (start, end) = (1_787_317_200_000.0, 1_787_490_000_000.0);
+        let phase = |a: f64, e: f64, now: f64| {
+            baro_phase(&PhaseRequest {
+                activation_ms: JsNumber(a),
+                expiry_ms: JsNumber(e),
+                now_ms: JsNumber(now),
+            })
+        };
+        assert_eq!(
+            phase(start, end, start - 3_600_000.0),
+            BaroPhase {
+                phase: VisitPhase::Incoming,
+                window_ms: Some(3_600_000.0)
+            }
+        );
+        assert_eq!(
+            phase(start, end, start),
+            BaroPhase {
+                phase: VisitPhase::Here,
+                window_ms: Some(end - start)
+            }
+        );
+        assert_eq!(
+            phase(start, end, end - 7_200_000.0),
+            BaroPhase {
+                phase: VisitPhase::Here,
+                window_ms: Some(7_200_000.0)
+            }
+        );
+        assert_eq!(
+            phase(start, end, end),
+            BaroPhase {
+                phase: VisitPhase::Unknown,
+                window_ms: None
+            }
+        );
+        assert_eq!(
+            phase(f64::NAN, f64::NAN, start),
+            BaroPhase {
+                phase: VisitPhase::Unknown,
+                window_ms: None
+            }
+        );
+        // An arrival without a known departure still counts down.
+        assert_eq!(
+            phase(start, f64::NAN, start - 1.0).phase,
+            VisitPhase::Incoming
+        );
+        assert_eq!(phase(start, f64::NAN, start).phase, VisitPhase::Unknown);
     }
 }

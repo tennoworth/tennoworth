@@ -1,74 +1,10 @@
 // @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
-import { scoreRow, bandSignal, clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
-
-describe('scoreRow', () => {
-  it('returns zero score with no market data', () => {
-    expect(scoreRow({ owned: 5, m: null })).toEqual({ sell_score: 0, patience: false });
-  });
-
-  it('uses low_sell as the clearing price when available', () => {
-    const r = scoreRow({ owned: 10, m: { low_sell: 30, avg: 45, vol: 20 } });
-    // dailySales = 20/2 = 10, capped by owned=10 → unitsToday = 10
-    // score = 10 × 30 = 300
-    expect(r.sell_score).toBe(300);
-    expect(r.patience).toBe(false);
-  });
-
-  it('falls back to avg when low_sell missing', () => {
-    const r = scoreRow({ owned: 1, m: { low_sell: 0, avg: 50, vol: 10 } });
-    // dailySales = 5, capped by owned=1 → 1 × 50 = 50
-    expect(r.sell_score).toBe(50);
-  });
-
-  it('caps units at the market absorption rate, not at what you own', () => {
-    // owned 100, vol 4 → dailySales = 2, score = 2 × 100p = 200
-    const r = scoreRow({ owned: 100, m: { low_sell: 100, avg: 110, vol: 4 } });
-    expect(r.sell_score).toBe(200);
-  });
-
-  it('caps at what you own when owned is the bottleneck', () => {
-    // owned 1, vol 100 → dailySales = 50, capped by owned=1 → 1 × 20 = 20
-    const r = scoreRow({ owned: 1, m: { low_sell: 20, avg: 25, vol: 100 } });
-    expect(r.sell_score).toBe(20);
-  });
-
-  it('flags low-volume items as patience', () => {
-    expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 1 } }).patience).toBe(true);
-    expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 0 } }).patience).toBe(true);
-    // vol 2 used to dodge the tag while still barely moving (winding_isles).
-    expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 2 } }).patience).toBe(true);
-    expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 3 } }).patience).toBe(false);
-  });
-
-  it('does not zero out completely dead items - they should still rank, just very low', () => {
-    const r = scoreRow({ owned: 1, m: { low_sell: 100, avg: 100, vol: 0 } });
-    // dailySales floor of 0.05 → 0.05 × 100 = 5
-    expect(r.sell_score).toBeCloseTo(5);
-    expect(r.patience).toBe(true);
-  });
-
-  it('handles missing fields defensively', () => {
-    expect(scoreRow({ owned: 0, m: {} })).toEqual({ sell_score: 0, patience: true });
-  });
-
-  it('does not let a dead item with a fantasy ask top the sort', () => {
-    // corpus_void_key: vol 1, lone 2,999p ask, real trades ~200p. Raw
-    // low_sell scored it 1499.5 - rank #2 of 2,623 in the live snapshot.
-    const r = scoreRow({ owned: 3, m: { low_sell: 2999, avg: 204, vol: 1, median_90d: 200 } });
-    // dailySales = 0.5 → 0.5 × clamped(200 × 1.5) = 150, not 1499.5
-    expect(r.sell_score).toBeCloseTo(150);
-  });
-
-  it('does not let a vol-2 item with a 10× ask dodge the clamp (winding isles)', () => {
-    // winding_isles_scene: vol 2, one live 100p ask over a 10p median -
-    // ranked #7 at "expected 100p/day" because the old gate was vol < 2.
-    const r = scoreRow({ owned: 1, m: { low_sell: 100, avg: 10, vol: 2, median_now: 10 } });
-    // clearing = 10 × 1.5 = 15, units = min(1, 1) → 15, not 100
-    expect(r.sell_score).toBeCloseTo(15);
-    expect(r.patience).toBe(true);
-  });
-});
+//
+// The rules are native; these run them through the view module, so they also
+// check what the wrappers hand it (missing fields, a null kept_lvl, hold rows).
+import { clearingPrice, sellableQty, selectPicks, MIN_PICK_SCORE } from './sell-priority.js';
+import pickFloor from '../../../tests/fixtures/sell-priority/pick-floor.json';
 
 describe('clearingPrice', () => {
   it('uses the live ask when it agrees with the median', () => {
@@ -102,6 +38,11 @@ describe('clearingPrice', () => {
     expect(clearingPrice({ low_sell: 0, median_now: 42, avg: 50, vol: 5 })).toBe(42);
     expect(clearingPrice({ low_sell: 0, median_now: 0, avg: 50, vol: 5 })).toBe(50);
     expect(clearingPrice({ low_sell: 0, median_now: 0, avg: 0, vol: 5 })).toBe(1);
+  });
+
+  it('reads a missing row or garbage fields as no figure', () => {
+    expect(clearingPrice(null)).toBe(1);
+    expect(clearingPrice({ low_sell: 'x', median_now: Number.NaN, avg: 7 })).toBe(7);
   });
 
   it('uses median_90d when median_now is absent (pre-split snapshots)', () => {
@@ -150,70 +91,6 @@ describe('sellableQty', () => {
   });
 });
 
-describe('bandSignal', () => {
-  it('flags a price near the 90d low as hold (e.g. a Baro-flooded mod)', () => {
-    // Primed Reach post-Baro: trough ~28 in a 25–66 band → bottom of range
-    expect(bandSignal({ price: 28, donchBot: 25, donchTop: 66 })).toBe('hold');
-  });
-
-  it('flags a corroborated price near the 90d high as peak', () => {
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 60 })).toBe('peak');
-  });
-
-  it('returns neutral in the middle of the band', () => {
-    expect(bandSignal({ price: 45, donchBot: 25, donchTop: 66 })).toBe('neutral');
-  });
-
-  it('is neutral when the band is degenerate (top === bot)', () => {
-    expect(bandSignal({ price: 50, donchBot: 50, donchTop: 50 })).toBe('neutral');
-  });
-
-  it('is neutral when band data is missing or zero (CSV-only rebuilds)', () => {
-    expect(bandSignal({ price: 50, donchBot: 0, donchTop: 0 })).toBe('neutral');
-    expect(bandSignal({ price: 50 })).toBe('neutral');
-    expect(bandSignal({ price: 0, donchBot: 25, donchTop: 66 })).toBe('neutral');
-  });
-
-  it('clamps prices outside the band rather than throwing', () => {
-    expect(bandSignal({ price: 10, donchBot: 25, donchTop: 66 })).toBe('hold');
-    expect(bandSignal({ price: 90, donchBot: 25, donchTop: 66, lowSell: 85 })).toBe('peak');
-  });
-
-  it('suppresses a peak the live book contradicts (wash-traded median)', () => {
-    // Goopolla: 36 "trades" at 12p while 209 live asks sit at 1p - the peak
-    // price is unrealizable, so "list now" would be wrong twice over.
-    expect(bandSignal({ price: 12, donchBot: 1, donchTop: 12, lowSell: 1 })).toBe('neutral');
-  });
-
-  it('keeps a peak when the live ask corroborates it', () => {
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 60 })).toBe('peak');
-    // a normal undercut spread is nowhere near the 2× gap threshold
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 40 })).toBe('peak');
-  });
-
-  it('fails CLOSED when there is no live book at all', () => {
-    // neo_t7_relic: median 42 at the band top, zero live asks, top buy 15.
-    // An uncorroborated peak on a no-ask item is the cheapest state to
-    // manipulate into existence - never render "list now" from history alone.
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 0 })).toBe('neutral');
-    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66 })).toBe('neutral');
-    expect(bandSignal({ price: 42, donchBot: 3, donchTop: 42, lowSell: 0, topBuy: 15 })).toBe('neutral');
-  });
-
-  it('lets real demand corroborate a peak when the ask side is polluted', () => {
-    // akbolto receiver: stable 38p median at its high, one 1p troll ask -
-    // but a live buy offer near the price proves the peak is real.
-    expect(bandSignal({ price: 38, donchBot: 20, donchTop: 40, lowSell: 1, topBuy: 30 })).toBe('peak');
-    // ...while a wash-traded fish has no demand side to fake (Goopolla:
-    // fake 12p median over 1p asks, zero buyers) → stays suppressed.
-    expect(bandSignal({ price: 12, donchBot: 1, donchTop: 12, lowSell: 1, topBuy: 0 })).toBe('neutral');
-  });
-
-  it('does not let the ask gap interfere with hold', () => {
-    expect(bandSignal({ price: 28, donchBot: 25, donchTop: 66, lowSell: 1 })).toBe('hold');
-  });
-});
-
 describe('selectPicks', () => {
   // Minimal row shape - real callers pass the full `results` row (name,
   // slug, clearing_price, …); selectPicks only reads these and timing.
@@ -227,8 +104,6 @@ describe('selectPicks', () => {
 
   it('excludes rows below the score floor', () => {
     const rows = [row({ sell_score: 5 }), row({ sell_score: 19.9 })];
-    expect(selectPicks(rows, { minScore: 20 })).toEqual([]);
-    // default floor (MIN_PICK_SCORE) behaves the same without an explicit option
     expect(selectPicks(rows)).toEqual([]);
   });
 
@@ -240,6 +115,10 @@ describe('selectPicks', () => {
   it('excludes hold rows, which would sell near their 90-day low', () => {
     const rows = [row({ sell_score: 500, timing: 'hold' }), row({ sell_score: 400, timing: 'peak', key: 'peak' })];
     expect(selectPicks(rows).map((r) => r.key)).toEqual(['peak']);
+  });
+
+  it('reads a missing score or quantity as zero', () => {
+    expect(selectPicks([row({ sell_score: Number.NaN }), row({ sellable: undefined })])).toEqual([]);
   });
 
   it('excludes rows with nothing sellable', () => {
@@ -254,12 +133,12 @@ describe('selectPicks', () => {
     expect(picks.map((r) => r.key)).toEqual([0, 1, 2]);
   });
 
-  it('defaults the cap to MAX_PICKS', () => {
-    const rows = Array.from({ length: MAX_PICKS + 3 }, () => row());
-    expect(selectPicks(rows)).toHaveLength(MAX_PICKS);
+  it('defaults the cap to the native pick count', () => {
+    const rows = Array.from({ length: pickFloor.max_picks + 3 }, () => row());
+    expect(selectPicks(rows)).toHaveLength(pickFloor.max_picks);
   });
 
-  it('defaults the score floor to MIN_PICK_SCORE', () => {
+  it('holds the score floor at MIN_PICK_SCORE', () => {
     const rows = [row({ sell_score: MIN_PICK_SCORE - 0.01 }), row({ sell_score: MIN_PICK_SCORE })];
     expect(selectPicks(rows)).toEqual([row({ sell_score: MIN_PICK_SCORE })]);
   });
@@ -268,26 +147,8 @@ describe('selectPicks', () => {
     // Deliberately out of score order. If selectPicks ever re-sorted, this
     // would come back ['high', 'low'] and mask a caller regression instead
     // of surfacing it.
-    const rows = [row({ sell_score: 10, key: 'low' }), row({ sell_score: 90, key: 'high' })];
-    const picks = selectPicks(rows, { minScore: 1 });
+    const rows = [row({ sell_score: 30, key: 'low' }), row({ sell_score: 90, key: 'high' })];
+    const picks = selectPicks(rows);
     expect(picks.map((r) => r.key)).toEqual(['low', 'high']);
-  });
-});
-
-describe('spareQty', () => {
-  it('all unranked copies are spare when a ranked copy is owned', () => {
-    expect(spareQty(4, 5)).toBe(4);
-    expect(spareQty(4, 1)).toBe(4);
-  });
-  it('keeps one copy when no ranked copy is owned (kept_lvl null or 0)', () => {
-    expect(spareQty(4, null)).toBe(3);
-    expect(spareQty(4, 0)).toBe(3);
-    expect(spareQty(1, null)).toBe(0);
-    expect(spareQty(0, null)).toBe(0);
-  });
-  it('leveled copies are never spare', () => {
-    expect(spareQty(3, 5, 3)).toBe(0);
-    expect(spareQty(3, 5, 1)).toBe(2);
-    expect(spareQty(3, null, 1)).toBe(1);
   });
 });

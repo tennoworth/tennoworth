@@ -34,6 +34,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-key: windows-ocr-test-release-${{ steps.windows-ocr.outputs.compatibility-key }}
+          targets: wasm32-unknown-unknown
 
       - name: Stage pinned OCR model
         uses: ./.github/actions/stage-tessdata
@@ -99,6 +100,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           shared-key: linux-ubuntu-24.04-ocr-test-release-${{ steps.runner-image.outputs.version }}
+          targets: wasm32-unknown-unknown
 
       - name: Install Linux bundle and display dependencies
         run: >

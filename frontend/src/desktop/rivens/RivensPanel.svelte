@@ -13,18 +13,15 @@
   import { t } from '../../i18n/i18n.svelte';
   import {
     bandForRiven,
-    compsFilterFor,
     dispoChangeFor,
     formatAuctionStat,
     isSplicedStat,
     polaritySymbol,
-    resolveRivenStats,
+    readRivenRows,
     rivenReport,
-    rivenSimilarity,
-    spliceOptions,
-    unreadFingerprintKeys,
+    rivenSimilarities,
     type OwnedRiven,
-    type ResolvedRivenStat,
+    type RivenRowRead,
     type SpliceOption,
   } from '../../domain/rivens';
   import { describeComps } from '../../domain/riven-appraise';
@@ -68,14 +65,10 @@
     }),
   );
 
-  interface Row {
+  interface Row extends RivenRowRead {
     key: string;
     riven: OwnedRiven;
-    stats: ResolvedRivenStat[];
-    splices: SpliceOption[];
-    filter: ReturnType<typeof compsFilterFor>;
     report: string | null;
-    unread: string[];
   }
 
   let page = $state(0);
@@ -83,22 +76,22 @@
   let win = $derived(pageWindow(sorted.length, page));
   // Only the page on screen is resolved; the key keeps the riven's place in
   // the whole sorted list so rows stay distinct across pages.
-  let rows = $derived<Row[]>(
-    sorted.slice(win.start, win.end).map((riven, j) => {
-      const i = win.start + j;
-      const stats = resolveRivenStats(riven, attrs);
-      const rivenType = riven.slug ? market?.rivens?.weapons?.[riven.slug]?.riven_type : undefined;
+  let rows = $derived.by<Row[]>(() => {
+    const page = sorted.slice(win.start, win.end);
+    const reads = readRivenRows(
+      page.map((riven) => ({ riven, rivenType: riven.slug ? market?.rivens?.weapons?.[riven.slug]?.riven_type : undefined })),
+      attrs,
+    );
+    return page.map((riven, j) => {
+      const read = reads[j]!;
       return {
-        key: `${i}:${riven.path}:${riven.compat ?? ''}:${riven.rerolls}:${stats.map((s) => (s.positive ? '+' : '-') + s.tag).join(',')}`,
+        ...read,
+        key: `${win.start + j}:${riven.path}:${riven.compat ?? ''}:${riven.rerolls}:${read.stats.map((s) => (s.positive ? '+' : '-') + s.tag).join(',')}`,
         riven,
-        stats,
-        splices: riven.veiled ? [] : spliceOptions(stats, rivenType),
-        filter: compsFilterFor(stats),
         report: rivenReport(riven),
-        unread: unreadFingerprintKeys(riven),
       };
-    }),
-  );
+    });
+  });
 
   // The DE weekly band for a riven, plus a note about which tier it is.
   // Falls back to the other tier when DE only published one.
@@ -376,6 +369,7 @@
                         : t('riven.noBuyouts')}
                     </div>
                   {:else if comps}
+                    {@const similarity = rivenSimilarities(r, comps.map((a) => a.attributes), attrs)}
                     <div class="comps">
                       <div class="comps-sample">
                         <span class="muted small" data-testid="comps-sample">{sampleLine(comps)}</span>
@@ -386,8 +380,8 @@
                           title={t('riven.refreshHelp')}
                         >{t('riven.refresh')}</button>
                       </div>
-                      {#each comps as a (a.id)}
-                        {@const similarity = rivenSimilarity(r, a.attributes, attrs)}
+                      {#each comps as a, ci (a.id)}
+                        {@const pct = similarity[ci]}
                         <div class="comp">
                           <div class="comp-head">
                             <span class="mono price">{a.price}p</span>
@@ -396,8 +390,8 @@
                               {#if a.top_bid != null} · {t('riven.topBid', { price: a.top_bid })}{/if}
                             </span>
                             <span class="comp-owner" title={t('riven.wfmStatus')}>{a.owner ?? t('riven.unknown')}{#if a.owner_status}{` · ${a.owner_status}`}{/if}</span>
-                            {#if similarity != null}
-                              <span class="similarity" title={t('riven.matchHelp')}>{t('riven.match', { pct: similarity })}</span>
+                            {#if pct != null}
+                              <span class="similarity" title={t('riven.matchHelp')}>{t('riven.match', { pct })}</span>
                             {/if}
                           </div>
                           <div class="comp-detail muted small">

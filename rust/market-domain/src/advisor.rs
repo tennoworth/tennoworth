@@ -134,6 +134,50 @@ pub fn pre_vault_median(start: &str, values: &[Option<f64>], vault: &str) -> Opt
         slice_median(values, index - 30, index)
     }
 }
+
+/// The market browser's one-year columns for several series at once.
+#[derive(Clone, Debug, Deserialize, TS)]
+pub struct YearViewsRequest {
+    /// Each series' daily medians, a non-number as `null`.
+    pub medians: Vec<Vec<Option<f64>>>,
+    /// Defaults to 20 traded days.
+    #[serde(default)]
+    #[ts(optional)]
+    pub min_days: Option<usize>,
+    /// Defaults to 52.
+    #[serde(default)]
+    #[ts(optional)]
+    pub buckets: Option<usize>,
+}
+
+#[derive(Clone, Debug, Serialize, TS, PartialEq)]
+pub struct YearView {
+    pub stats: Option<YearStats>,
+    pub weekly: Vec<f64>,
+}
+
+pub fn year_views(request: &YearViewsRequest) -> Vec<YearView> {
+    let (min_days, buckets) = (
+        request.min_days.unwrap_or(20),
+        request.buckets.unwrap_or(52),
+    );
+    request
+        .medians
+        .iter()
+        .map(|median| {
+            let series = HistorySeries {
+                median: median.clone(),
+                volume: Vec::new(),
+                subtype: None,
+            };
+            YearView {
+                stats: year_stats(&series, min_days),
+                weekly: weekly(&series, buckets),
+            }
+        })
+        .collect()
+}
+
 pub fn analyze_history(request: HistoryRequest) -> HistoryAnalysis {
     HistoryAnalysis {
         points: points(&request.series),

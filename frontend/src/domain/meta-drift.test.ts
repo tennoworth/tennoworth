@@ -27,6 +27,21 @@ describe('meta drift model', () => {
     expect(model.gains[0]).toMatchObject({ lowSell: 10, volume48h: 4 });
   });
 
+  it('reads a zero share as a share, not a missing row', () => {
+    const model = buildMetaDrift(market({ 2024: { rose: row('Rose', 'Primary', 0) }, 2025: { rose: row('Rose', 'Primary', 2) } }, [2024, 2025]))!;
+    expect(model.gains.map((r) => [r.slug, r.priorShare])).toEqual([['rose', 0]]);
+    expect(model.onlyCurrent).toEqual([]);
+  });
+
+  it('orders gains and losses by size', () => {
+    const model = buildMetaDrift(market({
+      2024: { small: row('Small', 'Primary', 1), big: row('Big', 'Primary', 1), drop: row('Drop', 'Primary', 5), dip: row('Dip', 'Primary', 5) },
+      2025: { small: row('Small', 'Primary', 1.5), big: row('Big', 'Primary', 4), drop: row('Drop', 'Primary', 1), dip: row('Dip', 'Primary', 4.5) },
+    }, [2024, 2025]))!;
+    expect(model.gains.map((r) => r.slug)).toEqual(['big', 'small']);
+    expect(model.losses.map((r) => r.slug)).toEqual(['drop', 'dip']);
+  });
+
   it('never zero-fills missing items and excludes category changes', () => {
     const model = buildMetaDrift(market({
       2023: { only_old: row('Only Old', 'Primary', 2), changed: row('Changed', 'Primary', 1), no_market: row('No Market', 'Primary', 1) },

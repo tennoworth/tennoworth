@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { isHistory, points, yearStats, weekly } from './history.js';
+import { isHistory, yearViews } from './history.js';
 
 const series = (median, volume) => ({ median, volume: volume ?? median.map((m) => (m == null ? 0 : 1)) });
 
@@ -12,16 +12,11 @@ describe('history helpers', () => {
     expect(isHistory('nope')).toBe(false);
   });
 
-
-  it('points skips nulls and keeps indexes', () => {
-    expect(points(series([null, 10, null, 12]))).toEqual([[1, 10], [3, 12]]);
-  });
-
-  it('yearStats needs enough traded days, then reports latest/baseline/Δ/high/low', () => {
-    expect(yearStats(series([10, null, 12]))).toBeNull();
+  it('stats need enough traded days, then report latest/baseline/Δ/high/low', () => {
+    expect(yearViews([series([10, null, 12])])[0].stats).toBeNull();
     // 40 days: first 30 at ~20, then ramps to 40
     const m = [...Array(30).fill(20), ...Array(10).fill(0).map((_, i) => 22 + i * 2)];
-    const s = yearStats(series(m));
+    const [{ stats: s }] = yearViews([series(m)]);
     expect(s.tradedDays).toBe(40);
     expect(s.latest).toBe(40);
     expect(s.latestIdx).toBe(39);
@@ -31,9 +26,16 @@ describe('history helpers', () => {
     expect(s.low).toBe(20);
   });
 
-  it('weekly downsamples by bucket median and skips empty buckets', () => {
-    const m = [10, 12, 14, 16, 18, 20, 22, null, null, null, null, null, null, null, 30, 30, 30, 30, 30, 30, 30];
-    expect(weekly(series(m), 3)).toEqual([16, 30]);
-    expect(weekly(series([]), 3)).toEqual([]);
+  it('weekly downsamples by bucket median and skips empty and non-numeric days', () => {
+    const m = [10, 12, 14, 16, 18, 20, 22, null, null, null, null, null, null, null, 30, 30, 30, 30, 30, '9', 30];
+    expect(yearViews([series(m), series([])], { buckets: 3 }).map((v) => v.weekly)).toEqual([[16, 30], []]);
+    expect(yearViews([])).toEqual([]);
+  });
+
+  it('defaults to 52 buckets and 20 traded days', () => {
+    const [full, thin] = yearViews([series(Array.from({ length: 104 }, (_, i) => i + 1)), series(Array.from({ length: 19 }, (_, i) => i + 1))]);
+    expect(full.weekly).toHaveLength(52);
+    expect(full.stats.tradedDays).toBe(104);
+    expect(thin.stats).toBeNull();
   });
 });

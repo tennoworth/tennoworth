@@ -3,7 +3,7 @@ import contract from '../../../tests/fixtures/notifications/contracts.json';
 import vaultCases from '../../../tests/fixtures/notifications/vault.json';
 import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT } from '../contracts/events';
 import { NOTIFICATION_CATEGORIES } from '../contracts/desktop';
-import { buildCalendar, vaultAffects } from '../domain/calendar-feed';
+import { buildCalendar } from '../domain/calendar-feed';
 import type { Market, OwnedRecord, VaultRotation } from '../contracts/data';
 import eventCase from '../../../tests/fixtures/notifications/events.json';
 
@@ -15,7 +15,10 @@ describe('notification contracts shared with Rust', () => {
   });
   for (const c of vaultCases) it(c.name, () => {
     const held = new Map(c.held.map(slug => [slug, { slug, count: 1 } as OwnedRecord]));
-    expect(vaultAffects(c.rotation as VaultRotation, c.market as unknown as Market, held).sort()).toEqual(c.expected);
+    const rotation = { ...(c.rotation as VaultRotation), activation: '2026-08-28T18:00:00Z', expiry: '2026-09-25T18:00:00Z' };
+    const market = { ...(c.market as unknown as Market), de: { vault_rotation: [rotation] } };
+    const vault = buildCalendar(market, held, Date.parse('2026-08-22T00:00:00Z')).find(item => item.kind === 'vault');
+    expect([...vault!.affects].sort()).toEqual(c.expected);
   });
 });
 

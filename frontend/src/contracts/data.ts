@@ -212,6 +212,15 @@ export interface CalendarSurface {
   resurgence?: ResurgenceRotation[];
 }
 
+/** One row of the homepage's hand-off strip, picked and scored by the
+ *  pipeline with the desktop's sell priority (`pipeline::handoff`). `owned`
+ *  is a sample count. */
+export interface HandoffPick {
+  slug: string;
+  owned: number;
+  score: number;
+}
+
 export interface Market {
   updated_at: string;
   platform: string;
@@ -247,7 +256,7 @@ export interface Market {
    *  recipe PRODUCES. Absent on older snapshots. */
   recipes?: Record<string, RecipeEntry> | null;
   /** DE's annual usage telemetry, keyed by the PARENT's slug (a part inherits
-   *  its set's figure - see `lib/demand.ts`). Absent on older snapshots. */
+   *  its set's figure - see `market_domain::scoring::UsageIndex`). Absent on older snapshots. */
   usage?: Record<string, UsageRecord> | null;
   /** Compact immutable annual history for same-category percentage-point
    *  comparisons. Historical rows intentionally omit Mastery-Rank curves. */
@@ -261,6 +270,8 @@ export interface Market {
     data_fetched_at: string;
     source?: string;
   }>;
+  /** Absent on snapshots built before the pipeline published it. */
+  handoff_sample?: HandoffPick[] | null;
 }
 
 export interface EventRewardItem {

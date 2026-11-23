@@ -4,18 +4,15 @@
 // number instead of the app's built-in "match the lowest ask". Set in
 // Settings → Selling.
 //
-// A rule only changes what is suggested. Nothing reprices on its own.
+// The rule and the live-ask read are native (market_domain::listing); this
+// file reads the stored setting and picks a snapshot row's evidence.
 
 import type { MarketItemEntry } from '../contracts/data';
+import type { LiveAskRead, PriceBasis, PriceEvidence, PriceRule } from '../contracts/generated/web';
+import { call } from './native';
 import { cachedUnitMarket, marketAtRank } from './order-prices';
-import { TROLL_UNDERCUT_RATIO } from './sell-priority';
 
-export type PriceBasis = 'lowest-ask' | 'low5-avg' | 'low20-avg' | 'avg-48h' | 'median-90d';
-
-export interface PriceRule {
-  basis: PriceBasis;
-  offset: number;
-}
+export type { LiveAskRead, PriceBasis, PriceEvidence, PriceRule };
 
 /** Reproduces the behaviour before rules existed: match the lowest other ask. */
 export const DEFAULT_PRICE_RULE: PriceRule = { basis: 'lowest-ask', offset: 0 };
@@ -25,44 +22,15 @@ export const MAX_PRICE_OFFSET = 50;
 
 const BASES: readonly PriceBasis[] = ['lowest-ask', 'low5-avg', 'low20-avg', 'avg-48h', 'median-90d'];
 
-/** The figures a basis can read. Snapshots write `0` for a statistic they do
- *  not carry, so `0`, `null` and absence all mean "unknown". */
-export interface PriceEvidence {
-  /** Lowest other online ask (own order excluded), or the troll-clamped
-   *  clearing price when no live check has run. */
-  lowestAsk?: number | null;
-  low5Avg?: number | null;
-  /** Snapshot only: a live check returns at most five asks. */
-  low20Avg?: number | null;
-  avg48h?: number | null;
-  median90d?: number | null;
-}
-
+/** Snapshots write `0` for a statistic they do not carry. */
 function known(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function basisValue(basis: PriceBasis, evidence: PriceEvidence): number | null {
-  switch (basis) {
-    case 'lowest-ask': return known(evidence.lowestAsk);
-    case 'low5-avg': return known(evidence.low5Avg);
-    case 'low20-avg': return known(evidence.low20Avg);
-    case 'avg-48h': return known(evidence.avg48h);
-    case 'median-90d': return known(evidence.median90d);
-  }
-}
-
-/** The suggested per-unit ask, or `null` when the rule's basis is unknown for
- *  this item - an absent statistic must not turn into a plausible-looking price.
- *
- *  Not rounded: bulk listings compare fractional unit prices, and rounding here
- *  hid a real overpricing (6.66p against a 6.5p ask became "fine" against 7p).
- *  Callers round when they build the lot total. A negative offset cannot take
- *  the price below 1p, or below the basis itself when that is already under 1p. */
+/** The suggested per-unit ask, unrounded, or `null` when the rule's basis is
+ *  unknown for this item. */
 export function priceFromRule(rule: PriceRule, evidence: PriceEvidence): number | null {
-  const base = basisValue(rule.basis, evidence);
-  if (base == null) return null;
-  return Math.max(Math.min(base, 1), base + rule.offset);
+  return call({ op: 'price_from_rule', input: { rule, evidence } });
 }
 
 /** The rule bases a snapshot entry carries, plus the median the live-ask
@@ -86,25 +54,10 @@ export function rankEvidence(m: MarketItemEntry | null | undefined, rank: number
   return tier ? snapshotEvidence(cachedUnitMarket(tier, bulk)) : { median: snapshotEvidence(m).median };
 }
 
-export interface LiveAskRead {
-  /** The cheapest ask worth competing with, or `null` with no asks. */
-  ask: number | null;
-  /** The cheapest ask, when it was skipped as an outlier. */
-  ignored: number | null;
-}
-
-/** The cheapest live ask "within reason". Any account can list for 1p, so an
- *  ask under a third of the median is skipped for the next one, as the
- *  snapshot's clearing price does. When every ask is that low the book has
- *  moved, not been trolled (a live check returns five asks at most), so the
- *  cheapest stands; without a median there is nothing to judge against.
- *  `asks` is the live check's list, cheapest first. */
+/** The cheapest live ask "within reason": a troll undercut under the median
+ *  is skipped. `asks` is the live check's list, cheapest first. */
 export function reasonableLowestAsk(asks: readonly number[], median: number | null | undefined): LiveAskRead {
-  const cheapest = asks[0] ?? null;
-  const baseline = known(median);
-  if (cheapest == null || baseline == null) return { ask: cheapest, ignored: null };
-  const first = asks.findIndex((ask) => ask * TROLL_UNDERCUT_RATIO >= baseline);
-  return first > 0 ? { ask: asks[first], ignored: cheapest } : { ask: cheapest, ignored: null };
+  return call({ op: 'reasonable_lowest_ask', input: { asks: [...asks], median } });
 }
 
 export function parsePriceRule(raw: string | null): PriceRule {

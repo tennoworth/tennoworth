@@ -1,20 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  appraise,
-  describeComps,
-  distributionOf,
-  judgeOffer,
-  LOCKED_REROLL_FACTOR,
-  LOW_POPULARITY,
-  placementOf,
-  rerollCost,
-  rerolledDiscount,
-  rerollRead,
-  skewOf,
-} from './riven-appraise';
+import { appraise, describeComps, rerolledDiscount } from './riven-appraise';
 import type { RivenAuction } from '../contracts/desktop';
 import type { RivenStatTier } from '../contracts/data';
+import fixture from '../../../tests/fixtures/rivens/appraise.json';
 
 function tier(over: Partial<RivenStatTier>): RivenStatTier {
   return {
@@ -28,6 +17,9 @@ function tier(over: Partial<RivenStatTier>): RivenStatTier {
   } as RivenStatTier;
 }
 
+/** The native popularity floor (`appraise::LOW_POPULARITY`). */
+const LOW_POPULARITY = 1;
+
 /**
  * The distribution that broke the previous implementation: 90 sales at 10p and
  * 10 at 1,000p. A normal fit to its mean and standard deviation called a 10p
@@ -36,139 +28,138 @@ function tier(over: Partial<RivenStatTier>): RivenStatTier {
  */
 const SKEWED_MARKET = tier({ avg: 109, median: 10, min: 10, max: 1000, stddev: 297, pop: 100 });
 
-describe('distributionOf', () => {
+const placement = (price: number, t: RivenStatTier) => appraise(price, t, 0).placement;
+const verdict = (price: number, t: RivenStatTier) => appraise(price, t, 0).verdict;
+const kuva = (rerolls: number, locked = false) => appraise(400, tier({}), rerolls, locked).reroll?.kuva;
+
+describe('the band', () => {
   // DE's pop is a 0-100 popularity score, and over half of each week's rows
   // sit at 1. Reading it as a trade count hid nearly every band.
   it('keeps a band whatever its popularity, because pop is not a count', () => {
-    expect(distributionOf(tier({ pop: 1 }))?.median).toBe(195);
-    expect(distributionOf(tier({ pop: 0 }))?.median).toBe(195);
+    expect(appraise(null, tier({ pop: 1 }), 0).dist?.median).toBe(195);
+    expect(appraise(null, tier({ pop: 0 }), 0).dist?.median).toBe(195);
   });
 
   it('rejects a tier with no published price', () => {
-    expect(distributionOf(tier({ median: 0 }))).toBeNull();
+    expect(appraise(null, tier({ median: 0 }), 0).dist).toBeNull();
   });
 
   it('accepts a real sample', () => {
-    expect(distributionOf(tier({}))?.pop).toBe(37);
+    expect(appraise(null, tier({}), 0).dist?.pop).toBe(37);
   });
 
   it('no longer requires a standard deviation, which nothing reads now', () => {
-    expect(distributionOf(tier({ stddev: 0 }))).not.toBeNull();
+    expect(appraise(null, tier({ stddev: 0 }), 0).dist).not.toBeNull();
   });
 
-  it('is null rather than throwing on a missing tier', () => {
-    expect(distributionOf(null)).toBeNull();
-    expect(distributionOf(undefined)).toBeNull();
+  it('is no-data rather than throwing on a missing tier', () => {
+    expect(appraise(null, null, 0).unavailable).toBe('no-data');
+    expect(appraise(null, undefined, 0).unavailable).toBe('no-data');
   });
 });
 
-describe('placementOf', () => {
-  const dist = distributionOf(tier({}))!;
-
+describe('placement', () => {
   it('places against the landmarks DE actually publishes', () => {
-    expect(placementOf(3, dist)).toBe('below-observed');
-    expect(placementOf(100, dist)).toBe('bottom');
-    expect(placementOf(200, dist)).toBe('middle'); // median 195, avg 210
-    expect(placementOf(400, dist)).toBe('upper');
-    expect(placementOf(2000, dist)).toBe('above-observed');
+    expect(placement(3, tier({}))).toBe('below-observed');
+    expect(placement(100, tier({}))).toBe('bottom');
+    expect(placement(200, tier({}))).toBe('middle'); // median 195, avg 210
+    expect(placement(400, tier({}))).toBe('upper');
+    expect(placement(2000, tier({}))).toBe('above-observed');
   });
 
   it('never claims a band the skewed market contradicts', () => {
     // 10p is the cheapest sale observed, and 90% of trades were at it. The old
     // normal fit called this the 37th percentile; the landmark answer is
     // simply "at the bottom", which is true.
-    const dist2 = distributionOf(SKEWED_MARKET)!;
-    expect(placementOf(10, dist2)).toBe('middle');
-    expect(placementOf(9, dist2)).toBe('below-observed');
-    expect(placementOf(500, dist2)).toBe('upper');
+    expect(placement(10, SKEWED_MARKET)).toBe('middle');
+    expect(placement(9, SKEWED_MARKET)).toBe('below-observed');
+    expect(placement(500, SKEWED_MARKET)).toBe('upper');
   });
 
   it('calls an at-the-median offer typical, even on a flat market', () => {
     // With avg == median, falling through to the skew branch called the most
     // ordinary price on the weapon "above the average" - wrong, and the
     // opposite of useful.
-    const flat = distributionOf(tier({ avg: 100, median: 100, min: 90, max: 110 }))!;
-    expect(placementOf(100, flat)).toBe('middle');
-    expect(judgeOffer(100, flat)).toBe('fair');
-    expect(placementOf(95, flat)).toBe('bottom');
-    expect(placementOf(105, flat)).toBe('upper');
+    const flat = tier({ avg: 100, median: 100, min: 90, max: 110 });
+    expect(placement(100, flat)).toBe('middle');
+    expect(verdict(100, flat)).toBe('fair');
+    expect(placement(95, flat)).toBe('bottom');
+    expect(placement(105, flat)).toBe('upper');
   });
 
   it('calls an at-the-median offer typical on a left-skewed market too', () => {
-    const left = distributionOf(tier({ avg: 80, median: 100, min: 40, max: 120 }))!;
-    expect(placementOf(100, left)).toBe('middle');
+    expect(placement(100, tier({ avg: 80, median: 100, min: 40, max: 120 }))).toBe('middle');
   });
 });
 
-describe('skewOf', () => {
-  it('measures how far large sales drag the average', () => {
-    expect(skewOf(distributionOf(SKEWED_MARKET)!)).toBeCloseTo(10.9, 1);
-    expect(skewOf(distributionOf(tier({}))!)).toBeCloseTo(1.08, 2);
+describe('skew', () => {
+  it('flags a market whose average large sales drag far above the median', () => {
+    expect(appraise(null, SKEWED_MARKET, 0).skewed).toBe(true);
+    expect(appraise(null, tier({}), 0).skewed).toBe(false);
+    expect(appraise(null, tier({ avg: 150, median: 100 }), 0).skewed).toBe(true);
+    expect(appraise(null, tier({ avg: 149, median: 100 }), 0).skewed).toBe(false);
   });
 });
 
-describe('judgeOffer', () => {
-  const dist = distributionOf(tier({}))!;
-
+describe('verdict', () => {
   it('calls a median-ish offer fair', () => {
-    expect(judgeOffer(195, dist)).toBe('fair');
-    expect(judgeOffer(200, dist)).toBe('fair');
+    expect(verdict(195, tier({}))).toBe('fair');
+    expect(verdict(200, tier({}))).toBe('fair');
   });
 
   it('calls a real lowball low', () => {
-    expect(judgeOffer(60, dist)).toBe('below');
+    expect(verdict(60, tier({}))).toBe('below');
   });
 
   it('does not call a slightly-under-median offer a lowball', () => {
-    expect(judgeOffer(180, dist)).toBe('fair');
+    expect(verdict(180, tier({}))).toBe('fair');
+    expect(verdict(146.25, tier({}))).toBe('fair');
+    expect(verdict(146, tier({}))).toBe('below');
   });
 
   it('calls an above-average offer high, and one past the range an outlier', () => {
-    expect(judgeOffer(400, dist)).toBe('above');
-    expect(judgeOffer(1500, dist)).toBe('outlier');
+    expect(verdict(400, tier({}))).toBe('above');
+    expect(verdict(1500, tier({}))).toBe('outlier');
   });
 });
 
-describe('rerollCost', () => {
+describe('reroll cost', () => {
   it('climbs with the reroll count and then caps', () => {
-    expect(rerollCost(0)).toBe(900);
-    expect(rerollCost(4)).toBe(1700);
-    expect(rerollCost(9)).toBe(3500);
-    expect(rerollCost(50)).toBe(3500);
+    expect(kuva(0)).toBe(900);
+    expect(kuva(4)).toBe(1700);
+    expect(kuva(9)).toBe(3500);
+    expect(kuva(50)).toBe(3500);
   });
 
   it('treats a nonsense count as a fresh riven rather than throwing', () => {
-    expect(rerollCost(-3)).toBe(900);
+    expect(kuva(-3)).toBe(900);
   });
 
   it('doubles while a trait is locked, up to 7,000 at the cap', () => {
-    expect(LOCKED_REROLL_FACTOR).toBe(2);
-    expect(rerollCost(0, true)).toBe(1800);
-    expect(rerollCost(50, true)).toBe(7000);
-    expect(rerollCost(4, false)).toBe(1700);
+    expect(kuva(0, true)).toBe(1800);
+    expect(kuva(50, true)).toBe(7000);
+    expect(kuva(4, false)).toBe(1700);
   });
 });
 
-describe('rerollRead', () => {
-  const dist = distributionOf(tier({}))!;
-
+describe('reroll read', () => {
   it('reports the cost and the median, and nothing else', () => {
-    const r = rerollRead(400, dist, 3);
+    const r = appraise(400, tier({}), 3).reroll!;
     expect(r.kuva).toBe(1400);
     expect(r.median).toBe(195);
     expect(r.aboveMedian).toBe(true);
   });
 
   it('states the comparison as a fact about two published numbers', () => {
-    expect(rerollRead(40, dist, 0).aboveMedian).toBe(false);
-    expect(rerollRead(195, dist, 0).aboveMedian).toBe(false);
+    expect(appraise(40, tier({}), 0).reroll?.aboveMedian).toBe(false);
+    expect(appraise(195, tier({}), 0).reroll?.aboveMedian).toBe(false);
   });
 
   it('exposes no probability and no direction', () => {
     // A "lean" is a probability claim wearing different clothes: a reroll
     // draws from the POSSIBLE rolls while DE publishes the SOLD ones. If a
     // fourth field ever appears on this type, a model came back.
-    const r = rerollRead(300, dist, 1);
+    const r = appraise(300, tier({}), 1).reroll!;
     expect(Object.keys(r).sort()).toEqual(['aboveMedian', 'kuva', 'median']);
   });
 });
@@ -242,6 +233,7 @@ describe('appraise', () => {
     const a = appraise(0, tier({}), 0);
     expect(a.placement).toBeNull();
     expect(a.reroll).toBeNull();
+    expect(appraise(Number.NaN, tier({}), 0).placement).toBeNull();
   });
 });
 
@@ -296,5 +288,31 @@ describe('describeComps', () => {
       comp({ owner_status: null }),
     ], now);
     expect(read.status).toEqual({ online: 1, ingame: 1, offline: 1, unknown: 2 });
+  });
+
+  it('reads no ages without a usable now', () => {
+    expect(describeComps([comp({ created: '2026-09-09T00:00:00Z' })], Number.NaN).dated).toBe(0);
+  });
+});
+
+// The outputs the TypeScript rules gave before they moved native.
+describe('shared fixture', () => {
+  it('appraises as before', () => {
+    for (const c of fixture.appraise) {
+      expect(appraise(c.price, c.tier as RivenStatTier | null | undefined, c.rerolls, c.locked), c.name).toEqual(c.expected);
+    }
+  });
+
+  it('measures the rerolled discount as before', () => {
+    for (const c of fixture.rerolled_discount) {
+      expect(rerolledDiscount(c.unrolled as RivenStatTier | null, c.rolled as RivenStatTier | null), c.name).toBe(c.expected);
+    }
+  });
+
+  it('describes comps as before', () => {
+    for (const c of fixture.describe_comps) {
+      const comps = c.comps.map((a) => ({ ...comp({}), owner_status: a.owner_status, created: a.created }) as RivenAuction);
+      expect(describeComps(comps, c.now_ms as number), c.name).toEqual(c.expected);
+    }
   });
 });

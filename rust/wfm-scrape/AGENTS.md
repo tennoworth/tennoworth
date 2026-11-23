@@ -95,6 +95,10 @@ writes `market-public.json` just before `market.json`: the fields listed in
 refresh from (the frontend checks they give the same page data), and
 `market-home.json`, the snapshot without the desktop-only fields in
 `tests/fixtures/public-market/home.json`, which the hosted homepage reads.
+The snapshot also carries `handoff_sample`, the homepage's three hand-off
+rows with sample owned counts, picked and scored with `market-domain`'s sell
+score (`pipeline/handoff.rs`) so the site has no copy of the formula; the
+strip falls back to its static sample when the field is absent.
 The fixture regression gates in `tests/` (`build_gate`, `scrape_gate`,
 `surfaces_gate`) shell the freshly built binary
 (`env!("CARGO_BIN_EXE_tennoworth-pipeline")`) against the frozen fixtures in

@@ -7,6 +7,9 @@ import './app.css';
 import { createStateStore } from './adapters/state-store';
 import { initTheme } from './ui/theme';
 import { installDesktopExternalLinkHandler } from './adapters/runtime';
+import { MISSING_NATIVE, startNative } from './domain/native';
+import desktopRulesUrl from './generated/market-domain-web.wasm?url';
+import siteRulesUrl from './generated/market-domain-site.wasm?url';
 
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
 // installs a stub Tauri runtime BEFORE anything sniffs for it, so the
@@ -35,20 +38,30 @@ const noticeSurface = surface === 'game-notice';
 document.documentElement.classList.toggle('relic-overlay-surface', overlaySurface);
 document.documentElement.classList.toggle('game-notice-surface', noticeSurface);
 const store = createStateStore();
+// The view rules are native (domain/native.ts) and called synchronously from
+// components, so every surface waits for the module before it mounts. Fetched
+// beside the surface's own startup work, not before it. On the hosted site a
+// failed load leaves the prerendered page in place, as a failed chunk does.
+// The hosted site loads the build without the desktop-only rules.
+const hostedSurface = !overlaySurface && !noticeSurface && store.mode !== 'tauri'
+  && !(import.meta.env.DEV && new URLSearchParams(location.search).has('styleguide'));
+const nativeReady = fetch(hostedSurface ? siteRulesUrl : desktopRulesUrl)
+  .then(response => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(`${MISSING_NATIVE} (${response.status})`))))
+  .then(startNative);
 // Keep the overlay's transparent, scroll-locked document CSS out of the hosted
 // page's initial bundle. A conditional mount does not isolate a static import's
 // component CSS: Svelte still emits it globally even when that branch never runs.
 const styleguideSurface = import.meta.env.DEV && new URLSearchParams(location.search).has('styleguide');
 const app = styleguideSurface && !overlaySurface && !noticeSurface
-  ? import('./dev/styleguide/Styleguide.svelte').then(({ default: Styleguide }) => mount(Styleguide, { target }))
+  ? Promise.all([import('./dev/styleguide/Styleguide.svelte'), nativeReady]).then(([{ default: Styleguide }]) => mount(Styleguide, { target }))
   : noticeSurface
-  ? Promise.all([import('./desktop/notice/GameNoticeCard.svelte'), import('./adapters/services')]).then(([{ default: GameNoticeCard }, { createDesktopServices }]) => mount(GameNoticeCard, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
+  ? Promise.all([import('./desktop/notice/GameNoticeCard.svelte'), import('./adapters/services'), nativeReady]).then(([{ default: GameNoticeCard }, { createDesktopServices }]) => mount(GameNoticeCard, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
   : overlaySurface
-  ? Promise.all([import('./desktop/relics/RelicOverlay.svelte'), import('./adapters/services'), import('./i18n/startup')]).then(async ([{ default: RelicOverlay }, { createDesktopServices }, { startSideWindowLanguage }]) => {
+  ? Promise.all([import('./desktop/relics/RelicOverlay.svelte'), import('./adapters/services'), import('./i18n/startup'), nativeReady]).then(async ([{ default: RelicOverlay }, { createDesktopServices }, { startSideWindowLanguage }]) => {
       await startSideWindowLanguage();
       return mount(RelicOverlay, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) });
     })
-  : store.hydrate().then(() => {
+  : Promise.all([store.hydrate(), nativeReady]).then(() => {
     // public/theme-boot.js already stamped the browser's stored theme before
     // first paint; this re-applies from the store (the desktop build keeps
     // settings in SQLite, which the boot script can't see) and starts following

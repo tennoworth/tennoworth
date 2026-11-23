@@ -9,8 +9,20 @@ license = "MIT"
 # Calendar rules parse snapshot ISO dates without consulting the system clock.
 jiff = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, features = ["preserve_order"] }
+# raw_value: WebRequest reads its input once the op is known (web.rs).
+serde_json = { workspace = true, features = ["preserve_order", "raw_value"] }
 ts-rs = { workspace = true }
+
+# The fixtures carry floats exactly as the page printed them; parse them back
+# exactly, as market-domain-web does at the page boundary.
+[dev-dependencies]
+serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
+
+[features]
+default = ["desktop-views"]
+# The desktop-only WebRequest ops (web.rs). market-domain-web's site build turns
+# it off so the hosted module carries only the ops the site calls.
+desktop-views = []
 
 [lints]
 workspace = true

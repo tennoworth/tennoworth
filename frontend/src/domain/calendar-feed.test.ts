@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCalendar, STALE_DAYS, vaultAffects, type CalendarItem } from './calendar-feed';
+import { buildCalendar, type CalendarItem } from './calendar-feed';
 
 const titleOf = (item: CalendarItem) => (item.text.kind === 'event' ? item.text.title : null);
 import staleDays from '../../../tests/fixtures/stale-days.json';
 import type { Market, OwnedRecord, VaultRotation } from '../contracts/data';
 
 const NOW = Date.parse('2026-08-22T00:00:00Z');
+
+// Vault matching is read through the feed's vault row, for a rotation dated ahead.
+function vaultAffects(rotation: VaultRotation, market: Market, held: Map<string, OwnedRecord> | null): string[] {
+  const dated = { ...rotation, activation: '2026-08-28T18:00:00Z', expiry: '2026-09-25T18:00:00Z' };
+  return buildCalendar({ ...market, de: { vault_rotation: [dated] } }, held, NOW).find((i) => i.kind === 'vault')?.affects ?? [];
+}
 
 function owned(slugs: string[]): Map<string, OwnedRecord> {
   return new Map(
@@ -337,7 +343,6 @@ describe('buildCalendar', () => {
   // At the pipeline's own stale age the calendar says stale too; it used to
   // wait one more day, so a surface the build warned about read as current.
   it('turns stale at the age the pipeline warns at', () => {
-    expect(STALE_DAYS).toBe(staleDays.stale_days);
     const at = (daysAgo: number) => {
       const market = structuredClone(EVENT_MARKET) as Market;
       market.event_rewards!.events = {

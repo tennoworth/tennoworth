@@ -31,13 +31,13 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import type { ScoredInventoryFact } from '../../contracts/generated/domain';
   import type { Verdict } from '../../contracts/generated/domain';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel, keep, active = true, sessionEpoch = 0 }: {
+  let { owned, market, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel, keep, active = true, sessionEpoch = 0 }: {
     keep?: Snippet;
     /** Bumped when the WFM session changes; live prices belong to one account. */
     sessionEpoch?: number;
     /** Whether the view is on screen; it stays mounted while hidden. */
     active?: boolean;
-    owned: Map<string, OwnedRecord>; market: Market | null; reserveCopies: number;
+    owned: Map<string, OwnedRecord>; market: Market | null;
     nativeFacts?: Map<string, ScoredInventoryFact>;
     advice: Map<string, Verdict>; scanning: boolean; onscan: () => Promise<void>;
     onreview: (rows: SessionRow[], budget: number, state: TradeSessionState) => void;
@@ -77,7 +77,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   const filters = { minPrice: 0, minOwned: 0, typeFilter: 'all', hideAtLvl: Infinity,
     activeTags: new Set<string>(), vaultOnly: false, ducatsOnly: false, minVol: 0,
     minMedian: 0, typesAny: [], sparesOnly: false, adviceOnly: false };
-  let parts = $derived(computeResults(owned, market, filters, reserveCopies, advice, availability, nativeFacts).filter(r => !r.slug.endsWith('_set')).map(r => ({
+  let parts = $derived(computeResults(owned, market, filters, nativeFacts, advice, availability).filter(r => !r.slug.endsWith('_set')).map(r => ({
     key: r.key, slug: r.slug, name: r.name, owned: r.owned, leveled: r.leveled,
     sellable: Math.min(r.sellable, sessionData?.quantities[r.slug] ?? 0), subtype: r.subtype,
     type: r.type, hold: r.timing === 'hold' || r.advice === 'hold',

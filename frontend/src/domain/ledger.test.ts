@@ -32,6 +32,13 @@ describe('ledger', () => {
     ]);
   });
 
+  it('soldByItem counts a zero-quantity line as one unit and rounds halves up', () => {
+    expect(soldByItem([t('sale', 5, 1, [g('Y'), g('X', 0)])])).toEqual([
+      { name: 'X', qty: 0, plat: 3, trades: 1 },
+      { name: 'Y', qty: 1, plat: 3, trades: 1 },
+    ]);
+  });
+
   it('describeItems shows the side that matters', () => {
     expect(describeItems(t('sale', 1, 1, [g('Primed Flow'), g('Lith C5 Relic', 3)]))).toBe('Primed Flow, Lith C5 Relic ×3');
     expect(describeItems(t('purchase', 1, 1, [r('Ash Prime Blueprint', 2)]))).toBe('Ash Prime Blueprint ×2');

@@ -22,7 +22,7 @@
 #   announcement-feed   - pure feed contract shared by readers and publishers.
 #   tennoworth-publisher - private host-only announcement publication service.
 [workspace]
-members = ["game-acquisition", "wfm-trading", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-collectors", "announcement-feed", "tennoworth-publisher"]
+members = ["game-acquisition", "wfm-trading", "market-domain", "market-domain-wasm", "market-domain-web", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-collectors", "announcement-feed", "tennoworth-publisher"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping
