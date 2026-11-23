@@ -9,7 +9,8 @@ license = "MIT"
 # Calendar rules parse snapshot ISO dates without consulting the system clock.
 jiff = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, features = ["preserve_order"] }
+# raw_value: WebRequest reads its input once the op is known (web.rs).
+serde_json = { workspace = true, features = ["preserve_order", "raw_value"] }
 ts-rs = { workspace = true }
 
 [lints]

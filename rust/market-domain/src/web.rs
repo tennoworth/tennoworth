@@ -39,9 +39,30 @@ pub struct PicksRequest {
 
 macro_rules! web_operations {
     ($($name:ident: $input:ty => $output:ty = $run:expr),+ $(,)?) => {
-        #[derive(Deserialize, TS)]
-        #[serde(tag = "op", content = "input", rename_all = "snake_case")]
+        #[derive(TS)]
+        #[ts(tag = "op", content = "input", rename_all = "snake_case")]
         pub enum WebRequest { $($name($input)),+ }
+
+        // The derived adjacently tagged form compiles every input's
+        // deserializer twice (once to buffer an `input` that arrives before
+        // `op`), which doubled the module the views download. Reading `input`
+        // raw and parsing it once its op is known compiles each one once.
+        impl<'de> Deserialize<'de> for WebRequest {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "snake_case")]
+                enum Op { $($name),+ }
+                #[derive(Deserialize)]
+                struct Envelope<'a> {
+                    op: Op,
+                    #[serde(borrow)]
+                    input: &'a serde_json::value::RawValue,
+                }
+                let Envelope { op, input } = Envelope::deserialize(d)?;
+                match op { $(Op::$name => serde_json::from_str(input.get()).map(Self::$name)),+ }
+                    .map_err(serde::de::Error::custom)
+            }
+        }
 
         #[derive(Serialize, TS)]
         #[serde(tag = "op", content = "result", rename_all = "snake_case")]
@@ -70,7 +91,7 @@ mod tests {
     use serde_json::json;
 
     fn call(request: serde_json::Value) -> serde_json::Value {
-        let request: WebRequest = serde_json::from_value(request).unwrap();
+        let request: WebRequest = serde_json::from_str(&request.to_string()).unwrap();
         serde_json::to_value(request.execute().unwrap()).unwrap()
     }
 
