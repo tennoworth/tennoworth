@@ -857,7 +857,7 @@ pub fn handle_log_line(app: &AppHandle, line: &str) {
     } else if line.contains(REWARD_SLOT_MARKER) {
         let _ = state
             .expected_slots
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |count| {
                 Some((count + 1).min(4))
             });
     }
