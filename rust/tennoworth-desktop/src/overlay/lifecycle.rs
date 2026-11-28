@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Capture work and displayed identity have different lifetimes: a late price
@@ -52,9 +52,41 @@ impl CaptureLifecycle {
     }
 }
 
+/// Counts reward screens the log has closed. A log-started scan remembers the
+/// count it was triggered at: a game that writes EE.log late delivers "Got
+/// rewards" and the screen's close in one chunk, after the screen is gone, and
+/// a scan of whatever replaced it can only read noise.
+#[derive(Default)]
+pub(super) struct RewardScreens(AtomicU64);
+
+impl RewardScreens {
+    pub(super) fn close(&self) {
+        self.0.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub(super) fn mark(&self) -> u64 {
+        self.0.load(Ordering::Acquire)
+    }
+
+    pub(super) fn closed_since(&self, mark: u64) -> bool {
+        self.0.load(Ordering::Acquire) != mark
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_scan_sees_only_closes_logged_after_its_trigger() {
+        let screens = RewardScreens::default();
+        screens.close();
+        let mark = screens.mark();
+        assert!(!screens.closed_since(mark), "an earlier close is history");
+        screens.close();
+        assert!(screens.closed_since(mark));
+        assert!(!screens.closed_since(screens.mark()));
+    }
 
     #[test]
     fn completion_allows_retry_without_changing_the_displayed_capture() {
