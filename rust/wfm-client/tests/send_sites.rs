@@ -145,6 +145,11 @@ fn raw_http_send_sites_are_classified() {
             "tennoworth-desktop/src/services/telemetry/reports/mod.rs",
             1,
         ),
+        // First-party, consent-gated read of players' riven prices: same client.
+        (
+            "tennoworth-desktop/src/services/telemetry/reports/community.rs",
+            1,
+        ),
         ("tennoworth-desktop/src/services/market/definitions.rs", 1),
         // First-party item pictures from tennoworth.app, cached on disk.
         ("tennoworth-desktop/src/services/market/art.rs", 1),
