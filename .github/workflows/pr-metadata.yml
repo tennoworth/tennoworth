@@ -1,0 +1,29 @@
+name: pr-metadata
+
+# Separate from audit so a label, milestone or assignee change re-runs only this
+# check, not the build gates. The pull request payload carries the metadata, so
+# the job needs no API access.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review, labeled, unlabeled, assigned, unassigned, milestoned, demilestoned]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-metadata-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-metadata:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: assignee, type and area labels, milestone
+        run: |
+          bun test scripts/check-pr-metadata.test.ts
+          bun scripts/check-pr-metadata.ts

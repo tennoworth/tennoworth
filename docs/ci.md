@@ -8,6 +8,8 @@ repository rulesets are in [github-rulesets/](github-rulesets/).
 ## Workflows
 
 `.github/workflows/` holds the release and verification workflows:
+`pr-metadata` (on every pull request event that changes its metadata; see
+[CONTRIBUTING.md](../CONTRIBUTING.md#submit-a-pull-request)),
 `release-desktop` (manual dispatch bound to an approved commit; creates the
 immutable `desktop-v*` tag during publication), `build-web`,
 `build-usage` and `build-reports` (thin callers of the shared

@@ -384,6 +384,16 @@ behavior, checks run, and any verification still pending. For visual changes,
 include both themes and relevant sizes. For risky boundaries, explain recovery
 and failure behavior. Keep unrelated edits and generated data out of the diff.
 
+Maintainers give every pull request, release and promotion ones included, an
+assignee, one type label (`bug`, `enhancement`, `documentation` or
+`maintenance`; a release or promotion is `maintenance`), every area it ships
+to (`desktop`, `site`, `pipeline`, `ci`, `release`, `translation`; a
+documentation-only change may have none) and the `Desktop X.Y.Z` milestone of
+the next desktop release. The `pr-metadata` check enforces this for
+branches of this repository; a fork's author usually cannot set these fields,
+so a maintainer adds them before merging. A pull request closed because another one carries its change
+is labelled `duplicate` and loses its milestone; one abandoned is `wontfix`.
+
 Review the final diff for architecture fit, correctness, concurrent operations,
 failure handling, and unnecessary complexity. Check that tests detect the behavior
 they claim to protect, including the original failure for a regression when
