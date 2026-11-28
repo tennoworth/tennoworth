@@ -1,4 +1,5 @@
-//! Opt-in price reports: anonymous sale prices from EE.log and riven
+//! Opt-in price reports: anonymous sale prices from EE.log, riven sales by
+//! weapon and roll verdict, ratings of the riven roll guide, and riven
 //! fingerprint shapes. The contract and its privacy rules are in
 //! docs/price-reports.md; the request plumbing mirrors tennoworth-usage, with
 //! its own process, database and quota so neither service can starve the other.
@@ -34,6 +35,8 @@ const PUBLISHED_TTL: Duration = Duration::from_secs(300);
 struct Published {
     prices: Option<(Instant, String)>,
     shapes: Option<(Instant, String)>,
+    riven_prices: Option<(Instant, String)>,
+    roll_votes: Option<(Instant, String)>,
 }
 
 pub struct Collector {
@@ -73,9 +76,13 @@ pub fn router(state: Arc<Collector>) -> Router {
     let public = Router::new()
         .route("/api/reports/sales", post(sales))
         .route("/api/reports/riven-shape", post(riven_shape))
+        .route("/api/reports/riven-sales", post(riven_sales))
+        .route("/api/reports/roll-vote", post(roll_vote))
         .route("/api/reports/erase", post(erase))
         .route("/api/reports/prices", get(prices))
         .route("/api/reports/riven-shapes", get(riven_shapes))
+        .route("/api/reports/riven-prices", get(riven_prices))
+        .route("/api/reports/roll-votes", get(roll_votes))
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -102,6 +109,42 @@ async fn sales(
     };
     store
         .add_sales(batch)
+        .map_or_else(|s| s, |_| StatusCode::NO_CONTENT)
+}
+
+async fn riven_sales(
+    State(state): State<Arc<Collector>>,
+    payload: Body<contract::RivenSalesBatch>,
+) -> StatusCode {
+    let Ok(Json(batch)) = payload else {
+        return StatusCode::BAD_REQUEST;
+    };
+    let Ok(batch) = contract::validate_riven_sales(batch, crate::utc_date(Timestamp::now())) else {
+        return StatusCode::BAD_REQUEST;
+    };
+    let Ok(mut store) = state.store.try_lock() else {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    };
+    store
+        .add_riven_sales(batch)
+        .map_or_else(|s| s, |_| StatusCode::NO_CONTENT)
+}
+
+async fn roll_vote(
+    State(state): State<Arc<Collector>>,
+    payload: Body<contract::RollVote>,
+) -> StatusCode {
+    let Ok(Json(vote)) = payload else {
+        return StatusCode::BAD_REQUEST;
+    };
+    let Ok(vote) = contract::validate_vote(vote) else {
+        return StatusCode::BAD_REQUEST;
+    };
+    let Ok(mut store) = state.store.try_lock() else {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    };
+    store
+        .add_vote(vote, Timestamp::now())
         .map_or_else(|s| s, |_| StatusCode::NO_CONTENT)
 }
 
@@ -196,6 +239,30 @@ async fn riven_shapes(State(state): State<Arc<Collector>>) -> Response {
         &state,
         |p| &mut p.shapes,
         |store| Ok(serde_json::to_string(&store.shapes(Timestamp::now())?)?),
+    )
+}
+
+async fn riven_prices(State(state): State<Arc<Collector>>) -> Response {
+    cached(
+        &state,
+        |p| &mut p.riven_prices,
+        |store| {
+            Ok(serde_json::to_string(
+                &store.riven_prices(Timestamp::now(), false)?,
+            )?)
+        },
+    )
+}
+
+async fn roll_votes(State(state): State<Arc<Collector>>) -> Response {
+    cached(
+        &state,
+        |p| &mut p.roll_votes,
+        |store| {
+            Ok(serde_json::to_string(
+                &store.roll_votes(Timestamp::now(), false)?,
+            )?)
+        },
     )
 }
 

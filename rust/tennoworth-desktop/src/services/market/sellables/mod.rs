@@ -213,8 +213,20 @@ pub struct MarketData {
     /// a non-English game. Optional like the maps above.
     #[serde(default, deserialize_with = "null_default")]
     reward_names: HashMap<String, LocalizedRewardNames>,
+    /// The riven weapons and stat manifest, for the verdicts a riven sale
+    /// report carries. Read leniently: a riven surface this build cannot read
+    /// must not cost the tray its whole market.
+    #[serde(default, deserialize_with = "lenient_rivens")]
+    rivens: Option<market_domain::rivens::sold::RivenRefs>,
     #[serde(skip)]
     usage_parent_by_part: HashMap<String, Option<String>>,
+}
+
+fn lenient_rivens<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Option<market_domain::rivens::sold::RivenRefs>, D::Error> {
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(serde_json::from_value(value).ok())
 }
 
 #[cfg(test)]

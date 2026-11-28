@@ -46,7 +46,7 @@ rust/
       wfm/                   signed-in session, sign-in window, presence
       watches/               order-book poll, live order stream, ready whisper offer
       market/                snapshot cache, scan definitions, sellable ranking
-      telemetry/             opt-in check-in and price reports
+      telemetry/             opt-in check-in, price reports and riven ratings
       notifications/         notification delivery and clock-driven reminders
       clipboard.rs           the process-lifetime clipboard owner
     persistence/             schema, record types, table operations, key storage

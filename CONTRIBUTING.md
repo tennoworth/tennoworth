@@ -201,6 +201,11 @@ needs no Rust: each weapon is one line in the trade shorthand that the file's
   game update you checked it against. Leave other entries' credit alone.
 - Say why in the pull request. A link to current warframe.market listings, or
   a sale you made, outweighs opinion.
+- Players rate verdicts in the app. A correction that enough players who sold
+  rivens for the weapon back shows as `proposed` in
+  [`/api/reports/roll-votes`](https://tennoworth.app/api/reports/roll-votes)
+  ([how ratings work](docs/price-reports.md#ratings-and-the-roll-guide)). Cite
+  it as evidence; it is not a change on its own.
 
 From `rust/`, `cargo test -p market-domain roll_guide` checks the file
 against the game: every weapon must exist on warframe.market, and every stat

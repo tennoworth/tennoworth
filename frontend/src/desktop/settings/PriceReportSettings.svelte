@@ -21,6 +21,12 @@
     }
     finally { saving=false; }
   }
+  async function includeRivens() {
+    saving=true; error='';
+    try { preference=await transport.includeRivenSales(); }
+    catch { error=t('privacy.saveFailed'); }
+    finally { saving=false; }
+  }
   async function erase() {
     erasing=true; error=''; erased=false;
     try {
@@ -44,6 +50,17 @@
     </div>
     <label class="ui-setting-check"><input id="price-sharing" type="checkbox" checked={preference?.enabled ?? false} disabled={!preference?.available || saving} onchange={async event => { const input=event.currentTarget; await change(input.checked); input.checked=preference?.enabled ?? false; }}><span>{t('privacy.enabled')}</span></label>
   </div>
+  {#if preference?.enabled && !preference.rivens}
+    <!-- Consent given under the first terms, which promised riven trades
+         were never sent, does not stretch to them on its own. -->
+    <div class="ui-setting-row" data-testid="include-rivens">
+      <div class="ui-setting-copy">
+        <strong>{t('prices.rivensTitle')}</strong>
+        <p>{t('prices.rivensHelp')}</p>
+      </div>
+      <div class="ui-setting-control"><button type="button" class="btn ghost" disabled={saving} onclick={includeRivens}>{t('prices.rivensInclude')}</button></div>
+    </div>
+  {/if}
   <div class="ui-setting-row">
     <div class="ui-setting-copy">
       <strong>{t('prices.remove')}</strong>
@@ -54,6 +71,8 @@
   <details class="terms">
     <summary>{t('privacy.whatIsSent')}</summary>
     <p>{t('prices.terms1')}</p>
+    <p>{t('prices.termsRivens')}</p>
+    <p>{t('prices.termsRatings')}</p>
     <p>{t('prices.terms2')}</p>
     <p>{t('prices.terms3')}<a href="https://github.com/tennoworth/tennoworth/blob/main/docs/price-reports.md" target="_blank" rel="noopener noreferrer">{t('prices.termsLink')}</a>{t('prices.terms4')}</p>
   </details>

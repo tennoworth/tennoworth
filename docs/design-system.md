@@ -571,6 +571,13 @@ the row. Its rows grow with their stats, so their rule is a snapped border
 rather than the shared background tile, which Chromium blurs when a row edge
 lands on a half pixel.
 
+With price sharing available, a quiet rating sits under each verdict's
+reasons, above a dotted rule: "Verdict right?" with Yes and No. No opens a
+`Select` of corrections, each the opposite of what the guide said about one of
+that riven's stats, then Send. The week's rating replaces the question, with
+Change. Players' reported price for the riven's weapon and verdict sits under
+DE's range in ink, labelled "Players", so it never reads as DE's figure.
+
 ### Row cursor and button hover
 
 A hovered or focus-holding table row shows a 6px `--fg` square in its first

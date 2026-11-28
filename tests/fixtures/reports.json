@@ -1,5 +1,5 @@
 {
-  "_comment": "Contract v1 of the price-report service. today is the server's UTC day the cases are judged on. erase = hex SHA-256 of the secret's hex text.",
+  "_comment": "Contract v1 of the price-report service: sales, riven sales, roll guide votes, riven shapes and erasure. today is the server's UTC day the cases are judged on. erase = hex SHA-256 of the secret's hex text.",
   "today": "2026-10-08",
   "erase_vectors": [
     {
@@ -1088,6 +1088,775 @@
     {
       "day": "2024-12-30",
       "week": "2025-W01"
+    }
+  ],
+  "riven_sales": [
+    {
+      "case": "one sellable riven today",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "every verdict, unrated included",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "2222222222222222222222222222222222222222222222222222222222222222",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "almost",
+            "plat": 120
+          },
+          {
+            "ref": "3333333333333333333333333333333333333333333333333333333333333333",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "weak",
+            "plat": 120
+          },
+          {
+            "ref": "4444444444444444444444444444444444444444444444444444444444444444",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "unrated",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "seven days old",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-01",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "eight days old",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-09-30",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "one batch spanning two ISO weeks",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-04",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "2222222222222222222222222222222222222222222222222222222222222222",
+            "day": "2026-10-05",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "stats alongside the verdict",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120,
+            "stats": [
+              "critical_damage",
+              "multishot"
+            ]
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "a riven name instead of a weapon slug",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "Acceltra Critacan",
+            "verdict": "sellable",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "an unknown verdict",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "godroll",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "zero plat",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 0
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "plat above the cap",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 100001
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "a quantity field",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120,
+            "qty": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "an empty batch",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": []
+      },
+      "valid": false
+    },
+    {
+      "case": "more than fifty sales",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000000",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000001",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000002",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000003",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000004",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000005",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000006",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000007",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000008",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000009",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000a",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000b",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000c",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000d",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000e",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000f",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000010",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000011",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000012",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000013",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000014",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000015",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000016",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000017",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000018",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000019",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001a",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001b",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001c",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001d",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001e",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001f",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000020",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000021",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000022",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000023",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000024",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000025",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000026",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000027",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000028",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000029",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002a",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002b",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002c",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002d",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002e",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002f",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000030",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000031",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000032",
+            "day": "2026-10-08",
+            "weapon": "acceltra",
+            "verdict": "sellable",
+            "plat": 120
+          }
+        ]
+      },
+      "valid": false
+    }
+  ],
+  "votes": [
+    {
+      "case": "agree with a verdict",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "sellable",
+        "agree": true
+      },
+      "valid": true
+    },
+    {
+      "case": "disagree without a suggestion",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false
+      },
+      "valid": true
+    },
+    {
+      "case": "disagree: buyers want a positive",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false,
+        "suggest": {
+          "stat": "multishot",
+          "positive": true,
+          "good": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "case": "disagree: a negative is harmless",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false,
+        "suggest": {
+          "stat": "zoom",
+          "positive": false,
+          "good": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "case": "a suggestion with agreement",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": true,
+        "suggest": {
+          "stat": "zoom",
+          "positive": false,
+          "good": true
+        }
+      },
+      "valid": false
+    },
+    {
+      "case": "rating an unrated riven",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "unrated",
+        "agree": false
+      },
+      "valid": false
+    },
+    {
+      "case": "a display name as the stat",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false,
+        "suggest": {
+          "stat": "Critical Damage",
+          "positive": true,
+          "good": true
+        }
+      },
+      "valid": false
+    },
+    {
+      "case": "the riven's stats attached",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false,
+        "stats": [
+          "critical_damage"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "free text",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false,
+        "note": "this is wrong"
+      },
+      "valid": false
+    },
+    {
+      "case": "an uppercase contributor",
+      "body": {
+        "v": 1,
+        "contributor": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false
+      },
+      "valid": false
+    },
+    {
+      "case": "an unknown contract version",
+      "body": {
+        "v": 2,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "weapon": "acceltra",
+        "verdict": "weak",
+        "agree": false
+      },
+      "valid": false
     }
   ]
 }

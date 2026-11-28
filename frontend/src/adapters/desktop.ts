@@ -43,6 +43,7 @@ export class TauriTransport implements DesktopCapabilities {
   async getPriceReportPreferences(): Promise<import('../contracts/price-reports').PriceReportPreferences> { return resolveInvoke()('get_price_report_preferences'); }
   async setPriceReportPreferences(enabled: boolean): Promise<import('../contracts/price-reports').PriceReportPreferences> { return resolveInvoke()('set_price_report_preferences', { enabled }); }
   async erasePriceReports(): Promise<void> { await resolveInvoke()('erase_price_reports'); }
+  async includeRivenSales(): Promise<import('../contracts/price-reports').PriceReportPreferences> { return resolveInvoke()('include_riven_sales'); }
   private activePlanRequest: string | null = null;
   async getOverlaySettings(): Promise<OverlaySettings> {
     return await resolveInvoke()<OverlaySettings>('get_overlay_settings');
@@ -323,6 +324,23 @@ export async function desktopRivenComps(weapon: string, stats: RivenStatFilter |
   } catch (e) {
     rethrowInvoke(e);
   }
+}
+
+export async function desktopPriceSharing(): Promise<import('../contracts/price-reports').PriceReportPreferences> {
+  try { return await resolveInvoke()('get_price_report_preferences'); } catch (e) { rethrowInvoke(e); }
+}
+
+/** This install's ratings of the roll guide this week, one per weapon. */
+export async function desktopRollVotes(): Promise<import('../contracts/price-reports').RollVote[]> {
+  try { return await resolveInvoke()('get_roll_votes'); } catch (e) { rethrowInvoke(e); }
+}
+
+export async function desktopSendRollVote(vote: import('../contracts/price-reports').RollVote): Promise<import('../contracts/price-reports').RollVote[]> {
+  try { return await resolveInvoke()('send_roll_vote', { vote }); } catch (e) { rethrowInvoke(e); }
+}
+
+export async function desktopCommunityRivenPrices(): Promise<import('../contracts/price-reports').CommunityRivenPrice[]> {
+  try { return await resolveInvoke()('community_riven_prices'); } catch (e) { rethrowInvoke(e); }
 }
 
 export async function desktopListWatches(): Promise<Watch[]> {

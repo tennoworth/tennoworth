@@ -102,6 +102,12 @@ fn record_game_scan(
         Ok(id)
     })();
     let snapshot_id = recorded.as_ref().ok().copied();
+    if snapshot_id.is_some() {
+        if let Some(cache) = app.try_state::<crate::services::market::cache::MarketCache>() {
+            let market = crate::services::market::sellables::MarketData::load(&cache);
+            crate::services::telemetry::reports::remember_scan(&db, &market, bytes);
+        }
+    }
     if let Err(error) = recorded {
         // A successful scan may be a different account. Never retain the
         // previous account's allowance when recording the new one fails.

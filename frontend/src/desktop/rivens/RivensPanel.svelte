@@ -1,8 +1,11 @@
 <script lang="ts">
   import { fitTable } from '../../ui/table-fit';
   import { useDesktopServices } from '../shell/desktop-context';
-  const { desktopRivenComps } = useDesktopServices();
+  const { desktopRivenComps, desktopPriceSharing, desktopRollVotes, desktopSendRollVote, desktopCommunityRivenPrices } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
+  import RollRating from './RollRating.svelte';
+  import { onMount } from 'svelte';
+  import type { CommunityRivenPrice, RollVote } from '../../contracts/price-reports';
   import CopyButton from '../../ui/CopyButton.svelte';
   import Pager from '../../ui/Pager.svelte';
   import { pageWindow } from '../../ui/paging';
@@ -234,6 +237,27 @@
     return t(o.randomIsNegative ? 'riven.spliceNegative' : 'riven.splice', { name, first: o.consumed[0].label, second: o.consumed[1].label });
   }
 
+  // Ratings and players' prices ride on price sharing; without it, or when it
+  // cannot load, the view is exactly as before.
+  let sharing = $state<'on' | 'off' | 'unavailable'>('unavailable');
+  let myVotes = $state<RollVote[]>([]);
+  let community = $state<CommunityRivenPrice[]>([]);
+  onMount(() => {
+    desktopPriceSharing()
+      .then((p) => { sharing = !p.available ? 'unavailable' : p.enabled ? 'on' : 'off'; })
+      .catch(() => {});
+    desktopRollVotes().then((v) => { myVotes = v; }).catch(() => {});
+    desktopCommunityRivenPrices().then((c) => { community = c; }).catch(() => {});
+  });
+  async function vote(v: RollVote): Promise<void> {
+    myVotes = await desktopSendRollVote(v);
+  }
+  /** Players' reported price for this riven's weapon under its verdict. */
+  function playersFor(row: Row): CommunityRivenPrice | undefined {
+    if (!row.riven.slug || row.verdict === 'unrated') return undefined;
+    return community.find((c) => c.weapon === row.riven.slug && c.verdict === row.verdict);
+  }
+
   // Changes to the roll guide come in as suggestions; the form asks for the
   // weapon, the change and the evidence for it.
   const ROLL_GUIDE_ISSUE = 'https://github.com/tennoworth/tennoworth/issues/new?template=riven-roll.yml';
@@ -382,6 +406,9 @@
                       <details class="wants"><summary>{t('riven.roll.buyersWant')}</summary><p>{wantedStats(roll)}</p></details>
                     {/if}
                     {#if roll.note}<p class="why muted">{t('riven.roll.note')} <span lang="en">{roll.note}</span></p>{/if}
+                    {#if r.slug}
+                      <RollRating weapon={r.slug} read={roll} stats={row.stats} mine={myVotes.find((v) => v.weapon === r.slug && v.verdict === roll.verdict)} {sharing} statName={attrName} suggestUrl={ROLL_GUIDE_ISSUE} onvote={vote} />
+                    {/if}
                   </div>
                 {:else if row.roll}
                   <p class="roll why muted" data-testid="riven-roll">{t(row.roll.kind === 'no_guide' ? 'riven.roll.noGuide' : 'riven.roll.unknownStat')}</p>
@@ -449,6 +476,13 @@
                   </div>
                 {:else}
                   <span class="muted">-</span>
+                {/if}
+                {#if playersFor(row)}
+                  {@const players = playersFor(row)!}
+                  <span class="small note players" data-testid="players-price" title={t('riven.players.help', { verdict: t(VERDICT[players.verdict as keyof typeof VERDICT]), week: players.week })}>
+                    <span>{t('riven.players', { price: plat(players.median) + 'p' })}</span>
+                    <span class="muted">· {t('riven.players.count', { count: players.contributors })}</span>
+                  </span>
                 {/if}
               </td>
             </tr>
@@ -589,6 +623,10 @@
   .dispo-move.down { color: var(--warn); }
   .note { display: block; font-family: var(--font-body); line-height: 1.25rem; white-space: normal; }
   .band { white-space: nowrap; }
+  /* Players' reported price sits under DE's band as a second, labelled source. */
+  .players { display: block; margin-top: var(--s1); color: var(--fg); }
+  /* Breaks only between the price and the count. */
+  .players > span { white-space: nowrap; }
   /* min-max hairline and a median tick on a shared 1-10,000p log scale. */
   .range { position: relative; display: block; width: 100%; max-width: 8rem; height: 10px; margin: 2px 0; }
   .range::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dotted var(--faint); }

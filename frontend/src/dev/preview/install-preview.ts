@@ -10,6 +10,14 @@ import type { ProtectionInventory, ProtectionPlan } from '../../contracts/protec
 import type { OwnedRecord } from '../../contracts/data';
 import { APP_ICON_COLOURS, type PresenceStatus, type PresenceSettings } from '../../contracts/desktop';
 import { PRESENCE_CHANGED_EVENT } from '../../contracts/events';
+import type { CommunityRivenPrice, RollVote } from '../../contracts/price-reports';
+
+// Players' riven prices for the sample's Acceltra rivens, as the service
+// publishes them once five sellers have reported a verdict.
+const SAMPLE_COMMUNITY_RIVEN_PRICES: CommunityRivenPrice[] = [
+  { weapon: 'acceltra', verdict: 'sellable', week: '2026-W47', complete: true, contributors: 7, sales: 9, p25: 220, median: 260, p75: 340 },
+  { weapon: 'acceltra', verdict: 'weak', week: '2026-W47', complete: true, contributors: 5, sales: 6, p25: 20, median: 30, p75: 45 },
+];
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
   const loadAnnouncements = new HostedTransport().loadAnnouncements;
@@ -70,7 +78,8 @@ export async function installPreview() {
   // browser snapshot round-trips exactly like the real thing.
   let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
   // `price-sharing` offers the opt-in prompt; `price-sharing-error` refuses the save.
-  let priceReports = { enabled: false, available: scenario?.startsWith('price-sharing') ?? false, sent_this_week: 0 };
+  let priceReports = { enabled: false, available: scenario?.startsWith('price-sharing') ?? false, sent_this_week: 0, rivens: false };
+  let rollVotes: RollVote[] = [];
   // Trade presence. `&presence=website|closed|unverified|unreachable` opens the
   // other states the status strip and Settings show; the default follows a
   // running game.
@@ -146,9 +155,21 @@ export async function installPreview() {
         issues: protectionPlan.goal ? ['Open the protected-plan sample to preview a pinned goal.'] : [] }, args?.inventory as ProtectionInventory, Number(localStorage.getItem('reserve-copies') ?? 0), {}));
     }
     if (cmd === 'get_price_report_preferences') return Promise.resolve({ ...priceReports });
+    if (cmd === 'include_riven_sales') {
+      priceReports = { ...priceReports, rivens: priceReports.enabled };
+      return Promise.resolve({ ...priceReports });
+    }
+    if (cmd === 'get_roll_votes') return Promise.resolve([...rollVotes]);
+    if (cmd === 'send_roll_vote') {
+      if (!priceReports.enabled) return Promise.reject(new Error('Turn on price sharing in Settings to rate verdicts.'));
+      const vote = args?.vote as RollVote;
+      rollVotes = [...rollVotes.filter((v) => v.weapon !== vote.weapon), vote];
+      return Promise.resolve([...rollVotes]);
+    }
+    if (cmd === 'community_riven_prices') return Promise.resolve(SAMPLE_COMMUNITY_RIVEN_PRICES);
     if (cmd === 'set_price_report_preferences') {
       if (scenario === 'price-sharing-error') return Promise.reject(new Error('Sample price sharing save failed.'));
-      priceReports = { ...priceReports, enabled: Boolean(args?.enabled) };
+      priceReports = { ...priceReports, enabled: Boolean(args?.enabled), rivens: Boolean(args?.enabled) };
       return Promise.resolve({ ...priceReports });
     }
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));

@@ -59,6 +59,10 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopLiveTopPrices(queries: LiveTopQuery[], requestId?: number): Promise<LiveTop[]>;
   isDesktopRuntime(): boolean;
   desktopRivenComps(weapon: string, stats?: RivenStatFilter | null): Promise<RivenAuction[]>;
+  desktopPriceSharing(): Promise<import('./price-reports').PriceReportPreferences>;
+  desktopRollVotes(): Promise<import('./price-reports').RollVote[]>;
+  desktopSendRollVote(vote: import('./price-reports').RollVote): Promise<import('./price-reports').RollVote[]>;
+  desktopCommunityRivenPrices(): Promise<import('./price-reports').CommunityRivenPrice[]>;
   desktopTradeSessionState(): Promise<import('./data').TradeSessionState>;
   encryptPayload(payload: unknown, passphrase: string): Promise<EncryptedBlob>;
   decryptPayload(blob: EncryptedBlob, passphrase: string): Promise<unknown>;

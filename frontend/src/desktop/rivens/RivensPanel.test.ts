@@ -2,7 +2,7 @@
 // bands, disposition moves, splice options, and the per-riven comps drawer
 // (riven_comps IPC).
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
+import { screen, fireEvent, waitFor, cleanup, within } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/preview/render-desktop';
 import RivensPanel from './RivensPanel.svelte';
 import { installTauri, removeTauri } from '../../dev/testing/test-utils';
@@ -313,5 +313,80 @@ describe('RivensPanel', () => {
     const compsButton = (await screen.findAllByRole('button', { name: 'Comps' }))[0];
     await fireEvent.click(compsButton);
     await screen.findByText(/Couldn.t load comps/);
+  });
+});
+
+describe('RivensPanel ratings and player prices', () => {
+  function sharingInvoke(enabled: boolean, available = true) {
+    return vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === 'get_price_report_preferences') return { enabled, available, sent_this_week: 0 };
+      if (cmd === 'get_roll_votes') return [];
+      if (cmd === 'send_roll_vote') return [args?.vote];
+      if (cmd === 'community_riven_prices') return [
+        { weapon: 'acceltra', verdict: 'weak', week: '2026-W47', complete: true, contributors: 5, sales: 6, p25: 20, median: 30, p75: 45 },
+        { weapon: 'acceltra', verdict: 'sellable', week: '2026-W47', complete: true, contributors: 7, sales: 9, p25: 220, median: 260, p75: 340 },
+      ];
+      throw new Error(`unexpected ${cmd}`);
+    });
+  }
+
+  it('sends a correction built from the riven stats and shows it as the rating for the week', async () => {
+    const invoke = sharingInvoke(true);
+    installTauri(invoke, undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    const ratings = await screen.findAllByTestId('roll-rating');
+    expect(ratings).toHaveLength(2);
+    // Player prices for the rows' own verdict, never another verdict's.
+    const players = await screen.findAllByTestId('players-price');
+    expect(players.map((p) => p.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Players: 30p · 5 sellers', 'Players: 30p · 5 sellers']);
+
+    const row = ratings.find((r) => r.closest('tr')?.textContent?.includes('Status Duration'))!;
+    await fireEvent.click(within(row).getByRole('button', { name: 'No' }));
+    await fireEvent.click(within(row).getByRole('combobox'));
+    const joiner = String.fromCharCode(0x2060);
+    const plain = (el: Element | null) => (el?.textContent ?? '').split(joiner).join('');
+    const option = (await screen.findAllByRole('option')).find((o) => plain(o) === '−Status Duration is harmless here')!;
+    await fireEvent.click(option);
+    await fireEvent.click(within(row).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('send_roll_vote', {
+      vote: { weapon: 'acceltra', verdict: 'weak', agree: false, suggest: { stat: 'status_duration', positive: false, good: true } },
+    }));
+    // One rating per weapon a week: both Acceltra rows show it.
+    await waitFor(() => expect(screen.getAllByText((_, el) => el?.tagName === 'P' && plain(el).startsWith('You said: −Status Duration is harmless here.'))).toHaveLength(2));
+  });
+
+  it('asks for price sharing before rating, and hides ratings where sharing is unavailable', async () => {
+    const off = sharingInvoke(false);
+    installTauri(off, undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    await waitFor(() => expect(off).toHaveBeenCalledWith('get_price_report_preferences'));
+    const [first] = await screen.findAllByTestId('roll-rating');
+    await fireEvent.click(within(first!).getByRole('button', { name: 'Yes' }));
+    expect(within(first!).getByRole('status').textContent).toContain('Turn on price sharing in Settings');
+    expect(off).not.toHaveBeenCalledWith('send_roll_vote', expect.anything());
+    cleanup();
+
+    installTauri(sharingInvoke(false, false), undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    await screen.findAllByTestId('riven-roll');
+    await waitFor(() => expect(screen.queryAllByTestId('players-price')).toHaveLength(2));
+    expect(screen.queryAllByTestId('roll-rating')).toHaveLength(0);
+  });
+
+  it('shows a rating only under rivens with the verdict it rated', async () => {
+    const invoke = sharingInvoke(true);
+    installTauri(invoke, undefined);
+    const sellable: OwnedRiven = {
+      ...RAW_RIVENS[0]!, raw: undefined,
+      buffs: [{ tag: 'WeaponCritDamageMod', value: 1 }, { tag: 'WeaponViralDamageMod', value: 1 }],
+      curses: [],
+    };
+    render(RivensPanel, { props: { market, rivens: resolveRivens([...RAW_RIVENS, sellable], market) } });
+    const ratings = await screen.findAllByTestId('roll-rating');
+    const weak = ratings.find((r) => r.closest('tr')?.textContent?.includes('Status Duration'))!;
+    await fireEvent.click(within(weak).getByRole('button', { name: 'Yes' }));
+    await waitFor(() => expect(screen.getAllByText('You rated this verdict right this week.')).toHaveLength(2));
+    const other = ratings.find((r) => r.closest('tr')?.textContent?.includes('Sellable'))!;
+    expect(within(other).getByText('Verdict right?')).toBeTruthy();
   });
 });

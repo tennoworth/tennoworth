@@ -10,7 +10,7 @@ afterEach(cleanup);
 
 const DAY = 86_400_000;
 const T0 = Date.UTC(2026, 9, 1);
-const off: PriceReportPreferences = { enabled: false, available: true, sent_this_week: 0 };
+const off: PriceReportPreferences = { enabled: false, available: true, sent_this_week: 0, rivens: false };
 function transport(overrides: Partial<DesktopCapabilities> = {}): DesktopCapabilities {
   return { getPriceReportPreferences: async () => off, setPriceReportPreferences: async (enabled: boolean) => ({ ...off, enabled }), ...overrides } as unknown as DesktopCapabilities;
 }

@@ -7,6 +7,7 @@
 
 pub mod appraise;
 pub mod roll_guide;
+pub mod sold;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

@@ -48,10 +48,11 @@ fn sale(id: i64, at: i64, name: &str, plat: i64) -> TradeRow {
     trade(id, at, "sale", plat, vec![item(name, 1, "given")])
 }
 
-fn resolve(name: &str) -> Option<(String, bool)> {
+fn resolve(name: &str) -> Option<Resolved> {
     match name {
-        "primed flow" => Some(("primed_flow".into(), true)),
-        "ash prime set" => Some(("ash_prime_set".into(), false)),
+        "primed flow" => Some(Resolved::Item("primed_flow".into(), true)),
+        "ash prime set" => Some(Resolved::Item("ash_prime_set".into(), false)),
+        "acceltra critacan" => Some(Resolved::Riven("acceltra".into(), SaleVerdict::Sellable)),
         _ => None,
     }
 }
@@ -335,10 +336,7 @@ async fn an_accepted_batch_advances_the_mark_and_the_weekly_count() {
     let service = tennoworth_collectors::reports::Collector::new(store);
     service.tick().unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let endpoint = format!(
-        "http://{}/api/reports/sales",
-        listener.local_addr().unwrap()
-    );
+    let endpoint = format!("http://{}/api/reports", listener.local_addr().unwrap());
     let task = tokio::spawn(
         axum::serve(listener, tennoworth_collectors::reports::router(service)).into_future(),
     );
@@ -356,10 +354,7 @@ async fn an_accepted_batch_advances_the_mark_and_the_weekly_count() {
 async fn answering(status: u16) -> (String, tokio::task::JoinHandle<()>) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let endpoint = format!(
-        "http://{}/api/reports/sales",
-        listener.local_addr().unwrap()
-    );
+    let endpoint = format!("http://{}/api/reports", listener.local_addr().unwrap());
     let task = tokio::spawn(async move {
         while let Ok((mut socket, _)) = listener.accept().await {
             let mut buffer = vec![0u8; 65536];
@@ -400,10 +395,7 @@ async fn a_refused_batch_is_settled_and_not_counted() {
 async fn nothing_is_sent_without_consent() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
-    let endpoint = format!(
-        "http://{}/api/reports/sales",
-        listener.local_addr().unwrap()
-    );
+    let endpoint = format!("http://{}/api/reports", listener.local_addr().unwrap());
     let (db, opted, _) = run_pass(&endpoint, false).await;
     assert_eq!(mark(&db).unwrap(), opted);
     assert_eq!(
@@ -421,7 +413,7 @@ async fn deleting_reports_skips_queued_trades_even_if_the_service_is_unavailable
         let newest = record(&db, 10, Timestamp::now().as_second(), "Primed Flow", 40);
         let (endpoint, task) = answering(status).await;
         let client = usage::client().unwrap();
-        let result = erase_recent(&db, &state, &client, endpoint.trim_end_matches("/sales")).await;
+        let result = erase_recent(&db, &state, &client, &endpoint).await;
         assert_eq!(result.is_ok(), status == 204);
         assert_eq!(mark(&db).unwrap(), newest);
         assert!(
@@ -490,7 +482,7 @@ async fn deletion_waits_for_an_active_upload_then_erases_its_results() {
         );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
-    let endpoint = format!("{base}/sales");
+    let endpoint = base.clone();
     let server = tokio::spawn(axum::serve(listener, app).into_future());
     let client = usage::client().unwrap();
     let mut receiver = state.consent.subscribe();
@@ -521,4 +513,378 @@ async fn deletion_waits_for_an_active_upload_then_erases_its_results() {
         0
     );
     server.abort();
+}
+
+#[test]
+fn a_sold_riven_is_reported_by_weapon_and_verdict_in_its_own_batch() {
+    let trades = vec![
+        sale(1, THURSDAY, "Primed Flow", 40),
+        sale(2, THURSDAY, "Acceltra Critacan", 150),
+        sale(3, THURSDAY, "Primed Flow", 41),
+    ];
+    let (batches, _) = plan(&trades, today(), &resolve);
+    let shape: Vec<(bool, Vec<i64>, i64)> = batches
+        .iter()
+        .map(|b| {
+            (
+                b.rivens,
+                b.sales.iter().map(|s| s.trade_id).collect(),
+                b.through,
+            )
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        [(false, vec![1], 1), (true, vec![2], 2), (false, vec![3], 3)],
+        "kinds stay in trade order so the mark still covers each batch"
+    );
+    let body = body(&key(), &batches[1]);
+    let parsed: tennoworth_collectors::reports::contract::RivenSalesBatch =
+        serde_json::from_value(body.clone()).unwrap();
+    tennoworth_collectors::reports::contract::validate_riven_sales(parsed, today()).unwrap();
+    assert_eq!(body["sales"][0]["weapon"], "acceltra");
+    assert_eq!(body["sales"][0]["verdict"], "sellable");
+    let text = body.to_string();
+    for leaked in ["SomeTenno", "1234.5", "Critacan", "critacan"] {
+        assert!(
+            !text.contains(leaked),
+            "{leaked} must not leave the machine"
+        );
+    }
+}
+
+#[test]
+fn a_bought_riven_or_one_traded_with_others_is_not_reported() {
+    let bought = trade(
+        1,
+        THURSDAY,
+        "purchase",
+        150,
+        vec![item("Acceltra Critacan", 1, "received")],
+    );
+    assert_eq!(
+        sale_of(&bought, &resolve),
+        None,
+        "a bought riven was never scanned"
+    );
+    let two = trade(
+        2,
+        THURSDAY,
+        "sale",
+        300,
+        vec![item("Acceltra Critacan", 2, "given")],
+    );
+    assert_eq!(sale_of(&two, &resolve), None);
+    let mixed = trade(
+        3,
+        THURSDAY,
+        "sale",
+        300,
+        vec![
+            item("Acceltra Critacan", 1, "given"),
+            item("Primed Flow", 1, "given"),
+        ],
+    );
+    assert_eq!(sale_of(&mixed, &resolve), None);
+}
+
+fn riven_market() -> std::sync::Arc<MarketData> {
+    std::sync::Arc::new(
+        serde_json::from_value(json!({
+            "catalog": {"primed flow": "primed_flow"},
+            "items": {"primed_flow": {"tags": ["mod", "legendary"]}},
+            "rivens": {
+                "weapons": {"dex_nikana": {"name": "Dex Nikana", "game_ref": "/Lotus/Weapons/Tenno/Melee/Swords/DexNikana"}},
+                "attributes": [{"game_ref": "WeaponCritDamageMod", "slug": "critical_damage", "name": "Critical Damage"}],
+            },
+        }))
+        .unwrap(),
+    )
+}
+
+fn inventory_with_a_dex_riven() -> Vec<u8> {
+    let fingerprint = json!({
+        "compat": "/Lotus/Weapons/Tenno/Melee/Swords/DexNikana",
+        "buffs": [{"Tag": "WeaponCritDamageMod", "Value": 1}],
+        "curses": [],
+    });
+    json!({"Upgrades": [{
+        "ItemType": "/Lotus/Upgrades/Mods/Randomized/PlayerMeleeWeaponRandomModRare",
+        "UpgradeFingerprint": fingerprint.to_string(),
+    }]})
+    .to_string()
+    .into_bytes()
+}
+
+#[test]
+fn scans_are_remembered_by_weapon_and_verdict_only_while_sharing_is_on() {
+    let db = Db::open_in_memory().unwrap();
+    let state = reports(true);
+    let market = riven_market();
+    remember_scan(&db, &market, &inventory_with_a_dex_riven());
+    assert!(
+        held_rivens(&db).is_empty(),
+        "nothing is kept before consent"
+    );
+
+    update_preferences(&db, &state, true).unwrap();
+    remember_scan(&db, &market, &inventory_with_a_dex_riven());
+    let held = held_rivens(&db);
+    assert_eq!(held.len(), 1);
+    assert_eq!(
+        (held[0].weapon.as_str(), held[0].verdict),
+        ("dex_nikana", SaleVerdict::Unrated)
+    );
+    let stored = db.get_setting(HELD).unwrap().unwrap();
+    assert!(
+        !stored.contains("WeaponCritDamageMod") && !stored.contains("critical_damage"),
+        "no stats are kept"
+    );
+
+    remember_scan(&db, &market, br#"{"Upgrades": []}"#);
+    assert_eq!(held_rivens(&db).len(), 1, "the previous scan still counts");
+    remember_scan(&db, &market, br#"{"Upgrades": []}"#);
+    assert!(held_rivens(&db).is_empty(), "two scans later it is gone");
+
+    remember_scan(&db, &market, &inventory_with_a_dex_riven());
+    update_preferences(&db, &state, false).unwrap();
+    assert!(held_rivens(&db).is_empty(), "opting out forgets the rivens");
+}
+
+/// A server that records each request's path and body and answers `status`.
+async fn recording(
+    status: u16,
+) -> (
+    String,
+    std::sync::Arc<std::sync::Mutex<Vec<(String, Value)>>>,
+    tokio::task::JoinHandle<std::io::Result<()>>,
+) {
+    use axum::{extract::Request, Router};
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let app = Router::new().fallback({
+        let seen = seen.clone();
+        move |request: Request| {
+            let seen = seen.clone();
+            async move {
+                let path = request.uri().path().to_string();
+                let bytes = axum::body::to_bytes(request.into_body(), 1 << 20)
+                    .await
+                    .unwrap();
+                let body = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+                seen.lock().unwrap().push((path, body));
+                axum::http::StatusCode::from_u16(status).unwrap()
+            }
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/api/reports", listener.local_addr().unwrap());
+    (
+        base,
+        seen,
+        tokio::spawn(axum::serve(listener, app).into_future()),
+    )
+}
+
+#[tokio::test]
+async fn a_pass_sends_riven_sales_to_their_own_endpoint() {
+    let db = Db::open_in_memory().unwrap();
+    let state = reports(true);
+    update_preferences(&db, &state, true).unwrap();
+    let market = riven_market();
+    remember_scan(&db, &market, &inventory_with_a_dex_riven());
+    let now = Timestamp::now().as_second();
+    record(&db, 10, now, "Dex Nikana Critatox", 300);
+    record(&db, 11, now, "Primed Flow", 40);
+    let newest = record(&db, 12, now, "Soma Critatox", 90);
+    let (base, seen, task) = recording(204).await;
+    let (_sender, mut receiver) = watch::channel(true);
+    let catalog = || market.clone();
+    assert!(
+        pass(
+            &db,
+            &catalog,
+            &usage::client().unwrap(),
+            &base,
+            &mut receiver,
+            &state
+        )
+        .await
+    );
+    let seen = seen.lock().unwrap().clone();
+    let paths: Vec<&str> = seen.iter().map(|(p, _)| p.as_str()).collect();
+    assert_eq!(paths, ["/api/reports/riven-sales", "/api/reports/sales"]);
+    assert_eq!(seen[0].1["sales"][0]["weapon"], "dex_nikana");
+    assert_eq!(seen[0].1["sales"][0]["verdict"], "unrated");
+    assert_eq!(
+        mark(&db).unwrap(),
+        newest,
+        "the unmatched Soma riven is settled, not retried"
+    );
+    task.abort();
+}
+
+fn vote(weapon: &str, agree: bool) -> RollVote {
+    RollVote {
+        weapon: weapon.into(),
+        verdict: SaleVerdict::Weak,
+        agree,
+        suggest: (!agree).then(|| RollSuggestion {
+            stat: "zoom".into(),
+            positive: false,
+            good: true,
+        }),
+    }
+}
+
+#[tokio::test]
+async fn a_rating_needs_sharing_on_and_is_kept_one_per_weapon_this_week() {
+    let db = Db::open_in_memory().unwrap();
+    let state = reports(true);
+    let client = usage::client().unwrap();
+    let (base, seen, task) = recording(204).await;
+    assert!(rate(&db, &state, &client, &base, vote("acceltra", true))
+        .await
+        .is_err());
+    assert!(
+        seen.lock().unwrap().is_empty(),
+        "nothing is sent before consent"
+    );
+
+    update_preferences(&db, &state, true).unwrap();
+    state.consent.send_replace(true);
+    rate(&db, &state, &client, &base, vote("acceltra", true))
+        .await
+        .unwrap();
+    rate(&db, &state, &client, &base, vote("soma", true))
+        .await
+        .unwrap();
+    let votes = rate(&db, &state, &client, &base, vote("acceltra", false))
+        .await
+        .unwrap();
+    assert_eq!(votes.len(), 2);
+    assert!(!votes.iter().find(|v| v.weapon == "acceltra").unwrap().agree);
+    assert_eq!(
+        week_votes(&db, &iso_week(utc_date(Timestamp::now()))),
+        votes
+    );
+
+    let (path, body) = seen.lock().unwrap().last().cloned().unwrap();
+    assert_eq!(path, "/api/reports/roll-vote");
+    let parsed: tennoworth_collectors::reports::contract::RollVote =
+        serde_json::from_value(body).unwrap();
+    tennoworth_collectors::reports::contract::validate_vote(parsed).unwrap();
+
+    erase_recent(&db, &state, &client, &base).await.unwrap();
+    assert!(week_votes(&db, &iso_week(utc_date(Timestamp::now()))).is_empty());
+    task.abort();
+}
+
+#[tokio::test]
+async fn a_refused_or_failed_rating_is_not_kept() {
+    for status in [400, 503] {
+        let db = Db::open_in_memory().unwrap();
+        let state = reports(true);
+        update_preferences(&db, &state, true).unwrap();
+        state.consent.send_replace(true);
+        let (base, _, task) = recording(status).await;
+        let client = usage::client().unwrap();
+        assert!(rate(&db, &state, &client, &base, vote("acceltra", true))
+            .await
+            .is_err());
+        assert!(week_votes(&db, &iso_week(utc_date(Timestamp::now()))).is_empty());
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn an_install_that_opted_in_before_rivens_sends_none_until_it_includes_them() {
+    let db = Db::open_in_memory().unwrap();
+    let state = reports(true);
+    update_preferences(&db, &state, true).unwrap();
+    // Consent given under the first terms, which left riven trades out.
+    db.set_setting(RIVEN_CONSENT, "").unwrap();
+    assert!(!status(&db, &state).rivens);
+    let market = riven_market();
+    remember_scan(&db, &market, &inventory_with_a_dex_riven());
+    assert!(
+        held_rivens(&db).is_empty(),
+        "no scan is kept for riven sales"
+    );
+
+    db.set_setting(
+        HELD,
+        &serde_json::to_string(&HeldScans {
+            current: vec![HeldRiven {
+                weapon: "dex_nikana".into(),
+                name: "Dex Nikana".into(),
+                verdict: SaleVerdict::Unrated,
+            }],
+            previous: Vec::new(),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    record(
+        &db,
+        10,
+        Timestamp::now().as_second(),
+        "Dex Nikana Critatox",
+        300,
+    );
+    let (base, seen, task) = recording(204).await;
+    let (_sender, mut receiver) = watch::channel(true);
+    let catalog = || market.clone();
+    assert!(
+        pass(
+            &db,
+            &catalog,
+            &usage::client().unwrap(),
+            &base,
+            &mut receiver,
+            &state
+        )
+        .await
+    );
+    assert!(
+        seen.lock().unwrap().is_empty(),
+        "the riven sale is not sent"
+    );
+
+    include_rivens(&db, &state).unwrap();
+    state.consent.send_replace(true);
+    assert!(status(&db, &state).rivens);
+    remember_scan(&db, &market, &inventory_with_a_dex_riven());
+    record(
+        &db,
+        11,
+        Timestamp::now().as_second(),
+        "Dex Nikana Critatox",
+        310,
+    );
+    assert!(
+        pass(
+            &db,
+            &catalog,
+            &usage::client().unwrap(),
+            &base,
+            &mut receiver,
+            &state
+        )
+        .await
+    );
+    let seen = seen.lock().unwrap().clone();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(
+        seen[0].1["sales"].as_array().unwrap().len(),
+        1,
+        "only the sale after including rivens"
+    );
+    assert_eq!(seen[0].1["sales"][0]["plat"], 310);
+    task.abort();
+
+    update_preferences(&db, &state, false).unwrap();
+    assert!(
+        include_rivens(&db, &state).is_err(),
+        "rivens need price sharing on"
+    );
 }
