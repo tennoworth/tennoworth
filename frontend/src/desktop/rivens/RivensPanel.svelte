@@ -51,6 +51,8 @@
   // One comps drawer open at a time, keyed by ROW: two rivens for the same
   // weapon are different rolls and must not share a drawer.
   let openRow = $state<string | null>(null);
+  // The offer check opens under its row too, independently of comps.
+  let openOffer = $state<string | null>(null);
   let scopeByRow = $state<Map<string, CompsScope>>(new Map());
   // Samples are cached per query, so two rows asking the same question share
   // one request against WFM's 10/min auction budget.
@@ -58,8 +60,8 @@
   let compsCache = $state<Map<string, RivenAuction[]>>(new Map());
   let compsError = $state<Map<string, string>>(new Map());
 
-  // Veiled rivens have no weapon to group by; keep them at the bottom.
-  let sorted = $derived(
+  // Grouped by weapon first; veiled rivens have no weapon, so they go last.
+  let byWeapon = $derived(
     [...rivens].sort((a, b) => {
       if (a.veiled !== b.veiled) return a.veiled ? 1 : -1;
       return (a.weaponName ?? '~').localeCompare(b.weaponName ?? '~');
@@ -70,29 +72,59 @@
     key: string;
     riven: OwnedRiven;
     report: string | null;
+    verdict: Verdict;
+  }
+
+  type Verdict = 'sellable' | 'almost' | 'weak' | 'unrated';
+  type VerdictFilter = 'all' | Verdict;
+  const VERDICT_ORDER: Record<Verdict, number> = { sellable: 0, almost: 1, weak: 2, unrated: 3 };
+  const FILTERS: VerdictFilter[] = ['all', 'sellable', 'almost', 'weak', 'unrated'];
+  const FILTER_LABEL = {
+    all: 'riven.filter.all', sellable: 'riven.filter.sellable', almost: 'riven.filter.almost', weak: 'riven.filter.weak', unrated: 'riven.filter.unrated',
+  } as const;
+
+  // Every riven is read, not just the page on screen: the list is ordered by
+  // verdict, so the verdicts are needed before paging. Rivens number in the
+  // tens, and the read is one native call.
+  let reads = $derived.by<Row[]>(() => {
+    const read = readRivenRows(
+      byWeapon.map((riven) => ({ riven, rivenType: riven.slug ? market?.rivens?.weapons?.[riven.slug]?.riven_type : undefined })),
+      attrs,
+    );
+    return byWeapon.map((riven, i) => {
+      const row = read[i]!;
+      return {
+        ...row,
+        // The key keeps the riven's place in the weapon order, so rows stay
+        // distinct and keep their open drawers when the filter changes.
+        key: `${i}:${riven.path}:${riven.compat ?? ''}:${riven.rerolls}:${row.stats.map((s) => (s.positive ? '+' : '-') + s.tag).join(',')}`,
+        riven,
+        report: rivenReport(riven),
+        verdict: row.roll?.kind === 'read' ? row.roll.verdict : 'unrated',
+      };
+    });
+  });
+
+  // Best verdict first, so the rivens worth listing lead; weapon order holds
+  // within a verdict. Array sort is stable.
+  let ordered = $derived([...reads].sort((a, b) => VERDICT_ORDER[a.verdict] - VERDICT_ORDER[b.verdict]));
+  let counts = $derived.by(() => {
+    const c: Record<VerdictFilter, number> = { all: reads.length, sellable: 0, almost: 0, weak: 0, unrated: 0 };
+    for (const r of reads) c[r.verdict]++;
+    return c;
+  });
+
+  let verdictFilter = $state<VerdictFilter>('all');
+  let shown = $derived(verdictFilter === 'all' ? ordered : ordered.filter((r) => r.verdict === verdictFilter));
+  function setFilter(f: VerdictFilter) {
+    verdictFilter = f;
+    page = 0;
   }
 
   let page = $state(0);
   let tableEl = $state<HTMLElement>();
-  let win = $derived(pageWindow(sorted.length, page));
-  // Only the page on screen is resolved; the key keeps the riven's place in
-  // the whole sorted list so rows stay distinct across pages.
-  let rows = $derived.by<Row[]>(() => {
-    const page = sorted.slice(win.start, win.end);
-    const reads = readRivenRows(
-      page.map((riven) => ({ riven, rivenType: riven.slug ? market?.rivens?.weapons?.[riven.slug]?.riven_type : undefined })),
-      attrs,
-    );
-    return page.map((riven, j) => {
-      const read = reads[j]!;
-      return {
-        ...read,
-        key: `${win.start + j}:${riven.path}:${riven.compat ?? ''}:${riven.rerolls}:${read.stats.map((s) => (s.positive ? '+' : '-') + s.tag).join(',')}`,
-        riven,
-        report: rivenReport(riven),
-      };
-    });
-  });
+  let win = $derived(pageWindow(shown.length, page));
+  let rows = $derived(shown.slice(win.start, win.end));
 
   // The DE weekly band for a riven, plus a note about which tier it is.
   // Falls back to the other tier when DE only published one.
@@ -224,8 +256,17 @@
     if (read.dead.length) parts.push(t('riven.roll.dead', { stats: statNames(read.dead, '+'), count: read.dead.length }));
     if (read.hurts) parts.push(t('riven.roll.hurts', { stat: statNames([read.hurts], '-') }));
     else if (read.harmless) parts.push(t('riven.roll.harmless', { stat: statNames([read.harmless], '-') }));
-    if (read.verdict === 'weak') parts.push(t('riven.roll.wants', { stats: statNames([...read.need, ...read.pick], '+') }));
     return parts.join(' · ');
+  }
+
+  /** The stats the guide lists for the weapon, shown on a weak roll. */
+  function wantedStats(read: RollRead): string {
+    return statNames([...read.need, ...read.pick], '+');
+  }
+
+  /** A stat's name without its sign, which the list draws in its own gutter. */
+  function statName(label: string): string {
+    return label.replace(/^[+-]/, '');
   }
 
   function filterText(row: Row): string {
@@ -241,6 +282,7 @@
   <div class="vh-end">
     <div class="ui-totals" role="group" aria-label={t('riven.summary')}>
       <div class="cell"><span class="k">{t('riven.owned')}</span><span class="v">{rivens.length}</span></div>
+      {#if rivens.length > 0}<div class="cell"><span class="k">{t('riven.sellableCount')}</span><span class="v">{counts.sellable}</span></div>{/if}
       {#if rivenStatsAge}<div class="cell"><span class="k">{t('riven.bandData')}</span><span class="v">{rivenStatsAge}</span></div>{/if}
     </div>
   </div>
@@ -251,24 +293,39 @@
     <span class="exp">{t('riven.ownedCount', { count: rivens.length })}</span>
   </div>
 
-  {#if sorted.length === 0}
+  {#if byWeapon.length === 0}
     <div class="line"><span class="exp">{t('riven.empty')}</span></div>
   {:else}
+    <div class="bar">
+      <span class="ui-segmented xs" role="group" aria-label={t('riven.filter')} data-testid="verdict-filter" use:roving>
+        {#each FILTERS as f (f)}
+          <button type="button" aria-pressed={verdictFilter === f} disabled={f !== 'all' && counts[f] === 0} onclick={() => setFilter(f)}>{t(FILTER_LABEL[f], { count: counts[f] })}</button>
+        {/each}
+      </span>
+      <span class="exp">{t('riven.sortedByVerdict')}</span>
+    </div>
     <div class="scroll" use:fitTable bind:this={tableEl}>
       <table class="tw fixed">
         <colgroup>
-          <col style="width:9rem" />
-          <col style="width:12rem" />
-          <col />
-          <col style="width:4.5rem" />
-          <col style="width:4.5rem" />
-          <col style="width:7rem" />
+          <col style="width:9.5rem" />
           <col style="width:13rem" />
+          <col />
+          <col style="width:4.75rem" />
+          <col style="width:4rem" />
+          <col style="width:4rem" />
+          <col style="width:5.5rem" />
+          <col style="width:10rem" />
         </colgroup>
         <thead>
           <tr>
-            <th class="l">{t('riven.col.weapon')}</th><th class="l"><span class="sr-only">{t('riven.col.actions')}</span></th><th class="l">{t('riven.col.stats')}</th><th>{t('riven.col.rolls')}</th><th data-drop="1">{t('riven.col.rank')}</th>
-            <th class="l">{t('riven.col.dispo')}</th><th title={t('riven.col.deHelp')}>{t('riven.col.de')}</th>
+            <th class="l">{t('riven.col.weapon')}</th>
+            <th class="l" data-group data-key>{t('riven.col.verdict')}</th>
+            <th class="l" data-group>{t('riven.col.stats')}</th>
+            <th data-group data-drop="3">{t('riven.col.dispo')}</th>
+            <th data-drop="2">{t('riven.col.rolls')}</th>
+            <th data-drop="1">{t('riven.col.rank')}</th>
+            <th data-group title={t('riven.col.deHelp')}>{t('riven.col.median')}</th>
+            <th class="l" title={t('riven.col.deHelp')}>{t('riven.col.range')}</th>
           </tr>
         </thead>
         <tbody>
@@ -278,7 +335,7 @@
             {@const band = bandText(r)}
             {@const query = queryOf(row)}
             <tr>
-              <td class="l">
+              <td class="l top">
                 <div class="weapon">
                   {#if r.veiled}
                     <span class="veiled" title={t('riven.veiledHelp')}>{t('riven.veiled')}</span>
@@ -287,46 +344,60 @@
                     {#if r.pol}<span class="pol" title={t('riven.polarity')}>{polaritySymbol(r.pol)}</span>{/if}
                   {/if}
                 </div>
-              </td>
-              <td class="l acts">
-                <button
-                  class="btn ghost"
-                  onclick={() => showComps(row)}
-                  disabled={!r.slug}
-                  use:busy={compsBusy !== null}
-                  aria-expanded={r.slug ? openRow === row.key : undefined}
-                  title={t(r.slug ? 'riven.compsHelp' : 'riven.noComps')}
-                >
-                  {t(query != null && compsBusy === query.key ? 'riven.fetching' : openRow === row.key ? 'riven.hideComps' : 'riven.comps')}
-                </button>
-                {#if row.report}
-                  <!-- DE's raw riven data, for reporting a trait or state the
-                       app does not read yet. No account details: the path
-                       and fingerprint only. -->
-                  <span class="copy-data" title={t('riven.copyHelp')}>
-                    <CopyButton text={row.report} label={t('riven.copyData')} name={t('riven.copyName', { weapon: r.weaponName ?? t('riven.thisRiven') })} />
-                  </span>
-                {/if}
-              </td>
-              <td class="l">
-                <div class="stats" title={t(r.veiled ? 'riven.veiledStats' : 'riven.statsHelp')}>
-                  {#if r.veiled}
-                    <span class="muted">{t('riven.challenge')}</span>
-                  {:else}
-                    {#each row.stats as stat, si (si)}
-                      <span class="stat" class:unknown={stat.slug == null}>{stat.label}{#if stat.spliced}<span class="spliced">{t('riven.spliced')}</span>{/if}</span>
-                    {/each}
+                <!-- Actions sit under the weapon, so they stay in view while the
+                     market columns hide on a narrow window. -->
+                <div class="acts">
+                  <button
+                    class="btn ghost xs"
+                    onclick={() => showComps(row)}
+                    disabled={!r.slug}
+                    use:busy={compsBusy !== null}
+                    aria-expanded={r.slug ? openRow === row.key : undefined}
+                    title={t(r.slug ? 'riven.compsHelp' : 'riven.noComps')}
+                  >
+                    {t(query != null && compsBusy === query.key ? 'riven.fetching' : openRow === row.key ? 'riven.hideComps' : 'riven.comps')}
+                  </button>
+                  {#if band}
+                    <button class="btn ghost xs" aria-expanded={openOffer === row.key} onclick={() => (openOffer = openOffer === row.key ? null : row.key)}>
+                      {t(openOffer === row.key ? 'riven.hideOffer' : 'riven.offer')}
+                    </button>
+                  {/if}
+                  {#if row.report}
+                    <!-- DE's raw riven data, for reporting a trait or state the
+                         app does not read yet. No account details: the path
+                         and fingerprint only. -->
+                    <span class="copy-data" title={t('riven.copyHelp')}>
+                      <CopyButton text={row.report} label={t('riven.copyData')} name={t('riven.copyName', { weapon: r.weaponName ?? t('riven.thisRiven') })} />
+                    </span>
                   {/if}
                 </div>
+              </td>
+              <td class="l top">
                 {#if row.roll?.kind === 'read'}
                   {@const roll = row.roll}
-                  <p class="roll" data-testid="riven-roll">
+                  <div class="roll" data-testid="riven-roll">
                     <span class="tag roll-{roll.verdict}" title={t('riven.roll.help')}>{t(VERDICT[roll.verdict])}</span>
-                    {rollReasons(roll)}
-                    {#if roll.note}<span class="roll-note">{t('riven.roll.note')} <span lang="en">{roll.note}</span></span>{/if}
-                  </p>
+                    {#if rollReasons(roll)}<p class="why">{rollReasons(roll)}</p>{/if}
+                    {#if roll.verdict === 'weak'}
+                      <details class="wants"><summary>{t('riven.roll.buyersWant')}</summary><p>{wantedStats(roll)}</p></details>
+                    {/if}
+                    {#if roll.note}<p class="why muted">{t('riven.roll.note')} <span lang="en">{roll.note}</span></p>{/if}
+                  </div>
                 {:else if row.roll}
-                  <p class="roll muted" data-testid="riven-roll">{t(row.roll.kind === 'no_guide' ? 'riven.roll.noGuide' : 'riven.roll.unknownStat')}</p>
+                  <p class="roll why muted" data-testid="riven-roll">{t(row.roll.kind === 'no_guide' ? 'riven.roll.noGuide' : 'riven.roll.unknownStat')}</p>
+                {:else if r.veiled}
+                  <p class="roll why muted">{t('riven.roll.veiled')}</p>
+                {/if}
+              </td>
+              <td class="l top">
+                {#if r.veiled}
+                  <span class="muted why" title={t('riven.veiledStats')}>{t('riven.challenge')}</span>
+                {:else}
+                  <ul class="stats" title={t('riven.statsHelp')}>
+                    {#each row.stats as stat, si (si)}
+                      <li class="stat" class:neg={!stat.positive} class:unknown={stat.slug == null}><span class="sign">{stat.positive ? '+' : '−'}</span>{statName(stat.label)}{#if stat.spliced}<span class="spliced">{t('riven.spliced')}</span>{/if}</li>
+                    {/each}
+                  </ul>
                 {/if}
                 {#if row.unread.length > 0}
                   <p class="unread" data-testid="unread-fingerprint">
@@ -340,11 +411,9 @@
                   </p>
                 {/if}
               </td>
-              <td>{r.veiled ? '-' : r.rerolls}</td>
-              <td>{r.veiled ? '-' : r.lvl}</td>
-              <td class="l">
+              <td class="top">
                 {#if r.slug && market?.rivens?.weapons?.[r.slug]}
-                  <span class="mono">{market.rivens.weapons[r.slug].disposition.toFixed(2)}</span>
+                  <span class="num">{market.rivens.weapons[r.slug].disposition.toFixed(2)}</span>
                   {#if change && change.to !== change.from}
                     {@const up = change.to > change.from}
                     <span class="dispo-move" class:up class:down={!up} title={t('riven.dispoMove', { from: change.from.toFixed(2), to: change.to.toFixed(2), date: change.seen_at.slice(0, 10) })}>
@@ -355,13 +424,21 @@
                   <span class="muted">-</span>
                 {/if}
               </td>
-              <td>
+              <td class="top"><span class="num">{r.veiled ? '-' : r.rerolls}</span></td>
+              <td class="top"><span class="num">{r.veiled ? '-' : r.lvl}</span></td>
+              <td class="top">
                 {#if band}
-                  <div class="band" title={band.note}>
-                    <span class="mono">{band.price}</span>
-                    {#if band.range}<span class="muted small"> {band.range}</span>{/if}
-                    <!-- The text beside it carries the values; the bar only
-                         shows where the median sits in the spread. -->
+                  <span class="num median">{band.price}</span>
+                {:else}
+                  <span class="muted">-</span>
+                {/if}
+              </td>
+              <td class="l top">
+                {#if band}
+                  <div class="band">
+                    {#if band.range}<span class="num">{band.range}</span>{/if}
+                    <!-- The text carries the values; the bar only shows where
+                         the median sits in the spread. -->
                     {#if band.bar}
                       <span class="range" aria-hidden="true">
                         <span class="span" style:left="{band.bar.from}%" style:width="{Math.max(band.bar.to - band.bar.from, 0.5)}%"></span>
@@ -370,22 +447,25 @@
                     {/if}
                     <span class="muted small note">{band.note}</span>
                   </div>
-                  <!-- Still no "this riven is worth N": the offer comes from
-                       the user, and we supply the arithmetic against DE's
-                       distribution - placement and reroll cost. -->
-                  <details class="offer-check">
-                    <summary>{t('riven.checkOffer')}</summary>
-                    <RivenOffer riven={r} market={market} />
-                  </details>
                 {:else}
                   <span class="muted">-</span>
                 {/if}
               </td>
             </tr>
+            {#if openOffer === row.key && band}
+              <!-- Still no "this riven is worth N": the offer comes from the
+                   user, and we supply the arithmetic against DE's
+                   distribution - placement and reroll cost. -->
+              <tr class="drawer-row">
+                <td colspan="8">
+                  <div class="offer-check" data-testid="offer-check"><RivenOffer riven={r} market={market} /></div>
+                </td>
+              </tr>
+            {/if}
             {#if openRow === row.key && query}
               {@const comps = compsCache.get(query.key)}
-              <tr class="comps-row">
-                <td colspan="7">
+              <tr class="drawer-row">
+                <td colspan="8">
                   <div class="comps-bar">
                     <span class="ui-segmented xs" role="group" aria-label={t('riven.compareWith')} use:roving>
                       <button type="button" aria-pressed={scopeOf(row) === 'matched'} disabled={!row.filter || compsBusy !== null} onclick={() => setScope(row, 'matched')}>{t('riven.samePositive')}</button>
@@ -452,10 +532,13 @@
               </tr>
             {/if}
           {/each}
+          {#if rows.length === 0}
+            <tr><td colspan="8" class="l"><span class="muted">{t('riven.filterEmpty')}</span></td></tr>
+          {/if}
         </tbody>
       </table>
     </div>
-    <Pager window={win} total={sorted.length} label={t('riven.pages')} target={tableEl} onpage={(p) => (page = p)} />
+    <Pager window={win} total={shown.length} label={t('riven.pages')} target={tableEl} onpage={(p) => (page = p)} />
     <p class="guide-credit" data-testid="roll-guide-credit">
       {t('riven.guideCredit')}
       <a href={ROLL_GUIDE_ISSUE} target="_blank" rel="noopener noreferrer">{t('riven.guideSuggest')}</a>
@@ -466,53 +549,62 @@
 
 <style>
   /* Shell + table come from the shared .wrap.tw / table.tw anatomy in
-     app.css; only riven-specific content styles live here. */
-  table { min-width: 65rem; }
-  td:last-child .btn { white-space: nowrap; }
-  /* Actions sit beside the weapon, so they stay in view while stats and the band scroll. */
-  .acts { white-space: nowrap; }
-  .copy-data { display: inline-block; margin-left: var(--s1); }
+     app.css; only riven-specific content styles live here. Every cell starts
+     at the top, so a riven's weapon, verdict, first stat and numbers share one
+     line however tall its stats and reasons make the row. Caption lines are
+     a whole 20px rather than the 19.5px leading gives 13px text: a row
+     boundary on a half pixel loses its 1px rule in Chromium. */
+  table { min-width: 62rem; }
+  /* Rows here are as tall as their stats, so their edges land on any
+     fraction of a pixel. The shared row rule is a 1px background tile, which
+     Chromium blurs across two pixel rows when it starts on a half pixel; a
+     border is snapped whole. A list of at most 100 rows does not need the
+     tile's cheaper raster. */
+  tbody > tr:not(:first-child) > td { border-top-color: var(--hairline); background-image: none; }
+  td.top { vertical-align: top; padding-block: var(--s2); white-space: normal; line-height: 1.5rem; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .copy-data :global(.copybtn) { min-height: var(--ctl-xs); }
-  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .weapon { display: flex; align-items: center; gap: var(--s1); }
-  .pol { color: var(--muted); font-size: var(--text-caption); }
+  .num { display: inline-block; line-height: 1.5rem; color: var(--fg); font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .median { font-weight: 600; }
+  .weapon { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 var(--s1); line-height: 1.5rem; }
+  .pol { color: var(--muted); font: var(--text-caption) var(--font-ui); }
   .veiled { color: var(--muted); font-style: italic; }
-  /* Stats wrap to several lines; td height acts as a minimum in tables. */
-  .stats { display: flex; flex-wrap: wrap; gap: 2px var(--s3); max-width: 420px; padding: var(--s1) 0; font-family: var(--font-body); color: var(--fg); }
+  .acts { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s1); }
+  .copy-data :global(.copybtn) { min-height: var(--ctl-xs); }
+  /* The verdict tag leads its cell, level with the weapon name. */
+  .roll .tag { margin: 0.25rem 0 0; }
+  .why { margin: var(--s1) 0 0; color: var(--fg); font: var(--text-caption)/1.25rem var(--font-body); }
+  .wants { margin-top: 2px; color: var(--muted); font: var(--text-caption)/1.25rem var(--font-body); }
+  .wants p { margin: 2px 0 0; }
+  /* One stat per line, signs in their own gutter so the names align. */
+  .stats { list-style: none; margin: 0; padding: 0; line-height: 1.5rem; font-family: var(--font-body); color: var(--fg); }
   .stat { white-space: nowrap; }
-  .dispo-move { font-family: var(--font-mono); font-size: var(--text-caption); margin-left: var(--s1); }
+  .sign { display: inline-block; width: 1ch; margin-right: var(--s1); font: 600 1em var(--font-mono); color: var(--good); }
+  .stat.neg, .stat.neg .sign, .stat.unknown { color: var(--muted); }
+  .spliced { margin-left: var(--s1); color: var(--muted); font: var(--text-caption)/1 var(--font-ui); }
+  .splices { margin: var(--s1) 0 0; color: var(--muted); font: var(--text-caption)/1.25rem var(--font-body); }
+  .splices-label { font-family: var(--font-ui); color: var(--fg); }
+  .unread { margin: var(--s1) 0 0; color: var(--warn); font: var(--text-caption)/1.25rem var(--font-body); }
+  .dispo-move { display: block; font-family: var(--font-mono); font-size: var(--text-caption); line-height: 1.25rem; }
   .dispo-move.up { color: var(--good); }
   .dispo-move.down { color: var(--warn); }
-  .stat.unknown { color: var(--muted); }
-  .spliced { margin-left: var(--s1); color: var(--muted); font: var(--text-caption) var(--font-ui); }
-  .splices { margin: 0 0 var(--s1); max-width: 420px; color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
-  .splices-label { font-family: var(--font-ui); color: var(--fg); }
-  /* The verdict leads its line, so the tag drops its usual leading gap. */
-  .roll { margin: 0 0 var(--s1); max-width: 420px; color: var(--fg); font: var(--text-caption)/var(--leading-body) var(--font-body); }
-  .roll .tag { margin-inline: 0 var(--s1); }
-  .roll-note { display: block; color: var(--muted); }
-  .guide-credit { margin: var(--s2) 0 0; padding: 0 var(--inset); max-width: 64rem; color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
-  .unread { margin: 0 0 var(--s1); max-width: 420px; color: var(--warn); font: var(--text-caption)/var(--leading-body) var(--font-body); }
-  .comps-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2); padding-top: var(--s1); }
+  .note { display: block; font-family: var(--font-body); line-height: 1.25rem; white-space: normal; }
   .band { white-space: nowrap; }
-  /* The tier and popularity note wraps under the price rather than being
-     clipped by the fixed column. */
-  .band .note { display: block; white-space: normal; }
   /* min-max hairline and a median tick on a shared 1-10,000p log scale. */
-  .range { position: relative; display: block; width: 100%; max-width: 10rem; height: 10px; margin: 3px 0 2px auto; }
+  .range { position: relative; display: block; width: 100%; max-width: 8rem; height: 10px; margin: 2px 0; }
   .range::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dotted var(--faint); }
   .range .span { position: absolute; top: 50%; height: 0; border-top: 1px solid var(--muted); }
   .range .mid { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--fg); }
-  .offer-check { margin-top: 4px; white-space: normal; text-align: left; }
-  .offer-check > summary { color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
-  .band .note { font-family: var(--font-body); }
+  .guide-credit { margin: 0; padding: var(--s2) var(--inset); border-top: 1px var(--rule) var(--hairline); color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
+  .guide-credit a { color: var(--fg); }
+  .comps-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2); padding-top: var(--s1); }
+  .offer-check { padding: var(--s1) 0; text-align: left; max-width: 48rem; }
   .small { font-size: var(--text-caption); }
   .muted { color: var(--muted); }
   .bad { color: var(--bad); }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .similarity { color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-ctl); padding: 1px 5px; font: 600 var(--text-caption) var(--font-mono); white-space: nowrap; }
-  /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
-  .comps-row td { background-color: var(--panel-2); height: auto; text-align: left; font-family: var(--font-body); white-space: normal; }
+  /* Comps and the offer check open as an inset drawer under the row, on the panel-2 ground. */
+  .drawer-row td { background-color: var(--panel-2); height: auto; text-align: left; font-family: var(--font-body); white-space: normal; }
   .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
   .comps-sample { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
   .comp { border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: var(--s2); display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
@@ -521,5 +613,6 @@
   .comp-owner { margin-left: auto; white-space: nowrap; font-family: var(--font-mono); }
   .comp-detail { display: flex; gap: var(--s2); flex-wrap: wrap; }
   .comp-stats { display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: var(--font-body); color: var(--fg); }
+  .comp-stats .stat { white-space: nowrap; }
   .riven-name { font-style: italic; }
 </style>

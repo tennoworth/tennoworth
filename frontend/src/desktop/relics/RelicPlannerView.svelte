@@ -107,8 +107,8 @@ function rarityInitial(rarity: string): string {
           <table data-shell class="tw relic-table">
             <thead data-shell><tr data-shell>
               <th data-shell class="l relic-name">{t('relic.col.relic')}</th><th data-shell>{t('relic.col.own')}</th><th data-shell class="l">{t('relic.col.decision')}</th>
-              <th data-shell>{t('relic.rung.intact')}</th><th data-shell data-drop="1">{t('relic.rung.exceptional')}</th><th data-shell data-drop="1">{t('relic.rung.flawless')}</th><th data-shell>{t('relic.rung.radiant')}</th>
-              <th data-shell>{t('relic.expected')}</th><th data-shell data-drop="3">{t('relic.col.orSell')}</th><th data-shell class="l why" data-drop="2">{t('relic.col.why')}</th>
+              <th data-shell data-group>{t('relic.rung.intact')}</th><th data-shell data-drop="1">{t('relic.rung.exceptional')}</th><th data-shell data-drop="1">{t('relic.rung.flawless')}</th><th data-shell>{t('relic.rung.radiant')}</th>
+              <th data-shell data-group>{t('relic.expected')}</th><th data-shell data-drop="3">{t('relic.col.orSell')}</th><th data-shell class="l why" data-drop="2">{t('relic.col.why')}</th>
             </tr></thead>
             <tbody data-shell>
             {#each relicVisible as p (p.relic_slug)}

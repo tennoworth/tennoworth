@@ -235,7 +235,7 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Tables | Preserve meaningful columns and item identity; align comparable numbers. Every table fits its pane through the shared fit steps (see Fitting tables), so the page and the table do not scroll sideways at any supported width. Overlay scrollbars hide that a table scrolls, so a scroll box holding a table that still overflows (enlarged text) fades its right edge while more columns sit beyond it, and drops the fade at the end or when the table fits; the sidebar's view list fades its bottom edge the same way on a short window. Prefer content-sized columns (no `fixed` layout) where numbers and buttons have a natural width, so the item and prose columns take the rest. An item picture and its name sit together in `.item-id`, so a long name wraps beside the picture, not under it. Pictures carry no per-image credit; their source is credited in the Item lists setting, where pictures are turned on, and in the site footer. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted. A sortable header is a button inside its `th`, which carries `aria-sort`, and its column is wide enough for the label plus the sort arrow. Column explanations live in one Column guide dialog beside the Columns menu, not in per-header popovers. A table's action column sits beside the item, so Top Picks keeps List and hide in view while price and reason scroll. Select Sell table in the living styleguide's Data state control for the production pattern |
 | Sparklines | `Sparkline.svelte` draws recent medians in ink, a dotted `--faint` rule at the 90-day median, and an endpoint dot coloured by the move against that median. The baseline shares the line's scale, so its distance from the line is honest |
 | Meters | `Meter.svelte` shows a share of a whole: a short label, the value in words ("9 of 14"), and an `--ink-bar` fill on one square `--panel-2` track. The words carry the value; a share with nothing to judge yet keeps an empty track and says why ("too recent"). Used for Ledger listing outcomes and Baro's ducats from spares. Select Meters in the living styleguide's Data state control |
-| Range bars | A spread drawn on a shared scale: a `--muted` hairline from minimum to maximum over a dotted `--faint` track, and a 2px ink tick at the median. Every row in the column uses the same scale (Rivens' DE weekly band: 1p to 10,000p, logarithmic), so rows compare down the column. The values stay as text beside the bar, which is decorative to assistive technology |
+| Range bars | A spread drawn on a shared scale: a `--muted` hairline from minimum to maximum over a dotted `--faint` track, and a 2px ink tick at the median. Every row in the column uses the same scale (Rivens' DE range column: 1p to 10,000p, logarithmic), so rows compare down the column. The values stay as text beside the bar, which is decorative to assistive technology |
 | Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide. Every caret and marker drawn as text (▸ ▾ ▲ ▼ △ ◂ ◈) comes from IBM Plex Math at the front of each stack, since Plex Sans and Mono have none; add a new shape to its subset (`public/fonts/LICENSES.md`) before using it |
 | Dialogs and popovers | Stay within the viewport; provide reachable dismissal and actions, visible focus, and appropriate keyboard behavior |
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
@@ -533,6 +533,43 @@ enlarged text, scrolls inside its own box as the last resort. `design-system.spe
 checks every desktop view from 960 to 1920px and the hosted pages from 320 to
 1440px for sideways overflow. Select Dense data in the living styleguide to see
 the steps.
+
+### Column definition
+
+Row rules alone left columns undefined: a cell's header was found by
+alignment, and a cell holding several stacked facts stopped reading as part
+of a column. Three marks on a header cell define its column, and
+`ui/table-fit.ts` copies them down to the body cells as it does the fit rank:
+
+- `data-group` starts a group of related columns with a faint solid line on
+  its left, from the header to the last row. Mark groups, never every column:
+  Sell is item | holdings | priority | market | advice and value.
+- `data-key` washes the column the table is about, header included
+  (`--col-key`, `--col-key-head`): Verdict on Rivens and Baro, Potential on
+  Trade Session, Health on My orders, Margin on Bargains, the price being set in
+  listing review, and the sorted column on Sell. At most one per table; a
+  table whose point already sits beside the name (Meta Drift's Δ share) needs
+  none.
+- While the pointer rests on a cell, its column carries `data-hot`: a
+  `--col-hot` wash and an underlined header, the column's counterpart to the
+  row cursor. It is an aid for pointer users, so a column must read without it.
+
+Narrow tables (Set picks, Watches, Notification settings) take neither line
+nor wash; alignment and the pointer mark are enough there. Relics marks only
+the two edges of its refinement ladder, since the chosen rung is already
+filled. A column hidden by a fit step takes its group line with it. Keep one
+fact per column: Rivens splits DE's band into a median column and a range
+column rather than stacking price, spread and note in one cell.
+
+Rivens leads with the best roll verdict (Sellable, Almost, Weak, then
+unrated), keeps weapon order within a verdict, and offers the verdicts as a
+`.ui-segmented` filter with counts; the header totals count the sellable
+rivens. Every cell starts at the top so the weapon, verdict, first stat and
+numbers share a line, stats list one per line with the sign in its own
+gutter, and Comps and Check offer sit under the weapon and open drawers under
+the row. Its rows grow with their stats, so their rule is a snapped border
+rather than the shared background tile, which Chromium blurs when a row edge
+lands on a half pixel.
 
 ### Row cursor and button hover
 

@@ -291,7 +291,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard focus is needed to scroll the wide table.) -->
       <div class="wrap tw"><div class="scroll" use:fitTable tabindex="0" role="region" aria-label={t('session.tableLabel')}>
         <table class="tw session-table">
-          <thead><tr><th class="l">{t('session.col.item')}</th><th title={t('session.col.qtyTitle')}>{t('session.col.qty')}</th><th title={t('session.col.perTradeTitle')}>{t('session.col.perTrade')}</th><th title={t('session.col.tradesTitle')}>{t('session.col.trades')}</th><th>{t('session.col.ask')}</th><th data-drop="1">{t('session.col.bid')}</th><th>{t('session.col.potential')}</th><th class="l">{t('session.col.why')}</th></tr></thead>
+          <thead><tr><th class="l">{t('session.col.item')}</th><th data-group title={t('session.col.qtyTitle')}>{t('session.col.qty')}</th><th title={t('session.col.perTradeTitle')}>{t('session.col.perTrade')}</th><th title={t('session.col.tradesTitle')}>{t('session.col.trades')}</th><th data-group>{t('session.col.ask')}</th><th data-drop="1">{t('session.col.bid')}</th><th data-group data-key>{t('session.col.potential')}</th><th class="l" data-group>{t('session.col.why')}</th></tr></thead>
           <tbody>
             {#each display.rows as row (row.key)}
               <tr>

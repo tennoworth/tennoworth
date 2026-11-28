@@ -76,6 +76,11 @@
      only has to set its surfaces. */
   --hover: color-mix(in srgb, var(--fg) 6%, var(--panel-2));
   --hover-tint: color-mix(in srgb, var(--fg) 4%, transparent);
+  /* Column definition (ui/table-fit.ts): the key column's wash, its header,
+     and the column under the pointer. Derived, so every look follows. */
+  --col-key: color-mix(in srgb, var(--fg) 5%, transparent);
+  --col-key-head: color-mix(in srgb, var(--fg) 9%, var(--panel-2));
+  --col-hot: color-mix(in srgb, var(--fg) 7%, transparent);
   /* Filled surfaces. --accent fills need --on-accent; the "one filled bar"
      looks (title bars, active nav, primary CTA) use --ink-bar/--on-ink. In
      looks without an ink bar both collapse onto the accent pair. */
@@ -596,6 +601,17 @@ table.tw td.reason { font-family: var(--font-body); text-align: left; color: var
 .scroll:is([data-fit="2"], [data-fit="3"], [data-fit="4"]) :is(th, td, col)[data-drop="1"],
 .scroll:is([data-fit="3"], [data-fit="4"]) :is(th, td, col)[data-drop="2"],
 .scroll[data-fit="4"] :is(th, td, col)[data-drop="3"] { display: none; }
+/* Column definition (ui/table-fit.ts copies the header marks down). Rows
+   alone left columns undefined: a cell's header was found by alignment only.
+   A faint line starts each group of columns, the column a table is about is
+   washed from header to last row, and the column under the pointer lights
+   its header. Fills set background-color only, so row rules survive; the
+   group line is a left border, solid and faded like every inner divider. */
+table :is(th, td)[data-group] { border-left: 1px var(--rule) var(--hairline); }
+table td[data-key] { background-color: var(--col-key); }
+table th[data-key] { background-color: var(--col-key-head); color: var(--fg); }
+table td[data-hot] { background-color: var(--col-hot); }
+table th[data-hot] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--fg); }
 .scroll[data-fit-note]::after {
   content: attr(data-fit-note);
   position: sticky; left: 0;

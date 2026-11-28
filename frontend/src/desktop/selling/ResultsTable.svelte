@@ -1,6 +1,6 @@
 <script lang="ts">
   import { roving } from '../../ui/keyboard-actions';
-  import { fitNote, fitStep, fitTable, hidesAt, MAX_DROP_RANK, paneWidth as watchPaneWidth } from '../../ui/table-fit';
+  import { columnCursor, fitNote, fitStep, fitTable, hidesAt, MAX_DROP_RANK, paneWidth as watchPaneWidth } from '../../ui/table-fit';
   import { keyboard, searchShortcut, tableNavigation } from '../../ui/keyboard.svelte';
   import DemandCell from './DemandCell.svelte';
   import ColumnGuide from './ColumnGuide.svelte';
@@ -28,6 +28,8 @@
     noSort?: boolean;
     /** Hides from fit step `drop + 1` when the pane is too narrow (ui/table-fit.ts). */
     drop?: number;
+    /** Starts a group of columns: holdings, the ranking, the market, the advice. */
+    group?: true;
   }
 
   interface Props {
@@ -279,18 +281,18 @@
   // actually renders.
   const COLUMN_DEFS: Omit<ColumnDef, 'label'>[] = [
     { key: 'name', labelKey: 'table.col.name', align: 'left', width: 0 },
-    { key: 'owned', labelKey: 'table.col.owned', align: 'right', width: 7 },
+    { key: 'owned', labelKey: 'table.col.owned', align: 'right', width: 7, group: true },
     { key: 'delta', labelKey: 'table.col.delta', align: 'right', width: 2.75, drop: 3 },
-    { key: 'sell_score', labelKey: 'table.col.sell_score', align: 'right', width: 6.25 },
+    { key: 'sell_score', labelKey: 'table.col.sell_score', align: 'right', width: 6.25, group: true },
     { key: 'avg_price', labelKey: 'table.col.avg_price', align: 'right', width: 4, drop: 2 },
-    { key: 'low_sell', labelKey: 'table.col.low_sell', align: 'right', width: 5.75 },
+    { key: 'low_sell', labelKey: 'table.col.low_sell', align: 'right', width: 5.75, group: true },
     { key: 'top_buy', labelKey: 'table.col.top_buy', align: 'right', width: 5.75, drop: 2 },
     { key: 'medians_7d', labelKey: 'table.col.medians_7d', align: 'left', width: 4.5, noSort: true, drop: 1 },
     { key: 'delta_90d_pct', labelKey: 'table.col.delta_90d_pct', align: 'right', width: 4.5, drop: 2 },
     { key: 'volume_48h', labelKey: 'table.col.volume_48h', align: 'right', width: 5.5, drop: 3 },
     { key: 'ratio', labelKey: 'table.col.ratio', align: 'right', width: 5.75, drop: 1 },
     { key: 'usage', labelKey: 'table.col.usage', align: 'left', width: 7.5, noSort: true, drop: 1 },
-    { key: 'advice', labelKey: 'table.col.advice', align: 'left', width: 5.5, drop: 3 },
+    { key: 'advice', labelKey: 'table.col.advice', align: 'left', width: 5.5, drop: 3, group: true },
     { key: 'ducats', labelKey: 'table.col.ducats', align: 'right', width: 5.5 },
     { key: 'plat_per_100d', labelKey: 'table.col.plat_per_100d', align: 'right', width: 5, drop: 3 },
     { key: 'raw_value', labelKey: 'table.col.raw_value', align: 'right', width: 7, drop: 3 },
@@ -776,7 +778,7 @@
   {#if results.length === 0 && empty}
     <div class="empty-slot">{@render empty()}</div>
   {:else}
-  <div class="scroll" use:tableNavigation={t('table.inventoryTable')} use:watchPaneWidth={(width) => (paneWidth = width)} data-fit={fitAt} data-fit-note={fittedNote}>
+  <div class="scroll" use:tableNavigation={t('table.inventoryTable')} use:watchPaneWidth={(width) => (paneWidth = width)} use:columnCursor data-fit={fitAt} data-fit-note={fittedNote}>
   <table class="fit-planned" style="min-width:{floorRem}rem">
     {@render colgroup()}
     <thead>
@@ -786,6 +788,8 @@
             class={col.align}
             class:active={sortKey === col.key}
             class:nosort={col.noSort}
+            data-group={col.group ? '' : undefined}
+            data-key={sortKey === col.key ? '' : undefined}
             title={helpText(col.key)}
             aria-sort={col.noSort ? undefined : sortKey === col.key ? (sortDir === -1 ? 'descending' : 'ascending') : 'none'}
           >
@@ -805,7 +809,7 @@
         {@const d = rowDelta(r)}
         <tr class:row-dim={r.sellable <= 0}>
           {#each shownColumns as col (col.key)}
-            <td class="{col.align} col-{col.key}">{@render cell(r, col, d)}</td>
+            <td class="{col.align} col-{col.key}" data-group={col.group ? '' : undefined} data-key={sortKey === col.key ? '' : undefined}>{@render cell(r, col, d)}</td>
           {/each}
         </tr>
       {/each}

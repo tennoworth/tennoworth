@@ -156,12 +156,12 @@
       <thead>
         <tr>
           <th scope="col">{t('baro.col.item')}</th>
-          <th scope="col" class="num">{t('baro.col.ducats')}</th>
+          <th scope="col" class="num" data-group>{t('baro.col.ducats')}</th>
           <th scope="col" class="num">{t('baro.col.credits')}</th>
-          <th scope="col" class="num">{t('baro.col.now')}</th>
+          <th scope="col" class="num" data-group>{t('baro.col.now')}</th>
           <th scope="col" class="num">{t('baro.col.baseline')}</th>
-          <th scope="col" class="num">{t('baro.col.perDucat')}</th>
-          <th scope="col">{t('baro.col.verdict')}</th>
+          <th scope="col" class="num" data-group>{t('baro.col.perDucat')}</th>
+          <th scope="col" data-group data-key>{t('baro.col.verdict')}</th>
         </tr>
       </thead>
       <tbody>

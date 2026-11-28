@@ -9899,19 +9899,103 @@ msgctxt "riven.col.rank"
 msgid "Rank"
 msgstr "Rank"
 
+#. Column header: the roll guide verdict.
+#. Max 14 characters.
+msgctxt "riven.col.verdict"
+msgid "Roll verdict"
+msgstr ""
+
+#. Column header: the median of DE’s weekly trade band.
+#. Max 12 characters.
+msgctxt "riven.col.median"
+msgid "DE median"
+msgstr ""
+
+#. Column header: the min–max of DE’s weekly trade band.
+#. Max 12 characters.
+msgctxt "riven.col.range"
+msgid "DE range"
+msgstr ""
+
+#. Summary label: rivens whose roll buyers look for.
+#. Max 12 characters.
+msgctxt "riven.sellableCount"
+msgid "Sellable"
+msgstr ""
+
+#. Screen reader name of the verdict filter.
+msgctxt "riven.filter"
+msgid "Show rivens by roll verdict"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 12 characters.
+msgctxt "riven.filter.all"
+msgid "All {count}"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 14 characters.
+msgctxt "riven.filter.sellable"
+msgid "Sellable {count}"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 14 characters.
+msgctxt "riven.filter.almost"
+msgid "Almost {count}"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 14 characters.
+msgctxt "riven.filter.weak"
+msgid "Weak {count}"
+msgstr ""
+
+#. Filter button with a count: rivens the roll guide does not judge.
+#. Max 14 characters.
+msgctxt "riven.filter.unrated"
+msgid "Unrated {count}"
+msgstr ""
+
+#. Note beside the filter: how the list is ordered.
+msgctxt "riven.sortedByVerdict"
+msgid "Best roll verdict first"
+msgstr ""
+
+#. Empty state when a filter matches nothing.
+msgctxt "riven.filterEmpty"
+msgid "No rivens with this verdict."
+msgstr ""
+
+#. Button: opens the offer check under the riven.
+#. Max 14 characters.
+msgctxt "riven.offer"
+msgid "Check offer"
+msgstr ""
+
+#. Button: closes the offer check.
+#. Max 14 characters.
+msgctxt "riven.hideOffer"
+msgid "Hide offer"
+msgstr ""
+
+#. Disclosure on a weak roll: the stats buyers look for on this weapon.
+msgctxt "riven.roll.buyersWant"
+msgid "What buyers want"
+msgstr ""
+
+#. In place of a verdict for a veiled riven.
+msgctxt "riven.roll.veiled"
+msgid "Not judged until unveiled."
+msgstr ""
+
 #. Column header: disposition.
 #. Max 8 characters.
 #, fuzzy
 msgctxt "riven.col.dispo"
 msgid "Dispo"
 msgstr "Dispo"
-
-#. Column header.
-#. Max 14 characters.
-#, fuzzy
-msgctxt "riven.col.de"
-msgid "DE weekly"
-msgstr "Semanal DE"
 
 #. Column tooltip.
 #, fuzzy
@@ -10041,12 +10125,6 @@ msgstr "Pode fundir:"
 msgctxt "riven.dispoMove"
 msgid "Disposition {from} → {to} ({date})"
 msgstr "Disposição {from} → {to} ({date})"
-
-#. Disclosure.
-#, fuzzy
-msgctxt "riven.checkOffer"
-msgid "check an offer"
-msgstr "avaliar uma oferta"
 
 #. Screen reader name.
 #, fuzzy
@@ -10226,11 +10304,6 @@ msgstr ""
 #. Note on the negative stat.
 msgctxt "riven.roll.harmless"
 msgid "{stat} is harmless here"
-msgstr ""
-
-#. Reason for a weak verdict: the stats the guide lists for this weapon.
-msgctxt "riven.roll.wants"
-msgid "Buyers look for {stats}"
 msgstr ""
 
 #. Label before a note in English from the roll guide.
