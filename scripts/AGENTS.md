@@ -28,6 +28,10 @@ for release preparation.
   lines and assistant links in a pull request's commit messages and body
   (`attribution-check` in audit.yml). Locally:
   `bun scripts/check-attribution.ts github/develop..HEAD`.
+- `check-pr-metadata.ts` - refuses a maintainer pull request without an
+  assignee, exactly one type label, an area label (documentation may have
+  none) and a `Desktop X.Y.Z` milestone (`pr-metadata.yml`). Pull requests
+  from forks pass; the labels are listed in ../CONTRIBUTING.md.
 
 ## Maintaining the instruction files
 

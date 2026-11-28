@@ -939,3 +939,9 @@ jobs:
           # Versioned assets are already public. Retain the old rolling files
           # for clients that cached manifests before immutable URLs were used.
           gh release upload "$tag" --clobber dist/latest.json
+
+          # The release existed before this run, so its tag would keep naming
+          # the commit that first created it. Move it to the version just
+          # published; the asset URLs are keyed by tag name and are unaffected.
+          commit=$(gh api "repos/$GH_REPO/commits/desktop-v$VERSION" --jq .sha)
+          gh api -X PATCH "repos/$GH_REPO/git/refs/tags/$tag" -f sha="$commit" -F force=true >/dev/null

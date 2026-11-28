@@ -162,6 +162,9 @@ jobs:
             ci:
               - '.github/workflows/**'
               - '.github/actions/**'
+              # Run by pr-metadata.yml, which tests it on every pull request.
+              - 'scripts/check-pr-metadata.ts'
+              - 'scripts/check-pr-metadata.test.ts'
             instructions:
               - 'README.md'
               - 'scripts/ci-filters.test.ts'

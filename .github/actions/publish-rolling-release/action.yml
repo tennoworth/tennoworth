@@ -6,7 +6,9 @@ description: >
   repo's "Latest release" badge - that's reserved for the versioned desktop-v*
   tags). Per-release tag/name/files/body stay caller-supplied so the releases
   can't silently diverge on the policy while still describing themselves
-  differently.
+  differently. The tag is moved to the commit that was built: an existing tag
+  otherwise keeps pointing at the run that first created the release, so its
+  "Source code" archives and target disagree with the assets.
 inputs:
   tag_name:
     description: The rolling tag to update, e.g. web-latest.
@@ -23,9 +25,21 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Point the rolling tag at the built commit
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG: ${{ inputs.tag_name }}
+      run: |
+        set -euo pipefail
+        if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" \
+            -f sha="$GITHUB_SHA" -F force=true >/dev/null
+        fi
     - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
       with:
         tag_name: ${{ inputs.tag_name }}
+        target_commitish: ${{ github.sha }}
         name: ${{ inputs.release_name }}
         files: ${{ inputs.files }}
         draft: false
