@@ -108,29 +108,48 @@ fn check_identity(v: u32, contributor: &str, erase: &str) -> Result<(), Invalid>
     Ok(())
 }
 
+/// The days a sale may carry and the one ISO week a batch may cover.
+struct SaleDays {
+    oldest: Date,
+    newest: Date,
+    week: Option<String>,
+}
+
+impl SaleDays {
+    fn new(today: Date) -> Result<Self, Invalid> {
+        Ok(Self {
+            oldest: add_days(today, -(MAX_SALE_AGE_DAYS as i64))
+                .ok_or(Invalid("date out of range"))?,
+            // A client clock a little ahead of the server's must not lose a sale.
+            newest: add_days(today, 1).ok_or(Invalid("date out of range"))?,
+            week: None,
+        })
+    }
+
+    fn check(&mut self, day: &str) -> Result<Date, Invalid> {
+        let day = Date::strptime("%Y-%m-%d", day).map_err(|_| Invalid("day must be YYYY-MM-DD"))?;
+        if day < self.oldest || day > self.newest {
+            return Err(Invalid("day outside the accepted window"));
+        }
+        // The contributor id is derived per ISO week, so one batch is one week.
+        let this_week = iso_week(day);
+        if self.week.as_ref().is_some_and(|w| *w != this_week) {
+            return Err(Invalid("a batch covers one ISO week"));
+        }
+        self.week = Some(this_week);
+        Ok(day)
+    }
+}
+
 pub fn validate_sales(batch: SalesBatch, today: Date) -> Result<ValidBatch, Invalid> {
     check_identity(batch.v, &batch.contributor, &batch.erase)?;
     if batch.sales.is_empty() || batch.sales.len() > MAX_SALES_PER_BATCH {
         return Err(Invalid("a batch holds 1 to 50 sales"));
     }
-    let oldest =
-        add_days(today, -(MAX_SALE_AGE_DAYS as i64)).ok_or(Invalid("date out of range"))?;
-    // A client clock a little ahead of the server's must not lose a sale.
-    let newest = add_days(today, 1).ok_or(Invalid("date out of range"))?;
-    let mut week: Option<String> = None;
+    let mut days = SaleDays::new(today)?;
     let mut sales = Vec::with_capacity(batch.sales.len());
     for sale in batch.sales {
-        let day =
-            Date::strptime("%Y-%m-%d", &sale.day).map_err(|_| Invalid("day must be YYYY-MM-DD"))?;
-        if day < oldest || day > newest {
-            return Err(Invalid("day outside the accepted window"));
-        }
-        // The contributor id is derived per ISO week, so one batch is one week.
-        let this_week = iso_week(day);
-        if week.as_ref().is_some_and(|w| *w != this_week) {
-            return Err(Invalid("a batch covers one ISO week"));
-        }
-        week = Some(this_week);
+        let day = days.check(&sale.day)?;
         if !is_hex64(&sale.reference) {
             return Err(Invalid("ref must be 64 lowercase hex"));
         }
@@ -154,10 +173,174 @@ pub fn validate_sales(batch: SalesBatch, today: Date) -> Result<ValidBatch, Inva
         });
     }
     Ok(ValidBatch {
-        week: week.ok_or(Invalid("a batch holds 1 to 50 sales"))?,
+        week: days.week.ok_or(Invalid("a batch holds 1 to 50 sales"))?,
         contributor: batch.contributor,
         erase: batch.erase,
         sales,
+    })
+}
+
+/// The roll guide's verdict on a riven, as the app showed it. `Unrated` covers
+/// a weapon the guide does not list and a riven with a stat the app cannot name.
+#[derive(Deserialize, serde::Serialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum Verdict {
+    Sellable,
+    Almost,
+    Weak,
+    Unrated,
+}
+
+impl Verdict {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Verdict::Sellable => "sellable",
+            Verdict::Almost => "almost",
+            Verdict::Weak => "weak",
+            Verdict::Unrated => "unrated",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(s.to_owned())).ok()
+    }
+}
+
+/// Riven sales carry the weapon and the verdict, never the stats: a stat set
+/// and a price together can match a public listing, which would tie a weekly
+/// contributor id to a seller.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RivenSalesBatch {
+    pub v: u32,
+    pub contributor: String,
+    pub erase: String,
+    pub sales: Vec<RivenSale>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RivenSale {
+    #[serde(rename = "ref")]
+    pub reference: String,
+    pub day: String,
+    /// The weapon's warframe.market slug.
+    pub weapon: String,
+    pub verdict: Verdict,
+    pub plat: u32,
+}
+
+#[derive(Debug)]
+pub struct ValidRivenSale {
+    pub reference: String,
+    pub weapon: String,
+    pub verdict: Verdict,
+    pub plat: u32,
+}
+
+#[derive(Debug)]
+pub struct ValidRivenBatch {
+    pub week: String,
+    pub contributor: String,
+    pub erase: String,
+    pub sales: Vec<ValidRivenSale>,
+}
+
+pub fn validate_riven_sales(
+    batch: RivenSalesBatch,
+    today: Date,
+) -> Result<ValidRivenBatch, Invalid> {
+    check_identity(batch.v, &batch.contributor, &batch.erase)?;
+    if batch.sales.is_empty() || batch.sales.len() > MAX_SALES_PER_BATCH {
+        return Err(Invalid("a batch holds 1 to 50 sales"));
+    }
+    let mut days = SaleDays::new(today)?;
+    let mut sales = Vec::with_capacity(batch.sales.len());
+    for sale in batch.sales {
+        days.check(&sale.day)?;
+        if !is_hex64(&sale.reference) {
+            return Err(Invalid("ref must be 64 lowercase hex"));
+        }
+        if !is_slug(&sale.weapon) {
+            return Err(Invalid("weapon must be lowercase letters, digits and _"));
+        }
+        if sale.plat == 0 || sale.plat > MAX_PLAT {
+            return Err(Invalid("plat out of range"));
+        }
+        sales.push(ValidRivenSale {
+            reference: sale.reference,
+            weapon: sale.weapon,
+            verdict: sale.verdict,
+            plat: sale.plat,
+        });
+    }
+    Ok(ValidRivenBatch {
+        week: days.week.ok_or(Invalid("a batch holds 1 to 50 sales"))?,
+        contributor: batch.contributor,
+        erase: batch.erase,
+        sales,
+    })
+}
+
+/// A player's rating of the verdict the app showed for one weapon's riven.
+/// It is evidence for a maintainer, never an edit: the guide changes only
+/// through a reviewed change to roll-guide.json.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RollVote {
+    pub v: u32,
+    pub contributor: String,
+    pub erase: String,
+    pub weapon: String,
+    pub verdict: Verdict,
+    pub agree: bool,
+    #[serde(default)]
+    pub suggest: Option<Suggestion>,
+}
+
+/// What the player says the guide gets wrong: a stat, its sign, and whether it
+/// is good on this weapon (a wanted positive, a harmless negative) or not.
+#[derive(Deserialize, serde::Serialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(deny_unknown_fields)]
+pub struct Suggestion {
+    pub stat: String,
+    pub positive: bool,
+    pub good: bool,
+}
+
+#[derive(Debug)]
+pub struct ValidVote {
+    pub contributor: String,
+    pub erase: String,
+    pub weapon: String,
+    pub verdict: Verdict,
+    pub agree: bool,
+    pub suggest: Option<Suggestion>,
+}
+
+pub fn validate_vote(vote: RollVote) -> Result<ValidVote, Invalid> {
+    check_identity(vote.v, &vote.contributor, &vote.erase)?;
+    if !is_slug(&vote.weapon) {
+        return Err(Invalid("weapon must be lowercase letters, digits and _"));
+    }
+    if vote.verdict == Verdict::Unrated {
+        return Err(Invalid("an unrated riven has no verdict to rate"));
+    }
+    if let Some(suggest) = &vote.suggest {
+        if vote.agree {
+            return Err(Invalid("a suggestion comes with disagreement"));
+        }
+        if !is_slug(&suggest.stat) {
+            return Err(Invalid("stat must be lowercase letters, digits and _"));
+        }
+    }
+    Ok(ValidVote {
+        contributor: vote.contributor,
+        erase: vote.erase,
+        weapon: vote.weapon,
+        verdict: vote.verdict,
+        agree: vote.agree,
+        suggest: vote.suggest,
     })
 }
 

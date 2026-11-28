@@ -6,6 +6,8 @@
 //! Parity with the TypeScript rules this replaced: tests/fixtures/rivens/rivens.json.
 
 pub mod appraise;
+pub mod roll_guide;
+pub mod sold;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -601,6 +603,10 @@ pub struct RivenRowInput {
     #[serde(default)]
     #[ts(optional)]
     pub riven_type: Option<String>,
+    /// The weapon's WFM slug, which picks the roll guide entry.
+    #[serde(default)]
+    #[ts(optional)]
+    pub weapon: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -615,6 +621,8 @@ pub struct RivenRow {
     pub splices: Vec<SpliceChoice>,
     pub filter: Option<RivenStatFilterPlan>,
     pub unread: Vec<String>,
+    /// The roll guide's verdict; None for a veiled riven or an unresolved weapon.
+    pub roll: Option<roll_guide::RollCheck>,
 }
 
 pub fn riven_rows(request: &RivenRowsRequest) -> Vec<RivenRow> {
@@ -631,6 +639,7 @@ pub fn riven_rows(request: &RivenRowsRequest) -> Vec<RivenRow> {
                 },
                 filter: comps_filter_for(&stats),
                 unread: unread_fingerprint_keys(riven.raw.as_deref()),
+                roll: roll_guide::roll_check(riven.weapon.as_deref(), riven.veiled, &stats),
                 stats,
             }
         })

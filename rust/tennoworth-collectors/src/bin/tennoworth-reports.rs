@@ -16,7 +16,17 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string(&store.prices(now, true)?)?);
             return Ok(());
         }
-        Some(_) => anyhow::bail!("expected export or no argument"),
+        // Kept apart from `export` so the price backup's format does not move.
+        Some("export-rivens") => {
+            let store = Store::existing(&path)?;
+            let both = serde_json::json!({
+                "riven_prices": store.riven_prices(now, true)?,
+                "roll_votes": store.roll_votes(now, true)?,
+            });
+            println!("{}", serde_json::to_string(&both)?);
+            return Ok(());
+        }
+        Some(_) => anyhow::bail!("expected export, export-rivens or no argument"),
         None => {}
     }
     let state = Collector::new(Store::open(&path, now)?);

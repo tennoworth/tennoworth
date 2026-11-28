@@ -59,6 +59,20 @@ export function createPreview(scenario: string, announcementFeed: AnnouncementFe
       buffs: [{ Tag: 'WeaponFireDamageMod', Value: 812345678 }, { Tag: 'WeaponFreezeDamageMod', Value: 701234567 }, { Tag: 'WeaponDamageAmountMod', Value: 902345678 }],
       curses: [{ Tag: 'WeaponZoomFovMod', Value: 401234567 }],
     }),
+  }, {
+    // The roll guide's other verdicts: a spliced combination buyers look for,
+    // and one a hurting negative keeps short of it.
+    path: '/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare',
+    compat: '/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon',
+    slug: null, weaponName: null, rerolls: 5, lvl: 8, pol: 'AP_ATTACK',
+    buffs: [{ tag: 'WeaponCritDamageMod', value: 902345678 }, { tag: 'WeaponFireIterationsMod', value: 812345678 }, { tag: 'WeaponViralDamageMod', value: 701234567 }],
+    curses: [{ tag: 'WeaponZoomFovMod', value: 401234567 }], veiled: false,
+  }, {
+    path: '/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare',
+    compat: '/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon',
+    slug: null, weaponName: null, rerolls: 1, lvl: 3, pol: 'AP_ATTACK',
+    buffs: [{ tag: 'WeaponCritDamageMod', value: 852345678 }, { tag: 'WeaponFireIterationsMod', value: 612345678 }],
+    curses: [{ tag: 'WeaponRecoilReductionMod', value: 301234567 }], veiled: false,
   }];
   // Long histories exercise the 100-entry pages of Rivens, Ledger and Notifications.
   const longHistory = scenario === 'long-history';

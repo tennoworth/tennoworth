@@ -175,12 +175,12 @@
           <tr>
             <th class="l">{t('orders.col.item')}</th>
             <th class="fix"><span class="sr-only">{t('orders.col.fix')}</span></th>
-            <th data-drop="1">{t('orders.col.type')}</th>
+            <th data-drop="1" data-group>{t('orders.col.type')}</th>
             <th>{t('orders.col.qty')}</th>
             <th>{t('orders.col.lot')}</th>
-            <th title={t('orders.col.askTitle')}>{t('orders.col.ask')}</th>
+            <th data-group title={t('orders.col.askTitle')}>{t('orders.col.ask')}</th>
             <th data-drop="2" title={t('orders.col.bidTitle')}>{t('orders.col.bid')}</th>
-            <th class="l health">{t('orders.col.health')}</th>
+            <th class="l health" data-group data-key>{t('orders.col.health')}</th>
             <th>{t('orders.col.visible')}</th>
             <th></th>
           </tr>

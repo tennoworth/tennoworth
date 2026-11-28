@@ -176,6 +176,43 @@ language's catalog in `frontend/src/i18n/locales/`. Reviewing a language needs n
 [docs/translating.md](docs/translating.md) explains how, and how a developer
 adds or changes a message.
 
+## Riven roll guide
+
+The Rivens view rates each riven Sellable, Almost or Weak against
+[`rust/market-domain/src/rivens/roll-guide.json`](rust/market-domain/src/rivens/roll-guide.json):
+for each weapon, by its warframe.market slug, the stat combinations buyers look
+for and the negatives that do no harm. It started from 44bananas' guide
+([ATTRIBUTIONS.md](ATTRIBUTIONS.md)), and players keep it current. Changing it
+needs no Rust: each weapon is one line in the trade shorthand that the file's
+`stats` table maps to warframe.market stats.
+
+```json
+"acceltra": {"builds": [{"need": [], "pick": ["CD", "MS", "DMG", "CC", "FR", "CORRO", "VIRAL"]}], "harmless": ["IMP", "ZOOM"], "source": "44bananas", "checked": "44.1.2"},
+```
+
+- A build is one combination buyers look for; list another build for a second
+  use of the weapon. `need` holds the stats it requires, `pick` the pool its
+  other wanted stats come from. A riven is Sellable when it has every needed
+  stat, at least two wanted stats, no positive outside the build and a negative
+  from `harmless` or none. One shortfall makes it Almost. The verdict judges
+  which stats a riven has, never how strong each roll is.
+- Put build-specific caveats in `note`, in plain English.
+- Set `source` to `community` when you change an entry, and `checked` to the
+  game update you checked it against. Leave other entries' credit alone.
+- Say why in the pull request. A link to current warframe.market listings, or
+  a sale you made, outweighs opinion.
+- Players rate verdicts in the app. A correction that enough players who sold
+  rivens for the weapon back shows as `proposed` in
+  [`/api/reports/roll-votes`](https://tennoworth.app/api/reports/roll-votes)
+  ([how ratings work](docs/price-reports.md#ratings-and-the-roll-guide)). Cite
+  it as evidence; it is not a change on its own.
+
+From `rust/`, `cargo test -p market-domain roll_guide` checks the file
+against the game: every weapon must exist on warframe.market, and every stat
+must be one that can roll on that weapon's riven type with that sign. Without
+Git, use the
+[roll guide suggestion form](https://github.com/tennoworth/tennoworth/issues/new?template=riven-roll.yml).
+
 ## Publishing market announcements
 
 The bundled feed bootstraps readers and initial publisher state. Once a host

@@ -5,7 +5,7 @@ import type { DesktopCapabilities } from '../../contracts/desktop';
 import type { PriceReportPreferences } from '../../contracts/price-reports';
 afterEach(cleanup);
 
-const off: PriceReportPreferences = { enabled: false, available: true, sent_this_week: 0 };
+const off: PriceReportPreferences = { enabled: false, available: true, sent_this_week: 0, rivens: false };
 function transport(overrides: Partial<DesktopCapabilities>): DesktopCapabilities {
   return { getPriceReportPreferences: async () => off, ...overrides } as unknown as DesktopCapabilities;
 }
@@ -24,7 +24,7 @@ describe('price sharing consent', () => {
   });
 
   it('says how many sales this install shared this week', async () => {
-    render(PriceReportSettings, { transport: transport({ getPriceReportPreferences: async () => ({ enabled: true, available: true, sent_this_week: 3 }) }) });
+    render(PriceReportSettings, { transport: transport({ getPriceReportPreferences: async () => ({ enabled: true, available: true, sent_this_week: 3, rivens: true }) }) });
     expect((await screen.findByText(/shared this week/)).textContent).toMatch(/3\s*sales shared this week/);
   });
 
@@ -68,5 +68,20 @@ describe('price sharing consent', () => {
     const terms = screen.getByText(/Never sent:/).textContent ?? '';
     for (const withheld of ['who you traded with', 'time of day', 'inventory']) expect(terms).toContain(withheld);
     expect(screen.getByText(/Trades from before you enabled this are never sent/)).toBeTruthy();
+  });
+
+  it('asks an install that consented before riven sales to include them, and only then', async () => {
+    const include = vi.fn(async () => ({ enabled: true, available: true, sent_this_week: 0, rivens: true }));
+    render(PriceReportSettings, { transport: transport({ getPriceReportPreferences: async () => ({ enabled: true, available: true, sent_this_week: 0, rivens: false }), includeRivenSales: include }) });
+    const row = await screen.findByTestId('include-rivens');
+    expect(row.textContent).toContain('never the riven’s stats');
+    expect(include).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Include riven sales' }));
+    await waitFor(() => expect(include).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByTestId('include-rivens')).toBeNull());
+    cleanup();
+    render(PriceReportSettings, { transport: transport({ getPriceReportPreferences: async () => ({ enabled: true, available: true, sent_this_week: 0, rivens: true }) }) });
+    await screen.findByText(/shared this week/);
+    expect(screen.queryByTestId('include-rivens')).toBeNull();
   });
 });

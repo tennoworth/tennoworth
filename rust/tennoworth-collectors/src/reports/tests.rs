@@ -1,9 +1,17 @@
-use super::contract::{validate_erase, validate_sales, validate_shape};
-use super::store::{aggregate, RawSale, MAX_SALES_PER_CONTRIBUTOR_WEEK, MIN_CONTRIBUTORS};
+use super::contract::{
+    validate_erase, validate_riven_sales, validate_sales, validate_shape, validate_vote,
+    Suggestion, Verdict,
+};
+use super::store::{
+    aggregate, aggregate_rivens, aggregate_votes, RawRivenSale, RawSale, RawVote,
+    MAX_SALES_PER_CONTRIBUTOR_WEEK, MAX_VOTES_PER_CONTRIBUTOR_WEEK, MIN_CONTRIBUTORS,
+    MIN_TRADED_VOTERS,
+};
 use super::*;
 use jiff::civil::Date;
 use rusqlite::Connection;
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use std::future::IntoFuture;
 
 fn fixture() -> Value {
@@ -513,4 +521,368 @@ fn duplicate_refs_in_a_batch_only_consume_one_slot() {
             .unwrap(),
         451
     );
+}
+
+#[test]
+fn riven_sale_and_vote_cases_match_the_shared_fixture() {
+    let today = fixture_today();
+    for case in fixture()["riven_sales"].as_array().unwrap() {
+        let parsed = serde_json::from_value(case["body"].clone())
+            .ok()
+            .and_then(|b| validate_riven_sales(b, today).ok());
+        assert_eq!(
+            parsed.is_some(),
+            case["valid"].as_bool().unwrap(),
+            "{}",
+            case["case"]
+        );
+    }
+    for case in fixture()["votes"].as_array().unwrap() {
+        let parsed = serde_json::from_value(case["body"].clone())
+            .ok()
+            .and_then(|b| validate_vote(b).ok());
+        assert_eq!(
+            parsed.is_some(),
+            case["valid"].as_bool().unwrap(),
+            "{}",
+            case["case"]
+        );
+    }
+}
+
+/// One contributor's riven sales of `weapon` with `verdict`, all on `day`.
+fn riven_batch(contributor: u64, weapon: &str, verdict: &str, day: &str, prices: &[u32]) -> Value {
+    json!({
+        "v": 1,
+        "contributor": hex(contributor),
+        "erase": hex(contributor + 1_000_000),
+        "sales": prices.iter().enumerate().map(|(i, plat)| json!({
+            "ref": hex(i as u64), "day": day, "weapon": weapon,
+            "verdict": verdict, "plat": plat,
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn add_rivens(store: &mut Store, body: Value, today: &str) -> Result<(), StatusCode> {
+    let batch = validate_riven_sales(
+        serde_json::from_value(body).unwrap(),
+        today.parse().unwrap(),
+    )
+    .map_err(|_| StatusCode::BAD_REQUEST)?;
+    store.add_riven_sales(batch)
+}
+
+fn vote_body(contributor: u64, weapon: &str, agree: bool, suggest: Option<Value>) -> Value {
+    let mut body = json!({
+        "v": 1, "contributor": hex(contributor), "erase": hex(contributor + 1_000_000),
+        "weapon": weapon, "verdict": "weak", "agree": agree,
+    });
+    if let Some(suggest) = suggest {
+        body["suggest"] = suggest;
+    }
+    body
+}
+
+fn add_vote(store: &mut Store, body: Value, now: &str) -> Result<(), StatusCode> {
+    let vote = validate_vote(serde_json::from_value(body).unwrap())
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    store.add_vote(vote, at(now))
+}
+
+fn raw_riven(contributor: &str, verdict: Verdict, plat: u32) -> RawRivenSale {
+    RawRivenSale {
+        weapon: "acceltra".into(),
+        verdict,
+        contributor: contributor.into(),
+        plat,
+    }
+}
+
+#[test]
+fn riven_prices_are_per_weapon_and_verdict_with_one_vote_each() {
+    let mut rows: Vec<RawRivenSale> = (0..50)
+        .map(|_| raw_riven("loud", Verdict::Sellable, 9000))
+        .collect();
+    for (c, plat) in [("a", 100), ("b", 120), ("c", 140), ("d", 160)] {
+        rows.push(raw_riven(c, Verdict::Sellable, plat));
+    }
+    for c in ["a", "b", "c", "d"] {
+        rows.push(raw_riven(c, Verdict::Weak, 20));
+    }
+    let published = aggregate_rivens(&rows, MIN_CONTRIBUTORS);
+    assert_eq!(published.len(), 1, "weak has four sellers, under the floor");
+    let row = &published[0];
+    assert_eq!(
+        (row.weapon.as_str(), row.verdict),
+        ("acceltra", Verdict::Sellable)
+    );
+    assert_eq!((row.contributors, row.sales), (5, 54));
+    assert_eq!(row.median, 140.0, "the loud seller is one vote of five");
+}
+
+fn raw_vote(contributor: &str, agree: bool, suggest: Option<(&str, bool, bool)>) -> RawVote {
+    RawVote {
+        contributor: contributor.into(),
+        weapon: "acceltra".into(),
+        verdict: Verdict::Weak,
+        agree,
+        suggest: suggest.map(|(stat, positive, good)| Suggestion {
+            stat: stat.into(),
+            positive,
+            good,
+        }),
+    }
+}
+
+fn sold(contributors: &[&str]) -> BTreeSet<(String, String)> {
+    contributors
+        .iter()
+        .map(|c| (c.to_string(), "acceltra".to_string()))
+        .collect()
+}
+
+#[test]
+fn a_suggestion_is_proposed_only_with_enough_trading_voters_and_a_majority() {
+    let zoom = Some(("zoom", false, true));
+    let five: Vec<RawVote> = ["a", "b", "c", "d", "e"]
+        .iter()
+        .map(|c| raw_vote(c, false, zoom))
+        .collect();
+
+    let fresh_ids = aggregate_votes(&five, &sold(&[]), MIN_CONTRIBUTORS);
+    assert!(
+        !fresh_ids[0].suggestions[0].proposed,
+        "five ids that never sold a riven are free to make"
+    );
+    let one_trader = aggregate_votes(&five, &sold(&["a"]), MIN_CONTRIBUTORS);
+    assert!(!one_trader[0].suggestions[0].proposed);
+    let traders = aggregate_votes(&five, &sold(&["a", "b"]), MIN_CONTRIBUTORS);
+    let s = &traders[0].suggestions[0];
+    assert_eq!(
+        (s.voters, s.traded, s.proposed),
+        (5, MIN_TRADED_VOTERS, true)
+    );
+    assert_eq!(traders[0].traded, 2);
+
+    let mut outvoted = five;
+    for c in ["f", "g", "h", "i", "j"] {
+        outvoted.push(raw_vote(c, true, None));
+    }
+    let split = aggregate_votes(&outvoted, &sold(&["a", "b"]), MIN_CONTRIBUTORS);
+    assert!(
+        !split[0].suggestions[0].proposed,
+        "half the voters agree with the guide as it is"
+    );
+    assert_eq!(split[0].verdicts[0].agree, 5);
+
+    let four: Vec<RawVote> = ["a", "b", "c", "d"]
+        .iter()
+        .map(|c| raw_vote(c, false, zoom))
+        .collect();
+    assert!(aggregate_votes(&four, &sold(&["a", "b"]), MIN_CONTRIBUTORS).is_empty());
+}
+
+#[test]
+fn a_contributor_rates_a_weapon_once_a_week_and_may_change_their_mind() {
+    let mut store = store_at(at("2026-10-08T12:00:00Z"));
+    let now = "2026-10-08T12:00:00Z";
+    add_vote(&mut store, vote_body(1, "acceltra", true, None), now).unwrap();
+    add_vote(
+        &mut store,
+        vote_body(
+            1,
+            "acceltra",
+            false,
+            Some(json!({"stat": "zoom", "positive": false, "good": true})),
+        ),
+        now,
+    )
+    .unwrap();
+    for c in 2..=5 {
+        add_vote(&mut store, vote_body(c, "acceltra", true, None), now).unwrap();
+    }
+    let votes = store.roll_votes(at(now), false).unwrap();
+    let w41 = votes.weeks.iter().find(|w| w.week == "2026-W41").unwrap();
+    let acceltra = &w41.weapons[0];
+    assert_eq!(acceltra.voters, 5);
+    assert_eq!(
+        acceltra.verdicts[0].agree, 4,
+        "the first rating was replaced"
+    );
+    assert_eq!(acceltra.suggestions.len(), 1);
+}
+
+#[test]
+fn a_contributor_past_the_weekly_vote_cap_is_refused() {
+    let mut store = store_at(at("2026-10-08T12:00:00Z"));
+    let now = "2026-10-08T12:00:00Z";
+    for w in 0..MAX_VOTES_PER_CONTRIBUTOR_WEEK {
+        add_vote(
+            &mut store,
+            vote_body(1, &format!("weapon_{w}"), true, None),
+            now,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        add_vote(&mut store, vote_body(1, "one_more", true, None), now),
+        Err(StatusCode::TOO_MANY_REQUESTS)
+    );
+    add_vote(&mut store, vote_body(1, "weapon_0", false, None), now)
+        .expect("changing an existing rating is not a new one");
+}
+
+#[test]
+fn riven_sales_and_votes_fold_with_their_week_and_erase_with_it() {
+    let mut store = store_at(at("2026-09-24T12:00:00Z"));
+    let then = "2026-09-24T12:00:00Z";
+    for c in 1..=5 {
+        add_rivens(
+            &mut store,
+            riven_batch(
+                c,
+                "acceltra",
+                "sellable",
+                "2026-09-24",
+                &[100 + c as u32 * 10],
+            ),
+            "2026-09-24",
+        )
+        .unwrap();
+        add_vote(
+            &mut store,
+            vote_body(
+                c,
+                "acceltra",
+                false,
+                Some(json!({"stat": "zoom", "positive": false, "good": true})),
+            ),
+            then,
+        )
+        .unwrap();
+    }
+    store.tick(at("2026-10-08T12:00:00Z")).unwrap();
+    for table in ["riven_sale", "roll_vote"] {
+        let left: i64 = store
+            .conn()
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            left, 0,
+            "{table}: a contributor id must not outlive its week"
+        );
+    }
+    let now = at("2026-10-08T12:00:00Z");
+    let prices = store.riven_prices(now, false).unwrap();
+    let w39 = &prices.weeks[0];
+    assert_eq!((w39.week.as_str(), w39.complete), ("2026-W39", true));
+    assert_eq!(w39.rivens[0].median, 130.0);
+    let votes = store.roll_votes(now, false).unwrap();
+    let folded = &votes.weeks[0].weapons[0];
+    assert_eq!((folded.voters, folded.traded), (5, 5));
+    assert!(folded.suggestions[0].proposed);
+
+    let mut fresh = store_at(now);
+    let today = "2026-10-08T12:00:00Z";
+    let secret = "ab".repeat(32);
+    let mut mine = riven_batch(1, "acceltra", "weak", "2026-10-08", &[30]);
+    mine["erase"] = json!(contract::erase_hash(&secret));
+    add_rivens(&mut fresh, mine, "2026-10-08").unwrap();
+    let mut my_vote = vote_body(1, "acceltra", true, None);
+    my_vote["erase"] = json!(contract::erase_hash(&secret));
+    add_vote(&mut fresh, my_vote, today).unwrap();
+    add_vote(&mut fresh, vote_body(2, "acceltra", true, None), today).unwrap();
+    let request = validate_erase(
+        serde_json::from_value(json!({"v":1,"week":"2026-W41","secret":secret})).unwrap(),
+    )
+    .unwrap();
+    fresh.erase(&request).unwrap();
+    let count = |table: &str| -> i64 {
+        fresh
+            .conn()
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0))
+            .unwrap()
+    };
+    assert_eq!((count("riven_sale"), count("roll_vote")), (0, 1));
+}
+
+#[tokio::test]
+async fn http_takes_riven_sales_and_votes_and_publishes_their_summaries() {
+    let state = Collector::new(Store::new(Connection::open_in_memory().unwrap()).unwrap());
+    state.tick().unwrap();
+    let (url, task) = serve(state).await;
+    let client = reqwest::Client::new();
+    let today = crate::utc_date(Timestamp::now()).to_string();
+    let post = |path: &str, body: Value| client.post(format!("{url}{path}")).json(&body).send();
+
+    let sale = riven_batch(1, "acceltra", "sellable", &today, &[120]);
+    assert_eq!(
+        post("/api/reports/riven-sales", sale.clone())
+            .await
+            .unwrap()
+            .status(),
+        204
+    );
+    let mut with_stats = sale;
+    with_stats["sales"][0]["stats"] = json!(["critical_damage"]);
+    assert_eq!(
+        post("/api/reports/riven-sales", with_stats)
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
+    assert_eq!(
+        post(
+            "/api/reports/roll-vote",
+            vote_body(1, "acceltra", true, None)
+        )
+        .await
+        .unwrap()
+        .status(),
+        204
+    );
+    assert_eq!(
+        post(
+            "/api/reports/roll-vote",
+            vote_body(
+                1,
+                "acceltra",
+                true,
+                Some(json!({"stat": "zoom", "positive": false, "good": true}))
+            )
+        )
+        .await
+        .unwrap()
+        .status(),
+        400
+    );
+
+    let prices = client
+        .get(format!("{url}/api/reports/riven-prices"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(prices.status(), 200);
+    let prices: store::RivenPrices = prices.json().await.unwrap();
+    assert!(
+        prices.weeks.iter().all(|w| w.rivens.is_empty()),
+        "one seller publishes nothing"
+    );
+    let votes = client
+        .get(format!("{url}/api/reports/roll-votes"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(votes.status(), 200);
+    let votes: store::RollVotes = votes.json().await.unwrap();
+    assert_eq!(
+        (votes.min_contributors, votes.min_traded),
+        (MIN_CONTRIBUTORS, MIN_TRADED_VOTERS)
+    );
+    assert!(
+        votes.weeks.iter().all(|w| w.weapons.is_empty()),
+        "one voter publishes nothing"
+    );
+    task.abort();
 }

@@ -2,7 +2,7 @@
 // bands, disposition moves, splice options, and the per-riven comps drawer
 // (riven_comps IPC).
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
+import { screen, fireEvent, waitFor, cleanup, within } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/preview/render-desktop';
 import RivensPanel from './RivensPanel.svelte';
 import { installTauri, removeTauri } from '../../dev/testing/test-utils';
@@ -108,9 +108,11 @@ describe('RivensPanel', () => {
     // resolved weapon name + polarity glyph
     expect(await screen.findAllByText('Acceltra')).toHaveLength(2);
     expect(screen.getAllByText('V')).toHaveLength(2); // AP_ATTACK = Madurai
-    // The fingerprint proves stat identity, not the final in-game value.
-    expect(screen.getByText('+Critical Damage')).toBeTruthy();
-    expect(screen.getByText('-Status Duration')).toBeTruthy();
+    // The fingerprint proves stat identity, not the final in-game value. The
+    // sign sits in its own gutter, drawn as a true minus.
+    const stats = screen.getAllByRole('listitem').map((li) => li.textContent?.replace('−', '-'));
+    expect(stats).toContain('+Critical Damage');
+    expect(stats).toContain('-Status Duration');
     // DE weekly band: rerolled → rolled tier median 100p. pop is DE's 0-100
     // popularity, never a count of sales.
     expect(screen.getByText('100p')).toBeTruthy();
@@ -126,12 +128,65 @@ describe('RivensPanel', () => {
   it('reads a typed offer against the weapon band, and an emptied box as no offer', async () => {
     installTauri(makeInvoke(), undefined);
     render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    // The offer check opens under the riven it belongs to.
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    const [open] = await screen.findAllByRole('button', { name: 'Check offer' });
+    await fireEvent.click(open!);
     const [offer] = await screen.findAllByRole('spinbutton');
     await fireEvent.input(offer!, { target: { value: '200' } });
     // 200p against the rerolled band: over the 100p median, under the ~267p average.
     expect(await screen.findByText('Between median and average')).toBeTruthy();
     await fireEvent.input(offer!, { target: { value: '' } });
     await waitFor(() => expect(screen.queryByText('Between median and average')).toBeNull());
+  });
+
+  it('shows the roll guide verdict with its reasons, and credits the guide', async () => {
+    installTauri(makeInvoke(), undefined);
+    const sellable: OwnedRiven = {
+      ...RAW_RIVENS[0]!, raw: undefined,
+      buffs: [{ tag: 'WeaponCritDamageMod', value: 1 }, { tag: 'WeaponViralDamageMod', value: 1 }],
+      curses: [],
+    };
+    render(RivensPanel, { props: { market, rivens: resolveRivens([...RAW_RIVENS, sellable], market) } });
+    const verdicts = await screen.findAllByTestId('riven-roll');
+    // The veiled riven has nothing to judge.
+    expect(verdicts).toHaveLength(3);
+    // The sign is joined to its stat so a narrow cell never wraps between them.
+    const joiner = String.fromCharCode(0x2060);
+    expect(verdicts.some((v) => (v.textContent ?? '').includes('-' + joiner + 'Status Duration'))).toBe(true);
+    const text = verdicts.map((v) => (v.textContent ?? '').split(joiner).join(''));
+    expect(text.filter((v) => v.includes('Weak roll'))).toHaveLength(2);
+    expect(text.find((v) => v.includes('-Status Duration'))).toContain('-Status Duration hurts here');
+    expect(text.find((v) => v.includes('Sellable'))).toContain('Stats buyers look for on this weapon');
+    expect(text.find((v) => v.includes('+Heat'))).toContain('+Heat, +Cold add little here');
+    const credit = screen.getByTestId('roll-guide-credit');
+    expect(credit.textContent).toContain('44bananas');
+    expect(screen.getByRole('link', { name: 'Suggest a change' }).getAttribute('href')).toContain('template=riven-roll.yml');
+  });
+
+  it('puts the best verdict first, counts the sellable ones, and filters by verdict', async () => {
+    installTauri(makeInvoke(), undefined);
+    const sellable: OwnedRiven = {
+      ...RAW_RIVENS[0]!, raw: undefined,
+      buffs: [{ tag: 'WeaponCritDamageMod', value: 1 }, { tag: 'WeaponViralDamageMod', value: 1 }],
+      curses: [],
+    };
+    // Listed last, so only the verdict order can bring it to the top.
+    render(RivensPanel, { props: { market, rivens: resolveRivens([...RAW_RIVENS, sellable], market) } });
+    const first = (await screen.findAllByTestId('riven-roll'))[0]!;
+    expect(first.textContent).toContain('Sellable');
+    const totals = screen.getByRole('group', { name: 'Rivens summary' });
+    expect(totals.textContent).toContain('Sellable1');
+    const filter = screen.getByTestId('verdict-filter');
+    expect(filter.textContent).toContain('Weak 2');
+    expect(screen.getByRole('button', { name: 'Almost 0' }).hasAttribute('disabled')).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Weak 2' }));
+    const shown = screen.getAllByTestId('riven-roll').map((v) => v.textContent ?? '');
+    expect(shown).toHaveLength(2);
+    expect(shown.every((v) => v.includes('Weak roll'))).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Unrated 1' }));
+    expect(screen.queryAllByTestId('riven-roll')).toHaveLength(0);
+    expect(screen.getByText('Not judged until unveiled.')).toBeTruthy();
   });
 
   it('lists the splices a riven qualifies for, and none for one that has no pair', async () => {
@@ -258,5 +313,80 @@ describe('RivensPanel', () => {
     const compsButton = (await screen.findAllByRole('button', { name: 'Comps' }))[0];
     await fireEvent.click(compsButton);
     await screen.findByText(/Couldn.t load comps/);
+  });
+});
+
+describe('RivensPanel ratings and player prices', () => {
+  function sharingInvoke(enabled: boolean, available = true) {
+    return vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === 'get_price_report_preferences') return { enabled, available, sent_this_week: 0 };
+      if (cmd === 'get_roll_votes') return [];
+      if (cmd === 'send_roll_vote') return [args?.vote];
+      if (cmd === 'community_riven_prices') return [
+        { weapon: 'acceltra', verdict: 'weak', week: '2026-W47', complete: true, contributors: 5, sales: 6, p25: 20, median: 30, p75: 45 },
+        { weapon: 'acceltra', verdict: 'sellable', week: '2026-W47', complete: true, contributors: 7, sales: 9, p25: 220, median: 260, p75: 340 },
+      ];
+      throw new Error(`unexpected ${cmd}`);
+    });
+  }
+
+  it('sends a correction built from the riven stats and shows it as the rating for the week', async () => {
+    const invoke = sharingInvoke(true);
+    installTauri(invoke, undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    const ratings = await screen.findAllByTestId('roll-rating');
+    expect(ratings).toHaveLength(2);
+    // Player prices for the rows' own verdict, never another verdict's.
+    const players = await screen.findAllByTestId('players-price');
+    expect(players.map((p) => p.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Players: 30p · 5 sellers', 'Players: 30p · 5 sellers']);
+
+    const row = ratings.find((r) => r.closest('tr')?.textContent?.includes('Status Duration'))!;
+    await fireEvent.click(within(row).getByRole('button', { name: 'No' }));
+    await fireEvent.click(within(row).getByRole('combobox'));
+    const joiner = String.fromCharCode(0x2060);
+    const plain = (el: Element | null) => (el?.textContent ?? '').split(joiner).join('');
+    const option = (await screen.findAllByRole('option')).find((o) => plain(o) === '−Status Duration is harmless here')!;
+    await fireEvent.click(option);
+    await fireEvent.click(within(row).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('send_roll_vote', {
+      vote: { weapon: 'acceltra', verdict: 'weak', agree: false, suggest: { stat: 'status_duration', positive: false, good: true } },
+    }));
+    // One rating per weapon a week: both Acceltra rows show it.
+    await waitFor(() => expect(screen.getAllByText((_, el) => el?.tagName === 'P' && plain(el).startsWith('You said: −Status Duration is harmless here.'))).toHaveLength(2));
+  });
+
+  it('asks for price sharing before rating, and hides ratings where sharing is unavailable', async () => {
+    const off = sharingInvoke(false);
+    installTauri(off, undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    await waitFor(() => expect(off).toHaveBeenCalledWith('get_price_report_preferences'));
+    const [first] = await screen.findAllByTestId('roll-rating');
+    await fireEvent.click(within(first!).getByRole('button', { name: 'Yes' }));
+    expect(within(first!).getByRole('status').textContent).toContain('Turn on price sharing in Settings');
+    expect(off).not.toHaveBeenCalledWith('send_roll_vote', expect.anything());
+    cleanup();
+
+    installTauri(sharingInvoke(false, false), undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    await screen.findAllByTestId('riven-roll');
+    await waitFor(() => expect(screen.queryAllByTestId('players-price')).toHaveLength(2));
+    expect(screen.queryAllByTestId('roll-rating')).toHaveLength(0);
+  });
+
+  it('shows a rating only under rivens with the verdict it rated', async () => {
+    const invoke = sharingInvoke(true);
+    installTauri(invoke, undefined);
+    const sellable: OwnedRiven = {
+      ...RAW_RIVENS[0]!, raw: undefined,
+      buffs: [{ tag: 'WeaponCritDamageMod', value: 1 }, { tag: 'WeaponViralDamageMod', value: 1 }],
+      curses: [],
+    };
+    render(RivensPanel, { props: { market, rivens: resolveRivens([...RAW_RIVENS, sellable], market) } });
+    const ratings = await screen.findAllByTestId('roll-rating');
+    const weak = ratings.find((r) => r.closest('tr')?.textContent?.includes('Status Duration'))!;
+    await fireEvent.click(within(weak).getByRole('button', { name: 'Yes' }));
+    await waitFor(() => expect(screen.getAllByText('You rated this verdict right this week.')).toHaveLength(2));
+    const other = ratings.find((r) => r.closest('tr')?.textContent?.includes('Sellable'))!;
+    expect(within(other).getByText('Verdict right?')).toBeTruthy();
   });
 });

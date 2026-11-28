@@ -433,3 +433,19 @@ describe('shared fixture', () => {
     for (const c of fixture.spliced) expect(isSplicedStat(c.slug), c.slug).toBe(c.expected);
   });
 });
+
+describe('roll verdicts', () => {
+  const CD = { tag: 'WeaponCritDamageMod', value: 1 };
+  const DMG = { tag: 'WeaponDamageAmountMod', value: 1 };
+
+  it('judges the stats against the guide entry for the riven\'s weapon', () => {
+    expect(row({ slug: 'acceltra', buffs: [CD, DMG], curses: [] }, ATTRS, 'rifle').roll)
+      .toMatchObject({ kind: 'read', verdict: 'sellable', source: '44bananas', checked: '44.1.2' });
+  });
+
+  it('has nothing to judge without a weapon, and says when the guide has no entry', () => {
+    expect(row({ buffs: [CD, DMG], curses: [] }, ATTRS).roll).toBeNull();
+    expect(row({ slug: 'acceltra', veiled: true, buffs: [], curses: [] }, ATTRS).roll).toBeNull();
+    expect(row({ slug: 'not_a_weapon', buffs: [CD, DMG], curses: [] }, ATTRS).roll).toEqual({ kind: 'no_guide' });
+  });
+});

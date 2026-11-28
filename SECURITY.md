@@ -51,7 +51,8 @@ The product crosses the following trust boundaries:
 
 3. **Opt-in collectors** (`rust/tennoworth-usage` and
    `rust/tennoworth-reports`). Separate loopback services receive daily usage
-   tokens and anonymous trade-price reports through the public proxy. They
+   tokens and anonymous trade-price reports, riven sales by weapon and verdict,
+   and roll guide ratings through the public proxy. They
    receive no inventory or account credentials. Their unauthenticated inputs
    are untrusted: random contributor ids do not establish independent people.
    Reported prices remain separate from sell-priority scoring. Retention and
@@ -198,7 +199,10 @@ The product crosses the following trust boundaries:
   the trading partner, time of day, inventory, game or warframe.market account,
   app version or platform. The service retains raw reports for the current
   and previous ISO week, then folds older weeks into aggregates and deletes
-  their raw rows during maintenance. It publishes an item only once five ids reported it that week. See
+  their raw rows during maintenance. It publishes an item only once five ids reported it that week.
+  A riven sale carries the weapon and roll verdict instead of an item, never
+  the riven's stats or name, and only for installs whose consent covers riven
+  sales. A roll guide rating is sent only when the player clicks. See
   [price reports](docs/price-reports.md).
 
 See [daily installation counts](docs/usage-counting.md) for the data flow,

@@ -57,6 +57,18 @@ impl MarketData {
         ))
     }
 
+    /// The rivens a raw inventory holds whose weapon this market knows, with
+    /// their roll verdicts.
+    pub fn held_rivens(
+        &self,
+        inventory: &serde_json::Value,
+    ) -> Vec<market_domain::rivens::sold::HeldRiven> {
+        self.rivens
+            .as_ref()
+            .map(|refs| market_domain::rivens::sold::held_rivens(inventory, refs))
+            .unwrap_or_default()
+    }
+
     /// Whether `candidate` is strictly older than the compiled-in bundle.
     ///
     /// The cache has already passed the market contract, so its stamp is
@@ -89,6 +101,7 @@ impl MarketData {
             set_to_parts: HashMap::new(),
             relic_rewards: HashMap::new(),
             reward_names: HashMap::new(),
+            rivens: None,
             usage_parent_by_part: HashMap::new(),
         });
         market.build_usage_parent_index();

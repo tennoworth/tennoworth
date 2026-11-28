@@ -7,7 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
-const DISPLAY_ONLY: &[&str] = &[];
+const DISPLAY_ONLY: &[&str] =
+    &["rust/tennoworth-desktop/src/services/telemetry/reports/community.rs"];
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap() {
@@ -46,6 +47,7 @@ fn no_client_reads_the_published_report_prices() {
         .filter(|path| {
             let text = std::fs::read_to_string(path).unwrap();
             text.contains("reports/prices")
+                || text.contains("riven-prices")
                 || (text.contains("/api/reports") && text.contains("/prices"))
         })
         .map(|path| {

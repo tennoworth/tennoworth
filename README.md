@@ -291,4 +291,5 @@ use a separate app identity and do not replace production TennoWorth.
 ## License
 
 [MIT](LICENSE). TennoWorth is a fan project and is not affiliated with Digital
-Extremes or warframe.market.
+Extremes or warframe.market. [ATTRIBUTIONS.md](ATTRIBUTIONS.md) credits the work
+it builds on, including the riven roll guide 44bananas started.

@@ -624,13 +624,21 @@ export type RivenCompat = { compat: string | null, veiled: boolean, };
 
 export type RivenFingerprintStat = { tag: string, value: number, };
 
-export type RivenRow = { stats: Array<RivenStatRead>, splices: Array<SpliceChoice>, filter: RivenStatFilterPlan | null, unread: Array<string>, };
+export type RivenRow = { stats: Array<RivenStatRead>, splices: Array<SpliceChoice>, filter: RivenStatFilterPlan | null, unread: Array<string>,
+/**
+ * The roll guide's verdict; None for a veiled riven or an unresolved weapon.
+ */
+roll: RollCheck | null, };
 
 export type RivenRowInput = { buffs: Array<RivenStatTag>, curses: Array<RivenStatTag>, raw?: string, veiled: boolean,
 /**
  * The weapon's WFM `riven_type`, which picks the splice recipes.
  */
-riven_type?: string, };
+riven_type?: string,
+/**
+ * The weapon's WFM slug, which picks the roll guide entry.
+ */
+weapon?: string, };
 
 export type RivenRowsRequest = { attributes: Array<RivenAttributeRef>, rivens: Array<RivenRowInput>, };
 
@@ -654,6 +662,40 @@ export type RivenStatRead = { tag: string, slug: string | null, positive: boolea
 export type RivenStatTag = { tag: string, };
 
 export type RivenTier = { avg: number, median: number, min: number, max: number, stddev: number, pop: number, };
+
+export type RollCheck = { "kind": "read" } & RollRead | { "kind": "no_guide" } | { "kind": "unknown_stat" };
+
+export type RollRead = { verdict: RollVerdict,
+/**
+ * The build's required stats, then the pool its other wanted stats come from.
+ */
+need: Array<string>, pick: Array<string>,
+/**
+ * Positives the build does not want.
+ */
+dead: Array<string>,
+/**
+ * Required stats the riven lacks.
+ */
+missing: Array<string>,
+/**
+ * The negative, when the guide does not call it harmless on this weapon.
+ */
+hurts: string | null,
+/**
+ * The negative, when the guide calls it harmless.
+ */
+harmless: string | null,
+/**
+ * The guide's note for the weapon, in English: build-specific caveats.
+ */
+note: string | null,
+/**
+ * Who wrote the entry and the game update it was last checked against.
+ */
+source: string, checked: string, };
+
+export type RollVerdict = "sellable" | "almost" | "weak";
 
 export type SearchRequest = {
 /**

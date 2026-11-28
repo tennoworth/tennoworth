@@ -140,15 +140,15 @@
             <thead>
               <tr>
                 <th><span class="visually-hidden">{t('review.include')}</span></th>
-                <th>{t('review.col.item')}</th>
-                <th>{t('review.col.qty')}</th>
+                <th data-group>{t('review.col.item')}</th>
+                <th data-group>{t('review.col.qty')}</th>
                 {#if controller.hasSession}<th>{t('review.col.unitsPerTrade')}</th><th>{t('review.col.change')}</th>{/if}
                 <th>{t('review.col.owned')}</th>
-                <th>{t('review.col.price')}</th>
+                <th data-group data-key>{t('review.col.price')}</th>
                 <th>{t('review.col.avg')}</th>
                 <th title={t('review.col.liveTitle')}>{t('review.col.live')}</th>
-                <th title={t('review.col.rankTitle')}>{t('review.col.rank')}</th>
-                <th>{t('review.col.subtotal')}</th>
+                <th data-group title={t('review.col.rankTitle')}>{t('review.col.rank')}</th>
+                <th data-group>{t('review.col.subtotal')}</th>
               </tr>
             </thead>
             <tbody>

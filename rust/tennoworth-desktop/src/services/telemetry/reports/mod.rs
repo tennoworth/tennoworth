@@ -1,4 +1,5 @@
-//! Opt-in price reports: sale prices from the trade ledger, sent anonymously to
+//! Opt-in price reports: sale prices from the trade ledger, riven sales by
+//! weapon and roll verdict, and ratings of the roll guide, sent anonymously to
 //! tennoworth.app. docs/price-reports.md owns the contract and its privacy
 //! terms; tests/fixtures/reports.json pins the wire format and the
 //! id derivation on both sides.
@@ -17,6 +18,7 @@ use crate::services::telemetry::usage;
 use hmac::{Hmac, Mac};
 use jiff::civil::Date;
 use jiff::Timestamp;
+use market_domain::rivens::sold::{sold_riven, HeldRiven, SaleVerdict};
 use market_domain::stamp::{days, utc_date};
 use rand::{rngs::SysRng, TryRng};
 use serde::{Deserialize, Serialize};
@@ -25,11 +27,23 @@ use std::time::Duration;
 use tauri::{Manager, State};
 use tokio::sync::watch;
 
+pub mod community;
+
 const CONSENT: &str = "reports.sales-consent-v1";
+/// Riven sales joined price sharing after its first terms, which promised
+/// riven trades were never sent. An install that consented under those terms
+/// sends no riven sale until it includes them; turning sharing on now covers
+/// them from the start.
+const RIVEN_CONSENT: &str = "reports.riven-sales-consent-v1";
 const KEY: &str = "reports.key-v1";
 /// The id of the last trade already handled (sent, refused or not reportable).
 const MARK: &str = "reports.sales-mark-v1";
 const SENT: &str = "reports.sent-v1";
+/// The rivens of the last two scans, by weapon and verdict, so a riven sold
+/// between scans can still be matched. Kept only while sharing is on.
+const HELD: &str = "reports.held-rivens-v1";
+/// This week's ratings of the roll guide, so the Rivens view can show them.
+const VOTES: &str = "reports.roll-votes-v1";
 const BASE: &str = "https://tennoworth.app/api/reports";
 
 const CONTRACT_VERSION: u32 = 1;
@@ -49,6 +63,8 @@ pub struct PriceReportStatus {
     pub available: bool,
     /// Sales accepted by the service during the current ISO week.
     pub sent_this_week: u32,
+    /// Riven sales are covered too.
+    pub rivens: bool,
 }
 
 pub struct PriceReports {
@@ -110,16 +126,28 @@ struct Sale {
     trade_id: i64,
     day: Date,
     side: &'static str,
+    /// The item's slug, or for a riven the weapon's.
     slug: String,
     tiered: bool,
     qty: i64,
     plat: i64,
+    /// Set for a riven: its verdict, which is all a riven report says of it.
+    riven: Option<SaleVerdict>,
+}
+
+/// What a traded name is, for reporting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Resolved {
+    /// A catalog item's slug and whether it has ranks or subtypes.
+    Item(String, bool),
+    /// A riven the last scans held: its weapon and verdict.
+    Riven(String, SaleVerdict),
 }
 
 /// A trade becomes a report only when it is plat for one kind of item: any
 /// other shape has no unit price. The partner, the log stamp and the time of
 /// day are not carried over.
-fn sale_of(trade: &TradeRow, resolve: &dyn Fn(&str) -> Option<(String, bool)>) -> Option<Sale> {
+fn sale_of(trade: &TradeRow, resolve: &dyn Fn(&str) -> Option<Resolved>) -> Option<Sale> {
     let (side, direction) = match trade.kind.as_str() {
         "sale" => ("sale", "given"),
         "purchase" => ("purchase", "received"),
@@ -138,7 +166,14 @@ fn sale_of(trade: &TradeRow, resolve: &dyn Fn(&str) -> Option<(String, bool)>) -
     if !(1..=MAX_QTY).contains(&qty) || !(1..=MAX_PLAT).contains(&trade.plat) {
         return None;
     }
-    let (slug, tiered) = resolve(&name)?;
+    let (slug, tiered, riven) = match resolve(&name)? {
+        Resolved::Item(slug, tiered) => (slug, tiered, None),
+        // A bought riven was never scanned, and each riven is one of a kind.
+        Resolved::Riven(weapon, verdict) if side == "sale" && qty == 1 => {
+            (weapon, false, Some(verdict))
+        }
+        Resolved::Riven(..) => return None,
+    };
     Some(Sale {
         trade_id: trade.id,
         day: utc_date(Timestamp::from_second(trade.at).ok()?),
@@ -147,12 +182,15 @@ fn sale_of(trade: &TradeRow, resolve: &dyn Fn(&str) -> Option<(String, bool)>) -
         tiered,
         qty,
         plat: trade.plat,
+        riven,
     })
 }
 
 #[derive(Debug)]
 struct Batch {
     week: String,
+    /// Riven sales go to their own endpoint, so a batch holds one kind.
+    rivens: bool,
     sales: Vec<Sale>,
     /// The mark to store once this batch is settled: every trade up to here
     /// has been handled, including unreportable ones before the next batch.
@@ -165,7 +203,7 @@ struct Batch {
 fn plan(
     trades: &[TradeRow],
     today: Date,
-    resolve: &dyn Fn(&str) -> Option<(String, bool)>,
+    resolve: &dyn Fn(&str) -> Option<Resolved>,
 ) -> (Vec<Batch>, Option<i64>) {
     let oldest = today.checked_sub(days(MAX_SALE_AGE_DAYS as i64)).ok();
     let mut batches: Vec<Batch> = Vec::new();
@@ -177,12 +215,18 @@ fn plan(
             continue;
         }
         let week = iso_week(sale.day);
+        let rivens = sale.riven.is_some();
         match batches.last_mut() {
-            Some(last) if last.week == week && last.sales.len() < MAX_SALES_PER_BATCH => {
+            Some(last)
+                if last.week == week
+                    && last.rivens == rivens
+                    && last.sales.len() < MAX_SALES_PER_BATCH =>
+            {
                 last.sales.push(sale);
             }
             _ => batches.push(Batch {
                 week,
+                rivens,
                 sales: vec![sale],
                 through: 0,
             }),
@@ -207,6 +251,20 @@ fn plan(
 
 fn body(key: &[u8; 32], batch: &Batch) -> serde_json::Value {
     let ids = week_ids(key, &batch.week);
+    if batch.rivens {
+        return serde_json::json!({
+            "v": CONTRACT_VERSION,
+            "contributor": ids.contributor,
+            "erase": ids.erase,
+            "sales": batch.sales.iter().map(|s| serde_json::json!({
+                "ref": sale_ref(key, s.trade_id),
+                "day": s.day.to_string(),
+                "weapon": s.slug,
+                "verdict": s.riven,
+                "plat": s.plat,
+            })).collect::<Vec<_>>(),
+        });
+    }
     serde_json::json!({
         "v": CONTRACT_VERSION,
         "contributor": ids.contributor,
@@ -225,6 +283,10 @@ fn body(key: &[u8; 32], batch: &Batch) -> serde_json::Value {
 
 fn opted_in(db: &Db) -> bool {
     db.get_setting(CONSENT).ok().flatten().as_deref() == Some("true")
+}
+
+fn rivens_opted_in(db: &Db) -> bool {
+    opted_in(db) && db.get_setting(RIVEN_CONSENT).ok().flatten().as_deref() == Some("true")
 }
 
 /// The install key, created on first opt-in. A key that cannot be read back
@@ -283,6 +345,7 @@ fn status(db: &Db, reports: &PriceReports) -> PriceReportStatus {
         enabled: *reports.consent.borrow(),
         available: reports.available,
         sent_this_week: sent_this_week(db, &iso_week(utc_date(Timestamp::now()))),
+        rivens: *reports.consent.borrow() && rivens_opted_in(db),
     }
 }
 
@@ -314,6 +377,8 @@ fn update_preferences(db: &Db, reports: &PriceReports, enabled: bool) -> Result<
     }
     if !enabled {
         reports.consent.send_replace(false);
+        let _ = db.set_setting(HELD, "");
+        let _ = db.set_setting(RIVEN_CONSENT, "false");
         return db.set_setting(CONSENT, "false").map_err(|_| {
             "Could not save this preference. Sharing is stopped for this session; retry before restarting.".to_string()
         });
@@ -324,9 +389,34 @@ fn update_preferences(db: &Db, reports: &PriceReports, enabled: bool) -> Result<
     let newest = db.last_trade_id().map_err(|_| failed())?;
     db.set_setting(MARK, &newest.to_string())
         .map_err(|_| failed())?;
+    db.set_setting(RIVEN_CONSENT, "true")
+        .map_err(|_| failed())?;
     db.set_setting(CONSENT, "true").map_err(|_| failed())?;
     reports.consent.send_replace(true);
     Ok(())
+}
+
+/// Extend an existing consent to riven sales. Only sales from now on: the
+/// queue mark already covers every trade recorded before this.
+#[tauri::command]
+pub fn include_riven_sales(
+    db: State<'_, Db>,
+    reports: State<'_, PriceReports>,
+) -> Result<PriceReportStatus, String> {
+    include_rivens(&db, &reports)?;
+    Ok(status(&db, &reports))
+}
+
+fn include_rivens(db: &Db, reports: &PriceReports) -> Result<(), String> {
+    let _mutation = reports
+        .mutation
+        .lock()
+        .map_err(|_| "Price sharing preferences are unavailable.".to_string())?;
+    if !reports.available || !opted_in(db) {
+        return Err("Turn on price sharing first.".into());
+    }
+    db.set_setting(RIVEN_CONSENT, "true")
+        .map_err(|_| "Could not save this preference. Nothing has been shared.".to_string())
 }
 
 /// Ask the service to delete this install's reports for the two weeks it still
@@ -375,6 +465,7 @@ async fn erase_recent(
         }
     }
     db.set_setting(SENT, "").map_err(|_| unavailable())?;
+    db.set_setting(VOTES, "").map_err(|_| unavailable())?;
     Ok(())
 }
 
@@ -444,7 +535,7 @@ async fn pass(
     db: &Db,
     market: &(dyn Fn() -> std::sync::Arc<MarketData> + Sync),
     client: &reqwest::Client,
-    endpoint: &str,
+    base: &str,
     consent: &mut watch::Receiver<bool>,
     reports: &PriceReports,
 ) -> bool {
@@ -461,10 +552,28 @@ async fn pass(
     let today = utc_date(Timestamp::now());
     let (batches, last_read) = {
         let market = market();
-        plan(&trades, today, &|name: &str| market.report_item(name))
+        let held = if rivens_opted_in(db) {
+            held_rivens(db)
+        } else {
+            Vec::new()
+        };
+        plan(&trades, today, &|name: &str| {
+            market
+                .report_item(name)
+                .map(|(slug, tiered)| Resolved::Item(slug, tiered))
+                .or_else(|| {
+                    sold_riven(name, &held)
+                        .map(|(weapon, verdict)| Resolved::Riven(weapon, verdict))
+                })
+        })
     };
     for batch in &batches {
-        match deliver(client, endpoint, &body(&key, batch), consent).await {
+        let endpoint = if batch.rivens {
+            format!("{base}/riven-sales")
+        } else {
+            format!("{base}/sales")
+        };
+        match deliver(client, &endpoint, &body(&key, batch), consent).await {
             Delivery::Settled { accepted } => {
                 if accepted {
                     add_sent(db, &iso_week(today), batch.sales.len());
@@ -484,6 +593,149 @@ async fn pass(
     true
 }
 
+#[derive(Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct HeldScans {
+    current: Vec<HeldRiven>,
+    previous: Vec<HeldRiven>,
+}
+
+fn held_scans(db: &Db) -> HeldScans {
+    db.get_setting(HELD)
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+/// Every riven the last two scans held. A riven sold after one scan and gone
+/// by the next is still found; one weapon's rivens under different verdicts
+/// leave its sale unattributed.
+fn held_rivens(db: &Db) -> Vec<HeldRiven> {
+    let scans = held_scans(db);
+    scans.current.into_iter().chain(scans.previous).collect()
+}
+
+/// Remember the rivens a scan found, by weapon and verdict only, so a riven
+/// sale can carry its verdict. Nothing is kept while sharing is off.
+pub(crate) fn remember_scan(db: &Db, market: &MarketData, inventory: &[u8]) {
+    if !rivens_opted_in(db) {
+        return;
+    }
+    let Ok(inventory) = serde_json::from_slice::<serde_json::Value>(inventory) else {
+        return;
+    };
+    let scans = HeldScans {
+        current: market.held_rivens(&inventory),
+        previous: held_scans(db).current,
+    };
+    if let Ok(json) = serde_json::to_string(&scans) {
+        let _ = db.set_setting(HELD, &json);
+    }
+}
+
+/// A rating of the roll guide's verdict for one weapon, as the Rivens view
+/// sends it. `stat` is a WFM stat slug; `good` means a wanted positive or a
+/// harmless negative on this weapon.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RollVote {
+    pub weapon: String,
+    pub verdict: SaleVerdict,
+    pub agree: bool,
+    #[serde(default)]
+    pub suggest: Option<RollSuggestion>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RollSuggestion {
+    pub stat: String,
+    pub positive: bool,
+    pub good: bool,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct WeekVotes {
+    week: String,
+    votes: Vec<RollVote>,
+}
+
+fn week_votes(db: &Db, week: &str) -> Vec<RollVote> {
+    db.get_setting(VOTES)
+        .ok()
+        .flatten()
+        .and_then(|raw| serde_json::from_str::<WeekVotes>(&raw).ok())
+        .filter(|v| v.week == week)
+        .map(|v| v.votes)
+        .unwrap_or_default()
+}
+
+/// This week's ratings from this install: the service keeps one per weapon a
+/// week, so the view shows it instead of asking again.
+#[tauri::command]
+pub fn get_roll_votes(db: State<'_, Db>) -> Vec<RollVote> {
+    week_votes(&db, &iso_week(utc_date(Timestamp::now())))
+}
+
+#[tauri::command]
+pub async fn send_roll_vote(
+    db: State<'_, Db>,
+    reports: State<'_, PriceReports>,
+    vote: RollVote,
+) -> Result<Vec<RollVote>, String> {
+    let client = usage::client()
+        .map_err(|_| "Could not reach the rating service. Try again later.".to_string())?;
+    rate(&db, &reports, &client, BASE, vote).await
+}
+
+async fn rate(
+    db: &Db,
+    reports: &PriceReports,
+    client: &reqwest::Client,
+    base: &str,
+    vote: RollVote,
+) -> Result<Vec<RollVote>, String> {
+    if !reports.available || !*reports.consent.borrow() || !opted_in(db) {
+        return Err("Turn on price sharing in Settings to rate verdicts.".into());
+    }
+    let Ok(Some(key)) = load_key(db, false) else {
+        return Err("Turn on price sharing in Settings to rate verdicts.".into());
+    };
+    let week = iso_week(utc_date(Timestamp::now()));
+    let ids = week_ids(&key, &week);
+    let body = serde_json::json!({
+        "v": CONTRACT_VERSION,
+        "contributor": ids.contributor,
+        "erase": ids.erase,
+        "weapon": vote.weapon,
+        "verdict": vote.verdict,
+        "agree": vote.agree,
+        "suggest": vote.suggest,
+    });
+    match post(client, &format!("{base}/roll-vote"), &body).await {
+        Ok(reqwest::StatusCode::NO_CONTENT) => {}
+        Ok(status)
+            if status.is_client_error() && status != reqwest::StatusCode::TOO_MANY_REQUESTS =>
+        {
+            return Err("The rating service refused this rating.".into());
+        }
+        _ => return Err("Could not reach the rating service. Try again later.".into()),
+    }
+    let mut votes = week_votes(db, &week);
+    votes.retain(|v| v.weapon != vote.weapon);
+    votes.push(vote);
+    let stored = serde_json::to_string(&WeekVotes {
+        week,
+        votes: votes.clone(),
+    })
+    .map_err(|_| "The rating was sent but could not be saved here.".to_string())?;
+    db.set_setting(VOTES, &stored)
+        .map_err(|_| "The rating was sent but could not be saved here.".to_string())?;
+    Ok(votes)
+}
+
 pub fn start(app: tauri::AppHandle) {
     let available = usage::allowed();
     let enabled = available && opted_in(&app.state::<Db>());
@@ -499,7 +751,6 @@ pub fn start(app: tauri::AppHandle) {
     }
     tauri::async_runtime::spawn(async move {
         let Ok(client) = usage::client() else { return };
-        let endpoint = format!("{BASE}/sales");
         let mut wait = PASS_INTERVAL;
         loop {
             // Setup registers the market cache after this task starts.
@@ -513,7 +764,7 @@ pub fn start(app: tauri::AppHandle) {
                     &app.state::<Db>(),
                     &market,
                     &client,
-                    &endpoint,
+                    BASE,
                     &mut receiver,
                     &app.state::<PriceReports>(),
                 )

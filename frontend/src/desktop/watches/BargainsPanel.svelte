@@ -59,10 +59,10 @@
         <thead>
           <tr>
             <th class="l">{t('bargains.col.item')}</th>
-            <th>{t('bargains.col.ask')}</th>
+            <th data-group>{t('bargains.col.ask')}</th>
             <th>{t('bargains.col.resale')}</th>
-            <th>{t('bargains.col.margin')}</th>
-            <th data-drop="1">{t('bargains.col.vol')}</th>
+            <th data-group data-key>{t('bargains.col.margin')}</th>
+            <th data-drop="1" data-group>{t('bargains.col.vol')}</th>
             <th class="l">{t('bargains.col.live')}</th>
           </tr>
         </thead>

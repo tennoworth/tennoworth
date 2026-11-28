@@ -8735,8 +8735,9 @@ msgstr "판매 가격 공유"
 
 #. Setting help.
 #, fuzzy
+#| msgid "Off unless you choose to enable it. When a trade for platinum completes from now on, the item and the price are sent so TennoWorth can publish what items really sell for. An item’s price is published only once five installs report it in the same week."
 msgctxt "prices.shareHelp"
-msgid "Off unless you choose to enable it. When a trade for platinum completes from now on, the item and the price are sent so TennoWorth can publish what items really sell for. An item’s price is published only once five installs report it in the same week."
+msgid "Off unless you choose to enable it. When a trade for platinum completes from now on, the item and the price are sent so TennoWorth can publish what items really sell for; for a riven, its weapon and roll verdict stand in for the item. A price is published only once five installs report it in the same week."
 msgstr "직접 켜지 않으면 꺼져 있습니다. 켜면 앞으로 플래티넘 거래가 완료될 때 아이템과 가격을 보내, TennoWorth가 아이템의 실제 판매 가격을 공개할 수 있게 합니다. 같은 주에 5개 설치본이 보고한 아이템의 가격만 공개됩니다."
 
 #. Status. Keep <b> around the number.
@@ -8777,9 +8778,35 @@ msgstr "플래티넘과 한 종류의 아이템을 교환한 거래만 해당합
 
 #. Terms.
 #, fuzzy
+#| msgid "Never sent: who you traded with, the time of day, your inventory, riven trades, your game or warframe.market account, the app version or your platform. Reports carry an id that changes every week, so weeks cannot be linked to each other or to you."
 msgctxt "prices.terms2"
-msgid "Never sent: who you traded with, the time of day, your inventory, riven trades, your game or warframe.market account, the app version or your platform. Reports carry an id that changes every week, so weeks cannot be linked to each other or to you."
+msgid "Never sent: who you traded with, the time of day, your inventory, a riven’s stats or name, your game or warframe.market account, the app version or your platform. Reports carry an id that changes every week, so weeks cannot be linked to each other or to you."
 msgstr "보내지 않는 것: 거래 상대, 거래 시각, 소지품, 리벤 거래, 게임 또는 warframe.market 계정, 앱 버전, 플랫폼. 보고에는 매주 바뀌는 ID가 붙으므로 주끼리 또는 사용자와 연결할 수 없습니다."
+
+#. Terms.
+msgctxt "prices.termsRivens"
+msgid "For a riven you sell: its weapon, its roll verdict (Sellable, Almost, Weak or unrated), the price and the UTC day. The app tells which riven it was from your last two scans, keeping only each riven’s weapon and verdict; a sale it cannot tell apart is not sent."
+msgstr ""
+
+#. Terms.
+msgctxt "prices.termsRatings"
+msgid "When you rate a roll verdict: the weapon, the verdict shown, your answer and the correction you picked, if any. One rating per weapon a week counts; ratings never change the roll guide on their own."
+msgstr ""
+
+#. Setting, shown to installs that turned sharing on before riven sales were covered.
+msgctxt "prices.rivensTitle"
+msgid "Riven sales are not shared yet"
+msgstr ""
+
+#. Setting help.
+msgctxt "prices.rivensHelp"
+msgid "Price sharing now covers riven sales: the weapon, the roll verdict, the price and the day, never the riven’s stats. You turned sharing on before this, so riven sales stay unsent until you include them."
+msgstr ""
+
+#. Button.
+msgctxt "prices.rivensInclude"
+msgid "Include riven sales"
+msgstr ""
 
 #. Terms, before a link. Keep the trailing space.
 #, fuzzy
@@ -9899,19 +9926,103 @@ msgctxt "riven.col.rank"
 msgid "Rank"
 msgstr "랭크"
 
+#. Column header: the roll guide verdict.
+#. Max 14 characters.
+msgctxt "riven.col.verdict"
+msgid "Roll verdict"
+msgstr ""
+
+#. Column header: the median of DE’s weekly trade band.
+#. Max 12 characters.
+msgctxt "riven.col.median"
+msgid "DE median"
+msgstr ""
+
+#. Column header: the min–max of DE’s weekly trade band.
+#. Max 12 characters.
+msgctxt "riven.col.range"
+msgid "DE range"
+msgstr ""
+
+#. Summary label: rivens whose roll buyers look for.
+#. Max 12 characters.
+msgctxt "riven.sellableCount"
+msgid "Sellable"
+msgstr ""
+
+#. Screen reader name of the verdict filter.
+msgctxt "riven.filter"
+msgid "Show rivens by roll verdict"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 12 characters.
+msgctxt "riven.filter.all"
+msgid "All {count}"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 14 characters.
+msgctxt "riven.filter.sellable"
+msgid "Sellable {count}"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 14 characters.
+msgctxt "riven.filter.almost"
+msgid "Almost {count}"
+msgstr ""
+
+#. Filter button with a count.
+#. Max 14 characters.
+msgctxt "riven.filter.weak"
+msgid "Weak {count}"
+msgstr ""
+
+#. Filter button with a count: rivens the roll guide does not judge.
+#. Max 14 characters.
+msgctxt "riven.filter.unrated"
+msgid "Unrated {count}"
+msgstr ""
+
+#. Note beside the filter: how the list is ordered.
+msgctxt "riven.sortedByVerdict"
+msgid "Best roll verdict first"
+msgstr ""
+
+#. Empty state when a filter matches nothing.
+msgctxt "riven.filterEmpty"
+msgid "No rivens with this verdict."
+msgstr ""
+
+#. Button: opens the offer check under the riven.
+#. Max 14 characters.
+msgctxt "riven.offer"
+msgid "Check offer"
+msgstr ""
+
+#. Button: closes the offer check.
+#. Max 14 characters.
+msgctxt "riven.hideOffer"
+msgid "Hide offer"
+msgstr ""
+
+#. Disclosure on a weak roll: the stats buyers look for on this weapon.
+msgctxt "riven.roll.buyersWant"
+msgid "What buyers want"
+msgstr ""
+
+#. In place of a verdict for a veiled riven.
+msgctxt "riven.roll.veiled"
+msgid "Not judged until unveiled."
+msgstr ""
+
 #. Column header: disposition.
 #. Max 8 characters.
 #, fuzzy
 msgctxt "riven.col.dispo"
 msgid "Dispo"
 msgstr "성향"
-
-#. Column header.
-#. Max 14 characters.
-#, fuzzy
-msgctxt "riven.col.de"
-msgid "DE weekly"
-msgstr "DE 주간"
 
 #. Column tooltip.
 #, fuzzy
@@ -10041,12 +10152,6 @@ msgstr "결합 가능:"
 msgctxt "riven.dispoMove"
 msgid "Disposition {from} → {to} ({date})"
 msgstr "성향 {from} → {to} ({date})"
-
-#. Disclosure.
-#, fuzzy
-msgctxt "riven.checkOffer"
-msgid "check an offer"
-msgstr "제안가 확인"
 
 #. Screen reader name.
 #, fuzzy
@@ -10179,6 +10284,189 @@ msgstr "랭크 {rank}"
 msgctxt "riven.pages"
 msgid "Riven pages"
 msgstr "리벤 페이지"
+
+#. Roll verdict tag: buyers look for this combination of stats on this weapon.
+#. Max 10 characters.
+msgctxt "riven.roll.sellable"
+msgid "Sellable"
+msgstr ""
+
+#. Roll verdict tag: one thing short of a combination buyers look for.
+#. Max 10 characters.
+msgctxt "riven.roll.almost"
+msgid "Almost"
+msgstr ""
+
+#. Roll verdict tag: few buyers look for these stats on this weapon.
+#. Max 10 characters.
+msgctxt "riven.roll.weak"
+msgid "Weak roll"
+msgstr ""
+
+#. Tooltip of the verdict tag.
+msgctxt "riven.roll.help"
+msgid "Roll guide verdict: whether buyers look for this combination of stats on this weapon. It does not judge how strong each roll is."
+msgstr ""
+
+#. Reason for a sellable verdict.
+msgctxt "riven.roll.matches"
+msgid "Stats buyers look for on this weapon"
+msgstr ""
+
+#. Reason; stats are riven stat names with their sign.
+msgctxt "riven.roll.missing"
+msgid "Missing {stats}"
+msgstr ""
+
+#. Reason: positive stats buyers do not look for on this weapon; stats is the list, count how many.
+msgctxt "riven.roll.dead"
+msgid "{count, plural, one {{stats} adds little here} other {{stats} add little here}}"
+msgstr ""
+
+#. Reason: the negative stat lowers what buyers pay.
+msgctxt "riven.roll.hurts"
+msgid "{stat} hurts here"
+msgstr ""
+
+#. Note on the negative stat.
+msgctxt "riven.roll.harmless"
+msgid "{stat} is harmless here"
+msgstr ""
+
+#. Label before a note in English from the roll guide.
+msgctxt "riven.roll.note"
+msgid "Guide note:"
+msgstr ""
+
+#. In place of a verdict.
+msgctxt "riven.roll.noGuide"
+msgid "No roll guide for this weapon yet."
+msgstr ""
+
+#. In place of a verdict.
+msgctxt "riven.roll.unknownStat"
+msgid "Not judged: it has a stat the app does not recognise."
+msgstr ""
+
+#. Credit line under the Rivens table. Keep the name 44bananas and the guide title as they are.
+msgctxt "riven.guideCredit"
+msgid "Roll verdicts come from the TennoWorth roll guide, started from 44bananas’ “good rolls for selling” (update 44.1.2) and kept up by players. They judge which stats a riven has, not how strong each roll is."
+msgstr ""
+
+#. Link to the form for changing the roll guide.
+msgctxt "riven.guideSuggest"
+msgid "Suggest a change"
+msgstr ""
+
+#. Before Yes and No buttons under a riven’s roll verdict.
+msgctxt "riven.rate.question"
+msgid "Verdict right?"
+msgstr ""
+
+#. Button: the roll verdict is right.
+#. Max 12 characters.
+msgctxt "riven.rate.yes"
+msgid "Yes"
+msgstr ""
+
+#. Button: the roll verdict is wrong.
+#. Max 12 characters.
+msgctxt "riven.rate.no"
+msgid "No"
+msgstr ""
+
+#. Label of the list of corrections to a roll verdict.
+msgctxt "riven.rate.whatsOff"
+msgid "What’s off?"
+msgstr ""
+
+#. Correction: buyers look for this positive stat on the weapon. stat is the stat name with its sign.
+msgctxt "riven.rate.wanted"
+msgid "Buyers want {stat} here"
+msgstr ""
+
+#. Correction: buyers do not look for this positive stat on the weapon.
+msgctxt "riven.rate.addsLittle"
+msgid "{stat} adds little here"
+msgstr ""
+
+#. Correction: this negative stat does not lower the price on the weapon.
+msgctxt "riven.rate.harmless"
+msgid "{stat} is harmless here"
+msgstr ""
+
+#. Correction: this negative stat lowers the price on the weapon.
+msgctxt "riven.rate.hurts"
+msgid "{stat} hurts here"
+msgstr ""
+
+#. Correction option when none of the listed ones fits.
+msgctxt "riven.rate.other"
+msgid "Something else"
+msgstr ""
+
+#. Button: send the rating.
+#. Max 12 characters.
+msgctxt "riven.rate.send"
+msgid "Send"
+msgstr ""
+
+#. Button: close the list of corrections without rating.
+#. Max 12 characters.
+msgctxt "riven.rate.cancel"
+msgid "Cancel"
+msgstr ""
+
+#. Shown when a rating is tried with price sharing off.
+msgctxt "riven.rate.needsSharing"
+msgid "Turn on price sharing in Settings to rate verdicts."
+msgstr ""
+
+#. After a rating is sent.
+msgctxt "riven.rate.thanks"
+msgid "Thanks. The guide is reviewed when enough players who sold rivens for this weapon say the same."
+msgstr ""
+
+#. This install’s rating for the weapon.
+msgctxt "riven.rate.saidRight"
+msgid "You rated this verdict right this week."
+msgstr ""
+
+#. This install’s rating for the weapon.
+msgctxt "riven.rate.saidWrong"
+msgid "You rated this verdict wrong this week."
+msgstr ""
+
+#. This install’s correction for the weapon; what is a correction such as “−Zoom is harmless here”.
+msgctxt "riven.rate.saidOff"
+msgid "You said: {what}."
+msgstr ""
+
+#. Button: rate the verdict again.
+#. Max 12 characters.
+msgctxt "riven.rate.change"
+msgid "Change"
+msgstr ""
+
+#. Link to the roll guide suggestion form after a rating without a correction.
+msgctxt "riven.rate.tellUs"
+msgid "Say what is off"
+msgstr ""
+
+#. Under DE’s band: the median price players reported for rivens of this weapon with the same verdict.
+msgctxt "riven.players"
+msgid "Players: {price}"
+msgstr ""
+
+#. After the players’ price: how many installs reported it.
+msgctxt "riven.players.count"
+msgid "{count, plural, one {# seller} other {# sellers}}"
+msgstr ""
+
+#. Tooltip; verdict is a verdict name such as Sellable, week an ISO week such as 2026-W47.
+msgctxt "riven.players.help"
+msgid "Median price players reported selling {verdict} rivens of this weapon for, week {week}. Shown as reported; it never feeds advice."
+msgstr ""
 
 #. Offer placement.
 #, fuzzy
@@ -13495,8 +13783,9 @@ msgstr "리벤, 아케인, 워프레임 모드는요?"
 
 #. FAQ answer. Keep the tags and the technical names in <code>.
 #, fuzzy
+#| msgid "Arcanes and frame mods (in <code>RawUpgrades</code>) are resolved and priced like anything else. Rivens are per-instance items with rolled stats, so they have no single market price and the app does not invent one. The desktop app’s Rivens view shows DE’s weekly price band for the weapon, the disposition trend, the splices each riven qualifies for, and the cheapest live buyouts for rolls with the same positive stats."
 msgctxt "faq.rivens.a"
-msgid "Arcanes and frame mods (in <code>RawUpgrades</code>) are resolved and priced like anything else. Rivens are per-instance items with rolled stats, so they have no single market price and the app does not invent one. The desktop app’s Rivens view shows DE’s weekly price band for the weapon, the disposition trend, the splices each riven qualifies for, and the cheapest live buyouts for rolls with the same positive stats."
+msgid "Arcanes and frame mods (in <code>RawUpgrades</code>) are resolved and priced like anything else. Rivens are per-instance items with rolled stats, so they have no single market price and the app does not invent one. The desktop app’s Rivens view shows DE’s weekly price band for the weapon, the disposition trend, the splices each riven qualifies for, whether its stats are a combination buyers look for on that weapon, and the cheapest live buyouts for rolls with the same positive stats. That roll guide started from 44bananas’ “good rolls for selling” and is kept up by players through the project’s repository. With price sharing on, you can rate each verdict; a correction reaches the guide’s maintainers once enough players who sold rivens for that weapon back it, and the view shows what players sold rivens with the same verdict for."
 msgstr "아케인과 워프레임 모드(<code>RawUpgrades</code>에 있음)는 다른 아이템처럼 인식하고 가격을 매깁니다. 리벤은 옵션이 무작위로 붙는 개별 아이템이라 단일 시세가 없으며, 앱도 임의로 만들어 내지 않습니다. 데스크톱 앱의 리벤 화면은 무기에 대한 DE의 주간 가격 구간, 성향 추세, 각 리벤에 가능한 결합, 같은 긍정 옵션을 가진 매물의 실시간 최저 즉시 구매가를 보여 줍니다."
 
 #. Question.

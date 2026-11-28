@@ -110,6 +110,8 @@ interface PriceReportCapability {
   setPriceReportPreferences(enabled: boolean): Promise<import('./price-reports').PriceReportPreferences>;
   /** Deletes this install's reports from the weeks the service still holds raw. */
   erasePriceReports(): Promise<void>;
+  /** Extends an existing consent to riven sales from now on. */
+  includeRivenSales(): Promise<import('./price-reports').PriceReportPreferences>;
 }
 
 export interface DesktopCapabilities extends UsageCapability, PriceReportCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability, AutoScanCapability, PresenceCapability, AppIconCapability { }

@@ -1101,7 +1101,44 @@ test('riven bands draw the median inside their min-max range on one shared scale
     expect(centre).toBeGreaterThanOrEqual(span.x - 1);
     expect(centre).toBeLessThanOrEqual(span.x + span.width + 1);
   }
-  // Medians of 140p and 100p: the higher one sits further right on the shared scale.
-  const mids = await bands.locator('.range .mid').evaluateAll(els => els.map(el => el.getBoundingClientRect().x));
-  expect(mids[0]).toBeGreaterThan(mids[1]);
+  // The higher median sits further right on the shared scale, whatever the
+  // row order (the list leads with the best verdict, not the highest price).
+  const ticks = await page.locator('tbody tr').evaluateAll(rows => rows.flatMap(row => {
+    const median = row.querySelector('.median')?.textContent ?? '';
+    const tick = row.querySelector('.range .mid');
+    return tick ? [{ median: Number(median.replace(/\D/g, '')), x: tick.getBoundingClientRect().x }] : [];
+  }));
+  const low = ticks.reduce((a, b) => (b.median < a.median ? b : a));
+  const high = ticks.reduce((a, b) => (b.median > a.median ? b : a));
+  expect(high.median).toBeGreaterThan(low.median);
+  expect(high.x).toBeGreaterThan(low.x);
+});
+
+test('column groups draw one straight line from header to last row, and the pointer lights its column', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
+  const table = page.getByTestId('rivens-view').locator('table');
+  await expect(table.locator('tbody tr').first()).toBeVisible();
+  const columns = await table.evaluate((t) => {
+    const heads = [...t.querySelectorAll('thead th')];
+    return heads.flatMap((th, i) => (th.hasAttribute('data-group') ? [i] : [])).map((i) => {
+      const lefts = [...t.querySelectorAll('tr')]
+        .filter((r) => r.children.length === heads.length)
+        .map((r) => {
+          const cell = r.children[i] as HTMLElement;
+          return { left: Math.round(cell.getBoundingClientRect().left), border: getComputedStyle(cell).borderLeftWidth };
+        });
+      return lefts;
+    });
+  });
+  expect(columns.length).toBeGreaterThan(2);
+  for (const cells of columns) {
+    expect(new Set(cells.map((c) => c.left)).size, 'every cell in a group column starts at the same x').toBe(1);
+    expect(cells.every((c) => c.border === '1px'), 'every cell carries the group line').toBe(true);
+  }
+  const verdictHead = table.locator('thead th[data-key]');
+  await expect(verdictHead).toHaveCount(1);
+  await table.locator('tbody tr').first().locator('td').nth(3).hover();
+  await expect(table.locator('thead th').nth(3)).toHaveAttribute('data-hot', '');
+  await expect(table.locator('thead th[data-hot]')).toHaveCount(1);
 });
