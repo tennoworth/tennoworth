@@ -134,6 +134,30 @@ describe('RivensPanel', () => {
     await waitFor(() => expect(screen.queryByText('Between median and average')).toBeNull());
   });
 
+  it('shows the roll guide verdict with its reasons, and credits the guide', async () => {
+    installTauri(makeInvoke(), undefined);
+    const sellable: OwnedRiven = {
+      ...RAW_RIVENS[0]!, raw: undefined,
+      buffs: [{ tag: 'WeaponCritDamageMod', value: 1 }, { tag: 'WeaponViralDamageMod', value: 1 }],
+      curses: [],
+    };
+    render(RivensPanel, { props: { market, rivens: resolveRivens([...RAW_RIVENS, sellable], market) } });
+    const verdicts = await screen.findAllByTestId('riven-roll');
+    // The veiled riven has nothing to judge.
+    expect(verdicts).toHaveLength(3);
+    // The sign is joined to its stat so a narrow cell never wraps between them.
+    const joiner = String.fromCharCode(0x2060);
+    expect(verdicts.some((v) => (v.textContent ?? '').includes('-' + joiner + 'Status Duration'))).toBe(true);
+    const text = verdicts.map((v) => (v.textContent ?? '').split(joiner).join(''));
+    expect(text.filter((v) => v.includes('Weak roll'))).toHaveLength(2);
+    expect(text.find((v) => v.includes('-Status Duration'))).toContain('-Status Duration hurts here');
+    expect(text.find((v) => v.includes('Sellable'))).toContain('Stats buyers look for on this weapon');
+    expect(text.find((v) => v.includes('+Heat'))).toContain('+Heat, +Cold add little here');
+    const credit = screen.getByTestId('roll-guide-credit');
+    expect(credit.textContent).toContain('44bananas');
+    expect(screen.getByRole('link', { name: 'Suggest a change' }).getAttribute('href')).toContain('template=riven-roll.yml');
+  });
+
   it('lists the splices a riven qualifies for, and none for one that has no pair', async () => {
     installTauri(makeInvoke(), undefined);
     render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });

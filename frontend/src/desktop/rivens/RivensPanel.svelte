@@ -22,6 +22,7 @@
     rivenSimilarities,
     type OwnedRiven,
     type RivenRowRead,
+    type RollCheck,
     type SpliceOption,
   } from '../../domain/rivens';
   import { describeComps } from '../../domain/riven-appraise';
@@ -201,6 +202,32 @@
     return t(o.randomIsNegative ? 'riven.spliceNegative' : 'riven.splice', { name, first: o.consumed[0].label, second: o.consumed[1].label });
   }
 
+  // Changes to the roll guide come in as suggestions; the form asks for the
+  // weapon, the change and the evidence for it.
+  const ROLL_GUIDE_ISSUE = 'https://github.com/tennoworth/tennoworth/issues/new?template=riven-roll.yml';
+  const VERDICT = { sellable: 'riven.roll.sellable', almost: 'riven.roll.almost', weak: 'riven.roll.weak' } as const;
+
+  type RollRead = Extract<RollCheck, { kind: 'read' }>;
+
+  // A word joiner keeps the sign on the line with its stat; a bare hyphen is a
+  // break opportunity, which split "-" from "Zoom" in a narrow cell.
+  function statNames(slugs: string[], sign: '+' | '-'): string {
+    return slugs.map((s) => sign + '\u2060' + attrName(s)).join(', ');
+  }
+
+  /** Why the verdict is what it is: what is missing, unwanted or harmful, or
+   *  for a sellable roll, that its negative does no harm here. */
+  function rollReasons(read: RollRead): string {
+    const parts: string[] = [];
+    if (read.verdict === 'sellable') parts.push(t('riven.roll.matches'));
+    if (read.missing.length) parts.push(t('riven.roll.missing', { stats: statNames(read.missing, '+') }));
+    if (read.dead.length) parts.push(t('riven.roll.dead', { stats: statNames(read.dead, '+'), count: read.dead.length }));
+    if (read.hurts) parts.push(t('riven.roll.hurts', { stat: statNames([read.hurts], '-') }));
+    else if (read.harmless) parts.push(t('riven.roll.harmless', { stat: statNames([read.harmless], '-') }));
+    if (read.verdict === 'weak') parts.push(t('riven.roll.wants', { stats: statNames([...read.need, ...read.pick], '+') }));
+    return parts.join(' · ');
+  }
+
   function filterText(row: Row): string {
     if (!row.filter) return '';
     const names = row.filter.filter.positive.map((s) => '+' + attrName(s)).join(', ');
@@ -291,6 +318,16 @@
                     {/each}
                   {/if}
                 </div>
+                {#if row.roll?.kind === 'read'}
+                  {@const roll = row.roll}
+                  <p class="roll" data-testid="riven-roll">
+                    <span class="tag roll-{roll.verdict}" title={t('riven.roll.help')}>{t(VERDICT[roll.verdict])}</span>
+                    {rollReasons(roll)}
+                    {#if roll.note}<span class="roll-note">{t('riven.roll.note')} <span lang="en">{roll.note}</span></span>{/if}
+                  </p>
+                {:else if row.roll}
+                  <p class="roll muted" data-testid="riven-roll">{t(row.roll.kind === 'no_guide' ? 'riven.roll.noGuide' : 'riven.roll.unknownStat')}</p>
+                {/if}
                 {#if row.unread.length > 0}
                   <p class="unread" data-testid="unread-fingerprint">
                     {t('riven.unread', { keys: row.unread.join(', ') })}
@@ -419,6 +456,10 @@
       </table>
     </div>
     <Pager window={win} total={sorted.length} label={t('riven.pages')} target={tableEl} onpage={(p) => (page = p)} />
+    <p class="guide-credit" data-testid="roll-guide-credit">
+      {t('riven.guideCredit')}
+      <a href={ROLL_GUIDE_ISSUE} target="_blank" rel="noopener noreferrer">{t('riven.guideSuggest')}</a>
+    </p>
   {/if}
 
 </section>
@@ -447,6 +488,11 @@
   .spliced { margin-left: var(--s1); color: var(--muted); font: var(--text-caption) var(--font-ui); }
   .splices { margin: 0 0 var(--s1); max-width: 420px; color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .splices-label { font-family: var(--font-ui); color: var(--fg); }
+  /* The verdict leads its line, so the tag drops its usual leading gap. */
+  .roll { margin: 0 0 var(--s1); max-width: 420px; color: var(--fg); font: var(--text-caption)/var(--leading-body) var(--font-body); }
+  .roll .tag { margin-inline: 0 var(--s1); }
+  .roll-note { display: block; color: var(--muted); }
+  .guide-credit { margin: var(--s2) 0 0; padding: 0 var(--inset); max-width: 64rem; color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .unread { margin: 0 0 var(--s1); max-width: 420px; color: var(--warn); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .comps-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2); padding-top: var(--s1); }
   .band { white-space: nowrap; }

@@ -1,0 +1,33 @@
+name: Suggest a riven roll guide change
+description: Tell us which stats buyers look for on a weapon, or which negatives do no harm.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The Rivens view rates each riven against the roll guide, which players keep current.
+        Suggestions are public. You do not need to edit any files; a maintainer or contributor turns a suggestion into a change.
+  - type: input
+    id: weapon
+    attributes:
+      label: Weapon
+      description: As the game or warframe.market names it, for example Acceltra.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: What should change?
+      description: The stats buyers look for, a negative that does or does not hurt, or a verdict the app gets wrong. Trade shorthand such as CD/MS/DMG is fine.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Why?
+      description: Optional, but it decides most suggestions. A link to warframe.market listings, a sale you made, or the build that needs it.
+  - type: input
+    id: update
+    attributes:
+      label: Game update
+      description: Optional. The Warframe update this is true for, if you know it.

@@ -70,7 +70,8 @@ rust/
     ingest/                  upstream transport and source adapters; de/ is the DE ingest
     scrape/                  the WFM sweep: transport and retry, orders, statistics, stats cache
     pipeline/                build: CSV input, render, reconcile, history, publication
-  market-domain/             market heuristics (math), inventory, scoring, advisor, planners
+  market-domain/             market heuristics (math), inventory, scoring, advisor, planners,
+                             riven rules and the riven roll guide data
   market-domain-wasm/        market-domain for the browser desktop preview (wasm32)
   market-domain-web/         the view rules every surface loads before rendering (wasm32)
   wfm-client/                shared request policy and transport primitives

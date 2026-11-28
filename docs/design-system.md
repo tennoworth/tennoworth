@@ -141,7 +141,7 @@ do not globally restyle similarly named legacy component classes by accident.
 Inline status tags use the one `.tag` primitive in `app.css`; components may
 position a tag but never recolour it. The border style carries the kind as well
 as the hue: solid for advice (`peak`, `flip`, `hold`, `drop`, `deal`, `stale`, advisor
-verdicts, and neutral `patience`/`crowded`/`cheap`/`skip`), dotted for facts (`vaulted`, `soon`, `auto`,
+verdicts, the Rivens roll verdicts `roll-sellable`, `roll-almost` and `roll-weak`, and neutral `patience`/`crowded`/`cheap`/`skip`), dotted for facts (`vaulted`, `soon`, `auto`,
 `aug`, `thin`, `unpriced`, `relic-tag`). Vaulted uses `--vault`; no tag uses
 `--bad`. Filter chips that select by a tag reuse its class.
 Use `table.tw.fixed` when declaring fixed column proportions; setting only

@@ -1,15 +1,16 @@
 // Riven rules the Rivens view applies. Extraction from the DE inventory, the
 // weapon join, the band choice, the stat join, splicing, the comps filter and
-// the similarity score are native (market_domain::rivens, documented there)
+// the similarity score and the roll guide's verdict are native
+// (market_domain::rivens, documented there)
 // and run from the view module (native.ts); this file is their call shape plus
 // the display the view prints: stat labels, auction stat lines, polarity
 // glyphs and the copyable bug report.
 
 import type { Inventory, Market, RivenAttribute, RivenDispoChange, RivenStatTier, RivenSurface } from '../contracts/data';
-import type { OwnedRiven, RivenStatFilterPlan, SpliceRecipe } from '../contracts/generated/web';
+import type { OwnedRiven, RivenStatFilterPlan, RollCheck, SpliceRecipe } from '../contracts/generated/web';
 import { call, native } from './native';
 
-export type { OwnedRiven };
+export type { OwnedRiven, RollCheck };
 
 /** Owned rivens from the raw DE inventory's `Upgrades[]`. */
 export function extractRivens(inv: Inventory | null | undefined): OwnedRiven[] {
@@ -82,10 +83,12 @@ export interface RivenRowRead {
   filter: RivenStatFilterPlan | null;
   /** Fingerprint keys the app does not read yet, reported rather than guessed at. */
   unread: string[];
+  /** The roll guide's verdict; null for a veiled riven or an unresolved weapon. */
+  roll: RollCheck | null;
 }
 
 export interface RivenRowSource {
-  riven: Pick<OwnedRiven, 'buffs' | 'curses' | 'raw' | 'veiled'>;
+  riven: Pick<OwnedRiven, 'buffs' | 'curses' | 'raw' | 'veiled'> & { slug?: string | null };
   /** The weapon's WFM `riven_type`, which picks the splice recipes. */
   rivenType?: string | null;
 }
@@ -104,6 +107,7 @@ export function readRivenRows(rows: readonly RivenRowSource[], attrs: RivenAttri
     attributes: attrs ?? [],
     rivens: rows.map(({ riven, rivenType }) => ({
       buffs: riven.buffs, curses: riven.curses, raw: riven.raw, veiled: riven.veiled, riven_type: rivenType ?? undefined,
+      weapon: riven.slug ?? undefined,
     })),
   } });
   return read.map((row) => {
@@ -113,6 +117,7 @@ export function readRivenRows(rows: readonly RivenRowSource[], attrs: RivenAttri
       splices: row.splices.map((o) => ({ recipe: o.recipe, consumed: [stats[o.consumed[0]]!, stats[o.consumed[1]]!] as const, randomIsNegative: o.randomIsNegative })),
       filter: row.filter,
       unread: row.unread,
+      roll: row.roll,
     };
   });
 }

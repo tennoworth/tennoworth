@@ -10180,6 +10180,84 @@ msgctxt "riven.pages"
 msgid "Riven pages"
 msgstr "Páginas de rivens"
 
+#. Roll verdict tag: buyers look for this combination of stats on this weapon.
+#. Max 10 characters.
+msgctxt "riven.roll.sellable"
+msgid "Sellable"
+msgstr ""
+
+#. Roll verdict tag: one thing short of a combination buyers look for.
+#. Max 10 characters.
+msgctxt "riven.roll.almost"
+msgid "Almost"
+msgstr ""
+
+#. Roll verdict tag: few buyers look for these stats on this weapon.
+#. Max 10 characters.
+msgctxt "riven.roll.weak"
+msgid "Weak roll"
+msgstr ""
+
+#. Tooltip of the verdict tag.
+msgctxt "riven.roll.help"
+msgid "Roll guide verdict: whether buyers look for this combination of stats on this weapon. It does not judge how strong each roll is."
+msgstr ""
+
+#. Reason for a sellable verdict.
+msgctxt "riven.roll.matches"
+msgid "Stats buyers look for on this weapon"
+msgstr ""
+
+#. Reason; stats are riven stat names with their sign.
+msgctxt "riven.roll.missing"
+msgid "Missing {stats}"
+msgstr ""
+
+#. Reason: positive stats buyers do not look for on this weapon; stats is the list, count how many.
+msgctxt "riven.roll.dead"
+msgid "{count, plural, one {{stats} adds little here} other {{stats} add little here}}"
+msgstr ""
+
+#. Reason: the negative stat lowers what buyers pay.
+msgctxt "riven.roll.hurts"
+msgid "{stat} hurts here"
+msgstr ""
+
+#. Note on the negative stat.
+msgctxt "riven.roll.harmless"
+msgid "{stat} is harmless here"
+msgstr ""
+
+#. Reason for a weak verdict: the stats the guide lists for this weapon.
+msgctxt "riven.roll.wants"
+msgid "Buyers look for {stats}"
+msgstr ""
+
+#. Label before a note in English from the roll guide.
+msgctxt "riven.roll.note"
+msgid "Guide note:"
+msgstr ""
+
+#. In place of a verdict.
+msgctxt "riven.roll.noGuide"
+msgid "No roll guide for this weapon yet."
+msgstr ""
+
+#. In place of a verdict.
+msgctxt "riven.roll.unknownStat"
+msgid "Not judged: it has a stat the app does not recognise."
+msgstr ""
+
+#. Credit line under the Rivens table. Keep the name 44bananas and the guide title as they are.
+msgctxt "riven.guideCredit"
+msgid "Roll verdicts come from the TennoWorth roll guide, started from 44bananas’ “good rolls for selling” (update 44.1.2) and kept up by players. They judge which stats a riven has, not how strong each roll is."
+msgstr ""
+
+#. Link to the form for changing the roll guide.
+msgctxt "riven.guideSuggest"
+msgid "Suggest a change"
+msgstr ""
+
 #. Offer placement.
 #, fuzzy
 msgctxt "offer.place.below-observed"
@@ -13495,8 +13573,9 @@ msgstr "E Rivens, Arcanos e mods de frame?"
 
 #. FAQ answer. Keep the tags and the technical names in <code>.
 #, fuzzy
+#| msgid "Arcanes and frame mods (in <code>RawUpgrades</code>) are resolved and priced like anything else. Rivens are per-instance items with rolled stats, so they have no single market price and the app does not invent one. The desktop app’s Rivens view shows DE’s weekly price band for the weapon, the disposition trend, the splices each riven qualifies for, and the cheapest live buyouts for rolls with the same positive stats."
 msgctxt "faq.rivens.a"
-msgid "Arcanes and frame mods (in <code>RawUpgrades</code>) are resolved and priced like anything else. Rivens are per-instance items with rolled stats, so they have no single market price and the app does not invent one. The desktop app’s Rivens view shows DE’s weekly price band for the weapon, the disposition trend, the splices each riven qualifies for, and the cheapest live buyouts for rolls with the same positive stats."
+msgid "Arcanes and frame mods (in <code>RawUpgrades</code>) are resolved and priced like anything else. Rivens are per-instance items with rolled stats, so they have no single market price and the app does not invent one. The desktop app’s Rivens view shows DE’s weekly price band for the weapon, the disposition trend, the splices each riven qualifies for, whether its stats are a combination buyers look for on that weapon, and the cheapest live buyouts for rolls with the same positive stats. That roll guide started from 44bananas’ “good rolls for selling” and is kept up by players through the project’s repository."
 msgstr "Arcanos e mods de frame (em <code>RawUpgrades</code>) são reconhecidos e precificados como qualquer outro item. Rivens são itens individuais com atributos sorteados, então não têm um preço de mercado único e o app não inventa um. A visão Rivens do app desktop mostra a faixa de preço semanal da DE para a arma, a tendência de disposição, as fusões para as quais cada riven se qualifica e as compras imediatas ao vivo mais baratas para rolagens com os mesmos atributos positivos."
 
 #. Question.
