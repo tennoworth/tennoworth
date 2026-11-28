@@ -177,7 +177,9 @@ download URL points to its immutable `desktop-vX.Y.Z` release. Supported older
 versions can update directly to the latest version. Publishing a newer release
 must not remove or replace downloads referenced by a cached update offer.
 `desktop-latest` carries only `latest.json`: the rolling binaries that clients
-from before immutable URLs downloaded were removed on 2026-11-28.
+from before immutable URLs downloaded were removed on 2026-11-28. The same day
+the downloads of the unsupported 0.3-0.9 releases were removed; their tags,
+release pages and notes stay as the record.
 
 ## Channels
 
