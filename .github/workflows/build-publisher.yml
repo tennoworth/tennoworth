@@ -44,7 +44,7 @@ jobs:
         uses: ./.github/actions/publish-rolling-release
         with:
           tag_name: publisher-latest
-          release_name: publisher-latest (private dashboard code)
+          release_name: publisher-latest (dashboard code)
           files: |
             dist/tennoworth-publisher.tar.gz
             dist/tennoworth-publisher.tar.gz.sha256

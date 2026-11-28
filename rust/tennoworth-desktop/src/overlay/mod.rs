@@ -15,7 +15,7 @@ mod recognition;
 mod tests;
 use crate::vision::capture::{capture_backend_name, capture_warframe, CapturedFrame};
 use crate::vision::ocr::OcrWorker;
-use lifecycle::CaptureLifecycle;
+use lifecycle::{CaptureLifecycle, RewardScreens};
 pub(crate) use presentation::prewarm_overlay_window;
 use presentation::{
     hide_overlay, preferred_presentation_backend, present_overlay, push_overlay_result,
@@ -202,6 +202,7 @@ pub struct OverlayState {
     settings: Mutex<OverlaySettings>,
     status: Mutex<OverlayStatus>,
     lifecycle: CaptureLifecycle,
+    reward_screens: RewardScreens,
     expected_slots: AtomicUsize,
     last_reward_marker: Mutex<Option<String>>,
     current_result: Mutex<Option<RelicOverlayResult>>,
@@ -258,6 +259,7 @@ impl OverlayState {
             settings: Mutex::new(settings),
             status: Mutex::new(status),
             lifecycle: CaptureLifecycle::default(),
+            reward_screens: RewardScreens::default(),
             expected_slots: AtomicUsize::new(0),
             last_reward_marker: Mutex::new(None),
             current_result: Mutex::new(None),
@@ -838,6 +840,7 @@ pub fn handle_log_line(app: &AppHandle, line: &str) {
         return;
     }
     if settings.enabled && line.contains(REWARD_CLOSE_MARKER) {
+        state.reward_screens.close();
         state.expected_slots.store(0, Ordering::Release);
         hide_overlay(app);
         state.set_status("watching", None);
@@ -958,6 +961,9 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
     }
     state.set_status("recognizing", Some(format!("triggered by {source}")));
     let triggered_at = Instant::now();
+    // A player who pressed the shortcut is looking at the rewards; only a log
+    // trigger can describe a screen that is already gone.
+    let screen = watches_reward_close(source).then(|| state.reward_screens.mark());
     let source = source.to_string();
     let app = app.clone();
     std::thread::Builder::new()
@@ -966,7 +972,7 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
             let result = wait_for_game_in_gaming_mode().and_then(|waited| {
                 // The reward names were drawn while the player was away.
                 let started = if waited { Instant::now() } else { triggered_at };
-                capture_and_recognize(&app, &source, started)
+                capture_and_recognize(&app, &source, started, screen)
             });
             if let Err(error) = result {
                 eprintln!("tennoworth: relic scan ({source}) failed: {error}");
@@ -1039,6 +1045,10 @@ fn write_run_diagnostics(
 const REWARD_DRAW_WAIT: Duration = Duration::from_secs(3);
 const REWARD_DRAW_POLL: Duration = Duration::from_millis(150);
 
+fn watches_reward_close(source: &str) -> bool {
+    source.starts_with("eelog")
+}
+
 fn waits_for_reward_names(source: &str, any_name_read: bool, elapsed: Duration) -> bool {
     source.starts_with("eelog") && !any_name_read && elapsed < REWARD_DRAW_WAIT
 }
@@ -1047,6 +1057,7 @@ fn capture_and_recognize(
     app: &AppHandle,
     source: &str,
     run_started: Instant,
+    screen: Option<u64>,
 ) -> Result<(), String> {
     let state = app.state::<OverlayState>();
     let cache = app.state::<MarketCache>();
@@ -1105,7 +1116,8 @@ fn capture_and_recognize(
     let mut last_frame = None;
     let mut last_error = None;
     let mut attempt = 0;
-    while attempt < 3 {
+    let screen_closed = || screen.is_some_and(|mark| state.reward_screens.closed_since(mark));
+    while attempt < 3 && !screen_closed() {
         let capture_started = Instant::now();
         match capture_warframe() {
             Ok(frame) => {
@@ -1195,6 +1207,27 @@ fn capture_and_recognize(
             std::thread::sleep(Duration::from_millis(if attempt == 0 { 75 } else { 125 }));
         }
         attempt += 1;
+    }
+    if screen_closed() {
+        timings.total_ms = elapsed_ms(run_started);
+        write_run_diagnostics(run_dir.as_deref(), &timings, None);
+        let outcome = format!(
+            "reward_screen_closed: the game logged the reward screen after it closed; press {} while the rewards are shown",
+            settings.shortcut
+        );
+        state.set_status("watching", Some(outcome.clone()));
+        state.finish_run(OverlayLastRun {
+            outcome,
+            trigger_source: source.into(),
+            expected_slots,
+            recognized_slots: 0,
+            timings,
+            diagnostics_directory: diagnostic_path,
+        });
+        eprintln!(
+            "tennoworth: relic scan {scan_id} skipped: the reward screen closed before it was read"
+        );
+        return Ok(());
     }
     let Some((frame, read)) = recognized else {
         let current_expected = state.expected_slots.load(Ordering::Acquire);

@@ -619,6 +619,16 @@ fn a_log_started_scan_waits_for_the_names_to_be_drawn() {
     }
 }
 
+/// The shortcut is how a player reaches rewards the log announced late, so the
+/// late log's close of that same screen must not cancel the scan they asked for.
+#[test]
+fn only_a_log_started_scan_is_cancelled_by_the_screen_closing() {
+    assert!(watches_reward_close("eelog"));
+    assert!(watches_reward_close("eelog-snapshot"));
+    assert!(!watches_reward_close("hotkey"));
+    assert!(!watches_reward_close("settings button"));
+}
+
 #[test]
 fn reward_marker_updates_are_bounded_and_trimmed() {
     install_reward_markers(&["  Rewards ready  ".into()]).unwrap();
