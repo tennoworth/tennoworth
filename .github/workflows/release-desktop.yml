@@ -706,8 +706,8 @@ jobs:
       # Refuses to publish an incomplete release instead of publishing one and
       # patching it. Every name here is depended on by something: the updater
       # needs each .sig, SECURITY.md tells Linux users to check the AppImage's
-      # .sha256, and the AppImage's filename is unversioned because
-      # desktop-latest serves it under that exact name.
+      # .sha256, and the AppImage's filename is unversioned because the README
+      # and the site link releases/latest/download/ under that exact name.
       - name: Verify the inventory is complete
         run: |
           set -euo pipefail
@@ -743,8 +743,8 @@ jobs:
           ls -la
 
       # One file listing every asset. This is the ONLY checksum file for
-      # Windows now; Linux keeps its AppImage sidecar because the AppImage is
-      # also served, unversioned, from the rolling release. `sha256sum -c`
+      # Windows now; Linux keeps its AppImage sidecar because the README's
+      # unversioned latest/download command fetches it beside the AppImage. `sha256sum -c`
       # against this file needs --ignore-missing unless you downloaded every
       # asset it names - SECURITY.md spells that out.
       - name: Assemble SHA256SUMS
@@ -936,8 +936,8 @@ jobs:
             --title "$tag (auto-built)" \
             --notes "Rolling desktop build. The in-app updater reads latest.json from this release. Not a version release - see desktop-v* tags for the versioned desktop app."
 
-          # Versioned assets are already public. Retain the old rolling files
-          # for clients that cached manifests before immutable URLs were used.
+          # Versioned assets are already public; this release carries only the
+          # manifest. The pre-0.8 rolling binaries were removed on 2026-11-28.
           gh release upload "$tag" --clobber dist/latest.json
 
           # The release existed before this run, so its tag would keep naming
